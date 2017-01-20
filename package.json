@@ -4,7 +4,7 @@
   "description": "A backend as a service for declarative and functional API development",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node_modules/jasmine/bin/jasmine.js"
   },
   "repository": {
     "type": "git",
@@ -23,6 +23,10 @@
     "url": "https://github.com/specifyio/yabaas/issues"
   },
   "homepage": "https://github.com/specifyio/yabaas#readme",
+  "dependencies": {
+    "express": "~4.14.0",
+    "nlp_compromise": "~6.5.1"
+  },
   "devDependencies": {
     "jasmine": "~2.5.3"
   }
