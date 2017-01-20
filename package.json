@@ -1,0 +1,29 @@
+{
+  "name": "yabaas",
+  "version": "0.1.0",
+  "description": "A backend as a service for declarative and functional API development",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/specifyio/yabaas.git"
+  },
+  "keywords": [
+    "baas",
+    "faas",
+    "api",
+    "serverless",
+    "functional"
+  ],
+  "author": "Oliver Wolf",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/specifyio/yabaas/issues"
+  },
+  "homepage": "https://github.com/specifyio/yabaas#readme",
+  "devDependencies": {
+    "jasmine": "~2.5.3"
+  }
+}
