@@ -231,6 +231,11 @@ describe('Attribute Object', () => {
             it('must be an ID of an attribute value which has been created with the newValue function');
         });
 
+        describe('resolution Argument', () => {
+            it('is optional');
+            it('must be an integer representing milliseconds');
+        });
+
         describe('Return Value', () => {
             it('is an array');
             it('contains only objects');
