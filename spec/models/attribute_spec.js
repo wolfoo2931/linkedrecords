@@ -101,8 +101,15 @@ describe('Attribute Object', () => {
         });
 
         describe('representionRule Argument', () => {
-            it('must be present');
+            it('must be present if collectionOf argument is not present');
+            it('must not be present if collectionOf argument is present');
             it('must a string that represents a valid RepresentationRule');
+        });
+
+        describe('collectionOf Argument', () => {
+            it('must be present if representionRule argument is not present');
+            it('must not be present if representionRule argument is present');
+            it('must be the name of another attribute');
         });
 
         describe('domain Argument', () => {
@@ -116,11 +123,6 @@ describe('Attribute Object', () => {
             it('must have required key "active"');
             it('can have key "revisionCount" when argument "lastRevisionDate" is not set');
             it('can have key "lastRevisionDate" when argument "revisionCount" is not set');
-        });
-
-        describe('collectionOf Argument', () => {
-            it('is optional');
-            it('must be the name of another attribute');
         });
 
         describe('calculation Argument', () => {
