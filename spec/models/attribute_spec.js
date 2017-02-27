@@ -241,52 +241,6 @@ describe('Attribute Object', () => {
 
     });
 
-    describe('submitValueChangeRequest Function', () => {
-        describe('attributeValueId Argument', () => {
-            it('must be present');
-            it('must be the ID of an existing attribute value which has been created with Attribute.newValue');
-        });
-
-        describe('value Argument', () => {
-            it('must be present when the changeset argument is missing');
-            it('must not be present when the changeset argument is given');
-        });
-
-        describe('changeset Argument', () => {
-            it('must be present when the value argument is missing');
-            it('must not be present when the value argument is given');
-        });
-
-        it('does\'t change the value when the attributes representation format is violated');
-        it('throws an exception when the attributes representation format is violated');
-        it('throws an exception when the use dosn\'t has the permission to submit a change request');
-        it('throws an exception when the attribute has a calculation function');
-
-        describe('Return Value', () => {
-            it('is an object');
-            it('contains key changeRequestID');
-        });
-    });
-
-    describe('getChangeRequests Function', () => {
-        describe('attributeValueId Argument', () => {
-            it('must be present');
-            it('must be the ID of an existing attribute value which has been created with Attribute.newValue');
-        });
-
-        describe('Return Value', () => {
-            it('is an array');
-            it('is empty when the attribute has a calculation function');
-        });
-    });
-
-    describe('acceptValueChangeRequest Function', () => {
-        describe('changeRequestID Argument', () => {
-            it('is an string representing an existing change request (made with Attribute.submitValueChangeRequest())');
-        });
-
-        it('throws an exception if the change request dosn\'t exists');
-    });
 
     // Attribute.findByConcept({conceptName: 'user', userID: '4711'});
     //  -> { name: 'Peter', age: '24', bio: 'a long text descrbing the bio...' }
