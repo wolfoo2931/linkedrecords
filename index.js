@@ -1,5 +1,7 @@
 'use strict';
 
+debugger;
+
 var Attribute = require('./models/attribute.js'),
     express = require('express'),
     app = express();

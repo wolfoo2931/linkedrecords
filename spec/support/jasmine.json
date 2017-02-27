@@ -4,7 +4,8 @@
     "**/*[sS]pec.js"
   ],
   "helpers": [
-    "helpers/**/*.js"
+    "helpers/**/*.js",
+    "models/shared_behavior/**/*.js"
   ],
   "stopSpecOnExpectationFailure": false,
   "random": false
