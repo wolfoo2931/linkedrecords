@@ -26,8 +26,6 @@ Attribute.prototype.save = function(deliver) {
   }
 
   pgPool.connect(function(err, pgclient, releaseConnection) {
-
-console.log("SELECT name FROM attributes WHERE name='" + self.name + "' AND domain='" + self.domain + "'");
       pgclient.query("SELECT name FROM attributes WHERE name='" + self.name + "' AND domain='" + self.domain + "'", (err, result) => {
           if(result.rows.length == 0) {
               pgclient.query("INSERT INTO attributes (name, domain) VALUES ('" + self.name + "', '" + self.domain + "')", (err, result) => {
