@@ -1,10 +1,10 @@
 'use strict';
 
-debugger;
-
 var Attribute = require('./models/attribute.js'),
     express = require('express'),
     app = express();
+
+debugger;
 
 app.get('/attributes', function (req, res) {
     var attr = new Attribute({name: 'atname'});
