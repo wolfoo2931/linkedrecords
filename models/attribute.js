@@ -1,34 +1,37 @@
 'use strict';
 
 var pg = require('pg'),
-    pgPool = new pg.Pool({max: 10, idleTimeoutMillis: 30000});
+    pgPool = new pg.Pool();
 
-var Attribute = function (args, deliver) {
-    var self = this,
-        deliver = deliver || ((err, attr) => {});
+var Attribute = function (args) {
+    this.name = args.name;
+    this.domain = args.domain;
+};
 
-    if(!args.name) {
-        deliver('name argument must be present');
-        return;
-    }
+Attribute.prototype.save = function(deliver) {
+  var self = this;
+  if(!self.name) {
+      deliver(new Error('name argument must be present'));
+      return;
+  }
 
-    if(typeof args.name !== 'string') {
-        deliver('name argument must be a string');
-        return;
-    }
+  if(typeof self.name !== 'string') {
+      deliver(new Error('name argument must be a string'));
+      return;
+  }
 
-    pgPool.connect(function(err, pgclient, releaseConnection) {
-        pgclient.query("SELECT name FROM attributes WHERE name='" + args.name + "'", (err, result) => {
-            if(result.rows.length == 0) {
-                pgclient.query("INSERT INTO attributes (name) VALUES ('" + args.name + "')", (err, result) => {
-                   releaseConnection();
-                   deliver(null, self);
-                });
-            } else {
-                deliver(args.name + ' attribute already exists for the domain: ' + args.domain, null);
-            }
-        });
-    });
+  pgPool.connect(function(err, pgclient, releaseConnection) {
+      pgclient.query("SELECT name FROM attributes WHERE name='" + self.name + "'", (err, result) => {
+          if(result.rows.length == 0) {
+              pgclient.query("INSERT INTO attributes (name) VALUES ('" + self.name + "')", (err, result) => {
+                 releaseConnection();
+                 deliver(null);
+              });
+          } else {
+              deliver(new Error(self.name + ' attribute already exists for the domain: ' + self.domain));
+          }
+      });
+  });
 };
 
 module.exports = Attribute;
