@@ -2,7 +2,6 @@
 
 var code = require('../helpers/code_example'),
     Argument = require('../../models/attribute'),
-    pg = require('pg'),
     DatabaseCleaner = require('database-cleaner'),
     PgPool = require('pg-pool'),
     dbPool = new PgPool();
@@ -11,8 +10,14 @@ describe('Attribute Object', () => {
 
     beforeEach((done) => {
         var databaseCleaner = new DatabaseCleaner('postgresql');
-      //  databaseCleaner.clean(dbPool, done);
-      done();
+        databaseCleaner.clean(dbPool, done);
+        done();
+    });
+
+    afterEach((done) => {
+        var databaseCleaner = new DatabaseCleaner('postgresql');
+        databaseCleaner.clean(dbPool, done);
+        done();
     });
 
     describe('Usage Sceanrios // Code examples', () => {
@@ -105,7 +110,7 @@ describe('Attribute Object', () => {
         });
     });
 
-    describe('Constructor Function', () => {
+    describe('new Attribute(arguments).save()', () => {
 
         beforeEach(() => {
             this.validArgumentForDescriptionAttribute = {
@@ -121,18 +126,16 @@ describe('Attribute Object', () => {
             it('must be present', (done) => {
                 delete this.validArgumentForDescriptionAttribute.name;
 
-                new Argument(this.validArgumentForDescriptionAttribute, (err, attr) => {
-                    expect(err).toEqual('name argument must be present');
-                    expect(attr).toBe(undefined);
+                new Argument(this.validArgumentForDescriptionAttribute).save((err) => {
+                    expect(err.message).toEqual('name argument must be present');
                     done();
                 });
             });
 
             it('must be a string', (done) => {
                 this.validArgumentForDescriptionAttribute.name = 4711;
-                new Argument(this.validArgumentForDescriptionAttribute, (err, attr) => {
-                    expect(err).toEqual('name argument must be a string');
-                    expect(attr).toBe(undefined);
+                new Argument(this.validArgumentForDescriptionAttribute).save((err) => {
+                    expect(err.message).toEqual('name argument must be a string');
                     done();
                 });
             });
@@ -141,9 +144,9 @@ describe('Attribute Object', () => {
 
             it('must be unique among all other attribute names within the same domain', (done) => {
                 var self = this;
-                new Argument(self.validArgumentForDescriptionAttribute, (err, attr) => {
-                    new Argument(self.validArgumentForDescriptionAttribute, (err, attr) => {
-                        expect(err).toEqual('description attribute already exists for the domain: global.specify.io/domains/blog');
+                new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                    new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                        expect(err.message).toEqual('description attribute already exists for the domain: global.specify.io/domains/blog');
                         done();
                     });
                 });
