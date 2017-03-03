@@ -17,11 +17,11 @@ var Attribute = function (args, deliver) {
         return;
     }
 
-    pgPool.connect(function(err, pgclient, done) {
+    pgPool.connect(function(err, pgclient, releaseConnection) {
         pgclient.query("SELECT name FROM attributes WHERE name='" + args.name + "'", (err, result) => {
             if(result.rows.length == 0) {
                 pgclient.query("INSERT INTO attributes (name) VALUES ('" + args.name + "')", (err, result) => {
-                   done();
+                   releaseConnection();
                    deliver(null, self);
                 });
             } else {
