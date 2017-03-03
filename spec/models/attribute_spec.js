@@ -11,13 +11,6 @@ describe('Attribute Object', () => {
     beforeEach((done) => {
         var databaseCleaner = new DatabaseCleaner('postgresql');
         databaseCleaner.clean(dbPool, done);
-        done();
-    });
-
-    afterEach((done) => {
-        var databaseCleaner = new DatabaseCleaner('postgresql');
-        databaseCleaner.clean(dbPool, done);
-        done();
     });
 
     describe('Usage Sceanrios // Code examples', () => {
@@ -140,7 +133,13 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('must not contain a "#"');
+            it('must not contain a "#"', (done) => {
+                this.validArgumentForDescriptionAttribute.name = 'invalid#name';
+                new Argument(this.validArgumentForDescriptionAttribute).save((err) => {
+                    expect(err.message).toEqual('name argument must not include "#" character');
+                    done();
+                });
+            });
 
             it('must be unique among all other attribute names within the same domain', (done) => {
                 var self = this;
@@ -152,7 +151,18 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('can be already exists if the domain differs');
+            it('can be already exists if the domain differs', (done) => {
+                var self = this;
+                self.validArgumentForDescriptionAttribute.domain = 'global.specify.io/domains/blog'
+
+                new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                    self.validArgumentForDescriptionAttribute.domain = 'global.specify.io/domains/shop'
+                    new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                        expect(err).toBe(null);
+                        done();
+                    });
+                });
+            });
         });
 
         describe('representionRule Argument', () => {
