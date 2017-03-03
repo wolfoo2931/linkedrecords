@@ -25,11 +25,13 @@
   "homepage": "https://github.com/specifyio/yabaas#readme",
   "dependencies": {
     "express": "~4.14.0",
-    "nlp_compromise": "~6.5.1"
+    "nlp_compromise": "~6.5.1",
+    "pg": "~6.1.2"
   },
   "devDependencies": {
     "jasmine": "~2.5.3",
     "jasmine-spec-reporter": "~3.2.0",
-    "js-beautify": "~1.6.9"
+    "js-beautify": "~1.6.9",
+    "database-cleaner":  "1.2.0"
   }
 }

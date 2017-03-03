@@ -1,7 +1,19 @@
 'use strict';
-var code = require('../helpers/code_example');
+
+var code = require('../helpers/code_example'),
+    Argument = require('../../models/attribute'),
+    pg = require('pg'),
+    DatabaseCleaner = require('database-cleaner'),
+    PgPool = require('pg-pool'),
+    dbPool = new PgPool();
 
 describe('Attribute Object', () => {
+
+    beforeEach((done) => {
+        var databaseCleaner = new DatabaseCleaner('postgresql');
+      //  databaseCleaner.clean(dbPool, done);
+      done();
+    });
 
     describe('Usage Sceanrios // Code examples', () => {
         describe('Simple Entity Management', () => {
@@ -94,10 +106,50 @@ describe('Attribute Object', () => {
     });
 
     describe('Constructor Function', () => {
+
+        beforeEach(() => {
+            this.validArgumentForDescriptionAttribute = {
+                name: 'description',
+                representationRule: '{{string}}',
+                domain: 'global.specify.io/domains/blog',
+                revisioning: {active: true},
+            };
+        });
+
         describe('name Argument', () => {
-            it('must be present');
-            it('must be a string');
-            it('must be unique among all other attribute names');
+
+            it('must be present', (done) => {
+                delete this.validArgumentForDescriptionAttribute.name;
+
+                new Argument(this.validArgumentForDescriptionAttribute, (err, attr) => {
+                    expect(err).toEqual('name argument must be present');
+                    expect(attr).toBe(undefined);
+                    done();
+                });
+            });
+
+            it('must be a string', (done) => {
+                this.validArgumentForDescriptionAttribute.name = 4711;
+                new Argument(this.validArgumentForDescriptionAttribute, (err, attr) => {
+                    expect(err).toEqual('name argument must be a string');
+                    expect(attr).toBe(undefined);
+                    done();
+                });
+            });
+
+            it('must not contain a "#"');
+
+            it('must be unique among all other attribute names within the same domain', (done) => {
+                var self = this;
+                new Argument(self.validArgumentForDescriptionAttribute, (err, attr) => {
+                    new Argument(self.validArgumentForDescriptionAttribute, (err, attr) => {
+                        expect(err).toEqual('description attribute already exists for the domain: global.specify.io/domains/blog');
+                        done();
+                    });
+                });
+            });
+
+            it('can be already exists if the domain differs');
         });
 
         describe('representionRule Argument', () => {
@@ -114,6 +166,7 @@ describe('Attribute Object', () => {
 
         describe('domain Argument', () => {
             it('must be present');
+            it('must not contain a "#"');
             it('must be a domain identifier');
         });
 
@@ -201,6 +254,16 @@ describe('Attribute Object', () => {
         it('throws an exception when the attributes representation format is violated');
         it('throws an exception when the use dosn\'t has the permission to submit a change');
         it('throws an exception when the attribute has a calculation function');
+
+        it('returns a change id');
+    });
+
+    describe('undo Function', () => {
+        it('reverts the last commited change made by the same user who executes the undo function');
+    });
+
+    describe('getWordingIssues', () => {
+        it('behaves like http://www.hemingwayapp.com/');
     });
 
     // Attribute.getLastByID('1147')
