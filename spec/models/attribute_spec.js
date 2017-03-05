@@ -18,14 +18,14 @@ describe('Attribute Object', () => {
             code.exampleUsage(() => {
 
                   //There already must exists an attribute called "name" and another one called "age"
-                  var nameValueId = Attribute.newValue({conceptName: "user", userID: "4711", attribute: "name", value: "Peter"});
-                  var ageValueId = Attribute.newValue({conceptName: "user", userID: "4711", attribute: "age", value: "23"});
+                  var nameValueId = Attribute.newVariable({conceptName: "user", userID: "4711", attribute: "name", value: "Peter"});
+                  var ageValueId = Attribute.newVariable({conceptName: "user", userID: "4711", attribute: "age", value: "23"});
 
                   var petersAge = Attribute.getValueByID(ageValueId);
 
                   // petersAge is set to 23 now
 
-                  Attribute.submitValueChange({valueId: ageValueId, value: '24'});
+                  Attribute.submitVariableChange({valueId: ageValueId, value: '24'});
 
                   petersAge = Attribute.findLastValueByID(ageValueId);
 
@@ -76,7 +76,7 @@ describe('Attribute Object', () => {
                     }
                 });
 
-                var webpageUrlValueID = Attribute.newValue({
+                var webpageUrlValueID = Attribute.newVariable({
                                                     conceptName: "webpage",
                                                     webpageID: "4711",
                                                     attribute: "url",
@@ -87,13 +87,13 @@ describe('Attribute Object', () => {
                 // - because the html we pass the webpageUrlValueID in as a parameter and because the html
                 //   attribute is configured with an eager calculation this value will be recalculated whenever the
                 //   url attribute value with the passed id change.
-                var webpageHtmlValueID = Attribute.newValue({
+                var webpageHtmlValueID = Attribute.newVariable({
                                                     conceptName: "webpage",
                                                     webpageID: "4711",
                                                     attribute: "html",
                                                     inputAttributes: [webpageUrlValueID]});
 
-                var linksValueID = Attribute.newValues({
+                var linksValueID = Attribute.newVariables({
                                                 conceptName: "webpage",
                                                 webpageID: "4711",
                                                 attribute: "links",
@@ -201,10 +201,19 @@ describe('Attribute Object', () => {
         });
     });
 
-    // Attribute.newValue({conceptName: 'user', userID: '4711', attribute: 'name', value: 'Peter'});
-    // Attribute.newValue({conceptName: 'user', userID: '4711', attribute: 'age', value: '23'});
-    // Attribute.newValue({conceptName: 'user', userID: '4711', attribute: 'bio', value: 'a long text descrbing the biography of the user'});
-    describe('newValue Function', () => {
+
+    // Alternative names:
+    // Attribute.addValue
+    // Attribute.newInstance
+    // Attribute.newTimeSeries
+    // Attribute.newRecord
+    // Attribute.record
+    // Attribute.newVariable
+    //
+    // Attribute.newVariable({conceptName: 'user', userID: '4711', attribute: 'name', value: 'Peter'});
+    // Attribute.newVariable({conceptName: 'user', userID: '4711', attribute: 'age', value: '23'});
+    // Attribute.newVariable({conceptName: 'user', userID: '4711', attribute: 'bio', value: 'a long text descrbing the biography of the user'});
+    describe('newVariable Function', () => {
         describe('conceptName Argument', () => {
             it('must be present');
             it('must be a string');
@@ -237,7 +246,7 @@ describe('Attribute Object', () => {
             it('is optional');
             it('must be an array');
             it('must not be present (or empty) if the attribute hasn\'t a calculation function');
-            it('elements must be IDs of other existing attribute values (the id which is returned by the newValue function)');
+            it('elements must be IDs of other existing attribute values (the id which is returned by the newVariable function)');
         });
 
         describe('Return Value', () => {
@@ -245,12 +254,12 @@ describe('Attribute Object', () => {
         });
     });
 
-    // Attribute.submitValueChange({attributeValueId: '1147', value: '24'})
-    // Attribute.submitValueChange({attributeValueId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
-    describe('submitValueChange Function', () => {
+    // Attribute.submitVariableChange({attributeValueId: '1147', value: '24'})
+    // Attribute.submitVariableChange({attributeValueId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
+    describe('submitVariableChange Function', () => {
         describe('attributeValueId Argument', () => {
             it('must be present');
-            it('must be the ID of an existing attribute value which has been created with Attribute.newValue');
+            it('must be the ID of an existing attribute value which has been created with Attribute.newVariable');
         });
 
         describe('value Argument', () => {
@@ -284,7 +293,7 @@ describe('Attribute Object', () => {
 
         describe('ID Argument', () => {
             it('must be present');
-            it('must be an ID of an attribute value which has been created with the newValue function');
+            it('must be an ID of an attribute value which has been created with the newVariable function');
         });
 
         describe('when the attribute has a calculation function', () => {
@@ -306,7 +315,7 @@ describe('Attribute Object', () => {
 
         describe('ID Argument', () => {
             it('must be present');
-            it('must be an ID of an attribute value which has been created with the newValue function');
+            it('must be an ID of an attribute value which has been created with the newVariable function');
         });
 
         describe('resolution Argument', () => {
