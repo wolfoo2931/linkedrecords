@@ -1,7 +1,7 @@
 'use strict';
 
 var code = require('../helpers/code_example'),
-    Argument = require('../../models/attribute'),
+    Attribute = require('../../models/attribute'),
     DatabaseCleaner = require('database-cleaner'),
     PgPool = require('pg-pool'),
     dbPool = new PgPool();
@@ -10,7 +10,10 @@ describe('Attribute Object', () => {
 
     beforeEach((done) => {
         var databaseCleaner = new DatabaseCleaner('postgresql');
-        databaseCleaner.clean(dbPool, done);
+        Attribute.deleteAllVariables(() => {
+            databaseCleaner.clean(dbPool, done);
+        });
+
     });
 
     describe('Usage Sceanrios // Code examples', () => {
@@ -18,14 +21,14 @@ describe('Attribute Object', () => {
             code.exampleUsage(() => {
 
                   //There already must exists an attribute called "name" and another one called "age"
-                  var nameValueId = Attribute.newVariable({conceptName: "user", userID: "4711", attribute: "name", value: "Peter"});
-                  var ageValueId = Attribute.newVariable({conceptName: "user", userID: "4711", attribute: "age", value: "23"});
+                  var nameValueId = Attribute.newVariable({belonging: {concept: "user", id: "4711"}, attribute: "name", value: "Peter"});
+                  var ageValueId = Attribute.newVariable({belonging: {concept: "user", id: "4711"}, attribute: "age", value: "23"});
 
                   var petersAge = Attribute.getValueByID(ageValueId);
 
                   // petersAge is set to 23 now
 
-                  Attribute.submitVariableChange({valueId: ageValueId, value: '24'});
+                  Attribute.changeVariable({valueId: ageValueId, value: '24'});
 
                   petersAge = Attribute.findLastValueByID(ageValueId);
 
@@ -76,10 +79,9 @@ describe('Attribute Object', () => {
                     }
                 });
 
-                var webpageUrlValueID = Attribute.newVariable({
-                                                    conceptName: "webpage",
-                                                    webpageID: "4711",
+                var webpageUrlVariableID = Attribute.newVariable({
                                                     attribute: "url",
+                                                    belonging: {concept: "webpage", id: "4711"},
                                                     value: "https://en.wikipedia.org/wiki/Object-relational_impedance_mismatch"});
 
                 // - because the html attribute is configured with a validity of 60000 milliseconds this and
@@ -87,16 +89,14 @@ describe('Attribute Object', () => {
                 // - because the html we pass the webpageUrlValueID in as a parameter and because the html
                 //   attribute is configured with an eager calculation this value will be recalculated whenever the
                 //   url attribute value with the passed id change.
-                var webpageHtmlValueID = Attribute.newVariable({
-                                                    conceptName: "webpage",
-                                                    webpageID: "4711",
+                var webpageHtmlVariableID = Attribute.newVariable({
                                                     attribute: "html",
+                                                    belonging: {concept: "webpage", id: "4711"},
                                                     inputAttributes: [webpageUrlValueID]});
 
-                var linksValueID = Attribute.newVariables({
-                                                conceptName: "webpage",
-                                                webpageID: "4711",
+                var linksVariableID = Attribute.newVariables({
                                                 attribute: "links",
+                                                belonging: {concept: "webpage", id: "4711"},
                                                 inputAttributes: [webpageHtmlValueID]});
 
             }, () => {});
@@ -119,7 +119,7 @@ describe('Attribute Object', () => {
             it('must be present', (done) => {
                 delete this.validArgumentForDescriptionAttribute.name;
 
-                new Argument(this.validArgumentForDescriptionAttribute).save((err) => {
+                new Attribute(this.validArgumentForDescriptionAttribute).save((err) => {
                     expect(err.message).toEqual('name argument must be present');
                     done();
                 });
@@ -127,7 +127,7 @@ describe('Attribute Object', () => {
 
             it('must be a string', (done) => {
                 this.validArgumentForDescriptionAttribute.name = 4711;
-                new Argument(this.validArgumentForDescriptionAttribute).save((err) => {
+                new Attribute(this.validArgumentForDescriptionAttribute).save((err) => {
                     expect(err.message).toEqual('name argument must be a string');
                     done();
                 });
@@ -135,7 +135,7 @@ describe('Attribute Object', () => {
 
             it('must not contain a "#"', (done) => {
                 this.validArgumentForDescriptionAttribute.name = 'invalid#name';
-                new Argument(this.validArgumentForDescriptionAttribute).save((err) => {
+                new Attribute(this.validArgumentForDescriptionAttribute).save((err) => {
                     expect(err.message).toEqual('name argument must not include "#" character');
                     done();
                 });
@@ -143,8 +143,8 @@ describe('Attribute Object', () => {
 
             it('must be unique among all other attribute names within the same domain', (done) => {
                 var self = this;
-                new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
-                    new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
+                    new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
                         expect(err.message).toEqual('description attribute already exists for the domain: global.specify.io/domains/blog');
                         done();
                     });
@@ -155,9 +155,9 @@ describe('Attribute Object', () => {
                 var self = this;
                 self.validArgumentForDescriptionAttribute.domain = 'global.specify.io/domains/blog'
 
-                new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
                     self.validArgumentForDescriptionAttribute.domain = 'global.specify.io/domains/shop'
-                    new Argument(self.validArgumentForDescriptionAttribute).save((err) => {
+                    new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
                         expect(err).toBe(null);
                         done();
                     });
@@ -201,7 +201,6 @@ describe('Attribute Object', () => {
         });
     });
 
-
     // Alternative names:
     // Attribute.addValue
     // Attribute.newInstance
@@ -210,24 +209,30 @@ describe('Attribute Object', () => {
     // Attribute.record
     // Attribute.newVariable
     //
-    // Attribute.newVariable({conceptName: 'user', userID: '4711', attribute: 'name', value: 'Peter'});
-    // Attribute.newVariable({conceptName: 'user', userID: '4711', attribute: 'age', value: '23'});
-    // Attribute.newVariable({conceptName: 'user', userID: '4711', attribute: 'bio', value: 'a long text descrbing the biography of the user'});
+    // Attribute.newVariable({belonging: {concept: 'user', id: '4711'}, attribute: 'name', value: 'Peter'});
+    // Attribute.newVariable({belonging: {concept: 'user', id: '4711'}, attribute: 'age', value: '23'});
+    // Attribute.newVariable({belonging: {concept: 'user', id: '4711'}, attribute: 'bio', value: 'a long text descrbing the biography of the user'});
     describe('newVariable Function', () => {
-        describe('conceptName Argument', () => {
-            it('must be present');
-            it('must be a string');
-            it('represents the name of a concept');
-        });
 
-        describe('*ID Argument', () => {
-            it('is optional');
-            it('is named like the conceptName and "ID" as suffix (e.g. \'userID\', when \'user\' is the conceptName)');
+        beforeEach((done) => {
+            done();
         });
 
         describe('attribute Argument', () => {
             it('must be present');
             it('must be the name of an existing attribute');
+        });
+
+        describe('userID Argument', () => {
+            it('must be present');
+            it('must be a string');
+            it('identifies the actor of this actions for auditing reasons');
+        });
+
+        describe('belonging Argument', () => {
+            it('is optional');
+            it('must pe a flat object if present');
+            it('identifies the thing to which the attribute belongs to');
         });
 
         describe('value Argument', () => {
@@ -242,24 +247,50 @@ describe('Attribute Object', () => {
             });
         });
 
-        describe('inputAttributes', () => {
+        describe('inputAttributes Argument', () => {
             it('is optional');
-            it('must be an array');
+            it('must be an array if present');
             it('must not be present (or empty) if the attribute hasn\'t a calculation function');
             it('elements must be IDs of other existing attribute values (the id which is returned by the newVariable function)');
         });
 
-        describe('Return Value', () => {
-            it('is an id');
+        describe('callback Function', () => {
+            describe('id Argument', () => {
+                it('is a String', (done) => {
+                    Attribute.newVariable({userID: '698aafe8-dcd5-4ced-b969-ffc34a43f645', belonging: {concept: 'user', id: '4711'}, attribute: 'name', value: 'Peter'}, (id) => {
+                        expect(id.length).not.toBe(0);
+                        done();
+                    });
+                });
+
+                it('can be used to retrieve the current variable value', (done) => {
+                    Attribute.newVariable({userID: '698aafe8-dcd5-4ced-b969-ffc34a43f645', belonging: {concept: 'user', id: '4711'}, attribute: 'name', value: 'Peter'}, (id) => {
+                        Attribute.getVariableByID(id, (variable) => {
+                            expect(variable.value).toEqual('Peter');
+                            done();
+                        });
+                    });
+                });
+
+                it('can be used to change the variable value');
+
+            });
+
         });
     });
 
-    // Attribute.submitVariableChange({attributeValueId: '1147', value: '24'})
-    // Attribute.submitVariableChange({attributeValueId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
-    describe('submitVariableChange Function', () => {
-        describe('attributeValueId Argument', () => {
+    // Attribute.changeVariable({variableId: '1147', value: '24'})
+    // Attribute.changeVariable({variableId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
+    describe('changeVariable Function', () => {
+        describe('variableId Argument', () => {
             it('must be present');
             it('must be the ID of an existing attribute value which has been created with Attribute.newVariable');
+        });
+
+        describe('userID Argument', () => {
+            it('must be present');
+            it('must be a string');
+            it('identifies the actor of this actions for auditing reasons');
         });
 
         describe('value Argument', () => {
@@ -284,12 +315,8 @@ describe('Attribute Object', () => {
         it('reverts the last commited change made by the same user who executes the undo function');
     });
 
-    describe('getWordingIssues', () => {
-        it('behaves like http://www.hemingwayapp.com/');
-    });
-
     // Attribute.getLastByID('1147')
-    describe('getValueByID Function', () => {
+    describe('getVariableByID Function', () => {
 
         describe('ID Argument', () => {
             it('must be present');
@@ -311,7 +338,7 @@ describe('Attribute Object', () => {
         });
     });
 
-    describe('getValueHistoryById Function', () => {
+    describe('getVariableHistoryById Function', () => {
 
         describe('ID Argument', () => {
             it('must be present');
@@ -336,7 +363,7 @@ describe('Attribute Object', () => {
 
     // Attribute.findByConcept({conceptName: 'user', userID: '4711'});
     //  -> { name: 'Peter', age: '24', bio: 'a long text descrbing the bio...' }
-    describe('findAttributeValuesByConcept Function', () => {
+    describe('getVariablesByConcept Function', () => {
         describe('conceptName Argument', () => {
             it('must be present');
             it('must be a string');

@@ -25,8 +25,8 @@
   "homepage": "https://github.com/specifyio/yabaas#readme",
   "dependencies": {
     "express": "~4.14.0",
-    "nlp_compromise": "~6.5.1",
-    "pg": "~6.1.2"
+    "pg": "~6.1.2",
+    "uuid": "~3.0.1"
   },
   "devDependencies": {
     "jasmine": "~2.5.3",
