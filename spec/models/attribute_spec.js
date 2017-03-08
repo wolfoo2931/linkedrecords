@@ -119,33 +119,33 @@ describe('Attribute Object', () => {
             it('must be present', (done) => {
                 delete this.validArgumentForDescriptionAttribute.name;
 
-                new Attribute(this.validArgumentForDescriptionAttribute).save((err) => {
-                    expect(err.message).toEqual('name argument must be present');
+                new Attribute(this.validArgumentForDescriptionAttribute).save((result) => {
+                    expect(result.message).toEqual('name argument must be present');
                     done();
                 });
             });
 
             it('must be a string', (done) => {
                 this.validArgumentForDescriptionAttribute.name = 4711;
-                new Attribute(this.validArgumentForDescriptionAttribute).save((err) => {
-                    expect(err.message).toEqual('name argument must be a string');
+                new Attribute(this.validArgumentForDescriptionAttribute).save((result) => {
+                    expect(result.message).toEqual('name argument must be a string');
                     done();
                 });
             });
 
             it('must not contain a "#"', (done) => {
                 this.validArgumentForDescriptionAttribute.name = 'invalid#name';
-                new Attribute(this.validArgumentForDescriptionAttribute).save((err) => {
-                    expect(err.message).toEqual('name argument must not include "#" character');
+                new Attribute(this.validArgumentForDescriptionAttribute).save((result) => {
+                    expect(result.message).toEqual('name argument must not include "#" character');
                     done();
                 });
             });
 
             it('must be unique among all other attribute names within the same domain', (done) => {
                 var self = this;
-                new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
-                    new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
-                        expect(err.message).toEqual('description attribute already exists for the domain: global.specify.io/domains/blog');
+                new Attribute(self.validArgumentForDescriptionAttribute).save((result) => {
+                    new Attribute(self.validArgumentForDescriptionAttribute).save((result) => {
+                        expect(result.message).toEqual('description attribute already exists for the domain: global.specify.io/domains/blog');
                         done();
                     });
                 });
@@ -155,10 +155,10 @@ describe('Attribute Object', () => {
                 var self = this;
                 self.validArgumentForDescriptionAttribute.domain = 'global.specify.io/domains/blog'
 
-                new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
+                new Attribute(self.validArgumentForDescriptionAttribute).save((result) => {
                     self.validArgumentForDescriptionAttribute.domain = 'global.specify.io/domains/shop'
-                    new Attribute(self.validArgumentForDescriptionAttribute).save((err) => {
-                        expect(err).toBe(null);
+                    new Attribute(self.validArgumentForDescriptionAttribute).save((result) => {
+                        expect(result).toBe(null);
                         done();
                     });
                 });
@@ -215,12 +215,44 @@ describe('Attribute Object', () => {
     describe('newVariable Function', () => {
 
         beforeEach((done) => {
-            done();
+
+            this.validAttributeArguments = {
+                name: 'name',
+                representationRule: '{{string}}',
+                domain: 'global.specify.io/domains/persons',
+                revisioning: {active: true},
+            };
+
+            this.validVariablesArguments = {
+                userID: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                belonging: {concept: 'user', id: '4711'},
+                attribute: 'name',
+                value: 'Peter'
+            };
+
+            new Attribute(this.validAttributeArguments).save(() => {
+                done();
+            })
         });
 
         describe('attribute Argument', () => {
-            it('must be present');
-            it('must be the name of an existing attribute');
+
+            it('must be present', (done) => {
+                delete this.validVariablesArguments.attribute;
+
+                Attribute.newVariable(this.validVariablesArguments, (result) => {
+                    expect(result.message).toEqual('attribute argument must be present');
+                    done();
+                });
+            });
+
+            it('must be the name of an existing attribute', (done) => {
+                this.validVariablesArguments.attribute = 'notexistingattributename'
+                Attribute.newVariable(this.validVariablesArguments, (result) => {
+                    expect(result.message).toEqual('attribute "notexistingattributename" does not exist');
+                    done();
+                });
+            });
         });
 
         describe('userID Argument', () => {
@@ -257,14 +289,14 @@ describe('Attribute Object', () => {
         describe('callback Function', () => {
             describe('id Argument', () => {
                 it('is a String', (done) => {
-                    Attribute.newVariable({userID: '698aafe8-dcd5-4ced-b969-ffc34a43f645', belonging: {concept: 'user', id: '4711'}, attribute: 'name', value: 'Peter'}, (id) => {
+                    Attribute.newVariable(this.validVariablesArguments, (id) => {
                         expect(id.length).not.toBe(0);
                         done();
                     });
                 });
 
                 it('can be used to retrieve the current variable value', (done) => {
-                    Attribute.newVariable({userID: '698aafe8-dcd5-4ced-b969-ffc34a43f645', belonging: {concept: 'user', id: '4711'}, attribute: 'name', value: 'Peter'}, (id) => {
+                    Attribute.newVariable(this.validVariablesArguments, (id) => {
                         Attribute.getVariableByID(id, (variable) => {
                             expect(variable.value).toEqual('Peter');
                             done();

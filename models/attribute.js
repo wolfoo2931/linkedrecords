@@ -55,11 +55,27 @@ Attribute.newVariable = function(args, deliver) {
     var variableID = uuid(),
         pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_');
 
+    if(!args.attribute) {
+        deliver(new Error('attribute argument must be present'));
+        return;
+    }
+
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        pgclient.query("CREATE TABLE " + pgTableName + " (user_id uuid, time timestamp, value TEXT, delta boolean); INSERT INTO " + pgTableName + " (user_id, time, value, delta) VALUES ('" + args.userID + "', NOW(), '" + args.value + "', false)", (err, result) => {
-            releaseDBConnection();
-            deliver(variableID);
+
+        pgclient.query("SELECT name FROM attributes WHERE name='" + args.attribute + "' LIMIT 1", (err, result)  => {
+          if(result.rows.length == 1) {
+              pgclient.query("CREATE TABLE " + pgTableName + " (user_id uuid, time timestamp, value TEXT, delta boolean); INSERT INTO " + pgTableName + " (user_id, time, value, delta) VALUES ('" + args.userID + "', NOW(), '" + args.value + "', false)", (err, result) => {
+                  deliver(variableID);
+              });
+          } else {
+              deliver(new Error('attribute "' + args.attribute + '" does not exist'));
+          }
+
+          releaseDBConnection();
+          return;
         });
+
+
     });
 };
 
