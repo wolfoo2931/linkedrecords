@@ -44,6 +44,7 @@ Attribute.prototype.save = function(deliver) {
                  deliver(null);
               });
           } else {
+              releaseDBConnection();
               deliver(new Error(self.name + ' attribute already exists for the domain: ' + self.domain));
           }
       });
@@ -96,15 +97,16 @@ Attribute.newVariable = function(args, deliver) {
               insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false)";
 
               pgclient.query(createVariableTableQuery + insertVariableValueQuery, (err, result) => {
+                  releaseDBConnection();
                   deliver(variableID);
+                  return;
               });
 
           } else {
+              releaseDBConnection();
               deliver(new Error('attribute "' + args.attribute + '" does not exist'));
+              return;
           }
-
-          releaseDBConnection();
-          return;
         });
 
     });
@@ -124,6 +126,7 @@ Attribute.getVariableByID = function(args, deliver) {
         pgclient.query("SELECT value FROM " + pgTableName + " WHERE delta=false ORDER BY time DESC LIMIT 1", (err, result) => {
 
             if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
+                releaseDBConnection();
                 deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
                 return;
             }
@@ -160,6 +163,7 @@ Attribute.changeVariable = function(args, deliver) {
         insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, change_id, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + changeID + "', '" + args.value + "', false)";
         pgclient.query(insertVariableValueQuery, (err, result) => {
             if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
+                releaseDBConnection();
                 deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
                 return;
             }
@@ -221,6 +225,7 @@ Attribute.getVariableHistoryById = function(args, deliver) {
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
         pgclient.query("SELECT actor_id, time, value FROM " + pgTableName + " ORDER BY time DESC", (err, result) => {
             if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
+                releaseDBConnection();
                 deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
                 return;
             }
