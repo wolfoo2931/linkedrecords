@@ -178,9 +178,25 @@ describe('Attribute Object', () => {
         });
 
         describe('domain Argument', () => {
-            it('must be present');
-            it('must not contain a "#"');
-            it('must be a domain identifier');
+
+            it('must be present', (done) => {
+                delete this.validArgumentForDescriptionAttribute.domain;
+
+                new Attribute(this.validArgumentForDescriptionAttribute).save((result) => {
+                    expect(result.message).toEqual('domain argument must be present');
+                    done();
+                });
+            });
+
+            it('must not contain a "#"', (done) => {
+                this.validArgumentForDescriptionAttribute.domain = 'not#valid';
+
+                new Attribute(this.validArgumentForDescriptionAttribute).save((result) => {
+                    expect(result.message).toEqual('domain argument must not include "#" character');
+                    done();
+                });
+            });
+
         });
 
         describe('revisioning Argument', () => {
@@ -212,7 +228,7 @@ describe('Attribute Object', () => {
     // Attribute.newVariable({belonging: {concept: 'user', id: '4711'}, attribute: 'name', value: 'Peter'});
     // Attribute.newVariable({belonging: {concept: 'user', id: '4711'}, attribute: 'age', value: '23'});
     // Attribute.newVariable({belonging: {concept: 'user', id: '4711'}, attribute: 'bio', value: 'a long text descrbing the biography of the user'});
-    fdescribe('newVariable Function', () => {
+    describe('newVariable Function', () => {
 
         beforeEach((done) => {
 
@@ -290,6 +306,14 @@ describe('Attribute Object', () => {
 
         describe('value Argument', () => {
             describe('when the attribute is not a collection of another attribute', () => {
+                it('must be present', (done) => {
+                    delete this.validVariablesArguments.value;
+                    Attribute.newVariable(this.validVariablesArguments, (result) => {
+                        expect(result.message).toEqual('value argument must be present');
+                        done();
+                    });
+                });
+
                 it('must match the attribute representaion rule');
                 it('must not be present if the attribute has a calculation function');
             });
@@ -318,14 +342,29 @@ describe('Attribute Object', () => {
 
                 it('can be used to retrieve the current variable value', (done) => {
                     Attribute.newVariable(this.validVariablesArguments, (id) => {
-                        Attribute.getVariableByID(id, (variable) => {
+                        Attribute.getVariableByID({variableId: id}, (variable) => {
                             expect(variable.value).toEqual('Peter');
                             done();
                         });
                     });
                 });
 
-                it('can be used to change the variable value');
+                it('can be used to change the variable value', (done) => {
+                  Attribute.newVariable(this.validVariablesArguments, (id) => {
+                      var changeArguments = {
+                          variableId: id,
+                          actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                          value: 'Paul'
+                      }
+
+                      Attribute.changeVariable(changeArguments, (changeId) => {
+                          Attribute.getVariableByID({variableId: id}, (variable) => {
+                              expect(variable.value).toEqual('Paul');
+                              done();
+                          });
+                      });
+                  });
+                });
 
             });
 
@@ -334,19 +373,17 @@ describe('Attribute Object', () => {
 
     // Attribute.changeVariable({variableId: '1147', value: '24'})
     // Attribute.changeVariable({variableId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
-    fdescribe('changeVariable Function', () => {
+    describe('changeVariable Function', () => {
 
         beforeEach((done) => {
-            var self = this;
-
-            self.validAttributeArguments = {
+            this.validAttributeArguments = {
                 name: 'name',
                 representationRule: '{{string}}',
                 domain: 'global.specify.io/domains/persons',
                 revisioning: {active: true},
             };
 
-            self.validVariablesArguments = {
+            this.validVariablesArguments = {
                 actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
                 belonging: {concept: 'user', id: '4711'},
                 attribute: 'name',
@@ -355,7 +392,7 @@ describe('Attribute Object', () => {
 
             new Attribute(this.validAttributeArguments).save(() => {
                 Attribute.newVariable(this.validVariablesArguments, (variableId) => {
-                    self.validChangeVariableArguments = {
+                    this.validChangeVariableArguments = {
                         variableId: variableId,
                         actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
                         value: 'Hans Peter'
@@ -363,7 +400,6 @@ describe('Attribute Object', () => {
                     done();
                 });
             });
-
         });
 
         describe('variableId Argument', () => {
@@ -386,9 +422,33 @@ describe('Attribute Object', () => {
         });
 
         describe('actorId Argument', () => {
-            it('must be present');
-            it('must be a string');
-            it('identifies the actor of this actions for auditing reasons');
+
+            it('must be present', (done) => {
+                delete this.validChangeVariableArguments.actorId;
+
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('actorId argument must be present');
+                    done();
+                });
+            });
+
+            it('must be a uuid', (done) => {
+                this.validChangeVariableArguments.actorId = 'not-a-valid-uuid';
+
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('actorId is "not-a-valid-uuid" but it must be a valid uuid');
+                    done();
+                });
+            });
+
+            it('identifies the actor of this actions for auditing reasons', (done) => {
+                Attribute.changeVariable(this.validChangeVariableArguments, (changeId) => {
+                    Attribute.getChangeById({variableId: this.validChangeVariableArguments.variableId, changeId: changeId}, (result) => {
+                        expect(result.actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
+                        done();
+                    });
+                });
+            });
         });
 
         describe('value Argument', () => {
@@ -401,13 +461,113 @@ describe('Attribute Object', () => {
             it('must not be present when the value argument is given');
         });
 
+        describe('callback Function', () => {
+            describe('id Argument', () => {
+
+                it('is a uuid', (done) => {
+                    Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                        expect(result.length).toBe(36);
+                        done();
+                    });
+                });
+
+                it('can be used to retrieve the change', (done) => {
+                    Attribute.changeVariable(this.validChangeVariableArguments, (IdFirstChange) => {
+                        this.validChangeVariableArguments.value = 'Hans Juergen Peter';
+                        Attribute.changeVariable(this.validChangeVariableArguments, (IdSecondChange) => {
+                            Attribute.getChangeById({changeId: IdFirstChange, variableId: this.validChangeVariableArguments.variableId}, (result) => {
+                                expect(result.value).toEqual('Hans Peter');
+                                done();
+                            });
+                        });
+                    });
+                });
+            });
+        });
+
         it('does\'t change the value when the attributes representation format is violated');
         it('throws an exception when the attributes representation format is violated');
         it('throws an exception when the actor (user) dosn\'t has the permission to change the attribute variable value');
         it('throws an exception when the attribute has a calculation function');
-
-        it('returns a change id');
     });
+
+    describe('getChangeById Function', () => {
+
+        beforeEach((done) => {
+            this.validAttributeArguments = {
+                name: 'name',
+                representationRule: '{{string}}',
+                domain: 'global.specify.io/domains/persons',
+                revisioning: {active: true},
+            };
+
+            this.validVariablesArguments = {
+                actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                belonging: {concept: 'user', id: '4711'},
+                attribute: 'name',
+                value: 'Peter'
+            };
+
+            new Attribute(this.validAttributeArguments).save(() => {
+                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                    this.variableId = variableId;
+                    var validChangeVariableArguments = {
+                        variableId: variableId,
+                        actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                        value: 'Hans Peter'
+                    };
+
+                    Attribute.changeVariable(validChangeVariableArguments, (changeId) => {
+                        this.changeId = changeId;
+                        done();
+                    });
+                });
+            });
+        });
+
+        describe('variableId Argument', () => {
+            it('must be present', (done) => {
+                Attribute.getChangeById({changeId: this.changeId}, (result) => {
+                    expect(result.message).toEqual('variableId argument must be present');
+                    done();
+                });
+            });
+
+            it('must be the id of an existing variable', (done) => {
+                Attribute.getChangeById({variableId: 'not-existing-variableId', changeId: this.changeId}, (result) => {
+                    expect(result.message).toEqual('variable with id "not-existing-variableId" does not exist');
+                    done();
+                });
+            });
+        });
+
+        describe('changeId Argument', () => {
+
+            it('must be present', (done) => {
+                Attribute.getChangeById({variableId: this.variableId}, (result) => {
+                    expect(result.message).toEqual('changeId argument must be present');
+                    done();
+                });
+            });
+
+            it('must be the id of an existing change', (done) => {
+                Attribute.getChangeById({variableId: this.variableId, changeId: 'not-existing-changeId'}, (result) => {
+                    expect(result.message).toEqual('change for variable "' + this.variableId + '" with id "not-existing-changeId" does not exist');
+                    done();
+                });
+            });
+        });
+
+        describe('return Value', () => {
+            it('is an object', (done) => {
+                Attribute.getChangeById({variableId: this.variableId, changeId: this.changeId}, (result) => {
+                    expect(typeof result).toEqual('object');
+                    expect(result.actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
+                    done();
+                });
+            });
+        });
+    })
 
     describe('undo Function', () => {
         it('reverts the last commited change made by the same user who executes the undo function');
@@ -416,9 +576,60 @@ describe('Attribute Object', () => {
     // Attribute.getLastByID('1147')
     describe('getVariableByID Function', () => {
 
+        beforeEach((done) => {
+            this.validAttributeArguments = {
+                name: 'name',
+                representationRule: '{{string}}',
+                domain: 'global.specify.io/domains/persons',
+                revisioning: {active: true},
+            };
+
+            this.validVariablesArguments = {
+                actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                belonging: {concept: 'user', id: '4711'},
+                attribute: 'name',
+                value: 'Peter'
+            };
+
+            new Attribute(this.validAttributeArguments).save(() => {
+                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                    this.variableId = variableId;
+                    done();
+                });
+            });
+        });
+
         describe('ID Argument', () => {
-            it('must be present');
-            it('must be an ID of an attribute value which has been created with the newVariable function');
+
+            it('must be present', (done) => {
+                Attribute.getVariableByID({}, (result) => {
+                    expect(result.message).toEqual('variableId argument must be present');
+                    done();
+                });
+            });
+
+            it('must be an ID of an attribute value which has been created with the newVariable function', (done) => {
+                Attribute.getVariableByID({variableId: 'not-existing-variable-id'}, (result) => {
+                    expect(result.message).toEqual('variable with id "not-existing-variable-id" does not exist');
+                    done();
+                });
+            });
+        });
+
+        describe('return Value', () => {
+            it('is an object containing a key called "value"', (done) => {
+                Attribute.getVariableByID({variableId: this.variableId}, (result) => {
+                    expect(typeof result).toEqual('object');
+                    done();
+                });
+            });
+
+            it('contains the last variable value', (done) => {
+                Attribute.getVariableByID({variableId: this.variableId}, (result) => {
+                    expect(result.value).toEqual('Peter');
+                    done();
+                });
+            });
         });
 
         describe('when the attribute has a calculation function', () => {
@@ -536,19 +747,19 @@ describe('Attribute Object', () => {
 
     // Attribute.findByConcept({conceptName: 'user', userID: '4711'});
     //  -> { name: 'Peter', age: '24', bio: 'a long text descrbing the bio...' }
-    xdescribe('getVariablesByConcept Function', () => {
-        describe('conceptName Argument', () => {
-            it('must be present');
-            it('must be a string');
-            it('represents the name of a concept');
-        });
-
-        describe('*ID Argument', () => {
-            it('must be present');
-            it('is named like the conceptName and "ID" as suffix (e.g. \'userID\', when \'user\' is the conceptName)');
-        });
-
-        it('returns an Object with keys values pairs representing the attributes/values created for the given concept \n e.g. { name: \'Peter\', age: \'24\', bio: \'a long text descrbing the bio...\' }');
-    })
+    // describe('getVariablesByConcept Function', () => {
+    //     describe('conceptName Argument', () => {
+    //         it('must be present');
+    //         it('must be a string');
+    //         it('represents the name of a concept');
+    //     });
+    //
+    //     describe('*ID Argument', () => {
+    //         it('must be present');
+    //         it('is named like the conceptName and "ID" as suffix (e.g. \'userID\', when \'user\' is the conceptName)');
+    //     });
+    //
+    //     it('returns an Object with keys values pairs representing the attributes/values created for the given concept \n e.g. { name: \'Peter\', age: \'24\', bio: \'a long text descrbing the bio...\' }');
+    // })
 
 });
