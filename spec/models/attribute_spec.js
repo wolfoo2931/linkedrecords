@@ -457,19 +457,26 @@ describe('Attribute Object', () => {
         });
 
         describe('changeset Argument', () => {
-            it('must be present when the value argument is missing');
+
+            it('must be present when the value argument is missing', () => {
+
+            });
+
+
             it('must not be present when the value argument is given');
         });
 
         describe('callback Function', () => {
             describe('id Argument', () => {
 
-                it('is a uuid', (done) => {
+                it('is a integer', (done) => {
                     Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
-                        expect(result.length).toBe(36);
+                        expect(result).toEqual(jasmine.any(Number));
                         done();
                     });
                 });
+
+                it('represents the order of the changes');
 
                 it('can be used to retrieve the change', (done) => {
                     Attribute.changeVariable(this.validChangeVariableArguments, (IdFirstChange) => {

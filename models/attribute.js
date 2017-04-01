@@ -93,7 +93,7 @@ Attribute.newVariable = function(args, deliver) {
         pgclient.query("SELECT name FROM attributes WHERE name='" + args.attribute + "' LIMIT 1", (err, result)  => {
           if(result.rows.length == 1) {
 
-              createVariableTableQuery = "CREATE TABLE " + pgTableName + " (actor_id uuid, time timestamp, change_id uuid, value TEXT, delta boolean);";
+              createVariableTableQuery = "CREATE TABLE " + pgTableName + " (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean);";
               insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false)";
 
               pgclient.query(createVariableTableQuery + insertVariableValueQuery, (err, result) => {
@@ -140,7 +140,7 @@ Attribute.getVariableByID = function(args, deliver) {
 Attribute.changeVariable = function(args, deliver) {
     var pgTableName,
         insertVariableValueQuery,
-        changeID = uuid();
+        changeID;
 
     if(!args.variableId) {
         deliver(new Error('variableId argument must be present'));
@@ -160,15 +160,20 @@ Attribute.changeVariable = function(args, deliver) {
     pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, change_id, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + changeID + "', '" + args.value + "', false)";
+        insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false) RETURNING change_id";
         pgclient.query(insertVariableValueQuery, (err, result) => {
+            if(!err) {
+                changeID = result.rows[0].change_id;
+            }
+
             if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
                 releaseDBConnection();
                 deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
                 return;
             }
+
             releaseDBConnection();
-            deliver(changeID);
+            deliver(err || changeID);
         });
     });
 };
