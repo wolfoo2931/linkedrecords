@@ -52,17 +52,6 @@ Attribute.prototype.save = function(deliver) {
   });
 };
 
-Attribute.deleteAllVariables = function(deliver) {
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        pgclient.query("SELECT * FROM pg_catalog.pg_tables WHERE tablename LIKE 'var_%'", (err, result) => {
-            pgclient.query("DROP TABLE " + result.rows.map((t) => {return t.tablename}).join(','), (err, result) => {
-                releaseDBConnection();
-                deliver();
-            });
-        });
-    });
-}
-
 Attribute.newVariable = function(args, deliver) {
     var variableID = uuid(),
         pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_').toLowerCase(),
@@ -198,5 +187,16 @@ Attribute.changeVariable = function(args, deliver) {
         });
     });
 };
+
+Attribute.deleteAllVariables = function(deliver) {
+    pgPool.connect(function(err, pgclient, releaseDBConnection) {
+        pgclient.query("SELECT * FROM pg_catalog.pg_tables WHERE tablename LIKE 'var_%'", (err, result) => {
+            pgclient.query("DROP TABLE " + result.rows.map((t) => {return t.tablename}).join(','), (err, result) => {
+                releaseDBConnection();
+                deliver();
+            });
+        });
+    });
+}
 
 module.exports = Attribute;
