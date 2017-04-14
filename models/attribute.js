@@ -199,45 +199,6 @@ Attribute.changeVariable = function(args, deliver) {
     });
 };
 
-Attribute.getChangeById = function(args, deliver) {
-    var pgTableName;
-
-    if(!args.variableId) {
-        deliver(new Error('variableId argument must be present'));
-        return;
-    }
-
-    if(!args.changeId) {
-        deliver(new Error('changeId argument must be present'));
-        return;
-    }
-
-    pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
-
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        pgclient.query("SELECT actor_id, time, value FROM " + pgTableName + "  WHERE change_id = '" + args.changeId +  "' LIMIT 1", (err, result) => {
-            if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
-                releaseDBConnection();
-                deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
-                return;
-            }
-
-            if(!result) {
-                releaseDBConnection();
-                deliver(new Error('change for variable "' + args.variableId + '" with id "' + args.changeId + '" does not exist'));
-                return;
-            }
-
-            releaseDBConnection();
-            deliver(result.rows.map((x) => {
-                x.actorId = x.actor_id;
-                delete x.actor_id
-                return x;
-            })[0]);
-        });
-    });
-}
-
 Attribute.getVariableHistoryById = function(args, deliver) {
     var pgTableName;
 
