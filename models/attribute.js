@@ -199,32 +199,4 @@ Attribute.changeVariable = function(args, deliver) {
     });
 };
 
-Attribute.getVariableHistoryById = function(args, deliver) {
-    var pgTableName;
-
-    if(!args.variableId) {
-        deliver(new Error('variableId argument must be present'));
-        return;
-    }
-
-    pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
-
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        pgclient.query("SELECT actor_id, time, value FROM " + pgTableName + " ORDER BY time DESC", (err, result) => {
-            if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
-                releaseDBConnection();
-                deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
-                return;
-            }
-
-            releaseDBConnection();
-            deliver(result.rows.map((row) => {
-                row.actorId = row.actor_id;
-                delete row.actor_id;
-                return row;
-            }));
-        });
-    });
-};
-
 module.exports = Attribute;

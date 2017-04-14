@@ -288,14 +288,7 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('identifies the actor of this actions for authorization and auditing reasons', (done) => {
-                Attribute.newVariable(this.validVariablesArguments, (result) => {
-                    Attribute.getVariableHistoryById({variableId: result}, (result) => {
-                        expect(result[0].actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
-                        done();
-                    });
-                });
-            });
+            it('identifies the actor of this actions for authorization and auditing reasons');
         });
 
         describe('belonging Argument', () => {
@@ -607,120 +600,5 @@ describe('Attribute Object', () => {
             it('returns the last attribute value');
         });
     });
-
-    describe('getVariableHistoryById Function', () => {
-        beforeEach((done) => {
-            var self = this;
-
-            self.validAttributeArguments = {
-                name: 'name',
-                representationRule: '{{string}}',
-                domain: 'global.specify.io/domains/persons',
-                revisioning: {active: true},
-            };
-
-            self.validVariablesArguments = {
-                actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                belonging: {concept: 'user', id: '4711'},
-                attribute: 'name',
-                value: 'Peter'
-            };
-
-            new Attribute(this.validAttributeArguments).save(() => {
-                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
-                    self.validArguments = {
-                        variableId: variableId
-                    };
-                    done();
-                });
-            });
-        });
-
-        describe('variableId Argument', () => {
-            it('must be present', (done) => {
-                delete this.validArguments.variableId;
-                Attribute.getVariableHistoryById(this.validArguments, (result) => {
-                    expect(result.message).toEqual('variableId argument must be present');
-                    done();
-                });
-            });
-
-            it('must be an Id of an attribute variable which has been created with the newVariable function', (done) => {
-                this.validArguments.variableId = 'not-existing-variable-id';
-                Attribute.getVariableHistoryById(this.validArguments, (result) => {
-                    expect(result.message).toEqual('variable with id "' + this.validArguments.variableId + '" does not exist');
-                    done();
-                });
-            });
-        });
-
-        describe('resolution Argument', () => {
-            it('is optional');
-            it('must be an integer representing milliseconds');
-        });
-
-        describe('Return Value', () => {
-            it('is an array', (done) => {
-                Attribute.getVariableHistoryById(this.validArguments, (result) => {
-                    expect(Array.isArray(result)).toBe(true);
-                    done();
-                });
-            });
-
-            it('contains only objects', (done) => {
-                Attribute.getVariableHistoryById(this.validArguments, (result) => {
-                    var objectResults = result.filter((x) => { return typeof x == 'object'});
-                    expect(objectResults.length).toBe(result.length);
-                    done();
-                });
-            });
-
-            it('objects has the key time', (done) => {
-                Attribute.getVariableHistoryById(this.validArguments, (result) => {
-                    var objectWithTimeKey = result.filter((x) => { return !!x.time});
-                    expect(objectWithTimeKey.length).toBe(result.length);
-                    done();
-                });
-            });
-
-            it('objects is sorted so that the current value is the first array entry', (done) => {
-                var validChangeVariableArguments = {
-                    variableId: this.validArguments.variableId,
-                    actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                    value: 'Hans Peter'
-                };
-
-                Attribute.changeVariable(validChangeVariableArguments, (result) => {
-                    Attribute.getVariableHistoryById(this.validArguments, (result) => {
-                        expect(result.length).toBe(2);
-                        expect(result[0].value).toEqual('Hans Peter');
-                        done();
-                    });
-                });
-            });
-
-            it('objects has the key changeset if the key value is not present');
-            it('objects has the key value if the key changeset is not present');
-        });
-
-    });
-
-
-    // Attribute.findByConcept({conceptName: 'user', userID: '4711'});
-    //  -> { name: 'Peter', age: '24', bio: 'a long text descrbing the bio...' }
-    // describe('getVariablesByConcept Function', () => {
-    //     describe('conceptName Argument', () => {
-    //         it('must be present');
-    //         it('must be a string');
-    //         it('represents the name of a concept');
-    //     });
-    //
-    //     describe('*ID Argument', () => {
-    //         it('must be present');
-    //         it('is named like the conceptName and "ID" as suffix (e.g. \'userID\', when \'user\' is the conceptName)');
-    //     });
-    //
-    //     it('returns an Object with keys values pairs representing the attributes/values created for the given concept \n e.g. { name: \'Peter\', age: \'24\', bio: \'a long text descrbing the bio...\' }');
-    // })
 
 });
