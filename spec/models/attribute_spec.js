@@ -299,9 +299,9 @@ describe('Attribute Object', () => {
                 value: 'Peter'
             };
 
-            promises.push(new Promise((resolve, reject) => {
+            new Attribute(this.validAttributeArguments).save(() => {
 
-                new Attribute(this.validAttributeArguments).save(() => {
+                promises.push(new Promise((resolve, reject) => {
                     Attribute.newVariable(this.validVariablesArguments, (variableId) => {
                         this.variableId = variableId;
                         this.validChangeVariableArguments = {
@@ -311,28 +311,28 @@ describe('Attribute Object', () => {
                         };
                         resolve();
                     });
-                });
+                }));
 
-            }));
-
-            promises.push(new Promise((resolve, reject) => {
-                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
-                    this.complicatedVariableId = variableId;
-                    Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter'}, (result) => {
-                        Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=5-1+1=4|KP|kp', parentVersion: result.id}}, (result) => {
-                            Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter pan'}, (result) => {
-                                Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=e|K|k', parentVersion: result.id}}, (result) => {
-                                    Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '=6-1+1=8|P|p', parentVersion: result.id}}, (result) => {
-                                        resolve();
+                promises.push(new Promise((resolve, reject) => {
+                    Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                        this.complicatedVariableId = variableId;
+                        Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter'}, (result) => {
+                            Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=5-1+1=4|KP|kp', parentVersion: result.id}}, (result) => {
+                                Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter pan'}, (result) => {
+                                    Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=e|K|k', parentVersion: result.id}}, (result) => {
+                                        Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '=6-1+1=8|P|p', parentVersion: result.id}}, (result) => {
+                                            resolve();
+                                        });
                                     });
                                 });
                             });
                         });
                     });
-                });
-            }));
+                }));
 
-            Promise.all(promises).then(done);
+                Promise.all(promises).then(done);
+
+            });
 
         });
 
@@ -490,7 +490,7 @@ describe('Attribute Object', () => {
             describe('transformedServerChange Argument', () => {
                 it('is set when changeVariable has been called with the change argument');
                 it('is NOT set when changeVariable has been called with the value argument');
-                fit('can be applied on the client (which emmited the change) to catch up the server state', (done) => {
+                it('can be applied on the client (which emmited the change) to catch up the server state', (done) => {
                     var clientChange = '=c-1+1=2+3|Pium|p',
                         clientSateAfterChange = 'klaus peter Panium',
                         updatedClientSate;
