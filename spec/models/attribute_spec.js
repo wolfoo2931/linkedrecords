@@ -279,7 +279,7 @@ describe('Attribute Object', () => {
 
     // Attribute.changeVariable({variableId: '1147', value: '24'})
     // Attribute.changeVariable({variableId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
-    describe('changeVariable Function', () => {
+    fdescribe('changeVariable Function', () => {
 
         beforeEach((done) => {
             this.validAttributeArguments = {
@@ -347,7 +347,14 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('identifies the actor of this actions for auditing reasons');
+            it('identifies the actor of this actions for auditing reasons', (done) => {
+                Attribute.changeVariable(this.validChangeVariableArguments, (change) => {
+                    Attribute.getVariable({variableId: this.validChangeVariableArguments.variableId, changeId: change.id}, (result) => {
+                        expect(result.actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
+                        done();
+                    });
+                });
+            });
         });
 
         describe('value Argument', () => {

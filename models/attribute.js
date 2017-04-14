@@ -10,6 +10,8 @@ var Attribute = function (args) {
     this.domain = args.domain;
 };
 
+// TODO: Assable this object from a base class and a couple of decorator classes (base class and decorator classes have exactly the same interface)
+// new AttributeTimeRecorder(new AttributeAuthorizer(new AttributeArgumentVerificator(new PGAttribute())))
 Attribute.prototype.save = function(deliver) {
   var self = this;
   if(!self.name) {
@@ -103,7 +105,7 @@ Attribute.newVariable = function(args, deliver) {
 };
 
 Attribute.getVariable = function(args, deliver) {
-    var pgTableName, value, changeId, changeIdLimitationSQLAddition = '';
+    var pgTableName, value, changeId, actorId, changeIdLimitationSQLAddition = '';
 
     if(!args.variableId) {
         deliver(new Error('variableId argument must be present'));
@@ -112,14 +114,14 @@ Attribute.getVariable = function(args, deliver) {
 
     pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
-    //TODO: cache computed value
+    //TODO: Performance Optimization: cache computed value
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
 
         if(args.changeId) {
             changeIdLimitationSQLAddition = "AND change_id <= " + args.changeId + " ";
         }
 
-        pgclient.query("SELECT value, change_id FROM " + pgTableName + " WHERE delta=false " + changeIdLimitationSQLAddition + "ORDER BY change_id DESC LIMIT 1", (err, lastNonDeltaRow) => {
+        pgclient.query("SELECT value, change_id, actor_id FROM " + pgTableName + " WHERE delta=false " + changeIdLimitationSQLAddition + "ORDER BY change_id DESC LIMIT 1", (err, lastNonDeltaRow) => {
             if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
                 releaseDBConnection();
                 deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
@@ -128,15 +130,17 @@ Attribute.getVariable = function(args, deliver) {
 
             value = lastNonDeltaRow.rows[0].value;
             changeId = lastNonDeltaRow.rows[0].change_id;
+            actorId = lastNonDeltaRow.rows[0].actor_id;
 
-            pgclient.query("SELECT value, change_id FROM " + pgTableName + " WHERE change_id > " + lastNonDeltaRow.rows[0].change_id + changeIdLimitationSQLAddition +" AND delta=true ORDER BY change_id ASC", (err, changes) => {
+            pgclient.query("SELECT value, change_id, actor_id FROM " + pgTableName + " WHERE change_id > " + lastNonDeltaRow.rows[0].change_id + changeIdLimitationSQLAddition +" AND delta=true ORDER BY change_id ASC", (err, changes) => {
                 changes.rows.forEach((row) => {
                     value = Changeset.unpack(row.value).apply(value);
                     changeId = row.change_id;
+                    actorId = row.actor_id;
                 })
 
                 releaseDBConnection();
-                deliver({value: value, changeId: changeId});
+                deliver({value: value, changeId: changeId, actorId: actorId});
             });
 
         });
