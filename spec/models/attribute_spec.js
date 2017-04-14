@@ -248,7 +248,7 @@ describe('Attribute Object', () => {
 
                 it('can be used to retrieve the current variable value', (done) => {
                     Attribute.newVariable(this.validVariablesArguments, (id) => {
-                        Attribute.getVariableByID({variableId: id}, (variable) => {
+                        Attribute.getVariable({variableId: id}, (variable) => {
                             expect(variable.value).toEqual('Peter');
                             done();
                         });
@@ -264,7 +264,7 @@ describe('Attribute Object', () => {
                       }
 
                       Attribute.changeVariable(changeArguments, (changeId) => {
-                          Attribute.getVariableByID({variableId: id}, (variable) => {
+                          Attribute.getVariable({variableId: id}, (variable) => {
                               expect(variable.value).toEqual('Paul');
                               done();
                           });
@@ -403,15 +403,7 @@ describe('Attribute Object', () => {
                 });
             });
 
-            // it('must contain an existing parent version', (done) => {
-            //     delete this.validChangeVariableArguments.value;
-            //     this.validChangeVariableArguments.change = {changeset: '=4+7=6| Jürgen|'}
-            //
-            //     Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
-            //         expect(result.message).toEqual('change must contain a perant version');
-            //         done();
-            //     });
-            // });
+            it('must contain an existing parent version');
         });
 
         describe('callback Function', () => {
@@ -437,7 +429,7 @@ describe('Attribute Object', () => {
     });
 
     // Attribute.getLastByID('1147')
-    describe('getVariableByID Function', () => {
+    describe('getVariable Function', () => {
 
         beforeEach((done) => {
             this.validAttributeArguments = {
@@ -465,14 +457,14 @@ describe('Attribute Object', () => {
         describe('ID Argument', () => {
 
             it('must be present', (done) => {
-                Attribute.getVariableByID({}, (result) => {
+                Attribute.getVariable({}, (result) => {
                     expect(result.message).toEqual('variableId argument must be present');
                     done();
                 });
             });
 
             it('must be an ID of an attribute value which has been created with the newVariable function', (done) => {
-                Attribute.getVariableByID({variableId: 'not-existing-variable-id'}, (result) => {
+                Attribute.getVariable({variableId: 'not-existing-variable-id'}, (result) => {
                     expect(result.message).toEqual('variable with id "not-existing-variable-id" does not exist');
                     done();
                 });
@@ -481,14 +473,14 @@ describe('Attribute Object', () => {
 
         describe('return Value', () => {
             it('is an object containing a key called "value"', (done) => {
-                Attribute.getVariableByID({variableId: this.variableId}, (result) => {
+                Attribute.getVariable({variableId: this.variableId}, (result) => {
                     expect(typeof result).toEqual('object');
                     done();
                 });
             });
 
             it('contains the last variable value', (done) => {
-                Attribute.getVariableByID({variableId: this.variableId}, (result) => {
+                Attribute.getVariable({variableId: this.variableId}, (result) => {
                     expect(result.value).toEqual('Peter');
                     done();
                 });
