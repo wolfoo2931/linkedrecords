@@ -441,14 +441,7 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('identifies the actor of this actions for auditing reasons', (done) => {
-                Attribute.changeVariable(this.validChangeVariableArguments, (changeId) => {
-                    Attribute.getChangeById({variableId: this.validChangeVariableArguments.variableId, changeId: changeId}, (result) => {
-                        expect(result.actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
-                        done();
-                    });
-                });
-            });
+            it('identifies the actor of this actions for auditing reasons');
         });
 
         describe('value Argument', () => {
@@ -527,17 +520,7 @@ describe('Attribute Object', () => {
 
                 it('represents the order of the changes');
 
-                it('can be used to retrieve the change', (done) => {
-                    Attribute.changeVariable(this.validChangeVariableArguments, (IdFirstChange) => {
-                        this.validChangeVariableArguments.value = 'Hans Juergen Peter';
-                        Attribute.changeVariable(this.validChangeVariableArguments, (IdSecondChange) => {
-                            Attribute.getChangeById({changeId: IdFirstChange, variableId: this.validChangeVariableArguments.variableId}, (result) => {
-                                expect(result.value).toEqual('Hans Peter');
-                                done();
-                            });
-                        });
-                    });
-                });
+                it('can be used to retrieve the change');
             });
         });
 
@@ -546,84 +529,6 @@ describe('Attribute Object', () => {
         it('throws an exception when the actor (user) dosn\'t has the permission to change the attribute variable value');
         it('throws an exception when the attribute has a calculation function');
     });
-
-    describe('getChangeById Function', () => {
-
-        beforeEach((done) => {
-            this.validAttributeArguments = {
-                name: 'name',
-                representationRule: '{{string}}',
-                domain: 'global.specify.io/domains/persons',
-                revisioning: {active: true},
-            };
-
-            this.validVariablesArguments = {
-                actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                belonging: {concept: 'user', id: '4711'},
-                attribute: 'name',
-                value: 'Peter'
-            };
-
-            new Attribute(this.validAttributeArguments).save(() => {
-                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
-                    this.variableId = variableId;
-                    var validChangeVariableArguments = {
-                        variableId: variableId,
-                        actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                        value: 'Hans Peter'
-                    };
-
-                    Attribute.changeVariable(validChangeVariableArguments, (changeId) => {
-                        this.changeId = changeId;
-                        done();
-                    });
-                });
-            });
-        });
-
-        describe('variableId Argument', () => {
-            it('must be present', (done) => {
-                Attribute.getChangeById({changeId: this.changeId}, (result) => {
-                    expect(result.message).toEqual('variableId argument must be present');
-                    done();
-                });
-            });
-
-            it('must be the id of an existing variable', (done) => {
-                Attribute.getChangeById({variableId: 'not-existing-variableId', changeId: this.changeId}, (result) => {
-                    expect(result.message).toEqual('variable with id "not-existing-variableId" does not exist');
-                    done();
-                });
-            });
-        });
-
-        describe('changeId Argument', () => {
-
-            it('must be present', (done) => {
-                Attribute.getChangeById({variableId: this.variableId}, (result) => {
-                    expect(result.message).toEqual('changeId argument must be present');
-                    done();
-                });
-            });
-
-            it('must be the id of an existing change', (done) => {
-                Attribute.getChangeById({variableId: this.variableId, changeId: 'not-existing-changeId'}, (result) => {
-                    expect(result.message).toEqual('change for variable "' + this.variableId + '" with id "not-existing-changeId" does not exist');
-                    done();
-                });
-            });
-        });
-
-        describe('return Value', () => {
-            it('is an object', (done) => {
-                Attribute.getChangeById({variableId: this.variableId, changeId: this.changeId}, (result) => {
-                    expect(typeof result).toEqual('object');
-                    expect(result.actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
-                    done();
-                });
-            });
-        });
-    })
 
     describe('undo Function', () => {
         it('reverts the last commited change made by the same user who executes the undo function');
