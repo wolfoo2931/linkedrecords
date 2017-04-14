@@ -103,7 +103,7 @@ Attribute.newVariable = function(args, deliver) {
 };
 
 Attribute.getVariable = function(args, deliver) {
-    var pgTableName;
+    var pgTableName, value, changeId, changeIdLimitationSQLAddition = '';
 
     if(!args.variableId) {
         deliver(new Error('variableId argument must be present'));
@@ -112,17 +112,33 @@ Attribute.getVariable = function(args, deliver) {
 
     pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
+    //TODO: cache computed value
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        pgclient.query("SELECT value FROM " + pgTableName + " WHERE delta=false ORDER BY time DESC LIMIT 1", (err, result) => {
 
+        if(args.changeId) {
+            changeIdLimitationSQLAddition = "AND change_id <= " + args.changeId + " ";
+        }
+
+        pgclient.query("SELECT value, change_id FROM " + pgTableName + " WHERE delta=false " + changeIdLimitationSQLAddition + "ORDER BY change_id DESC LIMIT 1", (err, lastNonDeltaRow) => {
             if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
                 releaseDBConnection();
                 deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
                 return;
             }
 
-            releaseDBConnection();
-            deliver({value: result.rows[0].value});
+            value = lastNonDeltaRow.rows[0].value;
+            changeId = lastNonDeltaRow.rows[0].change_id;
+
+            pgclient.query("SELECT value, change_id FROM " + pgTableName + " WHERE change_id > " + lastNonDeltaRow.rows[0].change_id + changeIdLimitationSQLAddition +" AND delta=true ORDER BY change_id ASC", (err, changes) => {
+                changes.rows.forEach((row) => {
+                    value = Changeset.unpack(row.value).apply(value);
+                    changeId = row.change_id;
+                })
+
+                releaseDBConnection();
+                deliver({value: value, changeId: changeId});
+            });
+
         });
     });
 };
@@ -150,7 +166,7 @@ Attribute.changeVariable = function(args, deliver) {
 
     if(args.change) {
         try {
-            unpackedChangeset = Changeset.unpack(args.change);
+            unpackedChangeset = Changeset.unpack(args.change.changeset);
         } catch(err) {
             deliver(new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)'));
             return;
@@ -170,7 +186,12 @@ Attribute.changeVariable = function(args, deliver) {
     pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false) RETURNING change_id";
+        if(args.value) {
+            insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false) RETURNING change_id";
+        } else if(args.change) {
+            insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.change.changeset + "', true) RETURNING change_id";
+        }
+
         pgclient.query(insertVariableValueQuery, (err, result) => {
             if(!err) {
                 changeID = result.rows[0].change_id;

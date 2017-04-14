@@ -421,6 +421,11 @@ describe('Attribute Object', () => {
                 it('can be used to retrieve the change');
             });
 
+            describe('transformedChange Argument', () => {
+                it('is set when changeVariable has been called with the change argument');
+                it('is NOT set when changeVariable has been called with the value argument');
+            });
+
         });
 
         it('does\'t change the value when the attributes representation format is violated');
@@ -433,6 +438,10 @@ describe('Attribute Object', () => {
     describe('getVariable Function', () => {
 
         beforeEach((done) => {
+
+            var promises = [],
+                actorId = '698aafe8-dcd5-4ced-b969-ffc34a43f645';
+
             this.validAttributeArguments = {
                 name: 'name',
                 representationRule: '{{string}}',
@@ -447,16 +456,60 @@ describe('Attribute Object', () => {
                 value: 'Peter'
             };
 
-            new Attribute(this.validAttributeArguments).save(() => {
-                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
-                    this.variableId = variableId;
-                    done();
+            // create a variable its value has been changed by specifying the new value (absolute changes, no changeset)
+            promises.push(new Promise((resolve, reject) => {
+                new Attribute(this.validAttributeArguments).save(() => {
+                    Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                        this.AbsoluteChangedVariableId = variableId;
+                        Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'Klaus Peter'}, () => {
+                            Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'Klaus Peter Pan'}, () => {
+                                resolve();
+                            });
+                        });
+                    });
                 });
-            });
+            }));
+
+            // create a variable its value has been changed by applying changesets
+            promises.push(new Promise((resolve, reject) => {
+                new Attribute(this.validAttributeArguments).save(() => {
+                    Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                        this.RelativeChangedVariableId = variableId;
+                        Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '+6=5|Klaus |', parentVersion: 1}}, (result) => {
+                            Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '=b+4| Pan|', parentVersion: result.id}}, () => {
+                                resolve();
+                            });
+                        });
+                    });
+                });
+            }));
+
+            // create a variable its value has been changed by applying changesets and specifying absolute values
+            promises.push(new Promise((resolve, reject) => {
+                new Attribute(this.validAttributeArguments).save(() => {
+                    Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                        this.MixedChangedVariableId = variableId;
+                        Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter'}, (result) => {
+                            Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=5-1+1=4|KP|kp', parentVersion: result.id}}, (result) => {
+                                Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter pan'}, (result) => {
+                                    Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=e|K|k', parentVersion: result.id}}, (result) => {
+                                        Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '=6-1+1=8|P|p', parentVersion: result.id}}, (result) => {
+                                            Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '=c-1+1=2|P|p', parentVersion: result.id}}, (result) => {
+                                                resolve();
+                                            });
+                                        });
+                                    });
+                                });
+                            });
+                        });
+                    });
+                });
+            }));
+
+            Promise.all(promises).then(done);
         });
 
         describe('ID Argument', () => {
-
             it('must be present', (done) => {
                 Attribute.getVariable({}, (result) => {
                     expect(result.message).toEqual('variableId argument must be present');
@@ -472,20 +525,80 @@ describe('Attribute Object', () => {
             });
         });
 
-        describe('return Value', () => {
-            it('is an object containing a key called "value"', (done) => {
-                Attribute.getVariable({variableId: this.variableId}, (result) => {
-                    expect(typeof result).toEqual('object');
-                    done();
-                });
-            });
+        describe('changeId Argument', () => {
 
-            it('contains the last variable value', (done) => {
-                Attribute.getVariable({variableId: this.variableId}, (result) => {
-                    expect(result.value).toEqual('Peter');
-                    done();
+        });
+
+        describe('callback Function', () => {
+            describe('value Argument', () => {
+                it('represents the current variable value when no change id is specifed', (done) => {
+                    var promises = [];
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.AbsoluteChangedVariableId}, (result) => {
+                            expect(result.value).toEqual('Klaus Peter Pan');
+                            expect(result.changeId).toBe(3);
+                            resolve();
+                        });
+                    }));
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.RelativeChangedVariableId}, (result) => {
+                            expect(result.value).toEqual('Klaus Peter Pan');
+                            expect(result.changeId).toBe(3);
+                            resolve();
+                        });
+                    }));
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.MixedChangedVariableId}, (result) => {
+                            expect(result.value).toEqual('Klaus Peter Pan');
+                            expect(result.changeId).toBe(7);
+                            resolve();
+                        });
+                    }));
+
+                    Promise.all(promises).then(done);
                 });
-            });
+
+                it('represents the variable value at a given change id if a change id has been specified in the arguments of getVariable', (done) => {
+                    var promises = [];
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.MixedChangedVariableId, changeId: 2}, (result) => {
+                            expect(result.value).toEqual('klaus peter');
+                            expect(result.changeId).toBe(2);
+                            resolve();
+                        });
+                    }));
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.MixedChangedVariableId, changeId: 3}, (result) => {
+                            expect(result.value).toEqual('Klaus Peter');
+                            expect(result.changeId).toBe(3);
+                            resolve();
+                        });
+                    }));
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.MixedChangedVariableId, changeId: 4}, (result) => {
+                            expect(result.value).toEqual('klaus peter pan');
+                            expect(result.changeId).toBe(4);
+                            resolve();
+                        });
+                    }));
+
+                    promises.push(new Promise((resolve, reject) => {
+                        Attribute.getVariable({variableId: this.MixedChangedVariableId, changeId: 6}, (result) => {
+                            expect(result.value).toEqual('Klaus Peter pan');
+                            expect(result.changeId).toBe(6);
+                            resolve();
+                        });
+                    }));
+
+                    Promise.all(promises).then(done);
+                });
+            })
         });
 
         describe('when the attribute value has NOT been changed via change sets', () => {
