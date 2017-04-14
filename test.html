@@ -1,0 +1,14 @@
+<html>
+    <head>
+    </head>
+    <body>
+        <script type="text/javascript" src="http://localhost:3000/faye/client.js"></script>
+        <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+        <script>
+            var client = new Faye.Client('http://localhost:3000/bayeux');
+            client.subscribe('/changes/uncommited/variable/*', function(message) {
+                console.log('Got a message: ' + message);
+            });
+        </script>
+    </body>
+</html>

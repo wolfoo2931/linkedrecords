@@ -2,7 +2,8 @@
 
 var pg = require('pg'),
     uuid = require('uuid/v4'),
-    pgPool = new pg.Pool();
+    pgPool = new pg.Pool(),
+    Changeset = require('changesets').Changeset;
 
 var Attribute = function (args) {
     this.name = args.name;
@@ -140,11 +141,31 @@ Attribute.getVariableByID = function(args, deliver) {
 Attribute.changeVariable = function(args, deliver) {
     var pgTableName,
         insertVariableValueQuery,
-        changeID;
+        changeID,
+        unpackedChangeset;
 
     if(!args.variableId) {
         deliver(new Error('variableId argument must be present'));
         return;
+    }
+
+    if(!args.value && !args.change) {
+        deliver(new Error('either value or changeset argument must be present'));
+        return;
+    }
+
+    if(args.value && args.change) {
+        deliver(new Error('either value or changeset argument must be present (specifying both is not allowed)'));
+        return;
+    }
+
+    if(args.change) {
+        try {
+            unpackedChangeset = Changeset.unpack(args.change);
+        } catch(err) {
+            deliver(new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)'));
+            return;
+        }
     }
 
     if(!args.actorId) {
