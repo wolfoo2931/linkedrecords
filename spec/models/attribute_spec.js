@@ -436,10 +436,6 @@ describe('Attribute Object', () => {
         it('throws an exception when the attribute has a calculation function');
     });
 
-    describe('undo Function', () => {
-        it('reverts the last commited change made by the same user who executes the undo function');
-    });
-
     // Attribute.getLastByID('1147')
     describe('getVariableByID Function', () => {
 
