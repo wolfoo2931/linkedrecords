@@ -416,9 +416,32 @@ describe('Attribute Object', () => {
                     });
                 });
 
-                it('represents the order of the changes');
+                it('can be used to retrieve the change (even if there are newer changes)', (done) => {
+                    Attribute.changeVariable(this.validChangeVariableArguments, (firstChange) => {
+                        this.validChangeVariableArguments.value = 'Hans Juergen Peter';
+                        Attribute.changeVariable(this.validChangeVariableArguments, (secondChange) => {
+                            Attribute.getVariable({changeId: firstChange.id, variableId: this.validChangeVariableArguments.variableId}, (result) => {
+                                expect(result.changeId).toEqual(2);
+                                expect(result.value).toEqual('Hans Peter');
+                                done();
+                            });
+                        });
+                    });
+                });
 
-                it('can be used to retrieve the change');
+                it('represents the order of the changes', (done) => {
+                    Attribute.changeVariable(this.validChangeVariableArguments, (firstChange) => {
+                        this.validChangeVariableArguments.value = 'hans juergen peter';
+                        Attribute.changeVariable(this.validChangeVariableArguments, (secondChange) => {
+                            this.validChangeVariableArguments.value = 'Hans Juergen Peter';
+                            Attribute.changeVariable(this.validChangeVariableArguments, (thirdChange) => {
+                                expect(firstChange.id < secondChange.id < thirdChange.id).toBe(true)
+                                done();
+                            });
+                        });
+                    });
+                });
+
             });
 
             describe('transformedChange Argument', () => {
@@ -599,14 +622,6 @@ describe('Attribute Object', () => {
                     Promise.all(promises).then(done);
                 });
             })
-        });
-
-        describe('when the attribute value has NOT been changed via change sets', () => {
-            it('returns the last attribute value');
-        });
-
-        describe('when the attribute value has been changed via change sets', () => {
-            it('returns the resulting text of all existing change sets');
         });
 
         describe('when the attribute has a calculation function', () => {
