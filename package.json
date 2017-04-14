@@ -28,7 +28,9 @@
     "pg": "~6.1.2",
     "uuid": "~3.0.1",
     "faye": "~1.2.4",
-    "changesets": "~1.0.2"
+    "changesets": "~1.0.2",
+    "diff_match_patch": "~0.1.1"
+
   },
   "devDependencies": {
     "jasmine": "~2.5.3",

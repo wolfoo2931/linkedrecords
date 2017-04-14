@@ -3,6 +3,7 @@
 var code = require('../helpers/code_example'),
     Attribute = require('../../models/attribute'),
     DatabaseCleaner = require('database-cleaner'),
+    Changeset = require('changesets').Changeset,
     PgPool = require('pg-pool'),
     dbPool = new PgPool();
 
@@ -279,9 +280,11 @@ describe('Attribute Object', () => {
 
     // Attribute.changeVariable({variableId: '1147', value: '24'})
     // Attribute.changeVariable({variableId: ''1148', changeset: '=5-1+2=2+5=6+b|habeen -ish thing.|i'})
-    fdescribe('changeVariable Function', () => {
+    describe('changeVariable Function', () => {
 
         beforeEach((done) => {
+            var promises = [],
+                actorId = '698aafe8-dcd5-4ced-b969-ffc34a43f645';
             this.validAttributeArguments = {
                 name: 'name',
                 representationRule: '{{string}}',
@@ -290,22 +293,47 @@ describe('Attribute Object', () => {
             };
 
             this.validVariablesArguments = {
-                actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                actorId: actorId,
                 belonging: {concept: 'user', id: '4711'},
                 attribute: 'name',
                 value: 'Peter'
             };
 
-            new Attribute(this.validAttributeArguments).save(() => {
-                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
-                    this.validChangeVariableArguments = {
-                        variableId: variableId,
-                        actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                        value: 'Hans Peter'
-                    };
-                    done();
+            promises.push(new Promise((resolve, reject) => {
+
+                new Attribute(this.validAttributeArguments).save(() => {
+                    Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                        this.variableId = variableId;
+                        this.validChangeVariableArguments = {
+                            variableId: variableId,
+                            actorId: actorId,
+                            value: 'Hans Peter'
+                        };
+                        resolve();
+                    });
                 });
-            });
+
+            }));
+
+            promises.push(new Promise((resolve, reject) => {
+                Attribute.newVariable(this.validVariablesArguments, (variableId) => {
+                    this.complicatedVariableId = variableId;
+                    Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter'}, (result) => {
+                        Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=5-1+1=4|KP|kp', parentVersion: result.id}}, (result) => {
+                            Attribute.changeVariable({variableId: variableId, actorId: actorId, value: 'klaus peter pan'}, (result) => {
+                                Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '-1+1=e|K|k', parentVersion: result.id}}, (result) => {
+                                    Attribute.changeVariable({variableId: variableId, actorId: actorId, change: {changeset: '=6-1+1=8|P|p', parentVersion: result.id}}, (result) => {
+                                        resolve();
+                                    });
+                                });
+                            });
+                        });
+                    });
+                });
+            }));
+
+            Promise.all(promises).then(done);
+
         });
 
         describe('variableId Argument', () => {
@@ -410,7 +438,15 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('must contain an existing parent version');
+            it('must contain an existing parent change id', (done) => {
+                delete this.validChangeVariableArguments.value;
+                this.validChangeVariableArguments.change = {changeset: '=4+7=6| Jürgen|'};
+
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('the changeset must also contain a parent version');
+                    done();
+                });
+            });
         });
 
         describe('callback Function', () => {
@@ -451,9 +487,28 @@ describe('Attribute Object', () => {
 
             });
 
-            describe('transformedChange Argument', () => {
+            describe('transformedServerChange Argument', () => {
                 it('is set when changeVariable has been called with the change argument');
                 it('is NOT set when changeVariable has been called with the value argument');
+                fit('can be applied on the client (which emmited the change) to catch up the server state', (done) => {
+                    var clientChange = '=c-1+1=2+3|Pium|p',
+                        clientSateAfterChange = 'klaus peter Panium',
+                        updatedClientSate;
+
+                    Attribute.changeVariable({variableId: this.complicatedVariableId, actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645', change: {parentVersion: 4, changeset: clientChange}}, (change) => {
+                        updatedClientSate = Changeset.unpack(change.transformedServerChange).apply(clientSateAfterChange);
+                        Attribute.getVariable({variableId: this.complicatedVariableId}, (result) => {
+                            expect(result.value).toEqual(updatedClientSate);
+                            done();
+                        });
+                    });
+                });
+            });
+
+            describe('transformedClientChange Argument', () => {
+                it('is set when changeVariable has been called with the change argument');
+                it('is NOT set when changeVariable has been called with the value argument');
+                it('can be applied on all other clients (which did not emmited the change)');
             });
 
         });
@@ -539,7 +594,7 @@ describe('Attribute Object', () => {
             Promise.all(promises).then(done);
         });
 
-        describe('ID Argument', () => {
+        describe('variableId Argument', () => {
             it('must be present', (done) => {
                 Attribute.getVariable({}, (result) => {
                     expect(result.message).toEqual('variableId argument must be present');
@@ -556,7 +611,7 @@ describe('Attribute Object', () => {
         });
 
         describe('changeId Argument', () => {
-
+            it('is optional');
         });
 
         describe('callback Function', () => {
