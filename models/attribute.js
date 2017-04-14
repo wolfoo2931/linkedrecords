@@ -102,7 +102,7 @@ Attribute.newVariable = function(args, deliver) {
     });
 };
 
-Attribute.getVariableByID = function(args, deliver) {
+Attribute.getVariable = function(args, deliver) {
     var pgTableName;
 
     if(!args.variableId) {
@@ -197,6 +197,6 @@ Attribute.deleteAllVariables = function(deliver) {
             });
         });
     });
-}
+};
 
 module.exports = Attribute;
