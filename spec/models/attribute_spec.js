@@ -452,18 +452,67 @@ describe('Attribute Object', () => {
         });
 
         describe('value Argument', () => {
-            it('must be present when the changeset argument is missing');
-            it('must not be present when the changeset argument is given');
-        });
+            it('must be present when the changeset argument is missing', (done) => {
+                delete this.validChangeVariableArguments.value;
+                delete this.validChangeVariableArguments.change;
 
-        describe('changeset Argument', () => {
-
-            it('must be present when the value argument is missing', () => {
-
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('either value or changeset argument must be present');
+                    done();
+                });
             });
 
+            it('must not be present when the changeset argument is given', (done) => {
+                this.validChangeVariableArguments.value;
+                this.validChangeVariableArguments.change = {changeset: '==+a'};
 
-            it('must not be present when the value argument is given');
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('either value or changeset argument must be present (specifying both is not allowed)');
+                    done();
+                });
+            });
+        });
+
+        describe('change Argument', () => {
+            it('must be present when the value argument is missing', (done) => {
+                delete this.validChangeVariableArguments.value;
+                delete this.validChangeVariableArguments.change;
+
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('either value or changeset argument must be present');
+                    done();
+                });
+            });
+
+            it('must not be present when the value argument is given', (done) => {
+                this.validChangeVariableArguments.value;
+                this.validChangeVariableArguments.change = {changeset: '=4+7=6| Jürgen|'};
+
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('either value or changeset argument must be present (specifying both is not allowed)');
+                    done();
+                });
+            });
+
+            it('must contain a valid changeset string', (done) => {
+                delete this.validChangeVariableArguments.value;
+                this.validChangeVariableArguments.change = {changeset: '=4'}; //invalid changeset
+
+                Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+                    expect(result.message).toEqual('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)');
+                    done();
+                });
+            });
+
+            // it('must contain an existing parent version', (done) => {
+            //     delete this.validChangeVariableArguments.value;
+            //     this.validChangeVariableArguments.change = {changeset: '=4+7=6| Jürgen|'}
+            //
+            //     Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
+            //         expect(result.message).toEqual('change must contain a perant version');
+            //         done();
+            //     });
+            // });
         });
 
         describe('callback Function', () => {
