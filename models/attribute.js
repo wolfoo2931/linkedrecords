@@ -3,7 +3,9 @@
 var pg = require('pg'),
     uuid = require('uuid/v4'),
     pgPool = new pg.Pool(),
-    Changeset = require('changesets').Changeset;
+    Changeset = require('changesets').Changeset,
+    diffMatchPatch = require('diff_match_patch'),
+    diffEngine = new diffMatchPatch.diff_match_patch;
 
 var Attribute = function (args) {
     this.name = args.name;
@@ -11,7 +13,7 @@ var Attribute = function (args) {
 };
 
 // TODO: Assable this object from a base class and a couple of decorator classes (base class and decorator classes have exactly the same interface)
-// new AttributeTimeRecorder(new AttributeAuthorizer(new AttributeArgumentVerificator(new PGAttribute())))
+// new AttributeTimeRecorder(new AttributeAuthorizer(nes AttributeGrammarVerifier(new AttributeArgumentVerifier(new PGAttribute()))))
 Attribute.prototype.save = function(deliver) {
   var self = this;
   if(!self.name) {
@@ -149,9 +151,7 @@ Attribute.getVariable = function(args, deliver) {
 
 Attribute.changeVariable = function(args, deliver) {
     var pgTableName,
-        insertVariableValueQuery,
-        changeID,
-        unpackedChangeset;
+        changeID;
 
     if(!args.variableId) {
         deliver(new Error('variableId argument must be present'));
@@ -170,9 +170,14 @@ Attribute.changeVariable = function(args, deliver) {
 
     if(args.change) {
         try {
-            unpackedChangeset = Changeset.unpack(args.change.changeset);
+            Changeset.unpack(args.change.changeset);
         } catch(err) {
             deliver(new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)'));
+            return;
+        }
+
+        if(!args.change.parentVersion) {
+            deliver(new Error('the changeset must also contain a parent version'));
             return;
         }
     }
@@ -187,15 +192,20 @@ Attribute.changeVariable = function(args, deliver) {
         return;
     }
 
-    pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+    if(args.value) {
+        Attribute._changeVariableByValue(args, deliver);
+    } else if(args.change) {
+        Attribute._changeVariableByChangeset(args, deliver);
+    }
+};
+
+Attribute._changeVariableByValue = function(args, deliver) {
+    var pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase(),
+        insertVariableValueQuery,
+        changeID;
 
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
-        if(args.value) {
-            insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false) RETURNING change_id";
-        } else if(args.change) {
-            insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.change.changeset + "', true) RETURNING change_id";
-        }
-
+        insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false) RETURNING change_id";
         pgclient.query(insertVariableValueQuery, (err, result) => {
             if(!err) {
                 changeID = result.rows[0].change_id;
@@ -211,7 +221,86 @@ Attribute.changeVariable = function(args, deliver) {
             deliver(err || {id: changeID});
         });
     });
-};
+}
+
+// Applies the changeset which can be based on an older version of the veriable value.
+// This is because the client which constructed the change set might have the latest changes from the server
+// This is the "one-step diamond problem" in operational transfomration
+// see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
+Attribute._changeVariableByChangeset = function(args, deliver) {
+    var fetchVariableVersionPromises = [],
+        pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase(),
+        insertVariableValueQuery,
+        changeID,
+        parentVersion,
+        currentVersion,
+
+        // the a in the simple one-step diamond problem
+        // the changeset comming from the client, probably made on an older version of the variable (the server version migth be newr)
+        clientChange = Changeset.unpack(args.change.changeset),
+
+        // the b in the simple one-step diamond problem
+        //the compound changes on the server side which are missing on the client site (the changeset from the client site does not consider this changes)
+        serverChange,
+
+        // the a' in the simple one-step diamond problem
+        // this changeset will be applied to the current server sate and send to all clients
+        transformedClientChange,
+
+        // the b' in the simple one-step diamond problem
+        // this changeset will be applied on the client who made the change that does not respect the serverChange
+        transformedServerChange;
+
+
+    fetchVariableVersionPromises.push(new Promise((resolve, reject) => {
+        Attribute.getVariable({variableId: args.variableId, changeId: args.change.parentVersion}, (result) => {
+            if(result.value) {
+                parentVersion = result.value;
+                resolve(result.value);
+            } else {
+                reject();
+                deliver(new Error('error when fetching given parent version'));
+            }
+        });
+    }));
+
+    fetchVariableVersionPromises.push(new Promise((resolve, reject) => {
+        Attribute.getVariable({variableId: args.variableId}, (result) => {
+            if(result.value) {
+                currentVersion = result.value;
+                resolve(result.value);
+            } else {
+                reject();
+                deliver(new Error('error when fetching current version'));
+            }
+        });
+    }));
+
+    Promise.all(fetchVariableVersionPromises).then(() => {
+        serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersion, currentVersion));
+        transformedClientChange = clientChange.transformAgainst(serverChange);
+        transformedServerChange = serverChange.transformAgainst(clientChange);
+
+        pgPool.connect(function(err, pgclient, releaseDBConnection) {
+            insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + transformedClientChange.pack() + "', true) RETURNING change_id";
+            pgclient.query(insertVariableValueQuery, (err, result) => {
+                if(!err) {
+                    changeID = result.rows[0].change_id;
+                }
+
+                if(err && err.message === 'relation "' + pgTableName + '" does not exist') {
+                    releaseDBConnection();
+                    deliver(new Error('variable with id "' + args.variableId + '" does not exist'));
+                    return;
+                }
+
+                releaseDBConnection();
+                deliver(err || {id: changeID, transformedServerChange: transformedServerChange.pack(), transformedClientChange: transformedClientChange.pack()});
+            });
+        });
+    });
+
+}
 
 Attribute.deleteAllVariables = function(deliver) {
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
