@@ -183,7 +183,7 @@ Attribute.changeVariable = function(args, deliver) {
             }
 
             releaseDBConnection();
-            deliver(err || changeID);
+            deliver(err || {id: changeID});
         });
     });
 };

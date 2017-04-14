@@ -256,20 +256,20 @@ describe('Attribute Object', () => {
                 });
 
                 it('can be used to change the variable value', (done) => {
-                  Attribute.newVariable(this.validVariablesArguments, (id) => {
-                      var changeArguments = {
-                          variableId: id,
-                          actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                          value: 'Paul'
-                      }
+                    Attribute.newVariable(this.validVariablesArguments, (id) => {
+                        var changeArguments = {
+                            variableId: id,
+                            actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                            value: 'Paul'
+                        }
 
-                      Attribute.changeVariable(changeArguments, (changeId) => {
-                          Attribute.getVariable({variableId: id}, (variable) => {
-                              expect(variable.value).toEqual('Paul');
-                              done();
-                          });
-                      });
-                  });
+                        Attribute.changeVariable(changeArguments, (changeId) => {
+                            Attribute.getVariable({variableId: id}, (variable) => {
+                                expect(variable.value).toEqual('Paul');
+                                done();
+                            });
+                        });
+                    });
                 });
 
             });
@@ -411,7 +411,7 @@ describe('Attribute Object', () => {
 
                 it('is a integer', (done) => {
                     Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
-                        expect(result).toEqual(jasmine.any(Number));
+                        expect(result.id).toEqual(jasmine.any(Number));
                         done();
                     });
                 });
@@ -420,6 +420,7 @@ describe('Attribute Object', () => {
 
                 it('can be used to retrieve the change');
             });
+
         });
 
         it('does\'t change the value when the attributes representation format is violated');
@@ -487,19 +488,20 @@ describe('Attribute Object', () => {
             });
         });
 
-        describe('when the attribute has a calculation function', () => {
-            it('dosn\'t calculate the value if the last known value is still valid');
-            it('calculates the value on demand if eager calcuation is not enabled and the last known value is not valid anymore');
-            it('returns the calculated or cached attribute value');
+        describe('when the attribute value has NOT been changed via change sets', () => {
+            it('returns the last attribute value');
         });
 
         describe('when the attribute value has been changed via change sets', () => {
             it('returns the resulting text of all existing change sets');
         });
 
-        describe('when the attribute value has NOT been changed via change sets', () => {
-            it('returns the last attribute value');
+        describe('when the attribute has a calculation function', () => {
+            it('dosn\'t calculate the value if the last known value is still valid');
+            it('calculates the value on demand if eager calcuation is not enabled and the last known value is not valid anymore');
+            it('returns the calculated or cached attribute value');
         });
+
     });
 
 });
