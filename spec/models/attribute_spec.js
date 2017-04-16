@@ -534,45 +534,83 @@ describe('Attribute Object', () => {
                 it('can be applied on all other clients (which did not emmited the change) to get the same state on each client', (done) => {
 
                     var  promises = [],
+                         serverToClientMsgs = [],
                          actorId = '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-                         client1 = {
-                            parentVersion: 4, //= 'klaus peter pan'
-                            changeset: '=c-1+1=2+1|Pa|p',
-                            bridge: '=c-1+1=2+1|Pa|p',
-                            state: 'klaus peter Pana',
-                            clientId: 'client1'
-                         }, client2 = {
-                            parentVersion: 2, //= 'klaus peter'
-                            changeset: '=b+5| Panb|',
-                            bridge: '=b+5| Panb|',
-                            state: 'klaus peter Panb',
-                            clientId: 'client2'
-                         };
+                         clients = [
+                             {
+                                parentVersion: 4, //= 'klaus peter pan'
+                                changeset: '=c-1+1=2+1|Pa|p',
+                                state: 'klaus peter Pana',
+                                clientId: 'client1'
+                             },
+                             {
+                                parentVersion: 2, //= 'klaus peter'
+                                changeset: '=b+5| Panb|',
+                                state: 'klaus peter Panb',
+                                clientId: 'client2'
+                             },
+                             {
+                                parentVersion: 2, //= 'klaus peter'
+                                changeset: '=b+5| Panb|',
+                                state: 'klaus peter Panb',
+                                clientId: 'client3'
+                             },
+                             {
+                                parentVersion: 6, //= 'Klaus Peter pan'
+                                changeset: '=c-1+1=2+1|Pc|p',
+                                state: 'Klaus Peter Panc',
+                                clientId: 'client4'
+                             },
+                             {
+                                parentVersion: 6, //= 'Klaus Peter pan'
+                                changeset: '=c-1+1=2+1|Pc|p',
+                                state: 'Klaus Peter Panc',
+                                clientId: 'client5'
+                             }
+                         ];
 
-                    promises.push((resolve, reject) => {
-                        Attribute.changeVariable({variableId: this.complicatedVariableId, actorId: actorId, clientId: client1.clientId, change: client1}, (change) => {
-                            client1.state = Changeset.unpack(change.transformedServerChange).apply(client1.state);
-                            resolve();
+                    shuffleArray(clients).forEach((client) => {
+                        promises.push((resolve, reject) => {
+                            Attribute.changeVariable({variableId: this.complicatedVariableId, actorId: actorId, clientId: client.clientId, change: client}, (change) => {
+
+                                // this is our pseudo message queue (which would be a websocket connection to each client in real live)
+                                serverToClientMsgs.push(change);
+                                resolve();
+                            });
                         });
                     });
 
-                    promises.push((resolve, reject) => {
-                        Attribute.changeVariable({variableId: this.complicatedVariableId, actorId: actorId, clientId: client2.clientId, change: client2}, (change) => {
 
-                            // As this is the last operation sent by any client, client2 recieves all changes via transformedServerChange
-                            client2.state = Changeset.unpack(change.transformedServerChange).apply(client2.state);
-
-                            //client 1 also needs the changes from client 2
-                            client1.state = Changeset.unpack(change.transformedClientChange).apply(client1.state);
-
-                            resolve();
-                        });
-                    });
-
+                    // Each client process the messages from the server to get to the same state.
+                    // In the end all clients and the server should have the same state.
                     Promise.all(promises.map((p) => {return new Promise(p)})).then(() => {
+
+                        shuffleArray(clients).forEach((client) => {
+
+                            // Apply approvals first
+                            serverToClientMsgs.filter((change) => { return change.clientId === client.clientId}).forEach((approval) => {
+                                client.state = Changeset.unpack(approval.transformedServerChange).apply(client.state);
+                                client.parentVersion = approval.id;
+                            });
+
+                            // Apply all other changes second
+                            serverToClientMsgs.filter((change) => { return change.clientId !== client.clientId}).forEach((change) => {
+                                try {
+                                    client.state = Changeset.unpack(change.transformedClientChange).apply(client.state);
+                                    client.parentVersion = change.id;
+                                } catch (ex) {
+                                    // Changes cannot be applied if the change is included in the approval (The approval is already applied on the client site)
+                                    // We simply ignore the change because its already applied imlicitly on the client
+                                }
+                            });
+
+                        });
+
                         Attribute.getVariable({variableId: this.complicatedVariableId}, (variable) => {
-                            expect(variable.value).toEqual(client1.state);
-                            expect(client1.state).toEqual(client2.state);
+
+                            clients.forEach((client) => {
+                                expect(variable.value).toEqual(client.state);
+                            });
 
                             done();
                         });
