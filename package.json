@@ -30,12 +30,12 @@
     "faye": "~1.2.4",
     "changesets": "~1.0.2",
     "diff_match_patch": "~0.1.1"
-
   },
   "devDependencies": {
     "jasmine": "~2.5.3",
     "jasmine-spec-reporter": "~3.2.0",
     "js-beautify": "~1.6.9",
-    "database-cleaner":  "1.2.0"
+    "database-cleaner":  "1.2.0",
+    "shuffle-array": "~1.0.1"
   }
 }

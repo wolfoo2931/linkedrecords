@@ -5,7 +5,8 @@ var pg = require('pg'),
     pgPool = new pg.Pool(),
     Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
-    diffEngine = new diffMatchPatch.diff_match_patch;
+    diffEngine = new diffMatchPatch.diff_match_patch,
+    queue = require('queue')({concurrency: 1, autostart: true});
 
 var Attribute = function (args) {
     this.name = args.name;
@@ -116,7 +117,6 @@ Attribute.getVariable = function(args, deliver) {
 
     pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
-    //TODO: Performance Optimization: cache computed value
     pgPool.connect(function(err, pgclient, releaseDBConnection) {
 
         if(args.changeId) {
@@ -150,8 +150,15 @@ Attribute.getVariable = function(args, deliver) {
 };
 
 Attribute.changeVariable = function(args, deliver) {
-    var pgTableName,
-        changeID;
+    queue.push((cb) => {
+        Attribute._changeVariable(args, (result) => {
+            deliver(result);
+            cb();
+        });
+    });
+};
+
+Attribute._changeVariable = function(args, deliver) {
 
     if(!args.variableId) {
         deliver(new Error('variableId argument must be present'));
@@ -277,9 +284,13 @@ Attribute._changeVariableByChangeset = function(args, deliver) {
     }));
 
     Promise.all(fetchVariableVersionPromises).then(() => {
+
         serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersion, currentVersion));
-        transformedClientChange = clientChange.transformAgainst(serverChange);
-        transformedServerChange = serverChange.transformAgainst(clientChange);
+
+        // This works because of the TP1 property of the transformAgainst function
+        // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
+        transformedClientChange = clientChange.transformAgainst(serverChange, false);
+        transformedServerChange = serverChange.transformAgainst(clientChange, true);
 
         pgPool.connect(function(err, pgclient, releaseDBConnection) {
             insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + transformedClientChange.pack() + "', true) RETURNING change_id";
@@ -295,7 +306,7 @@ Attribute._changeVariableByChangeset = function(args, deliver) {
                 }
 
                 releaseDBConnection();
-                deliver(err || {id: changeID, transformedServerChange: transformedServerChange.pack(), transformedClientChange: transformedClientChange.pack()});
+                deliver(err || {id: changeID, clientId: args.clientId, transformedServerChange: transformedServerChange.pack(), transformedClientChange: transformedClientChange.pack()});
             });
         });
     });
