@@ -5,7 +5,8 @@ var code = require('../helpers/code_example'),
     DatabaseCleaner = require('database-cleaner'),
     Changeset = require('changesets').Changeset,
     PgPool = require('pg-pool'),
-    dbPool = new PgPool();
+    dbPool = new PgPool(),
+    shuffleArray = require('shuffle-array');
 
 describe('Attribute Object', () => {
 
@@ -355,6 +356,11 @@ describe('Attribute Object', () => {
             });
         });
 
+        describe('clientId Argument', () => {
+            it('must be present');
+            it('identifies the client of this actions (the same actor can use different devices at the same time and perform changes with the different devices, device = client)');
+        });
+
         describe('actorId Argument', () => {
 
             it('must be present', (done) => {
@@ -375,7 +381,7 @@ describe('Attribute Object', () => {
                 });
             });
 
-            it('identifies the actor of this actions for auditing reasons', (done) => {
+            it('identifies the actor (user) of this actions for auditing reasons', (done) => {
                 Attribute.changeVariable(this.validChangeVariableArguments, (change) => {
                     Attribute.getVariable({variableId: this.validChangeVariableArguments.variableId, changeId: change.id}, (result) => {
                         expect(result.actorId).toEqual('698aafe8-dcd5-4ced-b969-ffc34a43f645');
@@ -459,7 +465,7 @@ describe('Attribute Object', () => {
                     });
                 });
 
-                it('can be used to retrieve the change (even if there are newer changes)', (done) => {
+                it('can be used to retrieve the change (even if there are already newer changes in the database)', (done) => {
                     Attribute.changeVariable(this.validChangeVariableArguments, (firstChange) => {
                         this.validChangeVariableArguments.value = 'Hans Juergen Peter';
                         Attribute.changeVariable(this.validChangeVariableArguments, (secondChange) => {
@@ -487,9 +493,25 @@ describe('Attribute Object', () => {
 
             });
 
+            describe('clientId Argument', () => {
+
+                it('identifies the client which made the change (there could be one actor/user using multiple devices)', (done) => {
+                    var change = {parentVersion: 4, changeset: '=c-1+1=2+3|Pium|p'},
+                        actorId = '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                        clientId = '9792009a-2271-11e7-93ae-92361f002671';
+
+                    Attribute.changeVariable({variableId: this.complicatedVariableId, clientId: clientId, actorId: actorId, change: change}, (changeResult) => {
+                        expect(changeResult.clientId).toEqual(clientId);
+                        done();
+                    });
+                });
+
+            });
+
             describe('transformedServerChange Argument', () => {
                 it('is set when changeVariable has been called with the change argument');
                 it('is NOT set when changeVariable has been called with the value argument');
+
                 it('can be applied on the client (which emmited the change) to catch up the server state', (done) => {
                     var clientChange = '=c-1+1=2+3|Pium|p',
                         clientSateAfterChange = 'klaus peter Panium',
@@ -508,10 +530,66 @@ describe('Attribute Object', () => {
             describe('transformedClientChange Argument', () => {
                 it('is set when changeVariable has been called with the change argument');
                 it('is NOT set when changeVariable has been called with the value argument');
-                it('can be applied on all other clients (which did not emmited the change)');
-            });
 
+                it('can be applied on all other clients (which did not emmited the change) to get the same state on each client', (done) => {
+
+                    var  promises = [],
+                         actorId = '698aafe8-dcd5-4ced-b969-ffc34a43f645',
+                         client1 = {
+                            parentVersion: 4, //= 'klaus peter pan'
+                            changeset: '=c-1+1=2+1|Pa|p',
+                            bridge: '=c-1+1=2+1|Pa|p',
+                            state: 'klaus peter Pana',
+                            clientId: 'client1'
+                         }, client2 = {
+                            parentVersion: 2, //= 'klaus peter'
+                            changeset: '=b+5| Panb|',
+                            bridge: '=b+5| Panb|',
+                            state: 'klaus peter Panb',
+                            clientId: 'client2'
+                         };
+
+                    promises.push((resolve, reject) => {
+                        Attribute.changeVariable({variableId: this.complicatedVariableId, actorId: actorId, clientId: client1.clientId, change: client1}, (change) => {
+                            client1.state = Changeset.unpack(change.transformedServerChange).apply(client1.state);
+                            resolve();
+                        });
+                    });
+
+                    promises.push((resolve, reject) => {
+                        Attribute.changeVariable({variableId: this.complicatedVariableId, actorId: actorId, clientId: client2.clientId, change: client2}, (change) => {
+
+                            // As this is the last operation sent by any client, client2 recieves all changes via transformedServerChange
+                            client2.state = Changeset.unpack(change.transformedServerChange).apply(client2.state);
+
+                            //client 1 also needs the changes from client 2
+                            client1.state = Changeset.unpack(change.transformedClientChange).apply(client1.state);
+
+                            resolve();
+                        });
+                    });
+
+                    Promise.all(promises.map((p) => {return new Promise(p)})).then(() => {
+                        Attribute.getVariable({variableId: this.complicatedVariableId}, (variable) => {
+                            expect(variable.value).toEqual(client1.state);
+                            expect(client1.state).toEqual(client2.state);
+
+                            done();
+                        });
+                    });
+
+                });
+            });
         });
+
+        //TODO: use a more sophisticated queue mechanism
+        it('queues chagnes which belong the same variable so that they are executed one after the other');
+
+        //TODO: use a more sophisticated queue mechanism
+        it('queues chagnes which belong the same variable even if there are multiple application instances running');
+
+        //TODO: use a more sophisticated queue mechanism
+        it('executes changes on different variables in parallel');
 
         it('does\'t change the value when the attributes representation format is violated');
         it('throws an exception when the attributes representation format is violated');
