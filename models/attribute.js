@@ -171,7 +171,7 @@ Attribute._changeVariable = function(args, deliver) {
     }
 
     if(args.value && args.change) {
-        deliver(new Error('either value or changeset argument must be present (specifying both is not allowed)'));
+        deliver(new Error('either value or change argument must be present (specifying both is not allowed)'));
         return;
     }
 
@@ -285,6 +285,7 @@ Attribute._changeVariableByChangeset = function(args, deliver) {
 
     Promise.all(fetchVariableVersionPromises).then(() => {
 
+        //TODO: check whether this is the right order (parentVersion, currentVersion) or (currentVersion, parentVersion)
         serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersion, currentVersion));
 
         // This works because of the TP1 property of the transformAgainst function

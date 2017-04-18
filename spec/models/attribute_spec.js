@@ -407,7 +407,7 @@ describe('Attribute Object', () => {
                 this.validChangeVariableArguments.change = {changeset: '==+a'};
 
                 Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
-                    expect(result.message).toEqual('either value or changeset argument must be present (specifying both is not allowed)');
+                    expect(result.message).toEqual('either value or change argument must be present (specifying both is not allowed)');
                     done();
                 });
             });
@@ -429,7 +429,7 @@ describe('Attribute Object', () => {
                 this.validChangeVariableArguments.change = {changeset: '=4+7=6| Jürgen|'};
 
                 Attribute.changeVariable(this.validChangeVariableArguments, (result) => {
-                    expect(result.message).toEqual('either value or changeset argument must be present (specifying both is not allowed)');
+                    expect(result.message).toEqual('either value or change argument must be present (specifying both is not allowed)');
                     done();
                 });
             });
@@ -628,6 +628,9 @@ describe('Attribute Object', () => {
 
         //TODO: use a more sophisticated queue mechanism
         it('executes changes on different variables in parallel');
+
+        it('works when a client deletes the whole content of the value (set it to empty string), changes can be applied afterwards');
+        it('escapes all special characters to prevent SQL injections (or other query injects if no RDMS is used)');
 
         it('does\'t change the value when the attributes representation format is violated');
         it('throws an exception when the attributes representation format is violated');
