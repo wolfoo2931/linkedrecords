@@ -10,6 +10,7 @@
         <script type="text/javascript" src="node_modules/diff_match_patch/lib/diff_match_patch.js"></script>
 
         <script type="text/javascript" src="js_sdk/uuid.js"></script>
+        <script type="text/javascript" src="js_sdk/caret.js"></script>
         <script type="text/javascript" src="js_sdk/remote_variable.js"></script>
 
         <style>
@@ -34,14 +35,17 @@
 
         <div contenteditable="true" id="value"></div>
 
+        <div contenteditable="true" id="caretTest1">test <b>the caret</b> position <br/> <div id="caretTest1StopElement">with breaks in the text</div></div>
+
         <script>
 
             $().ready(function() {
                 var bayeuxClient = new Faye.Client('http://localhost:3000/bayeux'),
                     clientId = actorId = (new UUID()).getValue(),
-                    remoteVariable = new RemoveVariable('c1816608-c4c8-472c-8e0f-5f3c30b3fd24', bayeuxClient, clientId, actorId).load();
+                    remoteVariable = new RemoveVariable('c1816608-c4c8-472c-8e0f-5f3c30b3fd24', bayeuxClient, clientId, actorId).load(),
+                    caret = new Caret();
 
-                remoteVariable.on('change', function() {
+                remoteVariable.on('change', function(changeset) {
                     var range,
                         domEl = $('#value'),
                         selectionStart,
@@ -65,7 +69,6 @@
 
                     if(selectionStart && selectionEnd) {
                         range = document.createRange();
-                        console.log(document.getElementById('value').firstChild);
                         range.setStart(document.getElementById('value').firstChild, selectionStart);
                         range.setEnd(document.getElementById('value').firstChild, selectionEnd);
                         selection.removeAllRanges();
@@ -75,6 +78,10 @@
 
                 $('#value').on('input', function() {
                     remoteVariable.setValue($('#value').html());
+                });
+
+                $('#value').on('click', function() {
+                    new Caret().saveSelection(document.getElementById('value'));
                 });
             });
 
