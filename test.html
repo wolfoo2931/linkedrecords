@@ -35,45 +35,18 @@
 
         <div contenteditable="true" id="value"></div>
 
-        <div contenteditable="true" id="caretTest1">test <b>the caret</b> position <br/> <div id="caretTest1StopElement">with breaks in the text</div></div>
-
         <script>
 
             $().ready(function() {
                 var bayeuxClient = new Faye.Client('http://localhost:3000/bayeux'),
                     clientId = actorId = (new UUID()).getValue(),
-                    remoteVariable = new RemoveVariable('c1816608-c4c8-472c-8e0f-5f3c30b3fd24', bayeuxClient, clientId, actorId).load(),
+                    remoteVariable = new RemoveVariable('433847a8-d012-406d-b031-d76b4c3165ec', bayeuxClient, clientId, actorId).load(),
                     caret = new Caret();
 
                 remoteVariable.on('change', function(changeset) {
-                    var range,
-                        domEl = $('#value'),
-                        selectionStart,
-                        selectionEnd,
-                        anchorNode,
-                        focusNode,
-
-                        // get the current cursor position because the cursor will be moved to 0
-                        // once we modified the html contnent
-                        selection = $('#value:focus').length == 1 ? window.getSelection() : null;
-
-
-                    if(selection) {
-                        selectionStart = selection.anchorOffset;
-                        selectionEnd = selection.focusOffset;
-                        anchorNode = selection.anchorNode;
-                        focusNode = selection.focusNode;
-                    }
-
-                    domEl.html(remoteVariable.getValue());
-
-                    if(selectionStart && selectionEnd) {
-                        range = document.createRange();
-                        range.setStart(document.getElementById('value').firstChild, selectionStart);
-                        range.setEnd(document.getElementById('value').firstChild, selectionEnd);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-                    }
+                    caret.saveSelection(document.getElementById('value'));
+                    $('#value').html(remoteVariable.getValue());
+                    caret.restoreSelection(document.getElementById('value'));
                 });
 
                 $('#value').on('input', function() {
