@@ -51,7 +51,7 @@ RemoveVariable.prototype = {
             try {
                 this.value = Changeset.unpack(change.transformedClientChange).apply(this.value);
                 this.parentVersion = change.id;
-                this.notifyOnChangeObservers();
+                this.notifyOnChangeObservers(change.transformedClientChange);
             } catch (ex) {}
         }
     },
@@ -60,7 +60,7 @@ RemoveVariable.prototype = {
         this.value = Changeset.unpack(change.transformedServerChange).apply(this.value);
         this.parentVersion = change.id;
         this.changeInTransmission = null;
-        this.notifyOnChangeObservers();
+        this.notifyOnChangeObservers(change.transformedServerChange);
     },
 
     // As it is only allowed to sent one change to the server at a time
@@ -114,9 +114,9 @@ RemoveVariable.prototype = {
         this.observers[eventType].push(observer);
     },
 
-    notifyOnChangeObservers: function() {
+    notifyOnChangeObservers: function(changeset) {
         this.observers.change.forEach(function(observer) {
-            observer();
+            observer(changeset);
         });
     }
 }
