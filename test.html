@@ -44,18 +44,17 @@
                     caret = new Caret();
 
                 remoteVariable.on('change', function(changeset) {
-                    caret.saveSelection(document.getElementById('value'));
-                    $('#value').html(remoteVariable.getValue());
-                    caret.restoreSelection(document.getElementById('value'));
+                    var contentElement = document.getElementById('value');
+
+                    caret.saveSelection(contentElement);
+                    contentElement.innerHTML = remoteVariable.getValue();
+                    caret.restoreSelection(contentElement);
                 });
 
                 $('#value').on('input', function() {
                     remoteVariable.setValue($('#value').html());
                 });
 
-                $('#value').on('click', function() {
-                    new Caret().saveSelection(document.getElementById('value'));
-                });
             });
 
         </script>
