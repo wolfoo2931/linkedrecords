@@ -86,8 +86,6 @@ RemoveVariable.prototype = {
     // performs some input on the document)
     setValue: function(tmpValue) {
 
-        //tmpValue = tmpValue.replace(/<div>/gi, '').replace(/<\/div>/gi, '');
-
         var diff = this.diffEngine.diff_main(this.value, tmpValue),
             changeset = Changeset.fromDiff(diff);
 
