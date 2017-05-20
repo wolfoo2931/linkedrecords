@@ -60,21 +60,36 @@ RemoveVariable.prototype = {
         this.value = Changeset.unpack(change.transformedServerChange).apply(this.value);
         this.parentVersion = change.id;
         this.changeInTransmission = null;
+
         this.notifyOnChangeObservers(change.transformedServerChange);
     },
 
     // As it is only allowed to sent one change to the server at a time
-    // the returned changeset of this method includes all local changes made
-    // while the change is in transmission.
+    // this method returns a changeset which includes all local changes made
+    // while a change is in transmission.
     _composedSendBuffer: function() {
         var clonedBuffer = this.sendBuffer.slice(0),
             composedCS = clonedBuffer.shift();
 
         clonedBuffer.forEach(function(change) {
-            composedCS = composedCS.transformAgainst(change);
+            composedCS = composedCS.merge(change);
         });
 
         return composedCS;
+    },
+
+    _transmitChangeset: function(changeset, parentVersion) {
+        this.changeInTransmission = {
+            variableId: this.variableId,
+            change: {
+                changeset: changeset.pack(),
+                parentVersion: parentVersion
+            },
+            actorId: this.actorId,
+            clientId: this.clientId
+        };
+
+        this.bayeuxClient.publish('/uncommited/changes/variable/' + self.variableId, this.changeInTransmission);
     },
 
     getValue: function() {
@@ -92,19 +107,8 @@ RemoveVariable.prototype = {
         if(this.changeInTransmission) {
             this.sendBuffer.push(changeset);
         } else {
-            this.changeInTransmission = {
-                variableId: this.variableId,
-                change: {
-                    changeset: changeset.pack(),
-                    parentVersion: this.parentVersion
-                },
-                actorId: this.actorId,
-                clientId: this.clientId
-            };
-
+            this._transmitChangeset(changeset, this.parentVersion);
             this.value = changeset.apply(this.value);
-
-            this.bayeuxClient.publish('/uncommited/changes/variable/' + self.variableId, this.changeInTransmission);
         }
     },
 
