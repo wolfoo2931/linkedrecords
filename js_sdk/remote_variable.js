@@ -7,14 +7,14 @@ var Changeset = changesets.Changeset;
 var RemoveVariable = function (variableId, bayeuxClient, clientId, actorId) {
     this.variableId = variableId;
     this.diffEngine = new exports.diff_match_patch();
-    this.sendBuffer = [];
-    this.receiveBuffer = [];
     this.bayeuxClient = bayeuxClient;
     this.clientId = clientId;
     this.actorId = actorId;
     this.observers = {
         change: []
     };
+
+    this.receiveBuffer = [];
 
     // The change sent to the server but not yet acknowledged.
     this.changeInTransmission;
@@ -52,15 +52,14 @@ RemoveVariable.prototype = {
                 this.value = Changeset.unpack(change.transformedClientChange).apply(this.value);
                 this.parentVersion = change.id;
                 this.notifyOnChangeObservers(change.transformedClientChange);
-            } catch (ex) {}
+            } catch (ex) { console.log('failed to apply foreign change; local parentVersion: ' + this.parentVersion + ', change version: ' + change.id); }
         }
     },
 
     _processApproval: function(change) {
-        this.value = Changeset.unpack(change.transformedServerChange).apply(this.value);
         this.parentVersion = change.id;
         this.changeInTransmission = null;
-
+        this.value = Changeset.unpack(change.transformedServerChange).apply(this.value);
         this.notifyOnChangeObservers(change.transformedServerChange);
     },
 
@@ -78,23 +77,23 @@ RemoveVariable.prototype = {
         this.bayeuxClient.publish('/uncommited/changes/variable/' + self.variableId, this.changeInTransmission);
     },
 
+    _getChangesetBetweenValues: function(value1, value2) {
+        return Changeset.fromDiff(this.diffEngine.diff_main(value1, value2))
+    },
+
     getValue: function() {
         return this.value;
     },
 
-    // Update the content on the local client, buffer
-    // and propagate the change to the server (execute whenever the user
-    // performs some input on the document)
-    setValue: function(tmpValue) {
+    setValue: function(newValue) {
 
-        var diff = this.diffEngine.diff_main(this.value, tmpValue),
-            changeset = Changeset.fromDiff(diff);
+        var changeset = this._getChangesetBetweenValues(this.value, newValue);
 
         if(this.changeInTransmission) {
-            this.sendBuffer = this.sendBuffer ? this.sendBuffer.merge(changeset) : changeset;
+            this.sendBuffer = changeset;
         } else {
             this._transmitChangeset(changeset, this.parentVersion);
-            this.value = changeset.apply(this.value);
+            this.value = newValue;
         }
     },
 
