@@ -64,11 +64,13 @@ Caret.prototype = {
                 startOffset = this.rangeStart - this._getContentLengthOfDOMElement(rootEl, startNode),
                 endOffset = this.rangeEnd - this._getContentLengthOfDOMElement(rootEl, endNode);
 
-            range = document.createRange();
-            range.setStart(startNode, startOffset);
-            range.setEnd(endNode, endOffset);
-            selection.removeAllRanges();
-            selection.addRange(range);
+            try {
+                range = document.createRange();
+                range.setStart(startNode, startOffset);
+                range.setEnd(endNode, endOffset);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } catch(ex) { console.log('failed to set caret position') }
         }
     },
 
