@@ -64,20 +64,6 @@ RemoveVariable.prototype = {
         this.notifyOnChangeObservers(change.transformedServerChange);
     },
 
-    // As it is only allowed to sent one change to the server at a time
-    // this method returns a changeset which includes all local changes made
-    // while a change is in transmission.
-    _composedSendBuffer: function() {
-        var clonedBuffer = this.sendBuffer.slice(0),
-            composedCS = clonedBuffer.shift();
-
-        clonedBuffer.forEach(function(change) {
-            composedCS = composedCS.merge(change);
-        });
-
-        return composedCS;
-    },
-
     _transmitChangeset: function(changeset, parentVersion) {
         this.changeInTransmission = {
             variableId: this.variableId,
@@ -105,7 +91,7 @@ RemoveVariable.prototype = {
             changeset = Changeset.fromDiff(diff);
 
         if(this.changeInTransmission) {
-            this.sendBuffer.push(changeset);
+            this.sendBuffer = this.sendBuffer ? this.sendBuffer.merge(changeset) : changeset;
         } else {
             this._transmitChangeset(changeset, this.parentVersion);
             this.value = changeset.apply(this.value);
