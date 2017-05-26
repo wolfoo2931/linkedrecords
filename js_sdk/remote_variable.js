@@ -12,6 +12,11 @@ Buffer.prototype = {
         this.inFlightOp = this.inFlightOp || changeInTransmission;
     },
 
+    // this function returns a transformed version of the foreignChange which
+    // fits into the current client state. This is required because the client
+    // could have some changes which has not been send to the server yet. So, the
+    // server don't know about these changes and the changes comming from the server
+    // would not fit into the client state.
     transformAgainst: function(foreignChange) {
         var c1, v2;
 
@@ -109,7 +114,7 @@ RemoveVariable.prototype = {
     },
 
     _processForeignChange: function(foreignChange) {
-        var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange), //FIXME: client or server change?
+        var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange),
             transformedForeignChange = this.buffer.transformAgainst(foreignChangeset);
 
         this.value = transformedForeignChange.apply(this.value);
@@ -118,12 +123,12 @@ RemoveVariable.prototype = {
     },
 
     _processApproval: function(approval) {
-        var bufferedChange = this.buffer.getValue();
+        var bufferedChanges = this.buffer.getValue();
         this.changeInTransmission = null;
         this.version = approval.id;
 
-        if(bufferedChange) {
-            this._transmitChange(bufferedChange, approval.id);
+        if(bufferedChanges) {
+            this._transmitChange(bufferedChanges, approval.id);
             this.buffer.clear();
         }
     },
