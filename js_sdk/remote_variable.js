@@ -2,23 +2,61 @@
 
 var Changeset = changesets.Changeset;
 
-// because the same user can be logged on two browsers/laptops, we need
-// a clientId and an actorId
+var Buffer = function() {
+    this.value = null;
+};
+
+Buffer.prototype = {
+    add: function(changeset, changeInTransmission) {
+        this.value = !this.value ? changeset : this.value.merge(changeset);
+        this.inFlightOp = this.inFlightOp || changeInTransmission;
+    },
+
+    transformAgainst: function(foreignChange) {
+        var c1, v2;
+
+        if(!this.inFlightOp) return foreignChange;
+
+        c2 = foreignChange.transformAgainst(this.inFlightOp, true);
+        this.inFlightOp = this.inFlightOp.transformAgainst(foreignChange, false);
+
+        // instead of using a bridge we use c2 to transform the
+        // foreignChange (change from server) into the client state.
+        c1 = c2.transformAgainst(this.value, true);
+
+        // Once we have this inferred operation, c2, we can use it
+        // to transform the buffer (b) "down" one step
+        this.value = this.value.transformAgainst(c2, false);
+
+        return c1;
+    },
+
+    clear: function() {
+        this.value = null;
+        this.inFlightOp = null;
+    },
+
+    getValue: function() {
+        return this.value;
+    }
+};
+
 var RemoveVariable = function (variableId, bayeuxClient, clientId, actorId) {
     this.variableId = variableId;
     this.diffEngine = new exports.diff_match_patch();
     this.bayeuxClient = bayeuxClient;
+    this.observers = {change: []};
+    this.buffer = new Buffer();
+
+    // because the same user can be logged on two browsers/laptops, we need
+    // a clientId and an actorId
     this.clientId = clientId;
     this.actorId = actorId;
-    this.observers = {
-        change: []
-    };
 
-    this.receiveBuffer = [];
 
     // The change sent to the server but not yet acknowledged.
     this.changeInTransmission;
-}
+};
 
 RemoveVariable.prototype = {
 
@@ -26,7 +64,7 @@ RemoveVariable.prototype = {
         var self = this;
 
         $.ajax({url: 'http://localhost:3000/variables/' + this.variableId}).done((result) => {
-            self.parentVersion = result.changeId;
+            self.version = result.changeId;
             self.value = result.value;
 
             self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, function(change) {
@@ -37,48 +75,11 @@ RemoveVariable.prototype = {
                 }
             });
 
-            self.notifyOnChangeObservers();
+            self._notifyOnChangeObservers();
             done && done();
         });
 
         return self;
-    },
-
-    _processForeignChange: function(change) {
-        if(this.changeInTransmission) {
-            this.receiveBuffer.push(change);
-        } else {
-            try {
-                this.value = Changeset.unpack(change.transformedClientChange).apply(this.value);
-                this.parentVersion = change.id;
-                this.notifyOnChangeObservers(change.transformedClientChange);
-            } catch (ex) { console.log('failed to apply foreign change; local parentVersion: ' + this.parentVersion + ', change version: ' + change.id); }
-        }
-    },
-
-    _processApproval: function(change) {
-        this.parentVersion = change.id;
-        this.changeInTransmission = null;
-        this.value = Changeset.unpack(change.transformedServerChange).apply(this.value);
-        this.notifyOnChangeObservers(change.transformedServerChange);
-    },
-
-    _transmitChangeset: function(changeset, parentVersion) {
-        this.changeInTransmission = {
-            variableId: this.variableId,
-            change: {
-                changeset: changeset.pack(),
-                parentVersion: parentVersion
-            },
-            actorId: this.actorId,
-            clientId: this.clientId
-        };
-
-        this.bayeuxClient.publish('/uncommited/changes/variable/' + self.variableId, this.changeInTransmission);
-    },
-
-    _getChangesetBetweenValues: function(value1, value2) {
-        return Changeset.fromDiff(this.diffEngine.diff_main(value1, value2))
     },
 
     getValue: function() {
@@ -86,24 +87,58 @@ RemoveVariable.prototype = {
     },
 
     setValue: function(newValue) {
-
-        var changeset = this._getChangesetBetweenValues(this.value, newValue);
+        var changeset = Changeset.fromDiff(this.diffEngine.diff_main(this.value, newValue));
 
         if(this.changeInTransmission) {
-            this.sendBuffer = changeset;
+            this.buffer.add(changeset, this.changeInTransmission);
         } else {
-            this._transmitChangeset(changeset, this.parentVersion);
-            this.value = newValue;
+            this._transmitChange(changeset, this.version);
         }
+
+        this.value = newValue;
     },
 
     on: function(eventType, observer) {
         this.observers[eventType].push(observer);
     },
 
-    notifyOnChangeObservers: function(changeset) {
-        this.observers.change.forEach(function(observer) {
-            observer(changeset);
+    _notifyOnChangeObservers: function() {
+        this.observers.change.forEach(function(callback) {
+            callback();
         });
-    }
+    },
+
+    _processForeignChange: function(foreignChange) {
+        var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange), //FIXME: client or server change?
+            transformedForeignChange = this.buffer.transformAgainst(foreignChangeset);
+
+        this.value = transformedForeignChange.apply(this.value);
+        this.version = foreignChange.id
+        this._notifyOnChangeObservers();
+    },
+
+    _processApproval: function(approval) {
+        var bufferedChange = this.buffer.getValue();
+        this.changeInTransmission = null;
+        this.version = approval.id;
+
+        if(bufferedChange) {
+            this._transmitChange(bufferedChange, approval.id);
+            this.buffer.clear();
+        }
+    },
+
+    _transmitChange: function(changeset, version) {
+        this.changeInTransmission = {
+            variableId: this.variableId,
+            change: {
+                changeset: changeset.pack(),
+                parentVersion: version
+            },
+            actorId: this.actorId,
+            clientId: this.clientId
+        };
+
+        this.bayeuxClient.publish('/uncommited/changes/variable/' + self.variableId, this.changeInTransmission);
+    },
 }
