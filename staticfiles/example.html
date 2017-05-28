@@ -36,7 +36,8 @@
                 var bayeuxClient = new Faye.Client('/bayeux'),
                     clientId = actorId = (new UUID()).getValue(),
                     remoteVariable = new RemoveVariable('20b17377-88cc-46b6-8b54-5ba0aec0bcdd', bayeuxClient, clientId, actorId).load(),
-                    caret = new Caret();
+                    caret = new Caret(),
+                    updateVariableFn = function() { remoteVariable.setValue($('#value').html()) };
 
                 remoteVariable.on('change', function(changeset) {
                     var contentElement = document.getElementById('value');
@@ -46,9 +47,12 @@
                     caret.restoreSelection(contentElement);
                 });
 
-                $('#value').on('input', function() {
-                    remoteVariable.setValue($('#value').html());
-                });
+                $('#value').on('input', updateVariableFn);
+
+                // window.setInterval(function() {
+                //   $('#value').html($('#value').html() + 'a');
+                //   updateVariableFn();
+                // }, 1000);
             });
 
         </script>
