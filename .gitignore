@@ -1,2 +1,4 @@
 node_modules/*
 race_condition_test_results.txt
+manifest.yml
+npm-debug.log

@@ -58,7 +58,6 @@ var RemoveVariable = function (variableId, bayeuxClient, clientId, actorId) {
     this.clientId = clientId;
     this.actorId = actorId;
 
-
     // The change sent to the server but not yet acknowledged.
     this.changeInTransmission;
 };
@@ -68,7 +67,7 @@ RemoveVariable.prototype = {
     load: function(done) {
         var self = this;
 
-        $.ajax({url: 'http://localhost:3000/variables/' + this.variableId}).done((result) => {
+        $.ajax({url: '/variables/' + this.variableId}).done((result) => {
             self.version = result.changeId;
             self.value = result.value;
 
