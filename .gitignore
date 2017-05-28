@@ -3,3 +3,4 @@ scripts/run.sh
 race_condition_test_results.txt
 manifest.yml
 npm-debug.log
+staticfiles/sdk.min.js
