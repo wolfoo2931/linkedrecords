@@ -32,6 +32,8 @@
 
         <script>
 
+            var modifyContent = null;
+
             $().ready(function() {
                 var bayeuxClient = new Faye.Client('/bayeux'),
                     clientId = actorId = (new UUID()).getValue(),
@@ -49,10 +51,12 @@
 
                 $('#value').on('input', updateVariableFn);
 
-                // window.setInterval(function() {
-                //   $('#value').html($('#value').html() + 'a');
-                //   updateVariableFn();
-                // }, 1000);
+                window.setInterval(function() {
+                    if(modifyContent) {
+                        $('#value').html($('#value').html() + 'a');
+                        updateVariableFn();
+                    }
+                }, 1000);
             });
 
         </script>
