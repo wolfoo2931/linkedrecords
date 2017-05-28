@@ -4,7 +4,8 @@
   "description": "A backend as a service for declarative and functional API development",
   "main": "index.js",
   "scripts": {
-    "test": "node_modules/jasmine/bin/jasmine.js"
+    "test": "node_modules/jasmine/bin/jasmine.js",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
@@ -29,13 +30,15 @@
     "uuid": "~3.0.1",
     "faye": "~1.2.4",
     "changesets": "~1.0.2",
-    "diff_match_patch": "~0.1.1"
+    "diff_match_patch": "~0.1.1",
+    "queue": "4.2.1"
   },
   "devDependencies": {
     "jasmine": "~2.5.3",
     "jasmine-spec-reporter": "~3.2.0",
     "js-beautify": "~1.6.9",
     "database-cleaner":  "1.2.0",
-    "shuffle-array": "~1.0.1"
+    "shuffle-array": "~1.0.1",
+    "node-minify": "2.1.0"
   }
 }
