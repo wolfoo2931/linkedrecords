@@ -12,3 +12,6 @@ function UUID() {
 UUID.prototype.getValue = function() {
     return this.uuid;
 };
+
+var module = module || {};
+module.exports = UUID;
