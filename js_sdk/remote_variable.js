@@ -1,6 +1,9 @@
 'use strict';
 
-var Changeset = changesets.Changeset;
+var Changeset = require('changesets').Changeset,
+    diffMatchPatch = require('diff_match_patch'),
+    diffEngine = new diffMatchPatch.diff_match_patch,
+    request = require('request');
 
 var Buffer = function() {
     this.value = null;
@@ -9,7 +12,7 @@ var Buffer = function() {
 Buffer.prototype = {
     add: function(changeset, changeInTransmission) {
         this.value = !this.value ? changeset : this.value.merge(changeset);
-        this.inFlightOp = this.inFlightOp || changeInTransmission;
+        this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
     },
 
     // this function returns a transformed version of the foreignChange which
@@ -18,7 +21,7 @@ Buffer.prototype = {
     // server don't know about these changes and the changes comming from the server
     // would not fit into the client state.
     transformAgainst: function(foreignChange) {
-        var c1, v2;
+        var c1, c2;
 
         if(!this.inFlightOp) return foreignChange;
 
@@ -29,8 +32,8 @@ Buffer.prototype = {
         // foreignChange (change from server) into the client state.
         c1 = c2.transformAgainst(this.value, true);
 
-        // Once we have this inferred operation, c2, we can use it
-        // to transform the buffer (b) "down" one step
+        // "Once we have this inferred operation, c2, we can use it
+        // to transform the buffer (b) "down" one step"
         this.value = this.value.transformAgainst(c2, false);
 
         return c1;
@@ -46,11 +49,10 @@ Buffer.prototype = {
     }
 };
 
-var RemoveVariable = function (variableId, bayeuxClient, clientId, actorId) {
+var RemoteVariable = function (variableId, bayeuxClient, clientId, actorId) {
     this.variableId = variableId;
-    this.diffEngine = new exports.diff_match_patch();
     this.bayeuxClient = bayeuxClient;
-    this.observers = {change: []};
+    this.observers = [];
     this.buffer = new Buffer();
 
     // because the same user can be logged on two browsers/laptops, we need
@@ -62,12 +64,13 @@ var RemoveVariable = function (variableId, bayeuxClient, clientId, actorId) {
     this.changeInTransmission;
 };
 
-RemoveVariable.prototype = {
+RemoteVariable.prototype = {
 
     load: function(done) {
         var self = this;
 
-        $.ajax({url: '/variables/' + this.variableId}).done((result) => {
+        request('http://localhost:3000/variables/' + this.variableId, (error, response, result) => {
+            result = JSON.parse(result);
             self.version = result.changeId;
             self.value = result.value;
 
@@ -90,8 +93,8 @@ RemoveVariable.prototype = {
         return this.value;
     },
 
-    setValue: function(newValue) {
-        var changeset = Changeset.fromDiff(this.diffEngine.diff_main(this.value, newValue));
+    setValue: function(newValue, callback) {
+        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
 
         if(this.changeInTransmission) {
             this.buffer.add(changeset, this.changeInTransmission);
@@ -102,19 +105,19 @@ RemoveVariable.prototype = {
         this.value = newValue;
     },
 
-    on: function(eventType, observer) {
-        this.observers[eventType].push(observer);
+    onChange: function(observer) {
+        this.observers.push(observer);
     },
 
     _notifyOnChangeObservers: function() {
-        this.observers.change.forEach(function(callback) {
+        this.observers.forEach(function(callback) {
             callback();
         });
     },
 
     _processForeignChange: function(foreignChange) {
-        var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange),
-            transformedForeignChange = this.buffer.transformAgainst(foreignChangeset);
+        var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
+        var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset);
 
         this.value = transformedForeignChange.apply(this.value);
         this.version = foreignChange.id
@@ -143,6 +146,8 @@ RemoveVariable.prototype = {
             clientId: this.clientId
         };
 
-        this.bayeuxClient.publish('/uncommited/changes/variable/' + self.variableId, this.changeInTransmission);
-    },
-}
+        this.bayeuxClient.publish('/uncommited/changes/variable/' + this.variableId, this.changeInTransmission);
+    }
+};
+
+module.exports = RemoteVariable;
