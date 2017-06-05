@@ -62,11 +62,11 @@ fdescribe('RemoteVariable Object', () => {
                         expect(value).toBe(variableClient2.getValue());
 
                         variableClient1.setValue(value + 'x');
-                        variableClient1.setValue(value + 'xy');
                         variableClient2.setValue(value + 'a');
 
                         setTimeout(() => {
-                            console.log(variableClient2.getValue());
+                            expect(variableClient1.getValue().length).toBe(17);
+                            expect(variableClient1.getValue()).toBe(variableClient2.getValue());
                             done();
                         }, 1000);
 
@@ -84,11 +84,35 @@ fdescribe('RemoteVariable Object', () => {
         });
 
         describe('when multiple clients change the value at the same time', () => {
-            it('respects the change of each client (It is NOT "last one wins", it is operational transformation)');
+            it('respects the change of each client (It is NOT "last one wins", changes are merged)');
         });
 
         describe('when there are many changes from different clients at the same time', () => {
-            it('ensures each client sees exaclty the same value');
+            it('ensures each client sees exaclty the same value', (done) => {
+                var client1, client2, variableClient1, variableClient2;
+
+                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+
+                variableClient1 = new RemoteVariable(this.variableId, client1.bayeuxClient, client1.id, client1.id).load(() => {
+                    variableClient2 = new RemoteVariable(this.variableId, client2.bayeuxClient, client2.id, client2.id).load(() => {
+
+                        // Initial checks if the setup and variable initialization worked
+                        const value = variableClient1.getValue();
+                        expect(value).toBe('initial content');
+                        expect(value).toBe(variableClient2.getValue());
+
+                        variableClient1.setValue(value + 'x');
+                        variableClient1.setValue(value + 'xyz');
+                        variableClient2.setValue(value + 'a');
+
+                        setTimeout(() => {
+                            done();
+                        }, 1000);
+
+                    });
+                });
+            });
         });
     });
 
