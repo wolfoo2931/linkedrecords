@@ -45,10 +45,6 @@ Buffer.prototype = {
         return c1;
     },
 
-    getInFlightOp: function() {
-        return this.inFlightOp;
-    },
-
     clear: function() {
         this.value = null;
         this.inFlightOp = null;
