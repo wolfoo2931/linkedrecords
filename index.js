@@ -23,8 +23,6 @@ app.use(function(req, res, next) {
 });
 
 app.get('/variables/:id', function (req, res) {
-    console.log('get variable with id ' + req.params.id);
-
     Attribute.getVariable({variableId: req.params.id}, (result) => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
@@ -37,8 +35,6 @@ app.get('/variables/:id', function (req, res) {
 app.use(express.static('staticfiles'));
 
 server.listen(process.env.PORT || 3000);
-
-console.log('running');
 
 // new Attribute({
 //     name: 'content',
