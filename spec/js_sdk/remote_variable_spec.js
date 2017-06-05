@@ -16,7 +16,7 @@ var changesets = require('changesets'),
     DatabaseCleaner = require('database-cleaner'),
     faye = require('faye');
 
-fdescribe('RemoteVariable Object', () => {
+describe('RemoteVariable Object', () => {
 
     beforeEach((done) => {
         var self = this,
@@ -46,12 +46,12 @@ fdescribe('RemoteVariable Object', () => {
     describe('getValue Function', () => {
         describe('return Value', () => {
             it('represents the value of the variable');
-            fit('represents the value of the variable even if it has been changed by another client', (done) => {
+            it('represents the value of the variable even if it has been changed by another client', (done) => {
 
                 var client1, client2, variableClient1, variableClient2;
 
-                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
-                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux', {retry: 5})};
+                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux', {retry: 5})};
 
                 variableClient1 = new RemoteVariable(this.variableId, client1.bayeuxClient, client1.id, client1.id).load(() => {
                     variableClient2 = new RemoteVariable(this.variableId, client2.bayeuxClient, client2.id, client2.id).load(() => {
@@ -88,11 +88,11 @@ fdescribe('RemoteVariable Object', () => {
         });
 
         describe('when there are many changes from different clients at the same time', () => {
-            it('ensures each client sees exaclty the same value', (done) => {
+            fit('ensures each client sees exaclty the same value', (done) => {
                 var client1, client2, variableClient1, variableClient2;
 
-                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
-                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client1 = {id: '8c2574a7-921e-41f8-822b-000000000001', bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client2 = {id: '8c2574a7-921e-41f8-822b-000000000002', bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
 
                 variableClient1 = new RemoteVariable(this.variableId, client1.bayeuxClient, client1.id, client1.id).load(() => {
                     variableClient2 = new RemoteVariable(this.variableId, client2.bayeuxClient, client2.id, client2.id).load(() => {
