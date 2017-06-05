@@ -7,12 +7,12 @@ var Changeset = require('changesets').Changeset,
 
 var Buffer = function() {
     this.value = null;
+    this.inFlightOp = null;
 };
 
 Buffer.prototype = {
-    add: function(changeset, changeInTransmission) {
+    add: function(changeset) {
         this.value = !this.value ? changeset : this.value.merge(changeset);
-        this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
     },
 
     // this function returns a transformed version of the foreignChange which
@@ -20,13 +20,19 @@ Buffer.prototype = {
     // could have some changes which has not been send to the server yet. So, the
     // server don't know about these changes and the changes comming from the server
     // would not fit into the client state.
-    transformAgainst: function(foreignChange) {
+    transformAgainst: function(foreignChange, changeInTransmission) {
         var c1, c2;
 
-        if(!this.inFlightOp) return foreignChange;
+        if(!changeInTransmission) {
+            return foreignChange;
+        }
+
+        this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
 
         c2 = foreignChange.transformAgainst(this.inFlightOp, true);
         this.inFlightOp = this.inFlightOp.transformAgainst(foreignChange, false);
+
+        if(!this.getValue()) return c2;
 
         // instead of using a bridge we use c2 to transform the
         // foreignChange (change from server) into the client state.
@@ -37,6 +43,10 @@ Buffer.prototype = {
         this.value = this.value.transformAgainst(c2, false);
 
         return c1;
+    },
+
+    getInFlightOp: function() {
+        return this.inFlightOp;
     },
 
     clear: function() {
@@ -97,7 +107,7 @@ RemoteVariable.prototype = {
         var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
 
         if(this.changeInTransmission) {
-            this.buffer.add(changeset, this.changeInTransmission);
+            this.buffer.add(changeset);
         } else {
             this._transmitChange(changeset, this.version);
         }
@@ -116,11 +126,30 @@ RemoteVariable.prototype = {
     },
 
     _processForeignChange: function(foreignChange) {
+        var originalForeignChangeset = foreignChange;
+
+        console.log('------------------------------------------------------------------------');
+        console.log('client id:       ' + this.clientId);
+        console.log('current value:   ' + this.value);
+
+        if(this.changeInTransmission) {
+            console.log('change in trans: ' + Changeset.unpack(this.changeInTransmission.change.changeset).inspect());
+        } else {
+            console.log('change in trans: none');
+        }
+
+        console.log('foreign change:  ' + Changeset.unpack(originalForeignChangeset.transformedClientChange).inspect());
+
         var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
-        var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset);
+        var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
+
+        console.log('transf. change:  ' + transformedForeignChange.inspect());
 
         this.value = transformedForeignChange.apply(this.value);
-        this.version = foreignChange.id
+
+        console.log('new value:       ' + this.value);
+
+        this.version = foreignChange.id;
         this._notifyOnChangeObservers();
     },
 
@@ -128,10 +157,10 @@ RemoteVariable.prototype = {
         var bufferedChanges = this.buffer.getValue();
         this.changeInTransmission = null;
         this.version = approval.id;
+        this.buffer.clear();
 
         if(bufferedChanges) {
             this._transmitChange(bufferedChanges, approval.id);
-            this.buffer.clear();
         }
     },
 
