@@ -83,19 +83,14 @@ RemoteVariable.prototype = {
             result = JSON.parse(result);
             self.version = result.changeId;
             self.value = result.value;
+            this.buffer.clear();
 
-            self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, function(change) {
+            self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, function(change) {
                 if(change.clientId === self.clientId) {
                     self._processApproval(change);
                 } else {
                     self._processForeignChange(change);
                 }
-            }).errback(function(error) {
-                console.log('[SUBSCRIBE FAILED]', error);
-            });
-
-            self.bayeuxClient.bind('transport:down', function() {
-                console.log('[CONNECTION DOWN]');
             });
 
             self._notifyOnChangeObservers();
@@ -132,46 +127,19 @@ RemoteVariable.prototype = {
     },
 
     _processForeignChange: function(foreignChange) {
-        var originalForeignChangeset = foreignChange;
-
-        console.log('');
-        console.log('_processForeignChange');
-        console.log('    client id:       ' + this.clientId);
-
-        if(this.changeInTransmission) {
-            console.log('    change in trans: ' + Changeset.unpack(this.changeInTransmission.change.changeset).inspect());
-        } else {
-            console.log('    change in trans: none');
+        try {
+            var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
+            var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
+            this.value = transformedForeignChange.apply(this.value);
+            this.version = foreignChange.id;
+            this._notifyOnChangeObservers();
+        } catch(ex) {
+            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state.');
+            this.load();
         }
-
-        console.log('    current value:   ' + this.value);
-
-        console.log('    foreign change:  ' + Changeset.unpack(originalForeignChangeset.transformedClientChange).inspect());
-
-        var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
-        var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
-
-        console.log('    transf. change:  ' + transformedForeignChange.inspect());
-
-        this.value = transformedForeignChange.apply(this.value);
-
-        console.log('    new value:       ' + this.value);
-
-        this.version = foreignChange.id;
-        this._notifyOnChangeObservers();
     },
 
     _processApproval: function(approval) {
-
-        console.log('');
-        console.log('_processApproval');
-        console.log('    client id:       ' + this.clientId);
-        if(this.changeInTransmission) {
-            console.log('    change in trans: ' + Changeset.unpack(this.changeInTransmission.change.changeset).inspect());
-        } else {
-            console.log('    change in trans: none');
-        }
-
         var bufferedChanges = this.buffer.getValue();
         this.changeInTransmission = null;
         this.version = approval.id;
@@ -184,10 +152,6 @@ RemoteVariable.prototype = {
 
     _transmitChange: function(changeset, version) {
 
-      console.log('');
-      console.log('_transmitChange');
-      console.log('    client id:       ' + this.clientId);
-
         this.changeInTransmission = {
             variableId: this.variableId,
             change: {
@@ -197,8 +161,6 @@ RemoteVariable.prototype = {
             actorId: this.actorId,
             clientId: this.clientId
         };
-
-        console.log('    change in trans: ' + Changeset.unpack(this.changeInTransmission.change.changeset).inspect());
 
         this.bayeuxClient.publish('/uncommited/changes/variable/' + this.variableId, this.changeInTransmission);
     }

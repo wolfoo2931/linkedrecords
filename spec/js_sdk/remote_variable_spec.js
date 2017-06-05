@@ -107,6 +107,8 @@ describe('RemoteVariable Object', () => {
                         variableClient2.setValue(value + 'a');
 
                         setTimeout(() => {
+                            expect(variableClient1.getValue().length).toBe(19);
+                            expect(variableClient1.getValue()).toBe(variableClient2.getValue());
                             done();
                         }, 1000);
 
