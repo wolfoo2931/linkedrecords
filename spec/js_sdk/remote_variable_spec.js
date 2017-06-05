@@ -1,12 +1,5 @@
 'use strict';
 
-// Termenology used in this test suite:
-// variable:
-// change:
-// client:
-
-exports = {} // because of the export system used in diff_match_patch
-
 var changesets = require('changesets'),
     RemoteVariable = require('../../js_sdk/remote_variable'),
     UUID = require('../../js_sdk/uuid'),
@@ -14,7 +7,8 @@ var changesets = require('changesets'),
     PgPool = require('pg-pool'),
     dbPool = new PgPool(),
     DatabaseCleaner = require('database-cleaner'),
-    faye = require('faye');
+    faye = require('faye'),
+    app = require('../../index.js');
 
 describe('RemoteVariable Object', () => {
 
