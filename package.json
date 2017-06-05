@@ -25,20 +25,21 @@
   },
   "homepage": "https://github.com/specifyio/yabaas#readme",
   "dependencies": {
-    "express": "~4.14.0",
-    "pg": "~6.1.2",
-    "uuid": "~3.0.1",
-    "faye": "~1.2.4",
     "changesets": "~1.0.2",
     "diff_match_patch": "~0.1.1",
-    "queue": "4.2.1"
+    "express": "~4.14.0",
+    "faye": "~1.2.4",
+    "pg": "~6.1.2",
+    "queue": "4.2.1",
+    "request": "^2.81.0",
+    "uuid": "~3.0.1"
   },
   "devDependencies": {
+    "database-cleaner": "1.2.0",
     "jasmine": "~2.5.3",
     "jasmine-spec-reporter": "~3.2.0",
     "js-beautify": "~1.6.9",
-    "database-cleaner":  "1.2.0",
-    "shuffle-array": "~1.0.1",
-    "node-minify": "2.1.0"
+    "node-minify": "2.1.0",
+    "shuffle-array": "~1.0.1"
   }
 }

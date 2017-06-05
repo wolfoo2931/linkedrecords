@@ -9,9 +9,8 @@ var Attribute = require('./models/attribute.js'),
 
 bayeux.attach(server);
 
-bayeux.getClient().subscribe('/uncommited/changes/variable/*', function(change) {
+bayeux.getClient().subscribe('/uncommited/changes/variable/*', (change) => {
     Attribute.changeVariable(change, (commitedChange) => {
-        console.log(commitedChange);
         bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
     });
 });
