@@ -44,8 +44,8 @@ describe('RemoteVariable Object', () => {
 
                 var client1, client2, variableClient1, variableClient2;
 
-                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux', {retry: 5})};
-                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux', {retry: 5})};
+                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
 
                 variableClient1 = new RemoteVariable(this.variableId, client1.bayeuxClient, client1.id, client1.id).load(() => {
                     variableClient2 = new RemoteVariable(this.variableId, client2.bayeuxClient, client2.id, client2.id).load(() => {
@@ -62,7 +62,7 @@ describe('RemoteVariable Object', () => {
                             expect(variableClient1.getValue().length).toBe(17);
                             expect(variableClient1.getValue()).toBe(variableClient2.getValue());
                             done();
-                        }, 1000);
+                        }, 200);
 
                     });
                 });
@@ -82,7 +82,7 @@ describe('RemoteVariable Object', () => {
         });
 
         describe('when there are many changes from different clients at the same time', () => {
-            fit('ensures each client sees exaclty the same value', (done) => {
+            it('ensures each client sees exaclty the same value', (done) => {
                 var client1, client2, variableClient1, variableClient2;
 
                 client1 = {id: '8c2574a7-921e-41f8-822b-000000000001', bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
@@ -104,7 +104,7 @@ describe('RemoteVariable Object', () => {
                             expect(variableClient1.getValue().length).toBe(19);
                             expect(variableClient1.getValue()).toBe(variableClient2.getValue());
                             done();
-                        }, 1000);
+                        }, 400);
 
                     });
                 });
