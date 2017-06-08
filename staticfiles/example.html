@@ -28,15 +28,11 @@
         <div contenteditable="true" id="value" spellcheck="false"></div>
 
         <script>
-
-            var modifyContent = null;
-
             $().ready(function() {
                 var bayeuxClient = new Faye.Client('/bayeux'),
                     clientId = actorId = (new UUID()).getValue(),
                     remoteVariable = new RemoteVariable('433847a8-d012-406d-b031-d76b4c3165ec', bayeuxClient, clientId, actorId).load(),
-                    caret = new Caret(),
-                    updateVariableFn = function() { remoteVariable.setValue($('#value').html()) };
+                    caret = new Caret();
 
                 remoteVariable.subscribe(function(changeset) {
                     var contentElement = document.getElementById('value');
@@ -46,14 +42,9 @@
                     caret.restoreSelection(contentElement);
                 });
 
-                $('#value').on('input', updateVariableFn);
-
-                window.setInterval(function() {
-                    if(modifyContent) {
-                        $('#value').html($('#value').html() + 'a');
-                        updateVariableFn();
-                    }
-                }, 1000);
+                $('#value').on('input', function() {
+                  remoteVariable.setValue($('#value').html());
+                });
             });
 
         </script>
