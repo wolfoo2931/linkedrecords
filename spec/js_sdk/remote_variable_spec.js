@@ -112,7 +112,7 @@ describe('RemoteVariable Object', () => {
         });
     });
 
-    describe('onChange', () => {
+    describe('subscribe', () => {
         describe('callback Function', () => {
             it('is executed when the value changes on the server side (because another client updated the variable value)')
         });

@@ -3,7 +3,7 @@
 var Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
     diffEngine = new diffMatchPatch.diff_match_patch,
-    request = require('request');
+    popsicle = require('popsicle');
 
 var Buffer = function() {
     this.value = null;
@@ -75,22 +75,21 @@ RemoteVariable.prototype = {
     load: function(done) {
         var self = this;
 
-        request('http://localhost:3000/variables/' + this.variableId, (error, response, result) => {
-            result = JSON.parse(result);
+        popsicle.get('http://localhost:3000/variables/' + this.variableId).then((result) => {
+            result = JSON.parse(result.body);
             self.version = result.changeId;
             self.value = result.value;
-            this.buffer.clear();
-
-            self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, function(change) {
-                if(change.clientId === self.clientId) {
-                    self._processApproval(change);
-                } else {
-                    self._processForeignChange(change);
-                }
-            });
-
-            self._notifyOnChangeObservers();
+            self.buffer.clear();
+            self._notifySubscribers();
             done && done();
+        });
+
+        self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, (change) => {
+            if(change.clientId === self.clientId) {
+                self._processApproval(change);
+            } else {
+                self._processForeignChange(change);
+            }
         });
 
         return self;
@@ -112,11 +111,11 @@ RemoteVariable.prototype = {
         this.value = newValue;
     },
 
-    onChange: function(observer) {
+    subscribe: function(observer) {
         this.observers.push(observer);
     },
 
-    _notifyOnChangeObservers: function() {
+    _notifySubscribers: function() {
         this.observers.forEach(function(callback) {
             callback();
         });
@@ -128,9 +127,9 @@ RemoteVariable.prototype = {
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
             this.value = transformedForeignChange.apply(this.value);
             this.version = foreignChange.id;
-            this._notifyOnChangeObservers();
+            this._notifySubscribers();
         } catch(ex) {
-            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state.');
+            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
             this.load();
         }
     },
