@@ -3,10 +3,7 @@
 
         <script>exports = {} // because of the export system used in diff_match_patch</script>
 
-        <script type="text/javascript" src="/bayeux/client.js"></script>
-        <script type="text/javascript" src="/sdk.min.js"></script>
-
-        <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+        <script type="text/javascript" src="sdk.min.js"></script>
 
         <style>
             #value {
@@ -37,11 +34,11 @@
             $().ready(function() {
                 var bayeuxClient = new Faye.Client('/bayeux'),
                     clientId = actorId = (new UUID()).getValue(),
-                    remoteVariable = new RemoveVariable('20b17377-88cc-46b6-8b54-5ba0aec0bcdd', bayeuxClient, clientId, actorId).load(),
+                    remoteVariable = new RemoteVariable('433847a8-d012-406d-b031-d76b4c3165ec', bayeuxClient, clientId, actorId).load(),
                     caret = new Caret(),
                     updateVariableFn = function() { remoteVariable.setValue($('#value').html()) };
 
-                remoteVariable.on('change', function(changeset) {
+                remoteVariable.subscribe(function(changeset) {
                     var contentElement = document.getElementById('value');
 
                     caret.saveSelection(contentElement);
