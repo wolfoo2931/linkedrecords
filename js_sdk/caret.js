@@ -92,3 +92,5 @@ Caret.prototype = {
         }
     }
 }
+
+module.exports = Caret;
