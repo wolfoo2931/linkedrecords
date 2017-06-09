@@ -42,7 +42,7 @@ Attribute.prototype.save = function(deliver) {
       return;
   }
 
-  pgPool.connect(function(err, pgclient, releaseDBConnection) {
+  pgPool.connect((err, pgclient, releaseDBConnection) => {
       pgclient.query("SELECT name FROM attributes WHERE name='" + self.name + "' AND domain='" + self.domain + "'", (err, result) => {
           if(result.rows.length == 0) {
               pgclient.query("INSERT INTO attributes (name, domain) VALUES ('" + self.name + "', '" + self.domain + "')", (err, result) => {
@@ -83,7 +83,7 @@ Attribute.newVariable = function(args, deliver) {
         return;
     }
 
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
+    pgPool.connect((err, pgclient, releaseDBConnection) => {
 
         pgclient.query("SELECT name FROM attributes WHERE name='" + args.attribute + "' LIMIT 1", (err, result)  => {
           if(result.rows.length == 1) {
@@ -117,7 +117,7 @@ Attribute.getVariable = function(args, deliver) {
 
     pgTableName = 'var_' + args.variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
+    pgPool.connect((err, pgclient, releaseDBConnection) => {
 
         if(args.changeId) {
             changeIdLimitationSQLAddition = "AND change_id <= " + args.changeId + " ";
@@ -211,7 +211,7 @@ Attribute._changeVariableByValue = function(args, deliver) {
         insertVariableValueQuery,
         changeID;
 
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
+    pgPool.connect((err, pgclient, releaseDBConnection) => {
         insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + args.value + "', false) RETURNING change_id";
         pgclient.query(insertVariableValueQuery, (err, result) => {
             if(!err) {
@@ -285,7 +285,6 @@ Attribute._changeVariableByChangeset = function(args, deliver) {
 
     Promise.all(fetchVariableVersionPromises).then(() => {
 
-        //TODO: check whether this is the right order (parentVersion, currentVersion) or (currentVersion, parentVersion)
         serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersion, currentVersion));
 
         // This works because of the TP1 property of the transformAgainst function
@@ -293,7 +292,7 @@ Attribute._changeVariableByChangeset = function(args, deliver) {
         transformedClientChange = clientChange.transformAgainst(serverChange, false);
         transformedServerChange = serverChange.transformAgainst(clientChange, true);
 
-        pgPool.connect(function(err, pgclient, releaseDBConnection) {
+        pgPool.connect((err, pgclient, releaseDBConnection) => {
             insertVariableValueQuery = "INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + args.actorId + "', NOW(), '" + transformedClientChange.pack() + "', true) RETURNING change_id";
             pgclient.query(insertVariableValueQuery, (err, result) => {
                 if(!err) {
@@ -315,7 +314,7 @@ Attribute._changeVariableByChangeset = function(args, deliver) {
 }
 
 Attribute.deleteAllVariables = function(deliver) {
-    pgPool.connect(function(err, pgclient, releaseDBConnection) {
+    pgPool.connect((err, pgclient, releaseDBConnection) => {
         pgclient.query("SELECT * FROM pg_catalog.pg_tables WHERE tablename LIKE 'var_%'", (err, result) => {
             pgclient.query("DROP TABLE " + result.rows.map((t) => {return t.tablename}).join(','), (err, result) => {
                 releaseDBConnection();
