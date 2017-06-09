@@ -3,7 +3,8 @@
 var Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
     diffEngine = new diffMatchPatch.diff_match_patch,
-    popsicle = require('popsicle');
+    popsicle = require('popsicle'),
+    Faye = require('faye');
 
 var Buffer = function() {
     this.value = null;
@@ -55,9 +56,10 @@ Buffer.prototype = {
     }
 };
 
-var RemoteVariable = function (variableId, bayeuxClient, clientId, actorId) {
+var RemoteVariable = function (variableId, serverURL, clientId, actorId) {
     this.variableId = variableId;
-    this.bayeuxClient = bayeuxClient;
+    this.serverURL = serverURL;
+    this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
     this.observers = [];
     this.buffer = new Buffer();
 
@@ -75,7 +77,7 @@ RemoteVariable.prototype = {
     load: function(done) {
         var self = this;
 
-        popsicle.get('http://localhost:3000/variables/' + this.variableId).then((result) => {
+        popsicle.get(this.serverURL +  '/variables/' + this.variableId).then((result) => {
             result = JSON.parse(result.body);
             self.version = result.changeId;
             self.value = result.value;

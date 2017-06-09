@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node_modules/jasmine/bin/jasmine.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "build": "browserify staticfiles/example.js > staticfiles/example.packaged.js"
   },
   "repository": {
     "type": "git",
@@ -32,7 +33,6 @@
     "pg": "~6.1.2",
     "popsicle": "^9.1.0",
     "queue": "4.2.1",
-    "request": "^2.81.0",
     "uuid": "~3.0.1"
   },
   "devDependencies": {
