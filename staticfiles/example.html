@@ -1,6 +1,7 @@
 <html>
     <head>
         <script type="text/javascript" src="example.packaged.js"></script>
+        <link href="https://fonts.googleapis.com/css?family=Lora:400,700" rel="stylesheet" type="text/css">
 
         <style>
             #value {
@@ -8,7 +9,7 @@
                 background-color: #efefef;
                 width: 500px;
                 min-height: 300px;
-                border: 1px solid #ddd;
+                border: 1px solid #e0e0ec;
                 border-radius: 4px;
                 padding: 9px;
             }
@@ -17,10 +18,25 @@
                 border: 1px solid #ddd;
                 outline: none;
             }
+
+            p {
+                border: 1px dashed #e0e0ec;
+                display: block;
+                min-height: 20px;
+                padding: 4px 8px 4px 8px;
+                margin-top: 12px;
+                margin-bottom: 12px;
+                border-radius: 4px;
+                font-family: Lora;
+            }
+
         </style>
 
     </head>
     <body>
+
+        <button  onclick="document.execCommand('bold',false,null);">Bold</button>
+        <button  onclick="document.execCommand('italic',false,null);">Italic</button>
 
         <div contenteditable="true" id="value" spellcheck="false"></div>
 

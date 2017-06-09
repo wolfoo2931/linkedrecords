@@ -10,6 +10,7 @@ var Attribute = require('./models/attribute.js'),
 bayeux.attach(server);
 
 bayeux.getClient().subscribe('/uncommited/changes/variable/*', (change) => {
+    console.log('receive commit');
     Attribute.changeVariable(change, (commitedChange) => {
         bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
     });
