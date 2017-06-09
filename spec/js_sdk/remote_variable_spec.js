@@ -7,7 +7,6 @@ var changesets = require('changesets'),
     PgPool = require('pg-pool'),
     dbPool = new PgPool(),
     DatabaseCleaner = require('database-cleaner'),
-    faye = require('faye'),
     app = require('../../index.js');
 
 describe('RemoteVariable Object', () => {
@@ -44,11 +43,11 @@ describe('RemoteVariable Object', () => {
 
                 var client1, client2, variableClient1, variableClient2;
 
-                client1 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
-                client2 = {id: new UUID().getValue(), bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client1 = {id: new UUID().getValue()};
+                client2 = {id: new UUID().getValue()};
 
-                variableClient1 = new RemoteVariable(this.variableId, client1.bayeuxClient, client1.id, client1.id).load(() => {
-                    variableClient2 = new RemoteVariable(this.variableId, client2.bayeuxClient, client2.id, client2.id).load(() => {
+                variableClient1 = new RemoteVariable(this.variableId, 'http://localhost:3000', client1.id, client1.id).load(() => {
+                    variableClient2 = new RemoteVariable(this.variableId, 'http://localhost:3000', client2.id, client2.id).load(() => {
 
                         // Initial checks if the setup and variable initialization worked
                         var value = variableClient1.getValue();
@@ -85,11 +84,11 @@ describe('RemoteVariable Object', () => {
             it('ensures each client sees exaclty the same value', (done) => {
                 var client1, client2, variableClient1, variableClient2;
 
-                client1 = {id: '8c2574a7-921e-41f8-822b-000000000001', bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
-                client2 = {id: '8c2574a7-921e-41f8-822b-000000000002', bayeuxClient: new faye.Client('http://localhost:3000/bayeux')};
+                client1 = {id: '8c2574a7-921e-41f8-822b-000000000001'};
+                client2 = {id: '8c2574a7-921e-41f8-822b-000000000002'};
 
-                variableClient1 = new RemoteVariable(this.variableId, client1.bayeuxClient, client1.id, client1.id).load(() => {
-                    variableClient2 = new RemoteVariable(this.variableId, client2.bayeuxClient, client2.id, client2.id).load(() => {
+                variableClient1 = new RemoteVariable(this.variableId, 'http://localhost:3000', client1.id, client1.id).load(() => {
+                    variableClient2 = new RemoteVariable(this.variableId, 'http://localhost:3000', client2.id, client2.id).load(() => {
 
                         // Initial checks if the setup and variable initialization worked
                         const value = variableClient1.getValue();
