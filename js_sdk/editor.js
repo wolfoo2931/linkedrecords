@@ -42,7 +42,7 @@ Editor.prototype = {
         html = html.replace(/<div>\s*<\/div>/g, '');
         html = html.replace(/<div>/g, '<p>');
         html = html.replace(/<\/div>/g, '</p>');
-        html = html.replace(/<p><\/p>(<p><\/p>)+/g, '<p> </p>');
+        html = html.replace(/<p>\s*<\/p>(<p>\s*<\/p>)+/g, '<p> </p>');
         return html;
     }
 }
