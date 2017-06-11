@@ -44,7 +44,7 @@ Editor.prototype = {
         }
 
         this.focusedElement = element;
-        this.focusedElement.className += ' focused';
+        this.focusedElement.className = 'focused';
         return true;
     },
 
@@ -74,16 +74,11 @@ Editor.prototype = {
     },
 
     _cleanHTML: function(html) {
-        html = html.replace(/<br\/>/g, '');
-        html = html.replace(/<br>/g, '');
-        html = html.replace(/<b><\/b>/g, '');
-        html = html.replace(/<i><\/i>/g, '');
-        html = html.replace(/<div>\s*<\/div>/g, '');
+        html = html.replace(/<b><\/b>|<i><\/i>|<div>\s*<\/div>/g, '');
         html = html.replace(/<div>/g, '<p>');
         html = html.replace(/<\/div>/g, '</p>');
-        html = html.replace(/<p>\s*<\/p>(<p>\s*<\/p>)+/g, '<p></p>');
-        html = html.replace(/class="\s*focused\s*"/g, '');
-
+        html = html.replace(/<p.*?>/g, '<p>');
+        html = html.replace(/<p>(\s*|<br>)<\/p>(<p>(\s*|<br>)<\/p>)+/g, '<p><br></p>');
         return html;
     }
 }
