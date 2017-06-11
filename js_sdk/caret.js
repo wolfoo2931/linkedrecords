@@ -90,6 +90,13 @@ Caret.prototype = {
             this.rangeStartAtZeroOffset = selection.anchorOffset == 0;
             this.rangeEndAtZeroOffset = selection.focusOffset == 0;
         }
+    },
+
+    targetElement: function() {
+        var selection = window.getSelection();
+        if(selection.anchorNode === selection.focusNode) {
+            return selection.focusNode;
+        }
     }
 }
 

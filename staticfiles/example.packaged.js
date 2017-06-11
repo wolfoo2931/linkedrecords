@@ -91,6 +91,13 @@ Caret.prototype = {
             this.rangeStartAtZeroOffset = selection.anchorOffset == 0;
             this.rangeEndAtZeroOffset = selection.focusOffset == 0;
         }
+    },
+
+    targetElement: function() {
+        var selection = window.getSelection();
+        if(selection.anchorNode === selection.focusNode) {
+            return selection.focusNode;
+        }
     }
 }
 
@@ -108,18 +115,54 @@ var Editor = function(domId) {
     this.contentElement = document.getElementById(domId);
     this.caret = new Caret();
 
-    //FIXME: cleanup don't work
     this.subscribe(function() {
         self.cleanUpContent();
     });
+
+    document.addEventListener('selectionchange', function(e) {
+        console.log(e);
+        self.focusElement();
+    });
+
+    // this.contentElement.addEventListener('mouseover', function(e) {
+    //     self.focusElement(e.path[0]);
+    // });
+
 }
 
 Editor.prototype = {
     subscribe: function(callback) {
         var self = this;
-        $('#value').on('input', function() {
+        $('#' + this.domId).on('input', function() {
             callback(self._cleanHTML(self.contentElement.innerHTML));
         });
+    },
+
+    focusElement: function(element) {
+
+        element = this.caretEditorSectionTarget() || element;
+
+        if(!element) {
+            return false;
+        }
+
+        if(this.focusedElement) {
+            this.focusedElement.className = '';
+        }
+
+        this.focusedElement = element;
+        this.focusedElement.className += ' focused';
+        return true;
+    },
+
+    caretEditorSectionTarget: function() {
+        var caretTarget = this.caret.targetElement();
+
+        if(caretTarget &&
+           caretTarget.parentElement &&
+           caretTarget.parentElement.parentElement === this.contentElement) {
+             return caretTarget.parentElement;
+        }
     },
 
     cleanUpContent: function() {
@@ -142,7 +185,9 @@ Editor.prototype = {
         html = html.replace(/<div>\s*<\/div>/g, '');
         html = html.replace(/<div>/g, '<p>');
         html = html.replace(/<\/div>/g, '</p>');
-        html = html.replace(/<p>\s*<\/p>(<p>\s*<\/p>)+/g, '<p> </p>');
+        html = html.replace(/<p>\s*<\/p>(<p>\s*<\/p>)+/g, '<p></p>');
+        html = html.replace(/class="over"/g, '');
+
         return html;
     }
 }
