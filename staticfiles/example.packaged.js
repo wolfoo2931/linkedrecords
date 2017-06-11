@@ -120,13 +120,12 @@ var Editor = function(domId) {
     });
 
     document.addEventListener('selectionchange', function(e) {
-        console.log(e);
         self.focusElement();
     });
 
-    // this.contentElement.addEventListener('mouseover', function(e) {
-    //     self.focusElement(e.path[0]);
-    // });
+    this.contentElement.addEventListener('mouseover', function(e) {
+        self.focusElement(e.path[0]);
+    });
 
 }
 
@@ -140,7 +139,7 @@ Editor.prototype = {
 
     focusElement: function(element) {
 
-        element = this.caretEditorSectionTarget() || element;
+        element = this.caretTargetSection() || element || this.focusedElement;
 
         if(!element) {
             return false;
@@ -155,13 +154,15 @@ Editor.prototype = {
         return true;
     },
 
-    caretEditorSectionTarget: function() {
+    caretTargetSection: function() {
         var caretTarget = this.caret.targetElement();
 
-        if(caretTarget &&
-           caretTarget.parentElement &&
-           caretTarget.parentElement.parentElement === this.contentElement) {
-             return caretTarget.parentElement;
+        if(caretTarget && caretTarget.parentElement) {
+            if(caretTarget.parentElement.parentElement === this.contentElement) {
+                return caretTarget.parentElement;
+            } else if (caretTarget.parentElement === this.contentElement) {
+                return caretTarget;
+            }
         }
     },
 
@@ -169,6 +170,7 @@ Editor.prototype = {
         this.caret.saveSelection(this.contentElement);
         this.contentElement.innerHTML = this._cleanHTML(this.contentElement.innerHTML);
         this.caret.restoreSelection(this.contentElement);
+        this.focusElement();
     },
 
     setContent: function(content) {
@@ -186,7 +188,7 @@ Editor.prototype = {
         html = html.replace(/<div>/g, '<p>');
         html = html.replace(/<\/div>/g, '</p>');
         html = html.replace(/<p>\s*<\/p>(<p>\s*<\/p>)+/g, '<p></p>');
-        html = html.replace(/class="over"/g, '');
+        html = html.replace(/class="\s*focused\s*"/g, '');
 
         return html;
     }
