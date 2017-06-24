@@ -1,230 +1,6 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
-var Caret = function() {
-
-}
-
-Caret.prototype = {
-
-    _getElementsContentLengthIncrement(element) {
-        if(['BR', 'IMG'].includes(element.tagName)) return 1;
-        if(!element.length) return 0;
-        return element.length;
-    },
-
-    _getContentLengthOfDOMElement: function(element, endChild) {
-        var treeWalker = document.createTreeWalker(element),
-            currentEl,
-            length = 0;
-
-        while(currentEl = treeWalker.currentNode) {
-            if(currentEl === endChild) return length;
-
-            length += this._getElementsContentLengthIncrement(currentEl);
-
-            treeWalker.nextNode();
-        }
-
-        return length;
-    },
-
-    // rightMatch: when root element contains: '<p>Hello</p><p>World</p>' and contentLength is '5'
-    //             it is not clear which element to return, if rightMatch is true then '<p>World</p>' will
-    //             be returned, '<p>Hello</p>' otherwise
-    _getElementByContentLength: function(rootEl, contentLength, rightMatch) {
-        var treeWalker = document.createTreeWalker(rootEl),
-            currentEl,
-            length = 0,
-            currentElLength;
-
-        while(currentEl = treeWalker.currentNode) {
-            currentElLength = this._getElementsContentLengthIncrement(currentEl);
-
-            if((length + currentElLength) < contentLength) {
-                length += currentElLength;
-            } else if((length + currentElLength) === contentLength) {
-                return rightMatch ? (treeWalker.nextNode() || currentEl) : currentEl;
-            } else {
-                return currentEl;
-            }
-
-            treeWalker.nextNode();
-        }
-
-        return null;
-    },
-
-    restoreSelection: function(rootEl) {
-        if(this.rangeStart && this.rangeEnd) {
-
-            var range,
-                selection = window.getSelection(),
-                startNode = this._getElementByContentLength(rootEl, this.rangeStart, this.rangeStartAtZeroOffset),
-                endNode = this._getElementByContentLength(rootEl, this.rangeEnd, this.rangeEndAtZeroOffset),
-                startOffset = this.rangeStart - this._getContentLengthOfDOMElement(rootEl, startNode),
-                endOffset = this.rangeEnd - this._getContentLengthOfDOMElement(rootEl, endNode);
-
-            try {
-                range = document.createRange();
-                range.setStart(startNode, startOffset);
-                range.setEnd(endNode, endOffset);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            } catch(ex) { console.log('failed to set caret position') }
-        }
-    },
-
-    // text|text
-    // <div>text|</div><div>text</div>
-    // <div>text</div><div>|text<,/div>
-    // text|<br/><br/><br/>text
-    // text<br/>|<br/><br/>text
-    // text<br/><br/>|<br/>text
-    // text<br/><br/><br/>|text
-    // Preformatted stuff (root element includes <pre> tags)
-    saveSelection: function(rootEl) {
-        var selection = window.getSelection();
-        if(selection.anchorNode && selection.focusNode) {
-            this.rangeStart = this._getContentLengthOfDOMElement(rootEl, selection.anchorNode) + selection.anchorOffset;
-            this.rangeEnd = this._getContentLengthOfDOMElement(rootEl, selection.focusNode) + selection.focusOffset;
-            this.rangeStartAtZeroOffset = selection.anchorOffset == 0;
-            this.rangeEndAtZeroOffset = selection.focusOffset == 0;
-        }
-    },
-
-    targetElement: function() {
-        var selection = window.getSelection();
-        if(selection.anchorNode === selection.focusNode) {
-            return selection.focusNode;
-        }
-    }
-}
-
-module.exports = Caret;
-
-},{}],2:[function(require,module,exports){
-'use strict';
-
-var $ = require('jquery'),
-    Caret = require('./caret'),
-    Utils = require('./utils');
-
-var Editor = function(domId) {
-    var self = this;
-
-    this.domId = domId;
-    this.contentElement = document.getElementById(domId);
-    this.caret = new Caret();
-
-    this.sectionTypeSelector = document.createElement('div');
-    this.sectionTypeSelector.id = 'sectionTypeSelector';
-    this.sectionTypeSelector.innerHTML = "<div>paragraph</div>";
-    document.body.appendChild(this.sectionTypeSelector);
-
-    this.subscribe(function() {
-        self.cleanUpContent();
-    });
-
-    document.addEventListener('selectionchange', function(e) {
-        self.focusSection();
-    });
-
-    this.contentElement.addEventListener('mouseover', function(e) {
-        self.focusSection(e.path[0]);
-    });
-}
-
-Editor.prototype = {
-    subscribe: function(callback) {
-        var self = this;
-        $('#' + this.domId).on('input', function() {
-            callback(self._cleanHTML(self.contentElement.innerHTML));
-        });
-    },
-
-    focusSection: function(element) {
-
-        element = this.focusedSection() || element || this.focusedElement;
-
-        if(!element || element.parentElement !== this.contentElement) {
-            return false;
-        }
-
-        if(this.focusedElement && this.focusedElement != element) {
-            this.focusedElement.className = '';
-        }
-
-        if(this.focusedElement != element) {
-            this.focusedElement = element;
-            this.focusedElement.className = 'focused';
-            this.displaySectionTypeSelectorNextTo(this.focusedElement);
-        }
-
-        return true;
-    },
-
-    displaySectionTypeSelectorNextTo: function(focusedElement) {
-        var focusedElementPosition = Utils.getElementPosition(focusedElement),
-            sectionTypeSelectorElement = document.getElementById('sectionTypeSelector'),
-            posX,
-            posY;
-
-        if(focusedElement) {
-            posX = focusedElementPosition.x + focusedElement.offsetWidth - Math.floor(sectionTypeSelectorElement.offsetWidth/2);
-            posY = focusedElementPosition.y;
-
-            if(posY > focusedElementPosition.y + focusedElementPosition.offsetHeight) {
-                posY = focusedElementPosition.y + focusedElementPosition.offsetHeight;
-            }
-
-            sectionTypeSelectorElement.style.left = posX + 'px';
-            sectionTypeSelectorElement.style.top = posY + 'px';
-        }
-    },
-
-    focusedSection: function() {
-        var caretTarget = this.caret.targetElement();
-
-        if(caretTarget && caretTarget.parentElement) {
-            if(caretTarget.parentElement.parentElement === this.contentElement) {
-                return caretTarget.parentElement;
-            } else if (caretTarget.parentElement === this.contentElement) {
-                return caretTarget;
-            }
-        }
-    },
-
-    //FIXME: maybe use the TreeWalker to cleanup the content instead of
-    // replacing it compleatly after cleanup
-    cleanUpContent: function() {
-        this.caret.saveSelection(this.contentElement);
-        this.contentElement.innerHTML = this._cleanHTML(this.contentElement.innerHTML);
-        this.caret.restoreSelection(this.contentElement);
-        this.focusSection();
-    },
-
-    setContent: function(content) {
-        this.caret.saveSelection(this.contentElement);
-        this.contentElement.innerHTML = this._cleanHTML(content);
-        this.caret.restoreSelection(this.contentElement);
-    },
-
-    _cleanHTML: function(html) {
-        html = html.replace(/<b><\/b>|<i><\/i>|<div>\s*<\/div>/g, '');
-        html = html.replace(/<div>/g, '<p>');
-        html = html.replace(/<\/div>/g, '</p>');
-        html = html.replace(/<p.*?>/g, '<p>');
-        html = html.replace(/<p>(\s*|<br>)<\/p>(<p>(\s*|<br>)<\/p>)+/g, '<p><br></p>');
-        return html;
-    }
-}
-
-module.exports = Editor;
-
-},{"./caret":1,"./utils":4,"jquery":53}],3:[function(require,module,exports){
-'use strict';
-
 var Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
     diffEngine = new diffMatchPatch.diff_match_patch,
@@ -390,29 +166,7 @@ RemoteVariable.prototype = {
 
 module.exports = RemoteVariable;
 
-},{"changesets":13,"diff_match_patch":17,"faye":18,"popsicle":60}],4:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-    getElementPosition: function (el) {
-        var xPos = 0,
-            yPos = 0;
-
-        while (el) {
-            xPos += el.offsetLeft + el.clientLeft;
-            yPos += el.offsetTop  + el.clientTop;
-
-            el = el.offsetParent;
-        }
-
-        return {
-            x: xPos,
-            y: yPos
-        };
-    }
-};
-
-},{}],5:[function(require,module,exports){
+},{"changesets":10,"diff_match_patch":14,"faye":15,"popsicle":57}],2:[function(require,module,exports){
 'use strict';
 
 function UUID() {
@@ -430,7 +184,7 @@ UUID.prototype.getValue = function() {
 
 module.exports = UUID;
 
-},{}],6:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
 "use strict";
 
 // rawAsap provides everything we need except exception management.
@@ -498,7 +252,7 @@ RawTask.prototype.call = function () {
     }
 };
 
-},{"./raw":7}],7:[function(require,module,exports){
+},{"./raw":4}],4:[function(require,module,exports){
 (function (global){
 "use strict";
 
@@ -725,7 +479,7 @@ rawAsap.makeRequestCallFromTimer = makeRequestCallFromTimer;
 // https://github.com/tildeio/rsvp.js/blob/cddf7232546a9cf858524b75cde6f9edf72620a7/lib/rsvp/asap.js
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],8:[function(require,module,exports){
+},{}],5:[function(require,module,exports){
 var Changeset = require('./Changeset')
   , Retain = require('./operations/Retain')
   , Skip = require('./operations/Skip')
@@ -766,7 +520,7 @@ Builder.prototype.end = function() {
   return cs
 }
 
-},{"./Changeset":9,"./operations/Insert":14,"./operations/Retain":15,"./operations/Skip":16}],9:[function(require,module,exports){
+},{"./Changeset":6,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],6:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
@@ -1187,7 +941,7 @@ Changeset.fromDiff = function(diff) {
   return cs
 }
 
-},{"./Builder":8,"./ChangesetTransform":10,"./TextTransform":12,"./operations/Insert":14,"./operations/Retain":15,"./operations/Skip":16}],10:[function(require,module,exports){
+},{"./Builder":5,"./ChangesetTransform":7,"./TextTransform":9,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],7:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational ChangesetTransform (OT)
@@ -1276,7 +1030,7 @@ ChangesetTransform.prototype.result = function() {
   return newCs
 }
 
-},{"./Changeset":9,"./operations/Insert":14,"./operations/Retain":15,"./operations/Skip":16}],11:[function(require,module,exports){
+},{"./Changeset":6,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],8:[function(require,module,exports){
 function Operator() {
 }
 
@@ -1294,7 +1048,7 @@ Operator.prototype.pack = function() {
   return this.symbol + (this.length).toString(36)
 }
 
-},{}],12:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational Apply (OT)
@@ -1369,7 +1123,7 @@ TextTransform.prototype.result = function() {
   return this.output
 }
 
-},{"./Changeset":9,"./operations/Insert":14,"./operations/Retain":15,"./operations/Skip":16}],13:[function(require,module,exports){
+},{"./Changeset":6,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],10:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
@@ -1480,7 +1234,7 @@ exports.invert = function(op) {
   return exports.pack(exports.unpack(op).invert())
 }
 
-},{"./Changeset":9,"./Operator":11,"./operations/Insert":14,"./operations/Retain":15,"./operations/Skip":16}],14:[function(require,module,exports){
+},{"./Changeset":6,"./Operator":8,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],11:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
@@ -1554,7 +1308,7 @@ Insert.unpack = function(data) {
   return new Insert(parseInt(data, 36))
 }
 
-},{"../Operator":11,"./Retain":15,"./Skip":16}],15:[function(require,module,exports){
+},{"../Operator":8,"./Retain":12,"./Skip":13}],12:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
@@ -1624,7 +1378,7 @@ Retain.unpack = function(data) {
   return new Retain(parseInt(data, 36))
 }
 
-},{"../Operator":11}],16:[function(require,module,exports){
+},{"../Operator":8}],13:[function(require,module,exports){
 /*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
@@ -1701,7 +1455,7 @@ Skip.unpack = function(data) {
   return new Skip(parseInt(data, 36))
 }
 
-},{"../Changeset":9,"../Operator":11,"./Insert":14,"./Retain":15}],17:[function(require,module,exports){
+},{"../Changeset":6,"../Operator":8,"./Insert":11,"./Retain":12}],14:[function(require,module,exports){
 /**
  * Diff Match and Patch
  *
@@ -3845,7 +3599,7 @@ exports['DIFF_DELETE'] = DIFF_DELETE;
 exports['DIFF_INSERT'] = DIFF_INSERT;
 exports['DIFF_EQUAL'] = DIFF_EQUAL;
 
-},{}],18:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 'use strict';
 
 var constants = require('./util/constants'),
@@ -3862,7 +3616,7 @@ Logging.wrapper = Faye;
 
 module.exports = Faye;
 
-},{"./mixins/logging":20,"./protocol/client":24,"./protocol/scheduler":30,"./util/constants":42}],19:[function(require,module,exports){
+},{"./mixins/logging":17,"./protocol/client":21,"./protocol/scheduler":27,"./util/constants":39}],16:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -3914,7 +3668,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/promise":47}],20:[function(require,module,exports){
+},{"../util/promise":44}],17:[function(require,module,exports){
 'use strict';
 
 var toJSON = require('../util/to_json');
@@ -3963,7 +3717,7 @@ for (var key in Logging.LOG_LEVELS)
 
 module.exports = Logging;
 
-},{"../util/to_json":49}],21:[function(require,module,exports){
+},{"../util/to_json":46}],18:[function(require,module,exports){
 'use strict';
 
 var extend       = require('../util/extend'),
@@ -4002,7 +3756,7 @@ Publisher.trigger = Publisher.emit;
 
 module.exports = Publisher;
 
-},{"../util/event_emitter":45,"../util/extend":46}],22:[function(require,module,exports){
+},{"../util/event_emitter":42,"../util/extend":43}],19:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -4032,7 +3786,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],23:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 'use strict';
 
 var Class     = require('../util/class'),
@@ -4166,7 +3920,7 @@ extend(Channel, {
 
 module.exports = Channel;
 
-},{"../mixins/publisher":21,"../util/class":41,"../util/extend":46,"./grammar":28}],24:[function(require,module,exports){
+},{"../mixins/publisher":18,"../util/class":38,"../util/extend":43,"./grammar":25}],21:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -4556,7 +4310,7 @@ extend(Client.prototype, Extensible);
 module.exports = Client;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/deferrable":19,"../mixins/logging":20,"../mixins/publisher":21,"../util/array":39,"../util/browser":40,"../util/class":41,"../util/constants":42,"../util/extend":46,"../util/promise":47,"../util/uri":50,"../util/validate_options":51,"./channel":23,"./dispatcher":25,"./error":26,"./extensible":27,"./publication":29,"./subscription":31,"asap":6}],25:[function(require,module,exports){
+},{"../mixins/deferrable":16,"../mixins/logging":17,"../mixins/publisher":18,"../util/array":36,"../util/browser":37,"../util/class":38,"../util/constants":39,"../util/extend":43,"../util/promise":44,"../util/uri":47,"../util/validate_options":48,"./channel":20,"./dispatcher":22,"./error":23,"./extensible":24,"./publication":26,"./subscription":28,"asap":3}],22:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -4745,7 +4499,7 @@ extend(Dispatcher.prototype, Logging);
 module.exports = Dispatcher;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/logging":20,"../mixins/publisher":21,"../transport":32,"../util/class":41,"../util/cookies":43,"../util/extend":46,"../util/uri":50,"./scheduler":30}],26:[function(require,module,exports){
+},{"../mixins/logging":17,"../mixins/publisher":18,"../transport":29,"../util/class":38,"../util/cookies":40,"../util/extend":43,"../util/uri":47,"./scheduler":27}],23:[function(require,module,exports){
 'use strict';
 
 var Class   = require('../util/class'),
@@ -4802,7 +4556,7 @@ for (var name in errors)
 
 module.exports = Error;
 
-},{"../util/class":41,"./grammar":28}],27:[function(require,module,exports){
+},{"../util/class":38,"./grammar":25}],24:[function(require,module,exports){
 'use strict';
 
 var extend  = require('../util/extend'),
@@ -4851,7 +4605,7 @@ extend(Extensible, Logging);
 
 module.exports = Extensible;
 
-},{"../mixins/logging":20,"../util/extend":46}],28:[function(require,module,exports){
+},{"../mixins/logging":17,"../util/extend":43}],25:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -4861,7 +4615,7 @@ module.exports = {
   VERSION:          /^([0-9])+(\.(([a-z]|[A-Z])|[0-9])(((([a-z]|[A-Z])|[0-9])|\-|\_))*)*$/
 };
 
-},{}],29:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 'use strict';
 
 var Class      = require('../util/class'),
@@ -4869,7 +4623,7 @@ var Class      = require('../util/class'),
 
 module.exports = Class(Deferrable);
 
-},{"../mixins/deferrable":19,"../util/class":41}],30:[function(require,module,exports){
+},{"../mixins/deferrable":16,"../util/class":38}],27:[function(require,module,exports){
 'use strict';
 
 var extend = require('../util/extend');
@@ -4917,7 +4671,7 @@ extend(Scheduler.prototype, {
 
 module.exports = Scheduler;
 
-},{"../util/extend":46}],31:[function(require,module,exports){
+},{"../util/extend":43}],28:[function(require,module,exports){
 'use strict';
 
 var Class      = require('../util/class'),
@@ -4963,7 +4717,7 @@ extend(Subscription.prototype, Deferrable);
 
 module.exports = Subscription;
 
-},{"../mixins/deferrable":19,"../util/class":41,"../util/extend":46}],32:[function(require,module,exports){
+},{"../mixins/deferrable":16,"../util/class":38,"../util/extend":43}],29:[function(require,module,exports){
 'use strict';
 
 var Transport = require('./transport');
@@ -4976,7 +4730,7 @@ Transport.register('callback-polling', require('./jsonp'));
 
 module.exports = Transport;
 
-},{"./cors":33,"./event_source":34,"./jsonp":35,"./transport":36,"./web_socket":37,"./xhr":38}],33:[function(require,module,exports){
+},{"./cors":30,"./event_source":31,"./jsonp":32,"./transport":33,"./web_socket":34,"./xhr":35}],30:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -5064,7 +4818,7 @@ var CORS = extend(Class(Transport, {
 module.exports = CORS;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/class":41,"../util/extend":46,"../util/set":48,"../util/to_json":49,"../util/uri":50,"./transport":36}],34:[function(require,module,exports){
+},{"../util/class":38,"../util/extend":43,"../util/set":45,"../util/to_json":46,"../util/uri":47,"./transport":33}],31:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -5165,7 +4919,7 @@ extend(EventSource.prototype, Deferrable);
 module.exports = EventSource;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/deferrable":19,"../util/class":41,"../util/copy_object":44,"../util/extend":46,"../util/uri":50,"./transport":36,"./xhr":38}],35:[function(require,module,exports){
+},{"../mixins/deferrable":16,"../util/class":38,"../util/copy_object":41,"../util/extend":43,"../util/uri":47,"./transport":33,"./xhr":35}],32:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -5233,7 +4987,7 @@ var JSONP = extend(Class(Transport, {
 module.exports = JSONP;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/class":41,"../util/copy_object":44,"../util/extend":46,"../util/to_json":49,"../util/uri":50,"./transport":36}],36:[function(require,module,exports){
+},{"../util/class":38,"../util/copy_object":41,"../util/extend":43,"../util/to_json":46,"../util/uri":47,"./transport":33}],33:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -5448,7 +5202,7 @@ extend(Transport.prototype, Timeouts);
 module.exports = Transport;
 
 }).call(this,require('_process'))
-},{"../mixins/logging":20,"../mixins/timeouts":22,"../protocol/channel":23,"../util/array":39,"../util/class":41,"../util/cookies":43,"../util/extend":46,"../util/promise":47,"../util/uri":50,"_process":70}],37:[function(require,module,exports){
+},{"../mixins/logging":17,"../mixins/timeouts":19,"../protocol/channel":20,"../util/array":36,"../util/class":38,"../util/cookies":40,"../util/extend":43,"../util/promise":44,"../util/uri":47,"_process":67}],34:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -5613,7 +5367,7 @@ if (browser.Event && global.onbeforeunload !== undefined)
 module.exports = WebSocket;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/deferrable":19,"../util/browser":40,"../util/class":41,"../util/copy_object":44,"../util/extend":46,"../util/promise":47,"../util/set":48,"../util/to_json":49,"../util/uri":50,"../util/websocket":52,"./transport":36}],38:[function(require,module,exports){
+},{"../mixins/deferrable":16,"../util/browser":37,"../util/class":38,"../util/copy_object":41,"../util/extend":43,"../util/promise":44,"../util/set":45,"../util/to_json":46,"../util/uri":47,"../util/websocket":49,"./transport":33}],35:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -5699,7 +5453,7 @@ var XHR = extend(Class(Transport, {
 module.exports = XHR;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/browser":40,"../util/class":41,"../util/extend":46,"../util/to_json":49,"../util/uri":50,"./transport":36}],39:[function(require,module,exports){
+},{"../util/browser":37,"../util/class":38,"../util/extend":43,"../util/to_json":46,"../util/uri":47,"./transport":33}],36:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -5775,7 +5529,7 @@ module.exports = {
   }
 };
 
-},{}],40:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -5829,7 +5583,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],41:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 'use strict';
 
 var extend = require('./extend');
@@ -5854,7 +5608,7 @@ module.exports = function(parent, methods) {
   return klass;
 };
 
-},{"./extend":46}],42:[function(require,module,exports){
+},{"./extend":43}],39:[function(require,module,exports){
 module.exports = {
   VERSION:          '1.2.4',
 
@@ -5866,12 +5620,12 @@ module.exports = {
   MANDATORY_CONNECTION_TYPES: ['long-polling', 'callback-polling', 'in-process']
 };
 
-},{}],43:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 'use strict';
 
 module.exports = {};
 
-},{}],44:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 'use strict';
 
 var copyObject = function(object) {
@@ -5892,7 +5646,7 @@ var copyObject = function(object) {
 
 module.exports = copyObject;
 
-},{}],45:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 /*
 Copyright Joyent, Inc. and other Node contributors. All rights reserved.
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -6065,7 +5819,7 @@ EventEmitter.prototype.listeners = function(type) {
   return this._events[type];
 };
 
-},{}],46:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 'use strict';
 
 module.exports = function(dest, source, overwrite) {
@@ -6079,7 +5833,7 @@ module.exports = function(dest, source, overwrite) {
   return dest;
 };
 
-},{}],47:[function(require,module,exports){
+},{}],44:[function(require,module,exports){
 'use strict';
 
 var asap = require('asap');
@@ -6242,7 +5996,7 @@ Promise.deferred = Promise.pending = function() {
 
 module.exports = Promise;
 
-},{"asap":6}],48:[function(require,module,exports){
+},{"asap":3}],45:[function(require,module,exports){
 'use strict';
 
 var Class = require('./class');
@@ -6294,7 +6048,7 @@ module.exports = Class({
   }
 });
 
-},{"./class":41}],49:[function(require,module,exports){
+},{"./class":38}],46:[function(require,module,exports){
 'use strict';
 
 // http://assanka.net/content/tech/2009/09/02/json2-js-vs-prototype/
@@ -6305,7 +6059,7 @@ module.exports = function(object) {
   });
 };
 
-},{}],50:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -6390,7 +6144,7 @@ module.exports = {
   }
 };
 
-},{}],51:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 'use strict';
 
 var array = require('./array');
@@ -6402,7 +6156,7 @@ module.exports = function(options, validKeys) {
   }
 };
 
-},{"./array":39}],52:[function(require,module,exports){
+},{"./array":36}],49:[function(require,module,exports){
 (function (global){
 'use strict';
 
@@ -6416,7 +6170,7 @@ module.exports = {
 };
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],53:[function(require,module,exports){
+},{}],50:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.2.1
  * https://jquery.com/
@@ -16671,7 +16425,7 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],54:[function(require,module,exports){
+},{}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -16700,7 +16454,7 @@ var makeErrorCause;
 })(makeErrorCause || (makeErrorCause = {}));
 module.exports = makeErrorCause;
 
-},{"make-error":55}],55:[function(require,module,exports){
+},{"make-error":52}],52:[function(require,module,exports){
 // ISC @ Julien Fontanet
 
 'use strict'
@@ -16844,7 +16598,7 @@ function makeError (constructor, super_) {
 exports = module.exports = makeError
 exports.BaseError = BaseError
 
-},{}],56:[function(require,module,exports){
+},{}],53:[function(require,module,exports){
 "use strict";
 var url_1 = require("url");
 var querystring_1 = require("querystring");
@@ -17006,7 +16760,7 @@ var Base = (function () {
 }());
 exports.Base = Base;
 
-},{"./support":69,"querystring":74,"url":75}],57:[function(require,module,exports){
+},{"./support":66,"querystring":71,"url":75}],54:[function(require,module,exports){
 "use strict";
 var response_1 = require("./response");
 var index_1 = require("./plugins/index");
@@ -17111,11 +16865,11 @@ function parseToRawHeaders(headers) {
     return rawHeaders;
 }
 
-},{"./plugins/index":64,"./response":68}],58:[function(require,module,exports){
+},{"./plugins/index":61,"./response":65}],55:[function(require,module,exports){
 "use strict";
 module.exports = FormData;
 
-},{}],59:[function(require,module,exports){
+},{}],56:[function(require,module,exports){
 "use strict";
 var CookieJar = (function () {
     function CookieJar() {
@@ -17125,7 +16879,7 @@ var CookieJar = (function () {
 }());
 exports.CookieJar = CookieJar;
 
-},{}],60:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
@@ -17168,7 +16922,7 @@ __export(require("./response"));
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = exports.request;
 
-},{"./base":56,"./error":61,"./form":62,"./index":57,"./jar":63,"./plugins/index":64,"./request":67,"./response":68,"form-data":58}],61:[function(require,module,exports){
+},{"./base":53,"./error":58,"./form":59,"./index":54,"./jar":60,"./plugins/index":61,"./request":64,"./response":65,"form-data":55}],58:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17190,7 +16944,7 @@ var PopsicleError = (function (_super) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = PopsicleError;
 
-},{"make-error-cause":54}],62:[function(require,module,exports){
+},{"make-error-cause":51}],59:[function(require,module,exports){
 "use strict";
 var FormData = require("form-data");
 function form(obj) {
@@ -17205,7 +16959,7 @@ function form(obj) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = form;
 
-},{"form-data":58}],63:[function(require,module,exports){
+},{"form-data":55}],60:[function(require,module,exports){
 "use strict";
 var tough_cookie_1 = require("tough-cookie");
 function cookieJar(store) {
@@ -17214,14 +16968,14 @@ function cookieJar(store) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = cookieJar;
 
-},{"tough-cookie":59}],64:[function(require,module,exports){
+},{"tough-cookie":56}],61:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 __export(require("./common"));
 
-},{"./common":65}],65:[function(require,module,exports){
+},{"./common":62}],62:[function(require,module,exports){
 "use strict";
 var FormData = require("form-data");
 var querystring_1 = require("querystring");
@@ -17323,7 +17077,7 @@ function parse(type, strict) {
 }
 exports.parse = parse;
 
-},{"../form":62,"./is-host/index":66,"form-data":58,"querystring":74}],66:[function(require,module,exports){
+},{"../form":59,"./is-host/index":63,"form-data":55,"querystring":71}],63:[function(require,module,exports){
 "use strict";
 function isHostObject(object) {
     var str = Object.prototype.toString.call(object);
@@ -17340,7 +17094,7 @@ function isHostObject(object) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = isHostObject;
 
-},{}],67:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17579,7 +17333,7 @@ function exec(req) {
     return dispatch(0);
 }
 
-},{"./base":56,"./error":61,"./support":69}],68:[function(require,module,exports){
+},{"./base":53,"./error":58,"./support":66}],65:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17612,7 +17366,7 @@ var Response = (function (_super) {
 }(base_1.Base));
 exports.Response = Response;
 
-},{"./base":56}],69:[function(require,module,exports){
+},{"./base":53}],66:[function(require,module,exports){
 "use strict";
 function splice(arr, start, count) {
     if (count === void 0) { count = 1; }
@@ -17623,7 +17377,7 @@ function splice(arr, start, count) {
 }
 exports.splice = splice;
 
-},{}],70:[function(require,module,exports){
+},{}],67:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -17809,7 +17563,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],71:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -18346,7 +18100,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],72:[function(require,module,exports){
+},{}],69:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18432,7 +18186,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],73:[function(require,module,exports){
+},{}],70:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18519,13 +18273,259 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],74:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":72,"./encode":73}],75:[function(require,module,exports){
+},{"./decode":69,"./encode":70}],72:[function(require,module,exports){
+'use strict';
+
+var Caret = function() {
+
+}
+
+Caret.prototype = {
+
+    _getElementsContentLengthIncrement(element) {
+        if(['BR', 'IMG'].includes(element.tagName)) return 1;
+        if(!element.length) return 0;
+        return element.length;
+    },
+
+    _getContentLengthOfDOMElement: function(element, endChild) {
+        var treeWalker = document.createTreeWalker(element),
+            currentEl,
+            length = 0;
+
+        while(currentEl = treeWalker.currentNode) {
+            if(currentEl === endChild) return length;
+
+            length += this._getElementsContentLengthIncrement(currentEl);
+
+            treeWalker.nextNode();
+        }
+
+        return length;
+    },
+
+    // rightMatch: when root element contains: '<p>Hello</p><p>World</p>' and contentLength is '5'
+    //             it is not clear which element to return, if rightMatch is true then '<p>World</p>' will
+    //             be returned, '<p>Hello</p>' otherwise
+    _getElementByContentLength: function(rootEl, contentLength, rightMatch) {
+        var treeWalker = document.createTreeWalker(rootEl),
+            currentEl,
+            length = 0,
+            currentElLength;
+
+        while(currentEl = treeWalker.currentNode) {
+            currentElLength = this._getElementsContentLengthIncrement(currentEl);
+
+            if((length + currentElLength) < contentLength) {
+                length += currentElLength;
+            } else if((length + currentElLength) === contentLength) {
+                return rightMatch ? (treeWalker.nextNode() || currentEl) : currentEl;
+            } else {
+                return currentEl;
+            }
+
+            treeWalker.nextNode();
+        }
+
+        return null;
+    },
+
+    restoreSelection: function(rootEl) {
+        if(this.rangeStart && this.rangeEnd) {
+
+            var range,
+                selection = window.getSelection(),
+                startNode = this._getElementByContentLength(rootEl, this.rangeStart, this.rangeStartAtZeroOffset),
+                endNode = this._getElementByContentLength(rootEl, this.rangeEnd, this.rangeEndAtZeroOffset),
+                startOffset = this.rangeStart - this._getContentLengthOfDOMElement(rootEl, startNode),
+                endOffset = this.rangeEnd - this._getContentLengthOfDOMElement(rootEl, endNode);
+
+            try {
+                range = document.createRange();
+                range.setStart(startNode, startOffset);
+                range.setEnd(endNode, endOffset);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } catch(ex) { console.log('failed to set caret position') }
+        }
+    },
+
+    // text|text
+    // <div>text|</div><div>text</div>
+    // <div>text</div><div>|text<,/div>
+    // text|<br/><br/><br/>text
+    // text<br/>|<br/><br/>text
+    // text<br/><br/>|<br/>text
+    // text<br/><br/><br/>|text
+    // Preformatted stuff (root element includes <pre> tags)
+    saveSelection: function(rootEl) {
+        var selection = window.getSelection();
+        if(selection.anchorNode && selection.focusNode) {
+            this.rangeStart = this._getContentLengthOfDOMElement(rootEl, selection.anchorNode) + selection.anchorOffset;
+            this.rangeEnd = this._getContentLengthOfDOMElement(rootEl, selection.focusNode) + selection.focusOffset;
+            this.rangeStartAtZeroOffset = selection.anchorOffset == 0;
+            this.rangeEndAtZeroOffset = selection.focusOffset == 0;
+        }
+    },
+
+    targetElement: function() {
+        var selection = window.getSelection();
+        if(selection.anchorNode === selection.focusNode) {
+            return selection.focusNode;
+        }
+    }
+}
+
+module.exports = Caret;
+
+},{}],73:[function(require,module,exports){
+'use strict';
+
+var $ = require('jquery'),
+    Caret = require('./caret'),
+    Utils = require('./utils');
+
+var Editor = function(domId) {
+    var self = this;
+
+    this.domId = domId;
+    this.contentElement = document.getElementById(domId);
+    this.caret = new Caret();
+
+    this.sectionTypeSelector = document.createElement('div');
+    this.sectionTypeSelector.id = 'sectionTypeSelector';
+    this.sectionTypeSelector.innerHTML = "<div>paragraph</div>";
+    document.body.appendChild(this.sectionTypeSelector);
+
+    this.subscribe(function() {
+        self.cleanUpContent();
+    });
+
+    document.addEventListener('selectionchange', function(e) {
+        self.focusSection();
+    });
+
+    this.contentElement.addEventListener('mouseover', function(e) {
+        self.focusSection(e.path[0]);
+    });
+}
+
+Editor.prototype = {
+    subscribe: function(callback) {
+        var self = this;
+        $('#' + this.domId).on('input', function() {
+            callback(self._cleanHTML(self.contentElement.innerHTML));
+        });
+    },
+
+    focusSection: function(element) {
+
+        element = this.focusedSection() || element || this.focusedElement;
+
+        if(!element || element.parentElement !== this.contentElement) {
+            return false;
+        }
+
+        if(this.focusedElement && this.focusedElement != element) {
+            this.focusedElement.className = '';
+        }
+
+        if(this.focusedElement != element) {
+            this.focusedElement = element;
+            this.focusedElement.className = 'focused';
+            this.displaySectionTypeSelectorNextTo(this.focusedElement);
+        }
+
+        return true;
+    },
+
+    displaySectionTypeSelectorNextTo: function(focusedElement) {
+        var focusedElementPosition = Utils.getElementPosition(focusedElement),
+            sectionTypeSelectorElement = document.getElementById('sectionTypeSelector'),
+            posX,
+            posY;
+
+        if(focusedElement) {
+            posX = focusedElementPosition.x + focusedElement.offsetWidth - Math.floor(sectionTypeSelectorElement.offsetWidth/2);
+            posY = focusedElementPosition.y;
+
+            if(posY > focusedElementPosition.y + focusedElementPosition.offsetHeight) {
+                posY = focusedElementPosition.y + focusedElementPosition.offsetHeight;
+            }
+
+            sectionTypeSelectorElement.style.left = posX + 'px';
+            sectionTypeSelectorElement.style.top = posY + 'px';
+        }
+    },
+
+    focusedSection: function() {
+        var caretTarget = this.caret.targetElement();
+
+        if(caretTarget && caretTarget.parentElement) {
+            if(caretTarget.parentElement.parentElement === this.contentElement) {
+                return caretTarget.parentElement;
+            } else if (caretTarget.parentElement === this.contentElement) {
+                return caretTarget;
+            }
+        }
+    },
+
+    //FIXME: maybe use the TreeWalker to cleanup the content instead of
+    // replacing it compleatly after cleanup
+    cleanUpContent: function() {
+        this.caret.saveSelection(this.contentElement);
+        this.contentElement.innerHTML = this._cleanHTML(this.contentElement.innerHTML);
+        this.caret.restoreSelection(this.contentElement);
+        this.focusSection();
+    },
+
+    setContent: function(content) {
+        this.caret.saveSelection(this.contentElement);
+        this.contentElement.innerHTML = 'test';
+        this.caret.restoreSelection(this.contentElement);
+    },
+
+    _cleanHTML: function(html) {
+        html = html.replace(/<b><\/b>|<i><\/i>|<div>\s*<\/div>/g, '');
+        html = html.replace(/<div>/g, '<p>');
+        html = html.replace(/<\/div>/g, '</p>');
+        html = html.replace(/<p.*?>/g, '<p>');
+        html = html.replace(/<p>(\s*|<br>)<\/p>(<p>(\s*|<br>)<\/p>)+/g, '<p><br></p>');
+        return html;
+    }
+}
+
+module.exports = Editor;
+
+},{"./caret":72,"./utils":74,"jquery":50}],74:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+    getElementPosition: function (el) {
+        var xPos = 0,
+            yPos = 0;
+
+        while (el) {
+            xPos += el.offsetLeft + el.clientLeft;
+            yPos += el.offsetTop  + el.clientTop;
+
+            el = el.offsetParent;
+        }
+
+        return {
+            x: xPos,
+            y: yPos
+        };
+    }
+};
+
+},{}],75:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -19259,7 +19259,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":76,"punycode":71,"querystring":74}],76:[function(require,module,exports){
+},{"./util":76,"punycode":68,"querystring":71}],76:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -19280,8 +19280,7 @@ module.exports = {
 },{}],77:[function(require,module,exports){
 var RemoteVariable = require('../js_sdk/remote_variable'),
     UUID = require('../js_sdk/uuid'),
-    Editor = require('../js_sdk/editor');
-
+    Editor = require('structured-text-editor/src/editor');
 
 document.addEventListener("DOMContentLoaded", function(event) {
     var clientId = actorId = (new UUID()).getValue(),
@@ -19298,4 +19297,4 @@ document.addEventListener("DOMContentLoaded", function(event) {
     });
 });
 
-},{"../js_sdk/editor":2,"../js_sdk/remote_variable":3,"../js_sdk/uuid":5}]},{},[77]);
+},{"../js_sdk/remote_variable":1,"../js_sdk/uuid":2,"structured-text-editor/src/editor":73}]},{},[77]);

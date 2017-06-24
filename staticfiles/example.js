@@ -1,7 +1,6 @@
 var RemoteVariable = require('../js_sdk/remote_variable'),
     UUID = require('../js_sdk/uuid'),
-    Editor = require('../js_sdk/editor');
-
+    Editor = require('structured-text-editor/src/editor');
 
 document.addEventListener("DOMContentLoaded", function(event) {
     var clientId = actorId = (new UUID()).getValue(),
