@@ -1,26 +1,32 @@
 'use strict';
 
 var $ = require('jquery'),
-    Caret = require('../js_sdk/caret');
+    Caret = require('./caret'),
+    Utils = require('./utils');
 
 var Editor = function(domId) {
     var self = this;
+
     this.domId = domId;
     this.contentElement = document.getElementById(domId);
     this.caret = new Caret();
+
+    this.sectionTypeSelector = document.createElement('div');
+    this.sectionTypeSelector.id = 'sectionTypeSelector';
+    this.sectionTypeSelector.innerHTML = "<div>paragraph</div>";
+    document.body.appendChild(this.sectionTypeSelector);
 
     this.subscribe(function() {
         self.cleanUpContent();
     });
 
     document.addEventListener('selectionchange', function(e) {
-        self.focusElement();
+        self.focusSection();
     });
 
     this.contentElement.addEventListener('mouseover', function(e) {
-        self.focusElement(e.path[0]);
+        self.focusSection(e.path[0]);
     });
-
 }
 
 Editor.prototype = {
@@ -31,24 +37,47 @@ Editor.prototype = {
         });
     },
 
-    focusElement: function(element) {
+    focusSection: function(element) {
 
-        element = this.caretTargetSection() || element || this.focusedElement;
+        element = this.focusedSection() || element || this.focusedElement;
 
-        if(!element) {
+        if(!element || element.parentElement !== this.contentElement) {
             return false;
         }
 
-        if(this.focusedElement) {
+        if(this.focusedElement && this.focusedElement != element) {
             this.focusedElement.className = '';
         }
 
-        this.focusedElement = element;
-        this.focusedElement.className = 'focused';
+        if(this.focusedElement != element) {
+            this.focusedElement = element;
+            this.focusedElement.className = 'focused';
+            this.displaySectionTypeSelectorNextTo(this.focusedElement);
+        }
+
         return true;
     },
 
-    caretTargetSection: function() {
+    displaySectionTypeSelectorNextTo: function(focusedElement) {
+        var focusedElementPosition = Utils.getElementPosition(focusedElement),
+            sectionTypeSelectorElement = document.getElementById('sectionTypeSelector'),
+            posX,
+            posY;
+
+        if(focusedElement) {
+            posX = focusedElementPosition.x + focusedElement.offsetWidth - Math.floor(sectionTypeSelectorElement.offsetWidth/2);
+            posY = focusedElementPosition.y;
+
+            if(posY > focusedElementPosition.y + focusedElementPosition.offsetHeight) {
+                posY = focusedElementPosition.y + focusedElementPosition.offsetHeight;
+            }
+
+            sectionTypeSelectorElement.style.left = posX + 'px';
+            sectionTypeSelectorElement.style.top = posY + 'px';
+        }
+    },
+
+    focusedSection: function() {
         var caretTarget = this.caret.targetElement();
 
         if(caretTarget && caretTarget.parentElement) {
@@ -60,11 +89,13 @@ Editor.prototype = {
         }
     },
 
+    //FIXME: maybe use the TreeWalker to cleanup the content instead of
+    // replacing it compleatly after cleanup
     cleanUpContent: function() {
         this.caret.saveSelection(this.contentElement);
         this.contentElement.innerHTML = this._cleanHTML(this.contentElement.innerHTML);
         this.caret.restoreSelection(this.contentElement);
-        this.focusElement();
+        this.focusSection();
     },
 
     setContent: function(content) {
