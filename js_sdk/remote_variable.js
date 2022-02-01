@@ -117,9 +117,9 @@ RemoteVariable.prototype = {
         this.observers.push(observer);
     },
 
-    _notifySubscribers: function() {
+    _notifySubscribers: function(change) {
         this.observers.forEach(function(callback) {
-            callback();
+            callback(change);
         });
     },
 
@@ -129,7 +129,7 @@ RemoteVariable.prototype = {
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
             this.value = transformedForeignChange.apply(this.value);
             this.version = foreignChange.id;
-            this._notifySubscribers();
+            this._notifySubscribers(transformedForeignChange);
         } catch(ex) {
             console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
             this.load();

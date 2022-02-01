@@ -1,6176 +1,4 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-'use strict';
-
-var Changeset = require('changesets').Changeset,
-    diffMatchPatch = require('diff_match_patch'),
-    diffEngine = new diffMatchPatch.diff_match_patch,
-    popsicle = require('popsicle'),
-    Faye = require('faye');
-
-var Buffer = function() {
-    this.value = null;
-    this.inFlightOp = null;
-};
-
-Buffer.prototype = {
-    add: function(changeset) {
-        this.value = !this.value ? changeset : this.value.merge(changeset);
-    },
-
-    // this function returns a transformed version of the foreignChange which
-    // fits into the current client state. This is required because the client
-    // could have some changes which has not been send to the server yet. So, the
-    // server don't know about these changes and the changes comming from the server
-    // would not fit into the client state.
-    transformAgainst: function(foreignChange, changeInTransmission) {
-        var c1, c2;
-
-        if(!changeInTransmission) {
-            return foreignChange;
-        }
-
-        this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
-
-        c2 = foreignChange.transformAgainst(this.inFlightOp, true);
-        this.inFlightOp = this.inFlightOp.transformAgainst(foreignChange, false);
-
-        if(!this.getValue()) return c2;
-
-        // instead of using a bridge we use c2 to transform the
-        // foreignChange (change from server) into the client state.
-        c1 = c2.transformAgainst(this.value, true);
-
-        // "Once we have this inferred operation, c2, we can use it
-        // to transform the buffer (b) "down" one step"
-        this.value = this.value.transformAgainst(c2, false);
-
-        return c1;
-    },
-
-    clear: function() {
-        this.value = null;
-        this.inFlightOp = null;
-    },
-
-    getValue: function() {
-        return this.value;
-    }
-};
-
-var RemoteVariable = function (variableId, serverURL, clientId, actorId) {
-    this.variableId = variableId;
-    this.serverURL = serverURL;
-    this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
-    this.observers = [];
-    this.buffer = new Buffer();
-
-    // because the same user can be logged on two browsers/laptops, we need
-    // a clientId and an actorId
-    this.clientId = clientId;
-    this.actorId = actorId;
-
-    // The change sent to the server but not yet acknowledged.
-    this.changeInTransmission;
-};
-
-RemoteVariable.prototype = {
-
-    load: function(done) {
-        var self = this;
-
-        popsicle.get(this.serverURL +  '/variables/' + this.variableId).then((result) => {
-            result = JSON.parse(result.body);
-            self.version = result.changeId;
-            self.value = result.value;
-            self.buffer.clear();
-            self._notifySubscribers();
-            done && done();
-        });
-
-        self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, (change) => {
-            if(change.clientId === self.clientId) {
-                self._processApproval(change);
-            } else {
-                self._processForeignChange(change);
-            }
-        });
-
-        return self;
-    },
-
-    getValue: function() {
-        return this.value;
-    },
-
-    setValue: function(newValue, callback) {
-        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
-
-        if(this.changeInTransmission) {
-            this.buffer.add(changeset);
-        } else {
-            this._transmitChange(changeset, this.version);
-        }
-
-        this.value = newValue;
-    },
-
-    subscribe: function(observer) {
-        this.observers.push(observer);
-    },
-
-    _notifySubscribers: function() {
-        this.observers.forEach(function(callback) {
-            callback();
-        });
-    },
-
-    _processForeignChange: function(foreignChange) {
-        try {
-            var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
-            var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
-            this.value = transformedForeignChange.apply(this.value);
-            this.version = foreignChange.id;
-            this._notifySubscribers();
-        } catch(ex) {
-            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
-            this.load();
-        }
-    },
-
-    _processApproval: function(approval) {
-        var bufferedChanges = this.buffer.getValue();
-        this.changeInTransmission = null;
-        this.version = approval.id;
-        this.buffer.clear();
-
-        if(bufferedChanges) {
-            this._transmitChange(bufferedChanges, approval.id);
-        }
-    },
-
-    _transmitChange: function(changeset, version) {
-
-        this.changeInTransmission = {
-            variableId: this.variableId,
-            change: {
-                changeset: changeset.pack(),
-                parentVersion: version
-            },
-            actorId: this.actorId,
-            clientId: this.clientId
-        };
-
-        this.bayeuxClient.publish('/uncommited/changes/variable/' + this.variableId, this.changeInTransmission);
-    }
-};
-
-module.exports = RemoteVariable;
-
-},{"changesets":10,"diff_match_patch":14,"faye":15,"popsicle":57}],2:[function(require,module,exports){
-'use strict';
-
-function UUID() {
-    var d = new Date().getTime();
-    this.uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = (d + Math.random()*16)%16 | 0;
-        d = Math.floor(d/16);
-        return (c=='x' ? r : (r&0x3|0x8)).toString(16);
-    });
-};
-
-UUID.prototype.getValue = function() {
-    return this.uuid;
-};
-
-module.exports = UUID;
-
-},{}],3:[function(require,module,exports){
-"use strict";
-
-// rawAsap provides everything we need except exception management.
-var rawAsap = require("./raw");
-// RawTasks are recycled to reduce GC churn.
-var freeTasks = [];
-// We queue errors to ensure they are thrown in right order (FIFO).
-// Array-as-queue is good enough here, since we are just dealing with exceptions.
-var pendingErrors = [];
-var requestErrorThrow = rawAsap.makeRequestCallFromTimer(throwFirstError);
-
-function throwFirstError() {
-    if (pendingErrors.length) {
-        throw pendingErrors.shift();
-    }
-}
-
-/**
- * Calls a task as soon as possible after returning, in its own event, with priority
- * over other events like animation, reflow, and repaint. An error thrown from an
- * event will not interrupt, nor even substantially slow down the processing of
- * other events, but will be rather postponed to a lower priority event.
- * @param {{call}} task A callable object, typically a function that takes no
- * arguments.
- */
-module.exports = asap;
-function asap(task) {
-    var rawTask;
-    if (freeTasks.length) {
-        rawTask = freeTasks.pop();
-    } else {
-        rawTask = new RawTask();
-    }
-    rawTask.task = task;
-    rawAsap(rawTask);
-}
-
-// We wrap tasks with recyclable task objects.  A task object implements
-// `call`, just like a function.
-function RawTask() {
-    this.task = null;
-}
-
-// The sole purpose of wrapping the task is to catch the exception and recycle
-// the task object after its single use.
-RawTask.prototype.call = function () {
-    try {
-        this.task.call();
-    } catch (error) {
-        if (asap.onerror) {
-            // This hook exists purely for testing purposes.
-            // Its name will be periodically randomized to break any code that
-            // depends on its existence.
-            asap.onerror(error);
-        } else {
-            // In a web browser, exceptions are not fatal. However, to avoid
-            // slowing down the queue of pending tasks, we rethrow the error in a
-            // lower priority turn.
-            pendingErrors.push(error);
-            requestErrorThrow();
-        }
-    } finally {
-        this.task = null;
-        freeTasks[freeTasks.length] = this;
-    }
-};
-
-},{"./raw":4}],4:[function(require,module,exports){
-(function (global){
-"use strict";
-
-// Use the fastest means possible to execute a task in its own turn, with
-// priority over other events including IO, animation, reflow, and redraw
-// events in browsers.
-//
-// An exception thrown by a task will permanently interrupt the processing of
-// subsequent tasks. The higher level `asap` function ensures that if an
-// exception is thrown by a task, that the task queue will continue flushing as
-// soon as possible, but if you use `rawAsap` directly, you are responsible to
-// either ensure that no exceptions are thrown from your task, or to manually
-// call `rawAsap.requestFlush` if an exception is thrown.
-module.exports = rawAsap;
-function rawAsap(task) {
-    if (!queue.length) {
-        requestFlush();
-        flushing = true;
-    }
-    // Equivalent to push, but avoids a function call.
-    queue[queue.length] = task;
-}
-
-var queue = [];
-// Once a flush has been requested, no further calls to `requestFlush` are
-// necessary until the next `flush` completes.
-var flushing = false;
-// `requestFlush` is an implementation-specific method that attempts to kick
-// off a `flush` event as quickly as possible. `flush` will attempt to exhaust
-// the event queue before yielding to the browser's own event loop.
-var requestFlush;
-// The position of the next task to execute in the task queue. This is
-// preserved between calls to `flush` so that it can be resumed if
-// a task throws an exception.
-var index = 0;
-// If a task schedules additional tasks recursively, the task queue can grow
-// unbounded. To prevent memory exhaustion, the task queue will periodically
-// truncate already-completed tasks.
-var capacity = 1024;
-
-// The flush function processes all tasks that have been scheduled with
-// `rawAsap` unless and until one of those tasks throws an exception.
-// If a task throws an exception, `flush` ensures that its state will remain
-// consistent and will resume where it left off when called again.
-// However, `flush` does not make any arrangements to be called again if an
-// exception is thrown.
-function flush() {
-    while (index < queue.length) {
-        var currentIndex = index;
-        // Advance the index before calling the task. This ensures that we will
-        // begin flushing on the next task the task throws an error.
-        index = index + 1;
-        queue[currentIndex].call();
-        // Prevent leaking memory for long chains of recursive calls to `asap`.
-        // If we call `asap` within tasks scheduled by `asap`, the queue will
-        // grow, but to avoid an O(n) walk for every task we execute, we don't
-        // shift tasks off the queue after they have been executed.
-        // Instead, we periodically shift 1024 tasks off the queue.
-        if (index > capacity) {
-            // Manually shift all values starting at the index back to the
-            // beginning of the queue.
-            for (var scan = 0, newLength = queue.length - index; scan < newLength; scan++) {
-                queue[scan] = queue[scan + index];
-            }
-            queue.length -= index;
-            index = 0;
-        }
-    }
-    queue.length = 0;
-    index = 0;
-    flushing = false;
-}
-
-// `requestFlush` is implemented using a strategy based on data collected from
-// every available SauceLabs Selenium web driver worker at time of writing.
-// https://docs.google.com/spreadsheets/d/1mG-5UYGup5qxGdEMWkhP6BWCz053NUb2E1QoUTU16uA/edit#gid=783724593
-
-// Safari 6 and 6.1 for desktop, iPad, and iPhone are the only browsers that
-// have WebKitMutationObserver but not un-prefixed MutationObserver.
-// Must use `global` or `self` instead of `window` to work in both frames and web
-// workers. `global` is a provision of Browserify, Mr, Mrs, or Mop.
-
-/* globals self */
-var scope = typeof global !== "undefined" ? global : self;
-var BrowserMutationObserver = scope.MutationObserver || scope.WebKitMutationObserver;
-
-// MutationObservers are desirable because they have high priority and work
-// reliably everywhere they are implemented.
-// They are implemented in all modern browsers.
-//
-// - Android 4-4.3
-// - Chrome 26-34
-// - Firefox 14-29
-// - Internet Explorer 11
-// - iPad Safari 6-7.1
-// - iPhone Safari 7-7.1
-// - Safari 6-7
-if (typeof BrowserMutationObserver === "function") {
-    requestFlush = makeRequestCallFromMutationObserver(flush);
-
-// MessageChannels are desirable because they give direct access to the HTML
-// task queue, are implemented in Internet Explorer 10, Safari 5.0-1, and Opera
-// 11-12, and in web workers in many engines.
-// Although message channels yield to any queued rendering and IO tasks, they
-// would be better than imposing the 4ms delay of timers.
-// However, they do not work reliably in Internet Explorer or Safari.
-
-// Internet Explorer 10 is the only browser that has setImmediate but does
-// not have MutationObservers.
-// Although setImmediate yields to the browser's renderer, it would be
-// preferrable to falling back to setTimeout since it does not have
-// the minimum 4ms penalty.
-// Unfortunately there appears to be a bug in Internet Explorer 10 Mobile (and
-// Desktop to a lesser extent) that renders both setImmediate and
-// MessageChannel useless for the purposes of ASAP.
-// https://github.com/kriskowal/q/issues/396
-
-// Timers are implemented universally.
-// We fall back to timers in workers in most engines, and in foreground
-// contexts in the following browsers.
-// However, note that even this simple case requires nuances to operate in a
-// broad spectrum of browsers.
-//
-// - Firefox 3-13
-// - Internet Explorer 6-9
-// - iPad Safari 4.3
-// - Lynx 2.8.7
-} else {
-    requestFlush = makeRequestCallFromTimer(flush);
-}
-
-// `requestFlush` requests that the high priority event queue be flushed as
-// soon as possible.
-// This is useful to prevent an error thrown in a task from stalling the event
-// queue if the exception handled by Node.js’s
-// `process.on("uncaughtException")` or by a domain.
-rawAsap.requestFlush = requestFlush;
-
-// To request a high priority event, we induce a mutation observer by toggling
-// the text of a text node between "1" and "-1".
-function makeRequestCallFromMutationObserver(callback) {
-    var toggle = 1;
-    var observer = new BrowserMutationObserver(callback);
-    var node = document.createTextNode("");
-    observer.observe(node, {characterData: true});
-    return function requestCall() {
-        toggle = -toggle;
-        node.data = toggle;
-    };
-}
-
-// The message channel technique was discovered by Malte Ubl and was the
-// original foundation for this library.
-// http://www.nonblocking.io/2011/06/windownexttick.html
-
-// Safari 6.0.5 (at least) intermittently fails to create message ports on a
-// page's first load. Thankfully, this version of Safari supports
-// MutationObservers, so we don't need to fall back in that case.
-
-// function makeRequestCallFromMessageChannel(callback) {
-//     var channel = new MessageChannel();
-//     channel.port1.onmessage = callback;
-//     return function requestCall() {
-//         channel.port2.postMessage(0);
-//     };
-// }
-
-// For reasons explained above, we are also unable to use `setImmediate`
-// under any circumstances.
-// Even if we were, there is another bug in Internet Explorer 10.
-// It is not sufficient to assign `setImmediate` to `requestFlush` because
-// `setImmediate` must be called *by name* and therefore must be wrapped in a
-// closure.
-// Never forget.
-
-// function makeRequestCallFromSetImmediate(callback) {
-//     return function requestCall() {
-//         setImmediate(callback);
-//     };
-// }
-
-// Safari 6.0 has a problem where timers will get lost while the user is
-// scrolling. This problem does not impact ASAP because Safari 6.0 supports
-// mutation observers, so that implementation is used instead.
-// However, if we ever elect to use timers in Safari, the prevalent work-around
-// is to add a scroll event listener that calls for a flush.
-
-// `setTimeout` does not call the passed callback if the delay is less than
-// approximately 7 in web workers in Firefox 8 through 18, and sometimes not
-// even then.
-
-function makeRequestCallFromTimer(callback) {
-    return function requestCall() {
-        // We dispatch a timeout with a specified delay of 0 for engines that
-        // can reliably accommodate that request. This will usually be snapped
-        // to a 4 milisecond delay, but once we're flushing, there's no delay
-        // between events.
-        var timeoutHandle = setTimeout(handleTimer, 0);
-        // However, since this timer gets frequently dropped in Firefox
-        // workers, we enlist an interval handle that will try to fire
-        // an event 20 times per second until it succeeds.
-        var intervalHandle = setInterval(handleTimer, 50);
-
-        function handleTimer() {
-            // Whichever timer succeeds will cancel both timers and
-            // execute the callback.
-            clearTimeout(timeoutHandle);
-            clearInterval(intervalHandle);
-            callback();
-        }
-    };
-}
-
-// This is for `asap.js` only.
-// Its name will be periodically randomized to break any code that depends on
-// its existence.
-rawAsap.makeRequestCallFromTimer = makeRequestCallFromTimer;
-
-// ASAP was originally a nextTick shim included in Q. This was factored out
-// into this ASAP package. It was later adapted to RSVP which made further
-// amendments. These decisions, particularly to marginalize MessageChannel and
-// to capture the MutationObserver implementation in a closure, were integrated
-// back into ASAP proper.
-// https://github.com/tildeio/rsvp.js/blob/cddf7232546a9cf858524b75cde6f9edf72620a7/lib/rsvp/asap.js
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],5:[function(require,module,exports){
-var Changeset = require('./Changeset')
-  , Retain = require('./operations/Retain')
-  , Skip = require('./operations/Skip')
-  , Insert = require('./operations/Insert')
-
-function Builder() {
-  this.ops = []
-  this.addendum = ''
-  this.removendum = ''
-}
-
-module.exports = Builder
-
-Builder.prototype.keep =
-Builder.prototype.retain = function(len) {
-  this.ops.push(new Retain(len))
-  return this
-}
-
-Builder.prototype.delete =
-Builder.prototype.skip = function(str) {
-  this.removendum += str
-  this.ops.push(new Skip(str.length))
-  return this
-}
-
-Builder.prototype.add =
-Builder.prototype.insert = function(str) {
-  this.addendum += str
-  this.ops.push(new Insert(str.length))
-  return this
-}
-
-Builder.prototype.end = function() {
-  var cs = new Changeset(this.ops)
-  cs.addendum = this.addendum
-  cs.removendum = this.removendum
-  return cs
-}
-
-},{"./Changeset":6,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],6:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-/**
- * A sequence of consecutive operations
- *
- * @param ops.. <Operation> all passed operations will be added to the changeset
- */
-function Changeset(ops/*or ops..*/) {
-  this.addendum = ""
-  this.removendum = ""
-  this.inputLength = 0
-  this.outputLength = 0
-
-  if(!Array.isArray(ops)) ops = arguments
-  for(var i=0; i<ops.length; i++) {
-    this.push(ops[i])
-    this.inputLength += ops[i].input
-    this.outputLength += ops[i].output
-  }
-}
-
-// True inheritance
-Changeset.prototype = Object.create(Array.prototype, {
-  constructor: {
-    value: Changeset,
-    enumerable: false,
-    writable: true,
-    configurable: true
-  }
-});
-module.exports = Changeset
-
-var TextTransform = require('./TextTransform')
-  , ChangesetTransform = require('./ChangesetTransform')
-
-var Retain = require('./operations/Retain')
-  , Skip = require('./operations/Skip')
-  , Insert = require('./operations/Insert')
-
-var Builder = require('./Builder')
-
-/**
- * Returns an array containing the ops that are within the passed range
- * (only op.input is counted; thus not counting inserts to the range length, yet they are part of the range)
- */
-Changeset.prototype.subrange = function(start, len) {
-  var range = []
-    , op, oplen
-    , l=0
-  for(var i=0, pos=0; i<this.length && l < len; i++) {
-    op = this[i]
-    if(op.input+pos >= start) {
-      if(op.input) {
-        if(op.length != Infinity) oplen = op.length -Math.max(0, start-pos) -Math.max(0, (op.length+pos)-(start+len))
-        else oplen = len
-        if (oplen !== 0) range.push( op.derive(oplen) ) // (Don't copy over more than len param allows)
-      }
-      else {
-        range.push( op.derive(op.length) )
-        oplen = 0
-      }
-      l += oplen
-    }
-    pos += op.input
-  }
-  return range
-}
-
-/**
- * Merge two changesets (that are based on the same state!) so that the resulting changseset
- * has the same effect as both orignal ones applied one after the other
- *
- * @param otherCs <Changeset>
- * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely))
- * @returns <Changeset>
- */
-Changeset.prototype.merge = function(otherCs, left) {
-  if(!(otherCs instanceof Changeset)) {
-    throw new Error('Argument must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
-  }
-
-  if(otherCs.inputLength !== this.outputLength) {
-    throw new Error("Changeset lengths for merging don't match! Input length of younger cs: "+otherCs.inputLength+', output length of older cs:'+this.outputLength)
-  }
-
-  var newops = []
-    , addPtr1 = 0
-    , remPtr1 = 0
-    , addPtr2 = 0
-    , remPtr2 = 0
-    , newaddendum = ''
-    , newremovendum = ''
-
-  zip(this, otherCs, function(op1, op2) {
-    // console.log(newops)
-    // console.log(op1, op2)
-
-    // I'm deleting something -- the other cs can't know that, so just overtake my op
-    if(op1 && !op1.output) {
-      newops.push(op1.merge().clone())
-      newremovendum += this.removendum.substr(remPtr1, op1.length) // overtake added chars
-      remPtr1 += op1.length
-      op1.length = 0 // don't gimme that one again.
-      return
-    }
-
-    // op2 is an insert
-    if(op2 && !op2.input) {
-      newops.push(op2.merge().clone())
-      newaddendum += otherCs.addendum.substr(addPtr2, op2.length) // overtake added chars
-      addPtr2 += op2.length
-      op2.length = 0 // don't gimme that one again.
-      return
-    }
-
-    // op2 is either a retain or a skip
-    if(op2 && op2.input && op1) {
-      // op2 retains whatever we do here (retain or insert), so just clone my op
-      if(op2.output) {
-        newops.push(op1.merge(op2).clone())
-        if(!op1.input) { // overtake addendum
-          newaddendum += this.addendum.substr(addPtr1, op1.length)
-          addPtr1 += op1.length
-        }
-        op1.length = 0 // don't gimme these again
-        op2.length = 0
-      }else
-
-      // op2 deletes my retain here, so just clone the delete
-      // (op1 can only be a retain and no skip here, cause we've handled skips above already)
-      if(!op2.output && op1.input) {
-        newops.push(op2.merge(op1).clone())
-        newremovendum += otherCs.removendum.substr(remPtr2, op2.length) // overtake added chars
-        remPtr2 += op2.length
-        op1.length = 0 // don't gimme these again
-        op2.length = 0
-      }else
-
-      //otherCs deletes something I added (-1) +1 = 0
-      {
-        addPtr1 += op1.length
-        op1.length = 0 // don't gimme these again
-        op2.length = 0
-      }
-      return
-    }
-
-    console.log('oops', arguments)
-    throw new Error('oops. This case hasn\'t been considered by the developer (error code: PBCAC)')
-  }.bind(this))
-
-  var newCs = new Changeset(newops)
-  newCs.addendum = newaddendum
-  newCs.removendum = newremovendum
-
-  return newCs
-}
-
-/**
- * A private and quite handy function that slices ops into equally long pieces and applies them on a mapping function
- * that can determine the iteration steps by setting op.length to 0 on an op (equals using .next() in a usual iterator)
- */
-function zip(cs1, cs2, func) {
-  var opstack1 = cs1.map(function(op) {return op.clone()}) // copy ops
-    , opstack2 = cs2.map(function(op) {return op.clone()})
-
-  var op2, op1
-  while(opstack1.length || opstack2.length) {// iterate through all outstanding ops of this cs
-    op1 = opstack1[0]? opstack1[0].clone() : null
-    op2 = opstack2[0]? opstack2[0].clone() : null
-
-    if(op1) {
-      if(op2) op1 = op1.derive(Math.min(op1.length, op2.length)) // slice 'em into equally long pieces
-      if(opstack1[0].length > op1.length) opstack1[0] = opstack1[0].derive(opstack1[0].length-op1.length)
-      else opstack1.shift()
-    }
-
-    if(op2) {
-      if(op1) op2 = op2.derive(Math.min(op1.length, op2.length)) // slice 'em into equally long pieces
-      if(opstack2[0].length > op2.length) opstack2[0] = opstack2[0].derive(opstack2[0].length-op2.length)
-      else opstack2.shift()
-    }
-
-    func(op1, op2)
-
-    if(op1 && op1.length) opstack1.unshift(op1)
-    if(op2 && op2.length) opstack2.unshift(op2)
-  }
-}
-
-/**
- * Inclusion Transformation (IT) or Forward Transformation
- *
- * transforms the operations of the current changeset against the
- * all operations in another changeset in such a way that the
- * effects of the latter are effectively included.
- * This is basically like a applying the other cs on this one.
- *
- * @param otherCs <Changeset>
- * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
- *
- * @returns <Changeset>
- */
-Changeset.prototype.transformAgainst = function(otherCs, left) {
-  if(!(otherCs instanceof Changeset)) {
-    throw new Error('Argument to Changeset#transformAgainst must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
-  }
-
-  if(this.inputLength != otherCs.inputLength) {
-    throw new Error('Can\'t transform changesets with differing inputLength: '+this.inputLength+' and '+otherCs.inputLength)
-  }
-
-  var transformation = new ChangesetTransform(this, [new Retain(Infinity)])
-  otherCs.forEach(function(op) {
-    var nextOp = this.subrange(transformation.pos, Infinity)[0] // next op of this cs
-    if(nextOp && !nextOp.input && !op.input) { // two inserts tied; left breaks it
-      if (left) transformation.writeOutput(transformation.readInput(nextOp.length))
-    }
-    op.apply(transformation)
-  }.bind(this))
-
-  return transformation.result()
-}
-
-/**
- * Exclusion Transformation (ET) or Backwards Transformation
- *
- * transforms all operations in the current changeset against the operations
- * in another changeset in such a way that the impact of the latter are effectively excluded
- *
- * @param changeset <Changeset> the changeset to substract from this one
- * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
- * @returns <Changeset>
- */
-Changeset.prototype.substract = function(changeset, left) {
-  // The current operations assume that the changes in
-  // `changeset` happened before, so for each of those ops
-  // we create an operation that undoes its effect and
-  // transform all our operations on top of the inverse changes
-  return this.transformAgainst(changeset.invert(), left)
-}
-
-/**
- * Returns the inverse Changeset of the current one
- *
- * Changeset.invert().apply(Changeset.apply(document)) == document
- */
-Changeset.prototype.invert = function() {
-  // invert all ops
-  var newCs = new Changeset(this.map(function(op) {
-    return op.invert()
-  }))
-
-  // removendum becomes addendum and vice versa
-  newCs.addendum = this.removendum
-  newCs.removendum = this.addendum
-
-  return newCs
-}
-
-/**
- * Applies this changeset on a text
- */
-Changeset.prototype.apply = function(input) {
-  // pre-requisites
-  if(input.length != this.inputLength) throw new Error('Input length doesn\'t match expected length. expected: '+this.inputLength+'; actual: '+input.length)
-
-  var operation = new TextTransform(input, this.addendum, this.removendum)
-
-  this.forEach(function(op) {
-    // each Operation has access to all pointers as well as the input, addendum and removendum (the latter are immutable)
-    op.apply(operation)
-  }.bind(this))
-
-  return operation.result()
-}
-
-/**
- * Returns an array of strings describing this changeset's operations
- */
-Changeset.prototype.inspect = function() {
-  var j = 0
-  return this.map(function(op) {
-    var string = ''
-
-    if(!op.input) { // if Insert
-      string = this.addendum.substr(j,op.length)
-      j += op.length
-      return string
-    }
-
-    for(var i=0; i<op.length; i++) string += op.symbol
-    return string
-  }.bind(this)).join('')
-}
-
-/**
- * Serializes the given changeset in order to return a (hopefully) more compact representation
- * than json that can be sent through a network or stored in a database
- *
- * Numbers are converted to the base 36, unsafe chars in the text are urlencoded
- *
- * @param cs <Changeset> The changeset to be serialized
- * @returns <String> The serialized changeset
- */
-Changeset.prototype.pack = function() {
-  var packed = this.map(function(op) {
-    return op.pack()
-  }).join('')
-
-  var addendum = this.addendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
-    , removendum = this.removendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
-  return packed+'|'+addendum+'|'+removendum
-}
-Changeset.prototype.toString = function() {
-  return this.pack()
-}
-
-/**
- * Unserializes the output of cs.text.Changeset#toString()
- *
- * @param packed <String> The serialized changeset
- * @param <cs.Changeset>
- */
-Changeset.unpack = function(packed) {
-  if(packed == '') throw new Error('Cannot unpack from empty string')
-  var components = packed.split('|')
-    , opstring = components[0]
-    , addendum = components[1].replace(/%7c/gi, '|').replace(/%25/g, '%')
-    , removendum = components[2].replace(/%7c/gi, '|').replace(/%25/g, '%')
-
-  var matches = opstring.match(/[=+-]([^=+-])+/g)
-  if(!matches) throw new Error('Cannot unpack invalidly serialized op string')
-
-  var ops = []
-  matches.forEach(function(s) {
-    var symbol = s.substr(0,1)
-      , data = s.substr(1)
-    if(Skip.prototype.symbol == symbol) return ops.push(Skip.unpack(data))
-    if(Insert.prototype.symbol == symbol) return ops.push(Insert.unpack(data))
-    if(Retain.prototype.symbol == symbol) return ops.push(Retain.unpack(data))
-    throw new Error('Invalid changeset representation passed to Changeset.unpack')
-  })
-
-  var cs = new Changeset(ops)
-  cs.addendum = addendum
-  cs.removendum = removendum
-
-  return cs
-}
-
-Changeset.create = function() {
-  return new Builder
-}
-
-/**
- * Returns a Changeset containing the operations needed to transform text1 into text2
- *
- * @param text1 <String>
- * @param text2 <String>
- */
-Changeset.fromDiff = function(diff) {
-  /**
-   * The data structure representing a diff is an array of tuples:
-   * [[DIFF_DELETE, 'Hello'], [DIFF_INSERT, 'Goodbye'], [DIFF_EQUAL, ' world.']]
-   * which means: delete 'Hello', add 'Goodbye' and keep ' world.'
-   */
-  var DIFF_DELETE = -1;
-  var DIFF_INSERT = 1;
-  var DIFF_EQUAL = 0;
-
-  var ops = []
-    , removendum = ''
-    , addendum = ''
-
-  diff.forEach(function(d) {
-    if (DIFF_DELETE == d[0]) {
-      ops.push(new Skip(d[1].length))
-      removendum += d[1]
-    }
-
-    if (DIFF_INSERT == d[0]) {
-      ops.push(new Insert(d[1].length))
-      addendum += d[1]
-    }
-
-    if(DIFF_EQUAL == d[0]) {
-      ops.push(new Retain(d[1].length))
-    }
-  })
-
-  var cs = new Changeset(ops)
-  cs.addendum = addendum
-  cs.removendum = removendum
-  return cs
-}
-
-},{"./Builder":5,"./ChangesetTransform":7,"./TextTransform":9,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],7:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational ChangesetTransform (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Retain = require('./operations/Retain')
-  , Skip = require('./operations/Skip')
-  , Insert = require('./operations/Insert')
-  , Changeset = require('./Changeset')
-
-
-function ChangesetTransform(inputCs, addendum) {
-  this.output = []
-  this.addendum = addendum
-  this.newRemovendum = ''
-  this.newAddendum = ''
-
-  this.cs = inputCs
-  this.pos = 0
-  this.addendumPointer = 0
-  this.removendumPointer = 0
-}
-module.exports = ChangesetTransform
-
-ChangesetTransform.prototype.readInput = function (len) {
-  var ret = this.cs.subrange(this.pos, len)
-  this.pos += len
-  return ret
-}
-
-ChangesetTransform.prototype.readAddendum = function (len) {
-  //return [new Retain(len)]
-  var ret = this.subrange(this.addendum, this.addendumPointer, len)
-  this.addendumPointer += len
-  return ret
-}
-
-ChangesetTransform.prototype.writeRemovendum = function (range) {
-  range
-    .filter(function(op) {return !op.output})
-    .forEach(function(op) {
-      this.removendumPointer += op.length
-    }.bind(this))
-}
-
-ChangesetTransform.prototype.writeOutput = function (range) {
-  this.output = this.output.concat(range)
-  range
-    .filter(function(op) {return !op.output})
-    .forEach(function(op) {
-      this.newRemovendum += this.cs.removendum.substr(this.removendumPointer, op.length)
-      this.removendumPointer += op.length
-    }.bind(this))
-}
-
-ChangesetTransform.prototype.subrange = function (range, start, len) {
-  if(len) return this.cs.subrange.call(range, start, len)
-  else return range.filter(function(op){ return !op.input})
-}
-
-ChangesetTransform.prototype.result = function() {
-  this.writeOutput(this.readInput(Infinity))
-  var newCs = new Changeset(this.output)
-  newCs.addendum = this.cs.addendum
-  newCs.removendum = this.newRemovendum
-  return newCs
-}
-
-},{"./Changeset":6,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],8:[function(require,module,exports){
-function Operator() {
-}
-
-module.exports = Operator
-
-Operator.prototype.clone = function() {
-  return this.derive(this.length)
-}
-
-Operator.prototype.derive = function(len) {
-  return new (this.constructor)(len)
-}
-
-Operator.prototype.pack = function() {
-  return this.symbol + (this.length).toString(36)
-}
-
-},{}],9:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational Apply (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Retain = require('./operations/Retain')
-  , Skip = require('./operations/Skip')
-  , Insert = require('./operations/Insert')
-  , Insert = require('./Changeset')
-
-
-function TextTransform(input, addendum, removendum) {
-  this.output = ''
-
-  this.input = input
-  this.addendum = addendum
-  this.removendum = removendum
-  this.pos = 0
-  this.addPos = 0
-  this.remPos = 0
-}
-module.exports = TextTransform
-
-TextTransform.prototype.readInput = function (len) {
-  var ret = this.input.substr(this.pos, len)
-  this.pos += len
-  return ret
-}
-
-TextTransform.prototype.readAddendum = function (len) {
-  var ret = this.addendum.substr(this.addPos, len)
-  this.addPos += len
-  return ret
-}
-
-TextTransform.prototype.writeRemovendum = function (range) {
-  //var expected = this.removendum.substr(this.remPos, range.length)
-  //if(range != expected) throw new Error('Removed chars don\'t match removendum. expected: '+expected+'; actual: '+range)
-  this.remPos += range.length
-}
-
-TextTransform.prototype.writeOutput = function (range) {
-  this.output += range
-}
-
-TextTransform.prototype.subrange = function (range, start, len) {
-  return range.substr(start, len)
-}
-
-TextTransform.prototype.result = function() {
-  this.writeOutput(this.readInput(Infinity))
-  return this.output
-}
-
-},{"./Changeset":6,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],10:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Changeset = require('./Changeset')
-  , Retain = require('./operations/Retain')
-  , Skip = require('./operations/Skip')
-  , Insert = require('./operations/Insert')
-
-exports.Operator = require('./Operator')
-exports.Changeset = Changeset
-exports.Insert = Insert
-exports.Retain = Retain
-exports.Skip = Skip
-
-if('undefined' != typeof window) window.changesets = exports
-
-/**
- * Serializes the given changeset in order to return a (hopefully) more compact representation
- * that can be sent through a network or stored in a database
- * @alias cs.text.Changeset#pack
- */
-exports.pack = function(cs) {
-  return cs.pack()
-}
-
-/**
- * Unserializes the output of cs.text.pack
- * @alias cs.text.Changeset.unpack
- */
-exports.unpack = function(packed) {
-  return Changeset.unpack(packed)
-}
-
-
-
-
-/**
- * shareJS ot type API sepc support
- */
-
-exports.name = 'changesets'
-exports.url = 'https://github.com/marcelklehr/changesets'
-
-/**
- * create([initialText])
- *
- * creates a snapshot (optionally with supplied intial text)
- */
-exports.create = function(initText) {
-  return initText || ''
-}
-
-/**
- * Apply a changeset on a snapshot creating a new one
- *
- * The old snapshot object mustn't be used after calling apply on it
- * returns the resulting
- */
-exports.apply = function(snapshot, op) {
-  op = exports.unpack(op)
-  return op.apply(snapshot)
-}
-
-/**
- * Transform changeset1 against changeset2
- */
-exports.transform = function (op1, op2, side) {
-  op1 = exports.unpack(op1)
-  op2 = exports.unpack(op2)
-  return exports.pack(op1.transformAgainst(op2, ('left'==side)))
-}
-
-/**
- * Merge two changesets into one
- */
-exports.compose = function (op1, op2) {
-  op1 = exports.unpack(op1)
-  op2 = exports.unpack(op2)
-  return exports.pack(op1.merge(op2))
-}
-
-/**
- * Invert a changeset
- */
-exports.invert = function(op) {
-  return exports.pack(exports.unpack(op).invert())
-}
-
-},{"./Changeset":6,"./Operator":8,"./operations/Insert":11,"./operations/Retain":12,"./operations/Skip":13}],11:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Operator = require('../Operator')
-
-/**
- * Insert Operator
- * Defined by:
- * - length
- * - input=0
- * - output=length
- *
- * @param length <Number> How many chars to be inserted
- */
-function Insert(length) {
-  this.length = length
-  this.input = 0
-  this.output = length
-}
-
-// True inheritance
-Insert.prototype = Object.create(Operator.prototype, {
-  constructor: {
-    value: Insert,
-    enumerable: false,
-    writable: true,
-    configurable: true
-  }
-});
-module.exports = Insert
-Insert.prototype.symbol = '+'
-
-var Skip = require('./Skip')
-  , Retain = require('./Retain')
-
-Insert.prototype.apply = function(t) {
-  t.writeOutput(t.readAddendum(this.output))
-}
-
-Insert.prototype.merge = function() {
-  return this
-}
-
-Insert.prototype.invert = function() {
-  return new Skip(this.length)
-}
-
-Insert.unpack = function(data) {
-  return new Insert(parseInt(data, 36))
-}
-
-},{"../Operator":8,"./Retain":12,"./Skip":13}],12:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Operator = require('../Operator')
-
-/**
- * Retain Operator
- * Defined by:
- * - length
- * - input=output=length
- *
- * @param length <Number> How many chars to retain
- */
-function Retain(length) {
-  this.length = length
-  this.input = length
-  this.output = length
-}
-
-// True inheritance
-Retain.prototype = Object.create(Operator.prototype, {
-  constructor: {
-    value: Retain,
-    enumerable: false,
-    writable: true,
-    configurable: true
-  }
-});
-module.exports = Retain
-Retain.prototype.symbol = '='
-
-Retain.prototype.apply = function(t) {
-  t.writeOutput(t.readInput(this.input))
-}
-
-Retain.prototype.invert = function() {
-  return this
-}
-
-Retain.prototype.merge = function(op2) {
-  return this
-}
-
-Retain.unpack = function(data) {
-  return new Retain(parseInt(data, 36))
-}
-
-},{"../Operator":8}],13:[function(require,module,exports){
-/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Operator = require('../Operator')
-
-/**
- * Skip Operator
- * Defined by:
- * - length
- * - input=length
- * - output=0
- *
- * @param length <Number> How many chars to be Skip
- */
-function Skip(length) {
-  this.length = length
-  this.input = length
-  this.output = 0
-}
-
-// True inheritance
-Skip.prototype = Object.create(Operator.prototype, {
-  constructor: {
-    value: Skip,
-    enumerable: false,
-    writable: true,
-    configurable: true
-  }
-});
-module.exports = Skip
-Skip.prototype.symbol = '-'
-
-var Insert = require('./Insert')
-  , Retain = require('./Retain')
-  , Changeset = require('../Changeset')
-
-Skip.prototype.apply = function(t) {
-  var input = t.readInput(this.input)
-  t.writeRemovendum(input)
-  t.writeOutput(t.subrange(input, 0, this.output)) // retain Inserts in my range
-}
-
-Skip.prototype.merge = function(op2) {
-  return this
-}
-
-Skip.prototype.invert = function() {
-  return new Insert(this.length)
-}
-
-Skip.unpack = function(data) {
-  return new Skip(parseInt(data, 36))
-}
-
-},{"../Changeset":6,"../Operator":8,"./Insert":11,"./Retain":12}],14:[function(require,module,exports){
-/**
- * Diff Match and Patch
- *
- * Copyright 2006 Google Inc.
- * http://code.google.com/p/google-diff-match-patch/
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
- * @fileoverview Computes the difference between two texts to create a patch.
- * Applies the patch onto another text, allowing for errors.
- * @author fraser@google.com (Neil Fraser)
- */
-
-/**
- * Class containing the diff, match and patch methods.
- * @constructor
- */
-function diff_match_patch() {
-
-  // Defaults.
-  // Redefine these in your program to override the defaults.
-
-  // Number of seconds to map a diff before giving up (0 for infinity).
-  this.Diff_Timeout = 1.0;
-  // Cost of an empty edit operation in terms of edit characters.
-  this.Diff_EditCost = 4;
-  // The size beyond which the double-ended diff activates.
-  // Double-ending is twice as fast, but less accurate.
-  this.Diff_DualThreshold = 32;
-  // At what point is no match declared (0.0 = perfection, 1.0 = very loose).
-  this.Match_Threshold = 0.5;
-  // How far to search for a match (0 = exact location, 1000+ = broad match).
-  // A match this many characters away from the expected location will add
-  // 1.0 to the score (0.0 is a perfect match).
-  this.Match_Distance = 1000;
-  // When deleting a large block of text (over ~64 characters), how close does
-  // the contents have to match the expected contents. (0.0 = perfection,
-  // 1.0 = very loose).  Note that Match_Threshold controls how closely the
-  // end points of a delete need to match.
-  this.Patch_DeleteThreshold = 0.5;
-  // Chunk size for context length.
-  this.Patch_Margin = 4;
-
-  /**
-   * Compute the number of bits in an int.
-   * The normal answer for JavaScript is 32.
-   * @return {number} Max bits
-   */
-  function getMaxBits() {
-    var maxbits = 0;
-    var oldi = 1;
-    var newi = 2;
-    while (oldi != newi) {
-      maxbits++;
-      oldi = newi;
-      newi = newi << 1;
-    }
-    return maxbits;
-  }
-  // How many bits in a number?
-  this.Match_MaxBits = getMaxBits();
-}
-
-
-//  DIFF FUNCTIONS
-
-
-/**
- * The data structure representing a diff is an array of tuples:
- * [[DIFF_DELETE, 'Hello'], [DIFF_INSERT, 'Goodbye'], [DIFF_EQUAL, ' world.']]
- * which means: delete 'Hello', add 'Goodbye' and keep ' world.'
- */
-var DIFF_DELETE = -1;
-var DIFF_INSERT = 1;
-var DIFF_EQUAL = 0;
-
-
-/**
- * Find the differences between two texts.  Simplifies the problem by stripping
- * any common prefix or suffix off the texts before diffing.
- * @param {string} text1 Old string to be diffed.
- * @param {string} text2 New string to be diffed.
- * @param {boolean} opt_checklines Optional speedup flag.  If present and false,
- *     then don't run a line-level diff first to identify the changed areas.
- *     Defaults to true, which does a faster, slightly less optimal diff
- * @return {Array.<Array.<number|string>>} Array of diff tuples.
- */
-diff_match_patch.prototype.diff_main = function(text1, text2, opt_checklines) {
-  // Check for null inputs.
-  if (text1 == null || text2 == null) {
-    throw new Error('Null input. (diff_main)');
-  }
-
-  // Check for equality (speedup).
-  if (text1 == text2) {
-    return [[DIFF_EQUAL, text1]];
-  }
-
-  if (typeof opt_checklines == 'undefined') {
-    opt_checklines = true;
-  }
-  var checklines = opt_checklines;
-
-  // Trim off common prefix (speedup).
-  var commonlength = this.diff_commonPrefix(text1, text2);
-  var commonprefix = text1.substring(0, commonlength);
-  text1 = text1.substring(commonlength);
-  text2 = text2.substring(commonlength);
-
-  // Trim off common suffix (speedup).
-  commonlength = this.diff_commonSuffix(text1, text2);
-  var commonsuffix = text1.substring(text1.length - commonlength);
-  text1 = text1.substring(0, text1.length - commonlength);
-  text2 = text2.substring(0, text2.length - commonlength);
-
-  // Compute the diff on the middle block.
-  var diffs = this.diff_compute(text1, text2, checklines);
-
-  // Restore the prefix and suffix.
-  if (commonprefix) {
-    diffs.unshift([DIFF_EQUAL, commonprefix]);
-  }
-  if (commonsuffix) {
-    diffs.push([DIFF_EQUAL, commonsuffix]);
-  }
-  this.diff_cleanupMerge(diffs);
-  return diffs;
-};
-
-
-/**
- * Find the differences between two texts.  Assumes that the texts do not
- * have any common prefix or suffix.
- * @param {string} text1 Old string to be diffed.
- * @param {string} text2 New string to be diffed.
- * @param {boolean} checklines Speedup flag.  If false, then don't run a
- *     line-level diff first to identify the changed areas.
- *     If true, then run a faster, slightly less optimal diff
- * @return {Array.<Array.<number|string>>} Array of diff tuples.
- * @private
- */
-diff_match_patch.prototype.diff_compute = function(text1, text2, checklines) {
-  var diffs;
-
-  if (!text1) {
-    // Just add some text (speedup).
-    return [[DIFF_INSERT, text2]];
-  }
-
-  if (!text2) {
-    // Just delete some text (speedup).
-    return [[DIFF_DELETE, text1]];
-  }
-
-  var longtext = text1.length > text2.length ? text1 : text2;
-  var shorttext = text1.length > text2.length ? text2 : text1;
-  var i = longtext.indexOf(shorttext);
-  if (i != -1) {
-    // Shorter text is inside the longer text (speedup).
-    diffs = [[DIFF_INSERT, longtext.substring(0, i)],
-             [DIFF_EQUAL, shorttext],
-             [DIFF_INSERT, longtext.substring(i + shorttext.length)]];
-    // Swap insertions for deletions if diff is reversed.
-    if (text1.length > text2.length) {
-      diffs[0][0] = diffs[2][0] = DIFF_DELETE;
-    }
-    return diffs;
-  }
-  longtext = shorttext = null;  // Garbage collect.
-
-  // Check to see if the problem can be split in two.
-  var hm = this.diff_halfMatch(text1, text2);
-  if (hm) {
-    // A half-match was found, sort out the return data.
-    var text1_a = hm[0];
-    var text1_b = hm[1];
-    var text2_a = hm[2];
-    var text2_b = hm[3];
-    var mid_common = hm[4];
-    // Send both pairs off for separate processing.
-    var diffs_a = this.diff_main(text1_a, text2_a, checklines);
-    var diffs_b = this.diff_main(text1_b, text2_b, checklines);
-    // Merge the results.
-    return diffs_a.concat([[DIFF_EQUAL, mid_common]], diffs_b);
-  }
-
-  // Perform a real diff.
-  if (checklines && (text1.length < 100 || text2.length < 100)) {
-    // Too trivial for the overhead.
-    checklines = false;
-  }
-  var linearray;
-  if (checklines) {
-    // Scan the text on a line-by-line basis first.
-    var a = this.diff_linesToChars(text1, text2);
-    text1 = a[0];
-    text2 = a[1];
-    linearray = a[2];
-  }
-  diffs = this.diff_map(text1, text2);
-  if (!diffs) {
-    // No acceptable result.
-    diffs = [[DIFF_DELETE, text1], [DIFF_INSERT, text2]];
-  }
-  if (checklines) {
-    // Convert the diff back to original text.
-    this.diff_charsToLines(diffs, linearray);
-    // Eliminate freak matches (e.g. blank lines)
-    this.diff_cleanupSemantic(diffs);
-
-    // Rediff any replacement blocks, this time character-by-character.
-    // Add a dummy entry at the end.
-    diffs.push([DIFF_EQUAL, '']);
-    var pointer = 0;
-    var count_delete = 0;
-    var count_insert = 0;
-    var text_delete = '';
-    var text_insert = '';
-    while (pointer < diffs.length) {
-      switch (diffs[pointer][0]) {
-        case DIFF_INSERT:
-          count_insert++;
-          text_insert += diffs[pointer][1];
-          break;
-        case DIFF_DELETE:
-          count_delete++;
-          text_delete += diffs[pointer][1];
-          break;
-        case DIFF_EQUAL:
-          // Upon reaching an equality, check for prior redundancies.
-          if (count_delete >= 1 && count_insert >= 1) {
-            // Delete the offending records and add the merged ones.
-            var a = this.diff_main(text_delete, text_insert, false);
-            diffs.splice(pointer - count_delete - count_insert,
-                         count_delete + count_insert);
-            pointer = pointer - count_delete - count_insert;
-            for (var j = a.length - 1; j >= 0; j--) {
-              diffs.splice(pointer, 0, a[j]);
-            }
-            pointer = pointer + a.length;
-          }
-          count_insert = 0;
-          count_delete = 0;
-          text_delete = '';
-          text_insert = '';
-          break;
-      }
-     pointer++;
-    }
-    diffs.pop();  // Remove the dummy entry at the end.
-  }
-  return diffs;
-};
-
-
-/**
- * Split two texts into an array of strings.  Reduce the texts to a string of
- * hashes where each Unicode character represents one line.
- * @param {string} text1 First string.
- * @param {string} text2 Second string.
- * @return {Array.<string|Array.<string>>} Three element Array, containing the
- *     encoded text1, the encoded text2 and the array of unique strings.  The
- *     zeroth element of the array of unique strings is intentionally blank.
- * @private
- */
-diff_match_patch.prototype.diff_linesToChars = function(text1, text2) {
-  var lineArray = [];  // e.g. lineArray[4] == 'Hello\n'
-  var lineHash = {};   // e.g. lineHash['Hello\n'] == 4
-
-  // '\x00' is a valid character, but various debuggers don't like it.
-  // So we'll insert a junk entry to avoid generating a null character.
-  lineArray[0] = '';
-
-  /**
-   * Split a text into an array of strings.  Reduce the texts to a string of
-   * hashes where each Unicode character represents one line.
-   * Modifies linearray and linehash through being a closure.
-   * @param {string} text String to encode.
-   * @return {string} Encoded string.
-   * @private
-   */
-  function diff_linesToCharsMunge(text) {
-    var chars = '';
-    // Walk the text, pulling out a substring for each line.
-    // text.split('\n') would would temporarily double our memory footprint.
-    // Modifying text would create many large strings to garbage collect.
-    var lineStart = 0;
-    var lineEnd = -1;
-    // Keeping our own length variable is faster than looking it up.
-    var lineArrayLength = lineArray.length;
-    while (lineEnd < text.length - 1) {
-      lineEnd = text.indexOf('\n', lineStart);
-      if (lineEnd == -1) {
-        lineEnd = text.length - 1;
-      }
-      var line = text.substring(lineStart, lineEnd + 1);
-      lineStart = lineEnd + 1;
-
-      if (lineHash.hasOwnProperty ? lineHash.hasOwnProperty(line) :
-          (lineHash[line] !== undefined)) {
-        chars += String.fromCharCode(lineHash[line]);
-      } else {
-        chars += String.fromCharCode(lineArrayLength);
-        lineHash[line] = lineArrayLength;
-        lineArray[lineArrayLength++] = line;
-      }
-    }
-    return chars;
-  }
-
-  var chars1 = diff_linesToCharsMunge(text1);
-  var chars2 = diff_linesToCharsMunge(text2);
-  return [chars1, chars2, lineArray];
-};
-
-
-/**
- * Rehydrate the text in a diff from a string of line hashes to real lines of
- * text.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @param {Array.<string>} lineArray Array of unique strings.
- * @private
- */
-diff_match_patch.prototype.diff_charsToLines = function(diffs, lineArray) {
-  for (var x = 0; x < diffs.length; x++) {
-    var chars = diffs[x][1];
-    var text = [];
-    for (var y = 0; y < chars.length; y++) {
-      text[y] = lineArray[chars.charCodeAt(y)];
-    }
-    diffs[x][1] = text.join('');
-  }
-};
-
-
-/**
- * Explore the intersection points between the two texts.
- * @param {string} text1 Old string to be diffed.
- * @param {string} text2 New string to be diffed.
- * @return {?Array.<Array.<number|string>>} Array of diff tuples or null if no
- *     diff available.
- * @private
- */
-diff_match_patch.prototype.diff_map = function(text1, text2) {
-  // Don't run for too long.
-  var ms_end = (new Date()).getTime() + this.Diff_Timeout * 1000;
-  // Cache the text lengths to prevent multiple calls.
-  var text1_length = text1.length;
-  var text2_length = text2.length;
-  var max_d = text1_length + text2_length - 1;
-  var doubleEnd = this.Diff_DualThreshold * 2 < max_d;
-  // JavaScript efficiency note: (x << 32) + y doesn't work since numbers are
-  // only 32 bit.  Use x + ',' + y to create a hash instead.
-  var v_map1 = [];
-  var v_map2 = [];
-  var v1 = {};
-  var v2 = {};
-  v1[1] = 0;
-  v2[1] = 0;
-  var x, y;
-  var footstep;  // Used to track overlapping paths.
-  var footsteps = {};
-  var done = false;
-  // If the total number of characters is odd, then the front path will collide
-  // with the reverse path.
-  var front = (text1_length + text2_length) % 2;
-  for (var d = 0; d < max_d; d++) {
-    // Bail out if timeout reached.
-    if (this.Diff_Timeout > 0 && (new Date()).getTime() > ms_end) {
-      return null;
-    }
-
-    // Walk the front path one step.
-    v_map1[d] = {};
-    for (var k = -d; k <= d; k += 2) {
-      if (k == -d || k != d && v1[k - 1] < v1[k + 1]) {
-        x = v1[k + 1];
-      } else {
-        x = v1[k - 1] + 1;
-      }
-      y = x - k;
-      if (doubleEnd) {
-        footstep = x + ',' + y;
-        if (front && footsteps[footstep] !== undefined) {
-          done = true;
-        }
-        if (!front) {
-          footsteps[footstep] = d;
-        }
-      }
-      while (!done && x < text1_length && y < text2_length &&
-             text1.charAt(x) == text2.charAt(y)) {
-        x++;
-        y++;
-        if (doubleEnd) {
-          footstep = x + ',' + y;
-          if (front && footsteps[footstep] !== undefined) {
-            done = true;
-          }
-          if (!front) {
-            footsteps[footstep] = d;
-          }
-        }
-      }
-      v1[k] = x;
-      v_map1[d][x + ',' + y] = true;
-      if (x == text1_length && y == text2_length) {
-        // Reached the end in single-path mode.
-        return this.diff_path1(v_map1, text1, text2);
-      } else if (done) {
-        // Front path ran over reverse path.
-        v_map2 = v_map2.slice(0, footsteps[footstep] + 1);
-        var a = this.diff_path1(v_map1, text1.substring(0, x),
-                                text2.substring(0, y));
-        return a.concat(this.diff_path2(v_map2, text1.substring(x),
-                                        text2.substring(y)));
-      }
-    }
-
-    if (doubleEnd) {
-      // Walk the reverse path one step.
-      v_map2[d] = {};
-      for (var k = -d; k <= d; k += 2) {
-        if (k == -d || k != d && v2[k - 1] < v2[k + 1]) {
-          x = v2[k + 1];
-        } else {
-          x = v2[k - 1] + 1;
-        }
-        y = x - k;
-        footstep = (text1_length - x) + ',' + (text2_length - y);
-        if (!front && footsteps[footstep] !== undefined) {
-          done = true;
-        }
-        if (front) {
-          footsteps[footstep] = d;
-        }
-        while (!done && x < text1_length && y < text2_length &&
-               text1.charAt(text1_length - x - 1) ==
-               text2.charAt(text2_length - y - 1)) {
-          x++;
-          y++;
-          footstep = (text1_length - x) + ',' + (text2_length - y);
-          if (!front && footsteps[footstep] !== undefined) {
-            done = true;
-          }
-          if (front) {
-            footsteps[footstep] = d;
-          }
-        }
-        v2[k] = x;
-        v_map2[d][x + ',' + y] = true;
-        if (done) {
-          // Reverse path ran over front path.
-          v_map1 = v_map1.slice(0, footsteps[footstep] + 1);
-          var a = this.diff_path1(v_map1, text1.substring(0, text1_length - x),
-                                  text2.substring(0, text2_length - y));
-          return a.concat(this.diff_path2(v_map2,
-                          text1.substring(text1_length - x),
-                          text2.substring(text2_length - y)));
-        }
-      }
-    }
-  }
-  // Number of diffs equals number of characters, no commonality at all.
-  return null;
-};
-
-
-/**
- * Work from the middle back to the start to determine the path.
- * @param {Array.<Object>} v_map Array of paths.
- * @param {string} text1 Old string fragment to be diffed.
- * @param {string} text2 New string fragment to be diffed.
- * @return {Array.<Array.<number|string>>} Array of diff tuples.
- * @private
- */
-diff_match_patch.prototype.diff_path1 = function(v_map, text1, text2) {
-  var path = [];
-  var x = text1.length;
-  var y = text2.length;
-  /** @type {?number} */
-  var last_op = null;
-  for (var d = v_map.length - 2; d >= 0; d--) {
-    while (1) {
-      if (v_map[d][(x - 1) + ',' + y] !== undefined) {
-        x--;
-        if (last_op === DIFF_DELETE) {
-          path[0][1] = text1.charAt(x) + path[0][1];
-        } else {
-          path.unshift([DIFF_DELETE, text1.charAt(x)]);
-        }
-        last_op = DIFF_DELETE;
-        break;
-      } else if (v_map[d][x + ',' + (y - 1)] !== undefined) {
-        y--;
-        if (last_op === DIFF_INSERT) {
-          path[0][1] = text2.charAt(y) + path[0][1];
-        } else {
-          path.unshift([DIFF_INSERT, text2.charAt(y)]);
-        }
-        last_op = DIFF_INSERT;
-        break;
-      } else {
-        x--;
-        y--;
-        if (text1.charAt(x) != text2.charAt(y)) {
-          throw new Error('No diagonal.  Can\'t happen. (diff_path1)');
-        }
-        if (last_op === DIFF_EQUAL) {
-          path[0][1] = text1.charAt(x) + path[0][1];
-        } else {
-          path.unshift([DIFF_EQUAL, text1.charAt(x)]);
-        }
-        last_op = DIFF_EQUAL;
-      }
-    }
-  }
-  return path;
-};
-
-
-/**
- * Work from the middle back to the end to determine the path.
- * @param {Array.<Object>} v_map Array of paths.
- * @param {string} text1 Old string fragment to be diffed.
- * @param {string} text2 New string fragment to be diffed.
- * @return {Array.<Array.<number|string>>} Array of diff tuples.
- * @private
- */
-diff_match_patch.prototype.diff_path2 = function(v_map, text1, text2) {
-  var path = [];
-  var pathLength = 0;
-  var x = text1.length;
-  var y = text2.length;
-  /** @type {?number} */
-  var last_op = null;
-  for (var d = v_map.length - 2; d >= 0; d--) {
-    while (1) {
-      if (v_map[d][(x - 1) + ',' + y] !== undefined) {
-        x--;
-        if (last_op === DIFF_DELETE) {
-          path[pathLength - 1][1] += text1.charAt(text1.length - x - 1);
-        } else {
-          path[pathLength++] =
-              [DIFF_DELETE, text1.charAt(text1.length - x - 1)];
-        }
-        last_op = DIFF_DELETE;
-        break;
-      } else if (v_map[d][x + ',' + (y - 1)] !== undefined) {
-        y--;
-        if (last_op === DIFF_INSERT) {
-          path[pathLength - 1][1] += text2.charAt(text2.length - y - 1);
-        } else {
-          path[pathLength++] =
-              [DIFF_INSERT, text2.charAt(text2.length - y - 1)];
-        }
-        last_op = DIFF_INSERT;
-        break;
-      } else {
-        x--;
-        y--;
-        if (text1.charAt(text1.length - x - 1) !=
-            text2.charAt(text2.length - y - 1)) {
-          throw new Error('No diagonal.  Can\'t happen. (diff_path2)');
-        }
-        if (last_op === DIFF_EQUAL) {
-          path[pathLength - 1][1] += text1.charAt(text1.length - x - 1);
-        } else {
-          path[pathLength++] =
-              [DIFF_EQUAL, text1.charAt(text1.length - x - 1)];
-        }
-        last_op = DIFF_EQUAL;
-      }
-    }
-  }
-  return path;
-};
-
-
-/**
- * Determine the common prefix of two strings
- * @param {string} text1 First string.
- * @param {string} text2 Second string.
- * @return {number} The number of characters common to the start of each
- *     string.
- */
-diff_match_patch.prototype.diff_commonPrefix = function(text1, text2) {
-  // Quick check for common null cases.
-  if (!text1 || !text2 || text1.charAt(0) != text2.charAt(0)) {
-    return 0;
-  }
-  // Binary search.
-  // Performance analysis: http://neil.fraser.name/news/2007/10/09/
-  var pointermin = 0;
-  var pointermax = Math.min(text1.length, text2.length);
-  var pointermid = pointermax;
-  var pointerstart = 0;
-  while (pointermin < pointermid) {
-    if (text1.substring(pointerstart, pointermid) ==
-        text2.substring(pointerstart, pointermid)) {
-      pointermin = pointermid;
-      pointerstart = pointermin;
-    } else {
-      pointermax = pointermid;
-    }
-    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
-  }
-  return pointermid;
-};
-
-
-/**
- * Determine the common suffix of two strings
- * @param {string} text1 First string.
- * @param {string} text2 Second string.
- * @return {number} The number of characters common to the end of each string.
- */
-diff_match_patch.prototype.diff_commonSuffix = function(text1, text2) {
-  // Quick check for common null cases.
-  if (!text1 || !text2 || text1.charAt(text1.length - 1) !=
-                          text2.charAt(text2.length - 1)) {
-    return 0;
-  }
-  // Binary search.
-  // Performance analysis: http://neil.fraser.name/news/2007/10/09/
-  var pointermin = 0;
-  var pointermax = Math.min(text1.length, text2.length);
-  var pointermid = pointermax;
-  var pointerend = 0;
-  while (pointermin < pointermid) {
-    if (text1.substring(text1.length - pointermid, text1.length - pointerend) ==
-        text2.substring(text2.length - pointermid, text2.length - pointerend)) {
-      pointermin = pointermid;
-      pointerend = pointermin;
-    } else {
-      pointermax = pointermid;
-    }
-    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
-  }
-  return pointermid;
-};
-
-
-/**
- * Do the two texts share a substring which is at least half the length of the
- * longer text?
- * @param {string} text1 First string.
- * @param {string} text2 Second string.
- * @return {?Array.<string>} Five element Array, containing the prefix of
- *     text1, the suffix of text1, the prefix of text2, the suffix of
- *     text2 and the common middle.  Or null if there was no match.
- */
-diff_match_patch.prototype.diff_halfMatch = function(text1, text2) {
-  var longtext = text1.length > text2.length ? text1 : text2;
-  var shorttext = text1.length > text2.length ? text2 : text1;
-  if (longtext.length < 10 || shorttext.length < 1) {
-    return null;  // Pointless.
-  }
-  var dmp = this;  // 'this' becomes 'window' in a closure.
-
-  /**
-   * Does a substring of shorttext exist within longtext such that the substring
-   * is at least half the length of longtext?
-   * Closure, but does not reference any external variables.
-   * @param {string} longtext Longer string.
-   * @param {string} shorttext Shorter string.
-   * @param {number} i Start index of quarter length substring within longtext
-   * @return {?Array.<string>} Five element Array, containing the prefix of
-   *     longtext, the suffix of longtext, the prefix of shorttext, the suffix
-   *     of shorttext and the common middle.  Or null if there was no match.
-   * @private
-   */
-  function diff_halfMatchI(longtext, shorttext, i) {
-    // Start with a 1/4 length substring at position i as a seed.
-    var seed = longtext.substring(i, i + Math.floor(longtext.length / 4));
-    var j = -1;
-    var best_common = '';
-    var best_longtext_a, best_longtext_b, best_shorttext_a, best_shorttext_b;
-    while ((j = shorttext.indexOf(seed, j + 1)) != -1) {
-      var prefixLength = dmp.diff_commonPrefix(longtext.substring(i),
-                                               shorttext.substring(j));
-      var suffixLength = dmp.diff_commonSuffix(longtext.substring(0, i),
-                                               shorttext.substring(0, j));
-      if (best_common.length < suffixLength + prefixLength) {
-        best_common = shorttext.substring(j - suffixLength, j) +
-            shorttext.substring(j, j + prefixLength);
-        best_longtext_a = longtext.substring(0, i - suffixLength);
-        best_longtext_b = longtext.substring(i + prefixLength);
-        best_shorttext_a = shorttext.substring(0, j - suffixLength);
-        best_shorttext_b = shorttext.substring(j + prefixLength);
-      }
-    }
-    if (best_common.length >= longtext.length / 2) {
-      return [best_longtext_a, best_longtext_b,
-              best_shorttext_a, best_shorttext_b, best_common];
-    } else {
-      return null;
-    }
-  }
-
-  // First check if the second quarter is the seed for a half-match.
-  var hm1 = diff_halfMatchI(longtext, shorttext,
-                            Math.ceil(longtext.length / 4));
-  // Check again based on the third quarter.
-  var hm2 = diff_halfMatchI(longtext, shorttext,
-                            Math.ceil(longtext.length / 2));
-  var hm;
-  if (!hm1 && !hm2) {
-    return null;
-  } else if (!hm2) {
-    hm = hm1;
-  } else if (!hm1) {
-    hm = hm2;
-  } else {
-    // Both matched.  Select the longest.
-    hm = hm1[4].length > hm2[4].length ? hm1 : hm2;
-  }
-
-  // A half-match was found, sort out the return data.
-  var text1_a, text1_b, text2_a, text2_b;
-  if (text1.length > text2.length) {
-    text1_a = hm[0];
-    text1_b = hm[1];
-    text2_a = hm[2];
-    text2_b = hm[3];
-  } else {
-    text2_a = hm[0];
-    text2_b = hm[1];
-    text1_a = hm[2];
-    text1_b = hm[3];
-  }
-  var mid_common = hm[4];
-  return [text1_a, text1_b, text2_a, text2_b, mid_common];
-};
-
-
-/**
- * Reduce the number of edits by eliminating semantically trivial equalities.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- */
-diff_match_patch.prototype.diff_cleanupSemantic = function(diffs) {
-  var changes = false;
-  var equalities = [];  // Stack of indices where equalities are found.
-  var equalitiesLength = 0;  // Keeping our own length var is faster in JS.
-  var lastequality = null;  // Always equal to equalities[equalitiesLength-1][1]
-  var pointer = 0;  // Index of current position.
-  // Number of characters that changed prior to the equality.
-  var length_changes1 = 0;
-  // Number of characters that changed after the equality.
-  var length_changes2 = 0;
-  while (pointer < diffs.length) {
-    if (diffs[pointer][0] == DIFF_EQUAL) {  // equality found
-      equalities[equalitiesLength++] = pointer;
-      length_changes1 = length_changes2;
-      length_changes2 = 0;
-      lastequality = diffs[pointer][1];
-    } else {  // an insertion or deletion
-      length_changes2 += diffs[pointer][1].length;
-      if (lastequality !== null && (lastequality.length <= length_changes1) &&
-          (lastequality.length <= length_changes2)) {
-        // Duplicate record
-        diffs.splice(equalities[equalitiesLength - 1], 0,
-                     [DIFF_DELETE, lastequality]);
-        // Change second copy to insert.
-        diffs[equalities[equalitiesLength - 1] + 1][0] = DIFF_INSERT;
-        // Throw away the equality we just deleted.
-        equalitiesLength--;
-        // Throw away the previous equality (it needs to be reevaluated).
-        equalitiesLength--;
-        pointer = equalitiesLength > 0 ? equalities[equalitiesLength - 1] : -1;
-        length_changes1 = 0;  // Reset the counters.
-        length_changes2 = 0;
-        lastequality = null;
-        changes = true;
-      }
-    }
-    pointer++;
-  }
-  if (changes) {
-    this.diff_cleanupMerge(diffs);
-  }
-  this.diff_cleanupSemanticLossless(diffs);
-};
-
-
-/**
- * Look for single edits surrounded on both sides by equalities
- * which can be shifted sideways to align the edit to a word boundary.
- * e.g: The c<ins>at c</ins>ame. -> The <ins>cat </ins>came.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- */
-diff_match_patch.prototype.diff_cleanupSemanticLossless = function(diffs) {
-  // Define some regex patterns for matching boundaries.
-  var punctuation = /[^a-zA-Z0-9]/;
-  var whitespace = /\s/;
-  var linebreak = /[\r\n]/;
-  var blanklineEnd = /\n\r?\n$/;
-  var blanklineStart = /^\r?\n\r?\n/;
-
-  /**
-   * Given two strings, compute a score representing whether the internal
-   * boundary falls on logical boundaries.
-   * Scores range from 5 (best) to 0 (worst).
-   * Closure, makes reference to regex patterns defined above.
-   * @param {string} one First string.
-   * @param {string} two Second string.
-   * @return {number} The score.
-   */
-  function diff_cleanupSemanticScore(one, two) {
-    if (!one || !two) {
-      // Edges are the best.
-      return 5;
-    }
-
-    // Each port of this function behaves slightly differently due to
-    // subtle differences in each language's definition of things like
-    // 'whitespace'.  Since this function's purpose is largely cosmetic,
-    // the choice has been made to use each language's native features
-    // rather than force total conformity.
-    var score = 0;
-    // One point for non-alphanumeric.
-    if (one.charAt(one.length - 1).match(punctuation) ||
-        two.charAt(0).match(punctuation)) {
-      score++;
-      // Two points for whitespace.
-      if (one.charAt(one.length - 1).match(whitespace) ||
-          two.charAt(0).match(whitespace)) {
-        score++;
-        // Three points for line breaks.
-        if (one.charAt(one.length - 1).match(linebreak) ||
-            two.charAt(0).match(linebreak)) {
-          score++;
-          // Four points for blank lines.
-          if (one.match(blanklineEnd) || two.match(blanklineStart)) {
-            score++;
-          }
-        }
-      }
-    }
-    return score;
-  }
-
-  var pointer = 1;
-  // Intentionally ignore the first and last element (don't need checking).
-  while (pointer < diffs.length - 1) {
-    if (diffs[pointer - 1][0] == DIFF_EQUAL &&
-        diffs[pointer + 1][0] == DIFF_EQUAL) {
-      // This is a single edit surrounded by equalities.
-      var equality1 = diffs[pointer - 1][1];
-      var edit = diffs[pointer][1];
-      var equality2 = diffs[pointer + 1][1];
-
-      // First, shift the edit as far left as possible.
-      var commonOffset = this.diff_commonSuffix(equality1, edit);
-      if (commonOffset) {
-        var commonString = edit.substring(edit.length - commonOffset);
-        equality1 = equality1.substring(0, equality1.length - commonOffset);
-        edit = commonString + edit.substring(0, edit.length - commonOffset);
-        equality2 = commonString + equality2;
-      }
-
-      // Second, step character by character right, looking for the best fit.
-      var bestEquality1 = equality1;
-      var bestEdit = edit;
-      var bestEquality2 = equality2;
-      var bestScore = diff_cleanupSemanticScore(equality1, edit) +
-          diff_cleanupSemanticScore(edit, equality2);
-      while (edit.charAt(0) === equality2.charAt(0)) {
-        equality1 += edit.charAt(0);
-        edit = edit.substring(1) + equality2.charAt(0);
-        equality2 = equality2.substring(1);
-        var score = diff_cleanupSemanticScore(equality1, edit) +
-            diff_cleanupSemanticScore(edit, equality2);
-        // The >= encourages trailing rather than leading whitespace on edits.
-        if (score >= bestScore) {
-          bestScore = score;
-          bestEquality1 = equality1;
-          bestEdit = edit;
-          bestEquality2 = equality2;
-        }
-      }
-
-      if (diffs[pointer - 1][1] != bestEquality1) {
-        // We have an improvement, save it back to the diff.
-        if (bestEquality1) {
-          diffs[pointer - 1][1] = bestEquality1;
-        } else {
-          diffs.splice(pointer - 1, 1);
-          pointer--;
-        }
-        diffs[pointer][1] = bestEdit;
-        if (bestEquality2) {
-          diffs[pointer + 1][1] = bestEquality2;
-        } else {
-          diffs.splice(pointer + 1, 1);
-          pointer--;
-        }
-      }
-    }
-    pointer++;
-  }
-};
-
-
-/**
- * Reduce the number of edits by eliminating operationally trivial equalities.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- */
-diff_match_patch.prototype.diff_cleanupEfficiency = function(diffs) {
-  var changes = false;
-  var equalities = [];  // Stack of indices where equalities are found.
-  var equalitiesLength = 0;  // Keeping our own length var is faster in JS.
-  var lastequality = '';  // Always equal to equalities[equalitiesLength-1][1]
-  var pointer = 0;  // Index of current position.
-  // Is there an insertion operation before the last equality.
-  var pre_ins = false;
-  // Is there a deletion operation before the last equality.
-  var pre_del = false;
-  // Is there an insertion operation after the last equality.
-  var post_ins = false;
-  // Is there a deletion operation after the last equality.
-  var post_del = false;
-  while (pointer < diffs.length) {
-    if (diffs[pointer][0] == DIFF_EQUAL) {  // equality found
-      if (diffs[pointer][1].length < this.Diff_EditCost &&
-          (post_ins || post_del)) {
-        // Candidate found.
-        equalities[equalitiesLength++] = pointer;
-        pre_ins = post_ins;
-        pre_del = post_del;
-        lastequality = diffs[pointer][1];
-      } else {
-        // Not a candidate, and can never become one.
-        equalitiesLength = 0;
-        lastequality = '';
-      }
-      post_ins = post_del = false;
-    } else {  // an insertion or deletion
-      if (diffs[pointer][0] == DIFF_DELETE) {
-        post_del = true;
-      } else {
-        post_ins = true;
-      }
-      /*
-       * Five types to be split:
-       * <ins>A</ins><del>B</del>XY<ins>C</ins><del>D</del>
-       * <ins>A</ins>X<ins>C</ins><del>D</del>
-       * <ins>A</ins><del>B</del>X<ins>C</ins>
-       * <ins>A</del>X<ins>C</ins><del>D</del>
-       * <ins>A</ins><del>B</del>X<del>C</del>
-       */
-      if (lastequality && ((pre_ins && pre_del && post_ins && post_del) ||
-                           ((lastequality.length < this.Diff_EditCost / 2) &&
-                            (pre_ins + pre_del + post_ins + post_del) == 3))) {
-        // Duplicate record
-        diffs.splice(equalities[equalitiesLength - 1], 0,
-                     [DIFF_DELETE, lastequality]);
-        // Change second copy to insert.
-        diffs[equalities[equalitiesLength - 1] + 1][0] = DIFF_INSERT;
-        equalitiesLength--;  // Throw away the equality we just deleted;
-        lastequality = '';
-        if (pre_ins && pre_del) {
-          // No changes made which could affect previous entry, keep going.
-          post_ins = post_del = true;
-          equalitiesLength = 0;
-        } else {
-          equalitiesLength--;  // Throw away the previous equality;
-          pointer = equalitiesLength > 0 ?
-              equalities[equalitiesLength - 1] : -1;
-          post_ins = post_del = false;
-        }
-        changes = true;
-      }
-    }
-    pointer++;
-  }
-
-  if (changes) {
-    this.diff_cleanupMerge(diffs);
-  }
-};
-
-
-/**
- * Reorder and merge like edit sections.  Merge equalities.
- * Any edit section can move as long as it doesn't cross an equality.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- */
-diff_match_patch.prototype.diff_cleanupMerge = function(diffs) {
-  diffs.push([DIFF_EQUAL, '']);  // Add a dummy entry at the end.
-  var pointer = 0;
-  var count_delete = 0;
-  var count_insert = 0;
-  var text_delete = '';
-  var text_insert = '';
-  var commonlength;
-  while (pointer < diffs.length) {
-    switch (diffs[pointer][0]) {
-      case DIFF_INSERT:
-        count_insert++;
-        text_insert += diffs[pointer][1];
-        pointer++;
-        break;
-      case DIFF_DELETE:
-        count_delete++;
-        text_delete += diffs[pointer][1];
-        pointer++;
-        break;
-      case DIFF_EQUAL:
-        // Upon reaching an equality, check for prior redundancies.
-        if (count_delete !== 0 || count_insert !== 0) {
-          if (count_delete !== 0 && count_insert !== 0) {
-            // Factor out any common prefixies.
-            commonlength = this.diff_commonPrefix(text_insert, text_delete);
-            if (commonlength !== 0) {
-              if ((pointer - count_delete - count_insert) > 0 &&
-                  diffs[pointer - count_delete - count_insert - 1][0] ==
-                  DIFF_EQUAL) {
-                diffs[pointer - count_delete - count_insert - 1][1] +=
-                    text_insert.substring(0, commonlength);
-              } else {
-                diffs.splice(0, 0, [DIFF_EQUAL,
-                    text_insert.substring(0, commonlength)]);
-                pointer++;
-              }
-              text_insert = text_insert.substring(commonlength);
-              text_delete = text_delete.substring(commonlength);
-            }
-            // Factor out any common suffixies.
-            commonlength = this.diff_commonSuffix(text_insert, text_delete);
-            if (commonlength !== 0) {
-              diffs[pointer][1] = text_insert.substring(text_insert.length -
-                  commonlength) + diffs[pointer][1];
-              text_insert = text_insert.substring(0, text_insert.length -
-                  commonlength);
-              text_delete = text_delete.substring(0, text_delete.length -
-                  commonlength);
-            }
-          }
-          // Delete the offending records and add the merged ones.
-          if (count_delete === 0) {
-            diffs.splice(pointer - count_delete - count_insert,
-                count_delete + count_insert, [DIFF_INSERT, text_insert]);
-          } else if (count_insert === 0) {
-            diffs.splice(pointer - count_delete - count_insert,
-                count_delete + count_insert, [DIFF_DELETE, text_delete]);
-          } else {
-            diffs.splice(pointer - count_delete - count_insert,
-                count_delete + count_insert, [DIFF_DELETE, text_delete],
-                [DIFF_INSERT, text_insert]);
-          }
-          pointer = pointer - count_delete - count_insert +
-                    (count_delete ? 1 : 0) + (count_insert ? 1 : 0) + 1;
-        } else if (pointer !== 0 && diffs[pointer - 1][0] == DIFF_EQUAL) {
-          // Merge this equality with the previous one.
-          diffs[pointer - 1][1] += diffs[pointer][1];
-          diffs.splice(pointer, 1);
-        } else {
-          pointer++;
-        }
-        count_insert = 0;
-        count_delete = 0;
-        text_delete = '';
-        text_insert = '';
-        break;
-    }
-  }
-  if (diffs[diffs.length - 1][1] === '') {
-    diffs.pop();  // Remove the dummy entry at the end.
-  }
-
-  // Second pass: look for single edits surrounded on both sides by equalities
-  // which can be shifted sideways to eliminate an equality.
-  // e.g: A<ins>BA</ins>C -> <ins>AB</ins>AC
-  var changes = false;
-  pointer = 1;
-  // Intentionally ignore the first and last element (don't need checking).
-  while (pointer < diffs.length - 1) {
-    if (diffs[pointer - 1][0] == DIFF_EQUAL &&
-        diffs[pointer + 1][0] == DIFF_EQUAL) {
-      // This is a single edit surrounded by equalities.
-      if (diffs[pointer][1].substring(diffs[pointer][1].length -
-          diffs[pointer - 1][1].length) == diffs[pointer - 1][1]) {
-        // Shift the edit over the previous equality.
-        diffs[pointer][1] = diffs[pointer - 1][1] +
-            diffs[pointer][1].substring(0, diffs[pointer][1].length -
-                                        diffs[pointer - 1][1].length);
-        diffs[pointer + 1][1] = diffs[pointer - 1][1] + diffs[pointer + 1][1];
-        diffs.splice(pointer - 1, 1);
-        changes = true;
-      } else if (diffs[pointer][1].substring(0, diffs[pointer + 1][1].length) ==
-          diffs[pointer + 1][1]) {
-        // Shift the edit over the next equality.
-        diffs[pointer - 1][1] += diffs[pointer + 1][1];
-        diffs[pointer][1] =
-            diffs[pointer][1].substring(diffs[pointer + 1][1].length) +
-            diffs[pointer + 1][1];
-        diffs.splice(pointer + 1, 1);
-        changes = true;
-      }
-    }
-    pointer++;
-  }
-  // If shifts were made, the diff needs reordering and another shift sweep.
-  if (changes) {
-    this.diff_cleanupMerge(diffs);
-  }
-};
-
-
-/**
- * loc is a location in text1, compute and return the equivalent location in
- * text2.
- * e.g. 'The cat' vs 'The big cat', 1->1, 5->8
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @param {number} loc Location within text1.
- * @return {number} Location within text2.
- */
-diff_match_patch.prototype.diff_xIndex = function(diffs, loc) {
-  var chars1 = 0;
-  var chars2 = 0;
-  var last_chars1 = 0;
-  var last_chars2 = 0;
-  var x;
-  for (x = 0; x < diffs.length; x++) {
-    if (diffs[x][0] !== DIFF_INSERT) {  // Equality or deletion.
-      chars1 += diffs[x][1].length;
-    }
-    if (diffs[x][0] !== DIFF_DELETE) {  // Equality or insertion.
-      chars2 += diffs[x][1].length;
-    }
-    if (chars1 > loc) {  // Overshot the location.
-      break;
-    }
-    last_chars1 = chars1;
-    last_chars2 = chars2;
-  }
-  // Was the location was deleted?
-  if (diffs.length != x && diffs[x][0] === DIFF_DELETE) {
-    return last_chars2;
-  }
-  // Add the remaining character length.
-  return last_chars2 + (loc - last_chars1);
-};
-
-
-/**
- * Convert a diff array into a pretty HTML report.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @return {string} HTML representation.
- */
-diff_match_patch.prototype.diff_prettyHtml = function(diffs) {
-  var html = [];
-  var i = 0;
-  for (var x = 0; x < diffs.length; x++) {
-    var op = diffs[x][0];    // Operation (insert, delete, equal)
-    var data = diffs[x][1];  // Text of change.
-    var text = data.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/\n/g, '&para;<BR>');
-    switch (op) {
-      case DIFF_INSERT:
-        html[x] = '<INS STYLE="background:#E6FFE6;" TITLE="i=' + i + '">' +
-                text + '</INS>';
-        break;
-      case DIFF_DELETE:
-        html[x] = '<DEL STYLE="background:#FFE6E6;" TITLE="i=' + i + '">' +
-                text + '</DEL>';
-        break;
-      case DIFF_EQUAL:
-        html[x] = '<SPAN TITLE="i=' + i + '">' + text + '</SPAN>';
-        break;
-    }
-    if (op !== DIFF_DELETE) {
-      i += data.length;
-    }
-  }
-  return html.join('');
-};
-
-
-/**
- * Compute and return the source text (all equalities and deletions).
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @return {string} Source text.
- */
-diff_match_patch.prototype.diff_text1 = function(diffs) {
-  var text = [];
-  for (var x = 0; x < diffs.length; x++) {
-    if (diffs[x][0] !== DIFF_INSERT) {
-      text[x] = diffs[x][1];
-    }
-  }
-  return text.join('');
-};
-
-
-/**
- * Compute and return the destination text (all equalities and insertions).
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @return {string} Destination text.
- */
-diff_match_patch.prototype.diff_text2 = function(diffs) {
-  var text = [];
-  for (var x = 0; x < diffs.length; x++) {
-    if (diffs[x][0] !== DIFF_DELETE) {
-      text[x] = diffs[x][1];
-    }
-  }
-  return text.join('');
-};
-
-
-/**
- * Compute the Levenshtein distance; the number of inserted, deleted or
- * substituted characters.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @return {number} Number of changes.
- */
-diff_match_patch.prototype.diff_levenshtein = function(diffs) {
-  var levenshtein = 0;
-  var insertions = 0;
-  var deletions = 0;
-  for (var x = 0; x < diffs.length; x++) {
-    var op = diffs[x][0];
-    var data = diffs[x][1];
-    switch (op) {
-      case DIFF_INSERT:
-        insertions += data.length;
-        break;
-      case DIFF_DELETE:
-        deletions += data.length;
-        break;
-      case DIFF_EQUAL:
-        // A deletion and an insertion is one substitution.
-        levenshtein += Math.max(insertions, deletions);
-        insertions = 0;
-        deletions = 0;
-        break;
-    }
-  }
-  levenshtein += Math.max(insertions, deletions);
-  return levenshtein;
-};
-
-
-/**
- * Crush the diff into an encoded string which describes the operations
- * required to transform text1 into text2.
- * E.g. =3\t-2\t+ing  -> Keep 3 chars, delete 2 chars, insert 'ing'.
- * Operations are tab-separated.  Inserted text is escaped using %xx notation.
- * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
- * @return {string} Delta text.
- */
-diff_match_patch.prototype.diff_toDelta = function(diffs) {
-  var text = [];
-  for (var x = 0; x < diffs.length; x++) {
-    switch (diffs[x][0]) {
-      case DIFF_INSERT:
-        text[x] = '+' + encodeURI(diffs[x][1]);
-        break;
-      case DIFF_DELETE:
-        text[x] = '-' + diffs[x][1].length;
-        break;
-      case DIFF_EQUAL:
-        text[x] = '=' + diffs[x][1].length;
-        break;
-    }
-  }
-  // Opera doesn't know how to encode char 0.
-  return text.join('\t').replace(/\x00/g, '%00').replace(/%20/g, ' ');
-};
-
-
-/**
- * Given the original text1, and an encoded string which describes the
- * operations required to transform text1 into text2, compute the full diff.
- * @param {string} text1 Source string for the diff.
- * @param {string} delta Delta text.
- * @return {Array.<Array.<number|string>>} Array of diff tuples.
- * @throws {Error} If invalid input.
- */
-diff_match_patch.prototype.diff_fromDelta = function(text1, delta) {
-  var diffs = [];
-  var diffsLength = 0;  // Keeping our own length var is faster in JS.
-  var pointer = 0;  // Cursor in text1
-  // Opera doesn't know how to decode char 0.
-  delta = delta.replace(/%00/g, '\0');
-  var tokens = delta.split(/\t/g);
-  for (var x = 0; x < tokens.length; x++) {
-    // Each token begins with a one character parameter which specifies the
-    // operation of this token (delete, insert, equality).
-    var param = tokens[x].substring(1);
-    switch (tokens[x].charAt(0)) {
-      case '+':
-        try {
-          diffs[diffsLength++] = [DIFF_INSERT, decodeURI(param)];
-        } catch (ex) {
-          // Malformed URI sequence.
-          throw new Error('Illegal escape in diff_fromDelta: ' + param);
-        }
-        break;
-      case '-':
-        // Fall through.
-      case '=':
-        var n = parseInt(param, 10);
-        if (isNaN(n) || n < 0) {
-          throw new Error('Invalid number in diff_fromDelta: ' + param);
-        }
-        var text = text1.substring(pointer, pointer += n);
-        if (tokens[x].charAt(0) == '=') {
-          diffs[diffsLength++] = [DIFF_EQUAL, text];
-        } else {
-          diffs[diffsLength++] = [DIFF_DELETE, text];
-        }
-        break;
-      default:
-        // Blank tokens are ok (from a trailing \t).
-        // Anything else is an error.
-        if (tokens[x]) {
-          throw new Error('Invalid diff operation in diff_fromDelta: ' +
-                          tokens[x]);
-        }
-    }
-  }
-  if (pointer != text1.length) {
-    throw new Error('Delta length (' + pointer +
-        ') does not equal source text length (' + text1.length + ').');
-  }
-  return diffs;
-};
-
-
-//  MATCH FUNCTIONS
-
-
-/**
- * Locate the best instance of 'pattern' in 'text' near 'loc'.
- * @param {string} text The text to search.
- * @param {string} pattern The pattern to search for.
- * @param {number} loc The location to search around.
- * @return {number} Best match index or -1.
- */
-diff_match_patch.prototype.match_main = function(text, pattern, loc) {
-  // Check for null inputs.
-  if (text == null || pattern == null || loc == null) {
-    throw new Error('Null input. (match_main)');
-  }
-
-  loc = Math.max(0, Math.min(loc, text.length));
-  if (text == pattern) {
-    // Shortcut (potentially not guaranteed by the algorithm)
-    return 0;
-  } else if (!text.length) {
-    // Nothing to match.
-    return -1;
-  } else if (text.substring(loc, loc + pattern.length) == pattern) {
-    // Perfect match at the perfect spot!  (Includes case of null pattern)
-    return loc;
-  } else {
-    // Do a fuzzy compare.
-    return this.match_bitap(text, pattern, loc);
-  }
-};
-
-
-/**
- * Locate the best instance of 'pattern' in 'text' near 'loc' using the
- * Bitap algorithm.
- * @param {string} text The text to search.
- * @param {string} pattern The pattern to search for.
- * @param {number} loc The location to search around.
- * @return {number} Best match index or -1.
- * @private
- */
-diff_match_patch.prototype.match_bitap = function(text, pattern, loc) {
-  if (pattern.length > this.Match_MaxBits) {
-    throw new Error('Pattern too long for this browser.');
-  }
-
-  // Initialise the alphabet.
-  var s = this.match_alphabet(pattern);
-
-  var dmp = this;  // 'this' becomes 'window' in a closure.
-
-  /**
-   * Compute and return the score for a match with e errors and x location.
-   * Accesses loc and pattern through being a closure.
-   * @param {number} e Number of errors in match.
-   * @param {number} x Location of match.
-   * @return {number} Overall score for match (0.0 = good, 1.0 = bad).
-   * @private
-   */
-  function match_bitapScore(e, x) {
-    var accuracy = e / pattern.length;
-    var proximity = Math.abs(loc - x);
-    if (!dmp.Match_Distance) {
-      // Dodge divide by zero error.
-      return proximity ? 1.0 : accuracy;
-    }
-    return accuracy + (proximity / dmp.Match_Distance);
-  }
-
-  // Highest score beyond which we give up.
-  var score_threshold = this.Match_Threshold;
-  // Is there a nearby exact match? (speedup)
-  var best_loc = text.indexOf(pattern, loc);
-  if (best_loc != -1) {
-    score_threshold = Math.min(match_bitapScore(0, best_loc), score_threshold);
-    // What about in the other direction? (speedup)
-    best_loc = text.lastIndexOf(pattern, loc + pattern.length);
-    if (best_loc != -1) {
-      score_threshold =
-          Math.min(match_bitapScore(0, best_loc), score_threshold);
-    }
-  }
-
-  // Initialise the bit arrays.
-  var matchmask = 1 << (pattern.length - 1);
-  best_loc = -1;
-
-  var bin_min, bin_mid;
-  var bin_max = pattern.length + text.length;
-  var last_rd;
-  for (var d = 0; d < pattern.length; d++) {
-    // Scan for the best match; each iteration allows for one more error.
-    // Run a binary search to determine how far from 'loc' we can stray at this
-    // error level.
-    bin_min = 0;
-    bin_mid = bin_max;
-    while (bin_min < bin_mid) {
-      if (match_bitapScore(d, loc + bin_mid) <= score_threshold) {
-        bin_min = bin_mid;
-      } else {
-        bin_max = bin_mid;
-      }
-      bin_mid = Math.floor((bin_max - bin_min) / 2 + bin_min);
-    }
-    // Use the result from this iteration as the maximum for the next.
-    bin_max = bin_mid;
-    var start = Math.max(1, loc - bin_mid + 1);
-    var finish = Math.min(loc + bin_mid, text.length) + pattern.length;
-
-    var rd = Array(finish + 2);
-    rd[finish + 1] = (1 << d) - 1;
-    for (var j = finish; j >= start; j--) {
-      // The alphabet (s) is a sparse hash, so the following line generates
-      // warnings.
-      var charMatch = s[text.charAt(j - 1)];
-      if (d === 0) {  // First pass: exact match.
-        rd[j] = ((rd[j + 1] << 1) | 1) & charMatch;
-      } else {  // Subsequent passes: fuzzy match.
-        rd[j] = ((rd[j + 1] << 1) | 1) & charMatch |
-                (((last_rd[j + 1] | last_rd[j]) << 1) | 1) |
-                last_rd[j + 1];
-      }
-      if (rd[j] & matchmask) {
-        var score = match_bitapScore(d, j - 1);
-        // This match will almost certainly be better than any existing match.
-        // But check anyway.
-        if (score <= score_threshold) {
-          // Told you so.
-          score_threshold = score;
-          best_loc = j - 1;
-          if (best_loc > loc) {
-            // When passing loc, don't exceed our current distance from loc.
-            start = Math.max(1, 2 * loc - best_loc);
-          } else {
-            // Already passed loc, downhill from here on in.
-            break;
-          }
-        }
-      }
-    }
-    // No hope for a (better) match at greater error levels.
-    if (match_bitapScore(d + 1, loc) > score_threshold) {
-      break;
-    }
-    last_rd = rd;
-  }
-  return best_loc;
-};
-
-
-/**
- * Initialise the alphabet for the Bitap algorithm.
- * @param {string} pattern The text to encode.
- * @return {Object} Hash of character locations.
- * @private
- */
-diff_match_patch.prototype.match_alphabet = function(pattern) {
-  var s = {};
-  for (var i = 0; i < pattern.length; i++) {
-    s[pattern.charAt(i)] = 0;
-  }
-  for (var i = 0; i < pattern.length; i++) {
-    s[pattern.charAt(i)] |= 1 << (pattern.length - i - 1);
-  }
-  return s;
-};
-
-
-//  PATCH FUNCTIONS
-
-
-/**
- * Increase the context until it is unique,
- * but don't let the pattern expand beyond Match_MaxBits.
- * @param {patch_obj} patch The patch to grow.
- * @param {string} text Source text.
- * @private
- */
-diff_match_patch.prototype.patch_addContext = function(patch, text) {
-  if (text.length == 0) {
-    return;
-  }
-  var pattern = text.substring(patch.start2, patch.start2 + patch.length1);
-  var padding = 0;
-
-  // Look for the first and last matches of pattern in text.  If two different
-  // matches are found, increase the pattern length.
-  while (text.indexOf(pattern) != text.lastIndexOf(pattern) &&
-         pattern.length < this.Match_MaxBits - this.Patch_Margin -
-         this.Patch_Margin) {
-    padding += this.Patch_Margin;
-    pattern = text.substring(patch.start2 - padding,
-                             patch.start2 + patch.length1 + padding);
-  }
-  // Add one chunk for good luck.
-  padding += this.Patch_Margin;
-
-  // Add the prefix.
-  var prefix = text.substring(patch.start2 - padding, patch.start2);
-  if (prefix) {
-    patch.diffs.unshift([DIFF_EQUAL, prefix]);
-  }
-  // Add the suffix.
-  var suffix = text.substring(patch.start2 + patch.length1,
-                              patch.start2 + patch.length1 + padding);
-  if (suffix) {
-    patch.diffs.push([DIFF_EQUAL, suffix]);
-  }
-
-  // Roll back the start points.
-  patch.start1 -= prefix.length;
-  patch.start2 -= prefix.length;
-  // Extend the lengths.
-  patch.length1 += prefix.length + suffix.length;
-  patch.length2 += prefix.length + suffix.length;
-};
-
-
-/**
- * Compute a list of patches to turn text1 into text2.
- * Use diffs if provided, otherwise compute it ourselves.
- * There are four ways to call this function, depending on what data is
- * available to the caller:
- * Method 1:
- * a = text1, b = text2
- * Method 2:
- * a = diffs
- * Method 3 (optimal):
- * a = text1, b = diffs
- * Method 4 (deprecated, use method 3):
- * a = text1, b = text2, c = diffs
- *
- * @param {string|Array.<Array.<number|string>>} a text1 (methods 1,3,4) or
- * Array of diff tuples for text1 to text2 (method 2).
- * @param {string|Array.<Array.<number|string>>} opt_b text2 (methods 1,4) or
- * Array of diff tuples for text1 to text2 (method 3) or undefined (method 2).
- * @param {string|Array.<Array.<number|string>>} opt_c Array of diff tuples for
- * text1 to text2 (method 4) or undefined (methods 1,2,3).
- * @return {Array.<patch_obj>} Array of patch objects.
- */
-diff_match_patch.prototype.patch_make = function(a, opt_b, opt_c) {
-  var text1, diffs;
-  if (typeof a == 'string' && typeof opt_b == 'string' &&
-      typeof opt_c == 'undefined') {
-    // Method 1: text1, text2
-    // Compute diffs from text1 and text2.
-    text1 = a;
-    diffs = this.diff_main(text1, opt_b, true);
-    if (diffs.length > 2) {
-      this.diff_cleanupSemantic(diffs);
-      this.diff_cleanupEfficiency(diffs);
-    }
-  } else if (a && typeof a == 'object' && typeof opt_b == 'undefined' &&
-      typeof opt_c == 'undefined') {
-    // Method 2: diffs
-    // Compute text1 from diffs.
-    diffs = a;
-    text1 = this.diff_text1(diffs);
-  } else if (typeof a == 'string' && opt_b && typeof opt_b == 'object' &&
-      typeof opt_c == 'undefined') {
-    // Method 3: text1, diffs
-    text1 = a;
-    diffs = opt_b;
-  } else if (typeof a == 'string' && typeof opt_b == 'string' &&
-      opt_c && typeof opt_c == 'object') {
-    // Method 4: text1, text2, diffs
-    // text2 is not used.
-    text1 = a;
-    diffs = opt_c;
-  } else {
-    throw new Error('Unknown call format to patch_make.');
-  }
-
-  if (diffs.length === 0) {
-    return [];  // Get rid of the null case.
-  }
-  var patches = [];
-  var patch = new patch_obj();
-  var patchDiffLength = 0;  // Keeping our own length var is faster in JS.
-  var char_count1 = 0;  // Number of characters into the text1 string.
-  var char_count2 = 0;  // Number of characters into the text2 string.
-  // Start with text1 (prepatch_text) and apply the diffs until we arrive at
-  // text2 (postpatch_text).  We recreate the patches one by one to determine
-  // context info.
-  var prepatch_text = text1;
-  var postpatch_text = text1;
-  for (var x = 0; x < diffs.length; x++) {
-    var diff_type = diffs[x][0];
-    var diff_text = diffs[x][1];
-
-    if (!patchDiffLength && diff_type !== DIFF_EQUAL) {
-      // A new patch starts here.
-      patch.start1 = char_count1;
-      patch.start2 = char_count2;
-    }
-
-    switch (diff_type) {
-      case DIFF_INSERT:
-        patch.diffs[patchDiffLength++] = diffs[x];
-        patch.length2 += diff_text.length;
-        postpatch_text = postpatch_text.substring(0, char_count2) + diff_text +
-                         postpatch_text.substring(char_count2);
-        break;
-      case DIFF_DELETE:
-        patch.length1 += diff_text.length;
-        patch.diffs[patchDiffLength++] = diffs[x];
-        postpatch_text = postpatch_text.substring(0, char_count2) +
-                         postpatch_text.substring(char_count2 +
-                             diff_text.length);
-        break;
-      case DIFF_EQUAL:
-        if (diff_text.length <= 2 * this.Patch_Margin &&
-            patchDiffLength && diffs.length != x + 1) {
-          // Small equality inside a patch.
-          patch.diffs[patchDiffLength++] = diffs[x];
-          patch.length1 += diff_text.length;
-          patch.length2 += diff_text.length;
-        } else if (diff_text.length >= 2 * this.Patch_Margin) {
-          // Time for a new patch.
-          if (patchDiffLength) {
-            this.patch_addContext(patch, prepatch_text);
-            patches.push(patch);
-            patch = new patch_obj();
-            patchDiffLength = 0;
-            // Unlike Unidiff, our patch lists have a rolling context.
-            // http://code.google.com/p/google-diff-match-patch/wiki/Unidiff
-            // Update prepatch text & pos to reflect the application of the
-            // just completed patch.
-            prepatch_text = postpatch_text;
-            char_count1 = char_count2;
-          }
-        }
-        break;
-    }
-
-    // Update the current character count.
-    if (diff_type !== DIFF_INSERT) {
-      char_count1 += diff_text.length;
-    }
-    if (diff_type !== DIFF_DELETE) {
-      char_count2 += diff_text.length;
-    }
-  }
-  // Pick up the leftover patch if not empty.
-  if (patchDiffLength) {
-    this.patch_addContext(patch, prepatch_text);
-    patches.push(patch);
-  }
-
-  return patches;
-};
-
-
-/**
- * Given an array of patches, return another array that is identical.
- * @param {Array.<patch_obj>} patches Array of patch objects.
- * @return {Array.<patch_obj>} Array of patch objects.
- */
-diff_match_patch.prototype.patch_deepCopy = function(patches) {
-  // Making deep copies is hard in JavaScript.
-  var patchesCopy = [];
-  for (var x = 0; x < patches.length; x++) {
-    var patch = patches[x];
-    var patchCopy = new patch_obj();
-    patchCopy.diffs = [];
-    for (var y = 0; y < patch.diffs.length; y++) {
-      patchCopy.diffs[y] = patch.diffs[y].slice();
-    }
-    patchCopy.start1 = patch.start1;
-    patchCopy.start2 = patch.start2;
-    patchCopy.length1 = patch.length1;
-    patchCopy.length2 = patch.length2;
-    patchesCopy[x] = patchCopy;
-  }
-  return patchesCopy;
-};
-
-
-/**
- * Merge a set of patches onto the text.  Return a patched text, as well
- * as a list of true/false values indicating which patches were applied.
- * @param {Array.<patch_obj>} patches Array of patch objects.
- * @param {string} text Old text.
- * @return {Array.<string|Array.<boolean>>} Two element Array, containing the
- *      new text and an array of boolean values.
- */
-diff_match_patch.prototype.patch_apply = function(patches, text) {
-  if (patches.length == 0) {
-    return [text, []];
-  }
-
-  // Deep copy the patches so that no changes are made to originals.
-  patches = this.patch_deepCopy(patches);
-
-  var nullPadding = this.patch_addPadding(patches);
-  text = nullPadding + text + nullPadding;
-
-  this.patch_splitMax(patches);
-  // delta keeps track of the offset between the expected and actual location
-  // of the previous patch.  If there are patches expected at positions 10 and
-  // 20, but the first patch was found at 12, delta is 2 and the second patch
-  // has an effective expected position of 22.
-  var delta = 0;
-  var results = [];
-  for (var x = 0; x < patches.length; x++) {
-    var expected_loc = patches[x].start2 + delta;
-    var text1 = this.diff_text1(patches[x].diffs);
-    var start_loc;
-    var end_loc = -1;
-    if (text1.length > this.Match_MaxBits) {
-      // patch_splitMax will only provide an oversized pattern in the case of
-      // a monster delete.
-      start_loc = this.match_main(text, text1.substring(0, this.Match_MaxBits),
-                                  expected_loc);
-      if (start_loc != -1) {
-        end_loc = this.match_main(text,
-            text1.substring(text1.length - this.Match_MaxBits),
-            expected_loc + text1.length - this.Match_MaxBits);
-        if (end_loc == -1 || start_loc >= end_loc) {
-          // Can't find valid trailing context.  Drop this patch.
-          start_loc = -1;
-        }
-      }
-    } else {
-      start_loc = this.match_main(text, text1, expected_loc);
-    }
-    if (start_loc == -1) {
-      // No match found.  :(
-      results[x] = false;
-      // Subtract the delta for this failed patch from subsequent patches.
-      delta -= patches[x].length2 - patches[x].length1;
-    } else {
-      // Found a match.  :)
-      results[x] = true;
-      delta = start_loc - expected_loc;
-      var text2;
-      if (end_loc == -1) {
-        text2 = text.substring(start_loc, start_loc + text1.length);
-      } else {
-        text2 = text.substring(start_loc, end_loc + this.Match_MaxBits);
-      }
-      if (text1 == text2) {
-        // Perfect match, just shove the replacement text in.
-        text = text.substring(0, start_loc) +
-               this.diff_text2(patches[x].diffs) +
-               text.substring(start_loc + text1.length);
-      } else {
-        // Imperfect match.  Run a diff to get a framework of equivalent
-        // indices.
-        var diffs = this.diff_main(text1, text2, false);
-        if (text1.length > this.Match_MaxBits &&
-            this.diff_levenshtein(diffs) / text1.length >
-            this.Patch_DeleteThreshold) {
-          // The end points match, but the content is unacceptably bad.
-          results[x] = false;
-        } else {
-          this.diff_cleanupSemanticLossless(diffs);
-          var index1 = 0;
-          var index2;
-          for (var y = 0; y < patches[x].diffs.length; y++) {
-            var mod = patches[x].diffs[y];
-            if (mod[0] !== DIFF_EQUAL) {
-              index2 = this.diff_xIndex(diffs, index1);
-            }
-            if (mod[0] === DIFF_INSERT) {  // Insertion
-              text = text.substring(0, start_loc + index2) + mod[1] +
-                     text.substring(start_loc + index2);
-            } else if (mod[0] === DIFF_DELETE) {  // Deletion
-              text = text.substring(0, start_loc + index2) +
-                     text.substring(start_loc + this.diff_xIndex(diffs,
-                         index1 + mod[1].length));
-            }
-            if (mod[0] !== DIFF_DELETE) {
-              index1 += mod[1].length;
-            }
-          }
-        }
-      }
-    }
-  }
-  // Strip the padding off.
-  text = text.substring(nullPadding.length, text.length - nullPadding.length);
-  return [text, results];
-};
-
-
-/**
- * Add some padding on text start and end so that edges can match something.
- * Intended to be called only from within patch_apply.
- * @param {Array.<patch_obj>} patches Array of patch objects.
- * @return {string} The padding string added to each side.
- */
-diff_match_patch.prototype.patch_addPadding = function(patches) {
-  var paddingLength = this.Patch_Margin;
-  var nullPadding = '';
-  for (var x = 1; x <= paddingLength; x++) {
-    nullPadding += String.fromCharCode(x);
-  }
-
-  // Bump all the patches forward.
-  for (var x = 0; x < patches.length; x++) {
-    patches[x].start1 += paddingLength;
-    patches[x].start2 += paddingLength;
-  }
-
-  // Add some padding on start of first diff.
-  var patch = patches[0];
-  var diffs = patch.diffs;
-  if (diffs.length == 0 || diffs[0][0] != DIFF_EQUAL) {
-    // Add nullPadding equality.
-    diffs.unshift([DIFF_EQUAL, nullPadding]);
-    patch.start1 -= paddingLength;  // Should be 0.
-    patch.start2 -= paddingLength;  // Should be 0.
-    patch.length1 += paddingLength;
-    patch.length2 += paddingLength;
-  } else if (paddingLength > diffs[0][1].length) {
-    // Grow first equality.
-    var extraLength = paddingLength - diffs[0][1].length;
-    diffs[0][1] = nullPadding.substring(diffs[0][1].length) + diffs[0][1];
-    patch.start1 -= extraLength;
-    patch.start2 -= extraLength;
-    patch.length1 += extraLength;
-    patch.length2 += extraLength;
-  }
-
-  // Add some padding on end of last diff.
-  patch = patches[patches.length - 1];
-  diffs = patch.diffs;
-  if (diffs.length == 0 || diffs[diffs.length - 1][0] != DIFF_EQUAL) {
-    // Add nullPadding equality.
-    diffs.push([DIFF_EQUAL, nullPadding]);
-    patch.length1 += paddingLength;
-    patch.length2 += paddingLength;
-  } else if (paddingLength > diffs[diffs.length - 1][1].length) {
-    // Grow last equality.
-    var extraLength = paddingLength - diffs[diffs.length - 1][1].length;
-    diffs[diffs.length - 1][1] += nullPadding.substring(0, extraLength);
-    patch.length1 += extraLength;
-    patch.length2 += extraLength;
-  }
-
-  return nullPadding;
-};
-
-
-/**
- * Look through the patches and break up any which are longer than the maximum
- * limit of the match algorithm.
- * @param {Array.<patch_obj>} patches Array of patch objects.
- */
-diff_match_patch.prototype.patch_splitMax = function(patches) {
-  for (var x = 0; x < patches.length; x++) {
-    if (patches[x].length1 > this.Match_MaxBits) {
-      var bigpatch = patches[x];
-      // Remove the big old patch.
-      patches.splice(x--, 1);
-      var patch_size = this.Match_MaxBits;
-      var start1 = bigpatch.start1;
-      var start2 = bigpatch.start2;
-      var precontext = '';
-      while (bigpatch.diffs.length !== 0) {
-        // Create one of several smaller patches.
-        var patch = new patch_obj();
-        var empty = true;
-        patch.start1 = start1 - precontext.length;
-        patch.start2 = start2 - precontext.length;
-        if (precontext !== '') {
-          patch.length1 = patch.length2 = precontext.length;
-          patch.diffs.push([DIFF_EQUAL, precontext]);
-        }
-        while (bigpatch.diffs.length !== 0 &&
-               patch.length1 < patch_size - this.Patch_Margin) {
-          var diff_type = bigpatch.diffs[0][0];
-          var diff_text = bigpatch.diffs[0][1];
-          if (diff_type === DIFF_INSERT) {
-            // Insertions are harmless.
-            patch.length2 += diff_text.length;
-            start2 += diff_text.length;
-            patch.diffs.push(bigpatch.diffs.shift());
-            empty = false;
-          } else if (diff_type === DIFF_DELETE && patch.diffs.length == 1 &&
-                     patch.diffs[0][0] == DIFF_EQUAL &&
-                     diff_text.length > 2 * patch_size) {
-            // This is a large deletion.  Let it pass in one chunk.
-            patch.length1 += diff_text.length;
-            start1 += diff_text.length;
-            empty = false;
-            patch.diffs.push([diff_type, diff_text]);
-            bigpatch.diffs.shift();
-          } else {
-            // Deletion or equality.  Only take as much as we can stomach.
-            diff_text = diff_text.substring(0, patch_size - patch.length1 -
-                                               this.Patch_Margin);
-            patch.length1 += diff_text.length;
-            start1 += diff_text.length;
-            if (diff_type === DIFF_EQUAL) {
-              patch.length2 += diff_text.length;
-              start2 += diff_text.length;
-            } else {
-              empty = false;
-            }
-            patch.diffs.push([diff_type, diff_text]);
-            if (diff_text == bigpatch.diffs[0][1]) {
-              bigpatch.diffs.shift();
-            } else {
-              bigpatch.diffs[0][1] =
-                  bigpatch.diffs[0][1].substring(diff_text.length);
-            }
-          }
-        }
-        // Compute the head context for the next patch.
-        precontext = this.diff_text2(patch.diffs);
-        precontext =
-            precontext.substring(precontext.length - this.Patch_Margin);
-        // Append the end context for this patch.
-        var postcontext = this.diff_text1(bigpatch.diffs)
-                              .substring(0, this.Patch_Margin);
-        if (postcontext !== '') {
-          patch.length1 += postcontext.length;
-          patch.length2 += postcontext.length;
-          if (patch.diffs.length !== 0 &&
-              patch.diffs[patch.diffs.length - 1][0] === DIFF_EQUAL) {
-            patch.diffs[patch.diffs.length - 1][1] += postcontext;
-          } else {
-            patch.diffs.push([DIFF_EQUAL, postcontext]);
-          }
-        }
-        if (!empty) {
-          patches.splice(++x, 0, patch);
-        }
-      }
-    }
-  }
-};
-
-
-/**
- * Take a list of patches and return a textual representation.
- * @param {Array.<patch_obj>} patches Array of patch objects.
- * @return {string} Text representation of patches.
- */
-diff_match_patch.prototype.patch_toText = function(patches) {
-  var text = [];
-  for (var x = 0; x < patches.length; x++) {
-    text[x] = patches[x];
-  }
-  return text.join('');
-};
-
-
-/**
- * Parse a textual representation of patches and return a list of patch objects.
- * @param {string} textline Text representation of patches.
- * @return {Array.<patch_obj>} Array of patch objects.
- * @throws {Error} If invalid input.
- */
-diff_match_patch.prototype.patch_fromText = function(textline) {
-  var patches = [];
-  if (!textline) {
-    return patches;
-  }
-  // Opera doesn't know how to decode char 0.
-  textline = textline.replace(/%00/g, '\0');
-  var text = textline.split('\n');
-  var textPointer = 0;
-  while (textPointer < text.length) {
-    var m = text[textPointer].match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@$/);
-    if (!m) {
-      throw new Error('Invalid patch string: ' + text[textPointer]);
-    }
-    var patch = new patch_obj();
-    patches.push(patch);
-    patch.start1 = parseInt(m[1], 10);
-    if (m[2] === '') {
-      patch.start1--;
-      patch.length1 = 1;
-    } else if (m[2] == '0') {
-      patch.length1 = 0;
-    } else {
-      patch.start1--;
-      patch.length1 = parseInt(m[2], 10);
-    }
-
-    patch.start2 = parseInt(m[3], 10);
-    if (m[4] === '') {
-      patch.start2--;
-      patch.length2 = 1;
-    } else if (m[4] == '0') {
-      patch.length2 = 0;
-    } else {
-      patch.start2--;
-      patch.length2 = parseInt(m[4], 10);
-    }
-    textPointer++;
-
-    while (textPointer < text.length) {
-      var sign = text[textPointer].charAt(0);
-      try {
-        var line = decodeURI(text[textPointer].substring(1));
-      } catch (ex) {
-        // Malformed URI sequence.
-        throw new Error('Illegal escape in patch_fromText: ' + line);
-      }
-      if (sign == '-') {
-        // Deletion.
-        patch.diffs.push([DIFF_DELETE, line]);
-      } else if (sign == '+') {
-        // Insertion.
-        patch.diffs.push([DIFF_INSERT, line]);
-      } else if (sign == ' ') {
-        // Minor equality.
-        patch.diffs.push([DIFF_EQUAL, line]);
-      } else if (sign == '@') {
-        // Start of next patch.
-        break;
-      } else if (sign === '') {
-        // Blank line?  Whatever.
-      } else {
-        // WTF?
-        throw new Error('Invalid patch mode "' + sign + '" in: ' + line);
-      }
-      textPointer++;
-    }
-  }
-  return patches;
-};
-
-
-/**
- * Class representing one patch operation.
- * @constructor
- */
-function patch_obj() {
-  /** @type {Array.<Array.<number|string>>} */
-  this.diffs = [];
-  /** @type {?number} */
-  this.start1 = null;
-  /** @type {?number} */
-  this.start2 = null;
-  /** @type {number} */
-  this.length1 = 0;
-  /** @type {number} */
-  this.length2 = 0;
-}
-
-
-/**
- * Emmulate GNU diff's format.
- * Header: @@ -382,8 +481,9 @@
- * Indicies are printed as 1-based, not 0-based.
- * @return {string} The GNU diff string.
- */
-patch_obj.prototype.toString = function() {
-  var coords1, coords2;
-  if (this.length1 === 0) {
-    coords1 = this.start1 + ',0';
-  } else if (this.length1 == 1) {
-    coords1 = this.start1 + 1;
-  } else {
-    coords1 = (this.start1 + 1) + ',' + this.length1;
-  }
-  if (this.length2 === 0) {
-    coords2 = this.start2 + ',0';
-  } else if (this.length2 == 1) {
-    coords2 = this.start2 + 1;
-  } else {
-    coords2 = (this.start2 + 1) + ',' + this.length2;
-  }
-  var text = ['@@ -' + coords1 + ' +' + coords2 + ' @@\n'];
-  var op;
-  // Escape the body of the patch with %xx notation.
-  for (var x = 0; x < this.diffs.length; x++) {
-    switch (this.diffs[x][0]) {
-      case DIFF_INSERT:
-        op = '+';
-        break;
-      case DIFF_DELETE:
-        op = '-';
-        break;
-      case DIFF_EQUAL:
-        op = ' ';
-        break;
-    }
-    text[x + 1] = op + encodeURI(this.diffs[x][1]) + '\n';
-  }
-  // Opera doesn't know how to encode char 0.
-  return text.join('').replace(/\x00/g, '%00').replace(/%20/g, ' ');
-};
-
-
-// Export these global variables so that they survive Google's JS compiler.
-/*changed by lfborjas: changed `window` for `exports` to make it suitable for the node.js module conventions*/
-exports['diff_match_patch'] = diff_match_patch;
-exports['patch_obj'] = patch_obj;
-exports['DIFF_DELETE'] = DIFF_DELETE;
-exports['DIFF_INSERT'] = DIFF_INSERT;
-exports['DIFF_EQUAL'] = DIFF_EQUAL;
-
-},{}],15:[function(require,module,exports){
-'use strict';
-
-var constants = require('./util/constants'),
-    Logging   = require('./mixins/logging');
-
-var Faye = {
-  VERSION:    constants.VERSION,
-
-  Client:     require('./protocol/client'),
-  Scheduler:  require('./protocol/scheduler')
-};
-
-Logging.wrapper = Faye;
-
-module.exports = Faye;
-
-},{"./mixins/logging":17,"./protocol/client":21,"./protocol/scheduler":27,"./util/constants":39}],16:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Promise   = require('../util/promise');
-
-module.exports = {
-  then: function(callback, errback) {
-    var self = this;
-    if (!this._promise)
-      this._promise = new Promise(function(resolve, reject) {
-        self._resolve = resolve;
-        self._reject  = reject;
-      });
-
-    if (arguments.length === 0)
-      return this._promise;
-    else
-      return this._promise.then(callback, errback);
-  },
-
-  callback: function(callback, context) {
-    return this.then(function(value) { callback.call(context, value) });
-  },
-
-  errback: function(callback, context) {
-    return this.then(null, function(reason) { callback.call(context, reason) });
-  },
-
-  timeout: function(seconds, message) {
-    this.then();
-    var self = this;
-    this._timer = global.setTimeout(function() {
-      self._reject(message);
-    }, seconds * 1000);
-  },
-
-  setDeferredStatus: function(status, value) {
-    if (this._timer) global.clearTimeout(this._timer);
-
-    this.then();
-
-    if (status === 'succeeded')
-      this._resolve(value);
-    else if (status === 'failed')
-      this._reject(value);
-    else
-      delete this._promise;
-  }
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/promise":44}],17:[function(require,module,exports){
-'use strict';
-
-var toJSON = require('../util/to_json');
-
-var Logging = {
-  LOG_LEVELS: {
-    fatal:  4,
-    error:  3,
-    warn:   2,
-    info:   1,
-    debug:  0
-  },
-
-  writeLog: function(messageArgs, level) {
-    var logger = Logging.logger || (Logging.wrapper || Logging).logger;
-    if (!logger) return;
-
-    var args   = Array.prototype.slice.apply(messageArgs),
-        banner = '[Faye',
-        klass  = this.className,
-
-        message = args.shift().replace(/\?/g, function() {
-          try {
-            return toJSON(args.shift());
-          } catch (error) {
-            return '[Object]';
-          }
-        });
-
-    if (klass) banner += '.' + klass;
-    banner += '] ';
-
-    if (typeof logger[level] === 'function')
-      logger[level](banner + message);
-    else if (typeof logger === 'function')
-      logger(banner + message);
-  }
-};
-
-for (var key in Logging.LOG_LEVELS)
-  (function(level) {
-    Logging[level] = function() {
-      this.writeLog(arguments, level);
-    };
-  })(key);
-
-module.exports = Logging;
-
-},{"../util/to_json":46}],18:[function(require,module,exports){
-'use strict';
-
-var extend       = require('../util/extend'),
-    EventEmitter = require('../util/event_emitter');
-
-var Publisher = {
-  countListeners: function(eventType) {
-    return this.listeners(eventType).length;
-  },
-
-  bind: function(eventType, listener, context) {
-    var slice   = Array.prototype.slice,
-        handler = function() { listener.apply(context, slice.call(arguments)) };
-
-    this._listeners = this._listeners || [];
-    this._listeners.push([eventType, listener, context, handler]);
-    return this.on(eventType, handler);
-  },
-
-  unbind: function(eventType, listener, context) {
-    this._listeners = this._listeners || [];
-    var n = this._listeners.length, tuple;
-
-    while (n--) {
-      tuple = this._listeners[n];
-      if (tuple[0] !== eventType) continue;
-      if (listener && (tuple[1] !== listener || tuple[2] !== context)) continue;
-      this._listeners.splice(n, 1);
-      this.removeListener(eventType, tuple[3]);
-    }
-  }
-};
-
-extend(Publisher, EventEmitter.prototype);
-Publisher.trigger = Publisher.emit;
-
-module.exports = Publisher;
-
-},{"../util/event_emitter":42,"../util/extend":43}],19:[function(require,module,exports){
-(function (global){
-'use strict';
-
-module.exports = {
-  addTimeout: function(name, delay, callback, context) {
-    this._timeouts = this._timeouts || {};
-    if (this._timeouts.hasOwnProperty(name)) return;
-    var self = this;
-    this._timeouts[name] = global.setTimeout(function() {
-      delete self._timeouts[name];
-      callback.call(context);
-    }, 1000 * delay);
-  },
-
-  removeTimeout: function(name) {
-    this._timeouts = this._timeouts || {};
-    var timeout = this._timeouts[name];
-    if (!timeout) return;
-    global.clearTimeout(timeout);
-    delete this._timeouts[name];
-  },
-
-  removeAllTimeouts: function() {
-    this._timeouts = this._timeouts || {};
-    for (var name in this._timeouts) this.removeTimeout(name);
-  }
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],20:[function(require,module,exports){
-'use strict';
-
-var Class     = require('../util/class'),
-    extend    = require('../util/extend'),
-    Publisher = require('../mixins/publisher'),
-    Grammar   = require('./grammar');
-
-var Channel = Class({
-  initialize: function(name) {
-    this.id = this.name = name;
-  },
-
-  push: function(message) {
-    this.trigger('message', message);
-  },
-
-  isUnused: function() {
-    return this.countListeners('message') === 0;
-  }
-});
-
-extend(Channel.prototype, Publisher);
-
-extend(Channel, {
-  HANDSHAKE:    '/meta/handshake',
-  CONNECT:      '/meta/connect',
-  SUBSCRIBE:    '/meta/subscribe',
-  UNSUBSCRIBE:  '/meta/unsubscribe',
-  DISCONNECT:   '/meta/disconnect',
-
-  META:         'meta',
-  SERVICE:      'service',
-
-  expand: function(name) {
-    var segments = this.parse(name),
-        channels = ['/**', name];
-
-    var copy = segments.slice();
-    copy[copy.length - 1] = '*';
-    channels.push(this.unparse(copy));
-
-    for (var i = 1, n = segments.length; i < n; i++) {
-      copy = segments.slice(0, i);
-      copy.push('**');
-      channels.push(this.unparse(copy));
-    }
-
-    return channels;
-  },
-
-  isValid: function(name) {
-    return Grammar.CHANNEL_NAME.test(name) ||
-           Grammar.CHANNEL_PATTERN.test(name);
-  },
-
-  parse: function(name) {
-    if (!this.isValid(name)) return null;
-    return name.split('/').slice(1);
-  },
-
-  unparse: function(segments) {
-    return '/' + segments.join('/');
-  },
-
-  isMeta: function(name) {
-    var segments = this.parse(name);
-    return segments ? (segments[0] === this.META) : null;
-  },
-
-  isService: function(name) {
-    var segments = this.parse(name);
-    return segments ? (segments[0] === this.SERVICE) : null;
-  },
-
-  isSubscribable: function(name) {
-    if (!this.isValid(name)) return null;
-    return !this.isMeta(name) && !this.isService(name);
-  },
-
-  Set: Class({
-    initialize: function() {
-      this._channels = {};
-    },
-
-    getKeys: function() {
-      var keys = [];
-      for (var key in this._channels) keys.push(key);
-      return keys;
-    },
-
-    remove: function(name) {
-      delete this._channels[name];
-    },
-
-    hasSubscription: function(name) {
-      return this._channels.hasOwnProperty(name);
-    },
-
-    subscribe: function(names, subscription) {
-      var name;
-      for (var i = 0, n = names.length; i < n; i++) {
-        name = names[i];
-        var channel = this._channels[name] = this._channels[name] || new Channel(name);
-        channel.bind('message', subscription);
-      }
-    },
-
-    unsubscribe: function(name, subscription) {
-      var channel = this._channels[name];
-      if (!channel) return false;
-      channel.unbind('message', subscription);
-
-      if (channel.isUnused()) {
-        this.remove(name);
-        return true;
-      } else {
-        return false;
-      }
-    },
-
-    distributeMessage: function(message) {
-      var channels = Channel.expand(message.channel);
-
-      for (var i = 0, n = channels.length; i < n; i++) {
-        var channel = this._channels[channels[i]];
-        if (channel) channel.trigger('message', message);
-      }
-    }
-  })
-});
-
-module.exports = Channel;
-
-},{"../mixins/publisher":18,"../util/class":38,"../util/extend":43,"./grammar":25}],21:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var asap            = require('asap'),
-    Class           = require('../util/class'),
-    Promise         = require('../util/promise'),
-    URI             = require('../util/uri'),
-    array           = require('../util/array'),
-    browser         = require('../util/browser'),
-    constants       = require('../util/constants'),
-    extend          = require('../util/extend'),
-    validateOptions = require('../util/validate_options'),
-    Deferrable      = require('../mixins/deferrable'),
-    Logging         = require('../mixins/logging'),
-    Publisher       = require('../mixins/publisher'),
-    Channel         = require('./channel'),
-    Dispatcher      = require('./dispatcher'),
-    Error           = require('./error'),
-    Extensible      = require('./extensible'),
-    Publication     = require('./publication'),
-    Subscription    = require('./subscription');
-
-var Client = Class({ className: 'Client',
-  UNCONNECTED:        1,
-  CONNECTING:         2,
-  CONNECTED:          3,
-  DISCONNECTED:       4,
-
-  HANDSHAKE:          'handshake',
-  RETRY:              'retry',
-  NONE:               'none',
-
-  CONNECTION_TIMEOUT: 60,
-
-  DEFAULT_ENDPOINT:   '/bayeux',
-  INTERVAL:           0,
-
-  initialize: function(endpoint, options) {
-    this.info('New client created for ?', endpoint);
-    options = options || {};
-
-    validateOptions(options, ['interval', 'timeout', 'endpoints', 'proxy', 'retry', 'scheduler', 'websocketExtensions', 'tls', 'ca']);
-
-    this._channels   = new Channel.Set();
-    this._dispatcher = Dispatcher.create(this, endpoint || this.DEFAULT_ENDPOINT, options);
-
-    this._messageId = 0;
-    this._state     = this.UNCONNECTED;
-
-    this._responseCallbacks = {};
-
-    this._advice = {
-      reconnect: this.RETRY,
-      interval:  1000 * (options.interval || this.INTERVAL),
-      timeout:   1000 * (options.timeout  || this.CONNECTION_TIMEOUT)
-    };
-    this._dispatcher.timeout = this._advice.timeout / 1000;
-
-    this._dispatcher.bind('message', this._receiveMessage, this);
-
-    if (browser.Event && global.onbeforeunload !== undefined)
-      browser.Event.on(global, 'beforeunload', function() {
-        if (array.indexOf(this._dispatcher._disabled, 'autodisconnect') < 0)
-          this.disconnect();
-      }, this);
-  },
-
-  addWebsocketExtension: function(extension) {
-    return this._dispatcher.addWebsocketExtension(extension);
-  },
-
-  disable: function(feature) {
-    return this._dispatcher.disable(feature);
-  },
-
-  setHeader: function(name, value) {
-    return this._dispatcher.setHeader(name, value);
-  },
-
-  // Request
-  // MUST include:  * channel
-  //                * version
-  //                * supportedConnectionTypes
-  // MAY include:   * minimumVersion
-  //                * ext
-  //                * id
-  //
-  // Success Response                             Failed Response
-  // MUST include:  * channel                     MUST include:  * channel
-  //                * version                                    * successful
-  //                * supportedConnectionTypes                   * error
-  //                * clientId                    MAY include:   * supportedConnectionTypes
-  //                * successful                                 * advice
-  // MAY include:   * minimumVersion                             * version
-  //                * advice                                     * minimumVersion
-  //                * ext                                        * ext
-  //                * id                                         * id
-  //                * authSuccessful
-  handshake: function(callback, context) {
-    if (this._advice.reconnect === this.NONE) return;
-    if (this._state !== this.UNCONNECTED) return;
-
-    this._state = this.CONNECTING;
-    var self = this;
-
-    this.info('Initiating handshake with ?', URI.stringify(this._dispatcher.endpoint));
-    this._dispatcher.selectTransport(constants.MANDATORY_CONNECTION_TYPES);
-
-    this._sendMessage({
-      channel:                  Channel.HANDSHAKE,
-      version:                  constants.BAYEUX_VERSION,
-      supportedConnectionTypes: this._dispatcher.getConnectionTypes()
-
-    }, {}, function(response) {
-
-      if (response.successful) {
-        this._state = this.CONNECTED;
-        this._dispatcher.clientId  = response.clientId;
-
-        this._dispatcher.selectTransport(response.supportedConnectionTypes);
-
-        this.info('Handshake successful: ?', this._dispatcher.clientId);
-
-        this.subscribe(this._channels.getKeys(), true);
-        if (callback) asap(function() { callback.call(context) });
-
-      } else {
-        this.info('Handshake unsuccessful');
-        global.setTimeout(function() { self.handshake(callback, context) }, this._dispatcher.retry * 1000);
-        this._state = this.UNCONNECTED;
-      }
-    }, this);
-  },
-
-  // Request                              Response
-  // MUST include:  * channel             MUST include:  * channel
-  //                * clientId                           * successful
-  //                * connectionType                     * clientId
-  // MAY include:   * ext                 MAY include:   * error
-  //                * id                                 * advice
-  //                                                     * ext
-  //                                                     * id
-  //                                                     * timestamp
-  connect: function(callback, context) {
-    if (this._advice.reconnect === this.NONE) return;
-    if (this._state === this.DISCONNECTED) return;
-
-    if (this._state === this.UNCONNECTED)
-      return this.handshake(function() { this.connect(callback, context) }, this);
-
-    this.callback(callback, context);
-    if (this._state !== this.CONNECTED) return;
-
-    this.info('Calling deferred actions for ?', this._dispatcher.clientId);
-    this.setDeferredStatus('succeeded');
-    this.setDeferredStatus('unknown');
-
-    if (this._connectRequest) return;
-    this._connectRequest = true;
-
-    this.info('Initiating connection for ?', this._dispatcher.clientId);
-
-    this._sendMessage({
-      channel:        Channel.CONNECT,
-      clientId:       this._dispatcher.clientId,
-      connectionType: this._dispatcher.connectionType
-
-    }, {}, this._cycleConnection, this);
-  },
-
-  // Request                              Response
-  // MUST include:  * channel             MUST include:  * channel
-  //                * clientId                           * successful
-  // MAY include:   * ext                                * clientId
-  //                * id                  MAY include:   * error
-  //                                                     * ext
-  //                                                     * id
-  disconnect: function() {
-    if (this._state !== this.CONNECTED) return;
-    this._state = this.DISCONNECTED;
-
-    this.info('Disconnecting ?', this._dispatcher.clientId);
-    var promise = new Publication();
-
-    this._sendMessage({
-      channel:  Channel.DISCONNECT,
-      clientId: this._dispatcher.clientId
-
-    }, {}, function(response) {
-      if (response.successful) {
-        this._dispatcher.close();
-        promise.setDeferredStatus('succeeded');
-      } else {
-        promise.setDeferredStatus('failed', Error.parse(response.error));
-      }
-    }, this);
-
-    this.info('Clearing channel listeners for ?', this._dispatcher.clientId);
-    this._channels = new Channel.Set();
-
-    return promise;
-  },
-
-  // Request                              Response
-  // MUST include:  * channel             MUST include:  * channel
-  //                * clientId                           * successful
-  //                * subscription                       * clientId
-  // MAY include:   * ext                                * subscription
-  //                * id                  MAY include:   * error
-  //                                                     * advice
-  //                                                     * ext
-  //                                                     * id
-  //                                                     * timestamp
-  subscribe: function(channel, callback, context) {
-    if (channel instanceof Array)
-      return array.map(channel, function(c) {
-        return this.subscribe(c, callback, context);
-      }, this);
-
-    var subscription = new Subscription(this, channel, callback, context),
-        force        = (callback === true),
-        hasSubscribe = this._channels.hasSubscription(channel);
-
-    if (hasSubscribe && !force) {
-      this._channels.subscribe([channel], subscription);
-      subscription.setDeferredStatus('succeeded');
-      return subscription;
-    }
-
-    this.connect(function() {
-      this.info('Client ? attempting to subscribe to ?', this._dispatcher.clientId, channel);
-      if (!force) this._channels.subscribe([channel], subscription);
-
-      this._sendMessage({
-        channel:      Channel.SUBSCRIBE,
-        clientId:     this._dispatcher.clientId,
-        subscription: channel
-
-      }, {}, function(response) {
-        if (!response.successful) {
-          subscription.setDeferredStatus('failed', Error.parse(response.error));
-          return this._channels.unsubscribe(channel, subscription);
-        }
-
-        var channels = [].concat(response.subscription);
-        this.info('Subscription acknowledged for ? to ?', this._dispatcher.clientId, channels);
-        subscription.setDeferredStatus('succeeded');
-      }, this);
-    }, this);
-
-    return subscription;
-  },
-
-  // Request                              Response
-  // MUST include:  * channel             MUST include:  * channel
-  //                * clientId                           * successful
-  //                * subscription                       * clientId
-  // MAY include:   * ext                                * subscription
-  //                * id                  MAY include:   * error
-  //                                                     * advice
-  //                                                     * ext
-  //                                                     * id
-  //                                                     * timestamp
-  unsubscribe: function(channel, subscription) {
-    if (channel instanceof Array)
-      return array.map(channel, function(c) {
-        return this.unsubscribe(c, subscription);
-      }, this);
-
-    var dead = this._channels.unsubscribe(channel, subscription);
-    if (!dead) return;
-
-    this.connect(function() {
-      this.info('Client ? attempting to unsubscribe from ?', this._dispatcher.clientId, channel);
-
-      this._sendMessage({
-        channel:      Channel.UNSUBSCRIBE,
-        clientId:     this._dispatcher.clientId,
-        subscription: channel
-
-      }, {}, function(response) {
-        if (!response.successful) return;
-
-        var channels = [].concat(response.subscription);
-        this.info('Unsubscription acknowledged for ? from ?', this._dispatcher.clientId, channels);
-      }, this);
-    }, this);
-  },
-
-  // Request                              Response
-  // MUST include:  * channel             MUST include:  * channel
-  //                * data                               * successful
-  // MAY include:   * clientId            MAY include:   * id
-  //                * id                                 * error
-  //                * ext                                * ext
-  publish: function(channel, data, options) {
-    validateOptions(options || {}, ['attempts', 'deadline']);
-    var publication = new Publication();
-
-    this.connect(function() {
-      this.info('Client ? queueing published message to ?: ?', this._dispatcher.clientId, channel, data);
-
-      this._sendMessage({
-        channel:  channel,
-        data:     data,
-        clientId: this._dispatcher.clientId
-
-      }, options, function(response) {
-        if (response.successful)
-          publication.setDeferredStatus('succeeded');
-        else
-          publication.setDeferredStatus('failed', Error.parse(response.error));
-      }, this);
-    }, this);
-
-    return publication;
-  },
-
-  _sendMessage: function(message, options, callback, context) {
-    message.id = this._generateMessageId();
-
-    var timeout = this._advice.timeout
-                ? 1.2 * this._advice.timeout / 1000
-                : 1.2 * this._dispatcher.retry;
-
-    this.pipeThroughExtensions('outgoing', message, null, function(message) {
-      if (!message) return;
-      if (callback) this._responseCallbacks[message.id] = [callback, context];
-      this._dispatcher.sendMessage(message, timeout, options || {});
-    }, this);
-  },
-
-  _generateMessageId: function() {
-    this._messageId += 1;
-    if (this._messageId >= Math.pow(2,32)) this._messageId = 0;
-    return this._messageId.toString(36);
-  },
-
-  _receiveMessage: function(message) {
-    var id = message.id, callback;
-
-    if (message.successful !== undefined) {
-      callback = this._responseCallbacks[id];
-      delete this._responseCallbacks[id];
-    }
-
-    this.pipeThroughExtensions('incoming', message, null, function(message) {
-      if (!message) return;
-      if (message.advice) this._handleAdvice(message.advice);
-      this._deliverMessage(message);
-      if (callback) callback[0].call(callback[1], message);
-    }, this);
-  },
-
-  _handleAdvice: function(advice) {
-    extend(this._advice, advice);
-    this._dispatcher.timeout = this._advice.timeout / 1000;
-
-    if (this._advice.reconnect === this.HANDSHAKE && this._state !== this.DISCONNECTED) {
-      this._state = this.UNCONNECTED;
-      this._dispatcher.clientId = null;
-      this._cycleConnection();
-    }
-  },
-
-  _deliverMessage: function(message) {
-    if (!message.channel || message.data === undefined) return;
-    this.info('Client ? calling listeners for ? with ?', this._dispatcher.clientId, message.channel, message.data);
-    this._channels.distributeMessage(message);
-  },
-
-  _cycleConnection: function() {
-    if (this._connectRequest) {
-      this._connectRequest = null;
-      this.info('Closed connection for ?', this._dispatcher.clientId);
-    }
-    var self = this;
-    global.setTimeout(function() { self.connect() }, this._advice.interval);
-  }
-});
-
-extend(Client.prototype, Deferrable);
-extend(Client.prototype, Publisher);
-extend(Client.prototype, Logging);
-extend(Client.prototype, Extensible);
-
-module.exports = Client;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/deferrable":16,"../mixins/logging":17,"../mixins/publisher":18,"../util/array":36,"../util/browser":37,"../util/class":38,"../util/constants":39,"../util/extend":43,"../util/promise":44,"../util/uri":47,"../util/validate_options":48,"./channel":20,"./dispatcher":22,"./error":23,"./extensible":24,"./publication":26,"./subscription":28,"asap":3}],22:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Class     = require('../util/class'),
-    URI       = require('../util/uri'),
-    cookies   = require('../util/cookies'),
-    extend    = require('../util/extend'),
-    Logging   = require('../mixins/logging'),
-    Publisher = require('../mixins/publisher'),
-    Transport = require('../transport'),
-    Scheduler = require('./scheduler');
-
-var Dispatcher = Class({ className: 'Dispatcher',
-  MAX_REQUEST_SIZE: 2048,
-  DEFAULT_RETRY:    5,
-
-  UP:   1,
-  DOWN: 2,
-
-  initialize: function(client, endpoint, options) {
-    this._client     = client;
-    this.endpoint    = URI.parse(endpoint);
-    this._alternates = options.endpoints || {};
-
-    this.cookies      = cookies.CookieJar && new cookies.CookieJar();
-    this._disabled    = [];
-    this._envelopes   = {};
-    this.headers      = {};
-    this.retry        = options.retry || this.DEFAULT_RETRY;
-    this._scheduler   = options.scheduler || Scheduler;
-    this._state       = 0;
-    this.transports   = {};
-    this.wsExtensions = [];
-
-    this.proxy = options.proxy || {};
-    if (typeof this._proxy === 'string') this._proxy = {origin: this._proxy};
-
-    var exts = options.websocketExtensions;
-    if (exts) {
-      exts = [].concat(exts);
-      for (var i = 0, n = exts.length; i < n; i++)
-        this.addWebsocketExtension(exts[i]);
-    }
-
-    this.tls = options.tls || {};
-    this.tls.ca = this.tls.ca || options.ca;
-
-    for (var type in this._alternates)
-      this._alternates[type] = URI.parse(this._alternates[type]);
-
-    this.maxRequestSize = this.MAX_REQUEST_SIZE;
-  },
-
-  endpointFor: function(connectionType) {
-    return this._alternates[connectionType] || this.endpoint;
-  },
-
-  addWebsocketExtension: function(extension) {
-    this.wsExtensions.push(extension);
-  },
-
-  disable: function(feature) {
-    this._disabled.push(feature);
-  },
-
-  setHeader: function(name, value) {
-    this.headers[name] = value;
-  },
-
-  close: function() {
-    var transport = this._transport;
-    delete this._transport;
-    if (transport) transport.close();
-  },
-
-  getConnectionTypes: function() {
-    return Transport.getConnectionTypes();
-  },
-
-  selectTransport: function(transportTypes) {
-    Transport.get(this, transportTypes, this._disabled, function(transport) {
-      this.debug('Selected ? transport for ?', transport.connectionType, URI.stringify(transport.endpoint));
-
-      if (transport === this._transport) return;
-      if (this._transport) this._transport.close();
-
-      this._transport = transport;
-      this.connectionType = transport.connectionType;
-    }, this);
-  },
-
-  sendMessage: function(message, timeout, options) {
-    options = options || {};
-
-    var id       = message.id,
-        attempts = options.attempts,
-        deadline = options.deadline && new Date().getTime() + (options.deadline * 1000),
-        envelope = this._envelopes[id],
-        scheduler;
-
-    if (!envelope) {
-      scheduler = new this._scheduler(message, {timeout: timeout, interval: this.retry, attempts: attempts, deadline: deadline});
-      envelope  = this._envelopes[id] = {message: message, scheduler: scheduler};
-    }
-
-    this._sendEnvelope(envelope);
-  },
-
-  _sendEnvelope: function(envelope) {
-    if (!this._transport) return;
-    if (envelope.request || envelope.timer) return;
-
-    var message   = envelope.message,
-        scheduler = envelope.scheduler,
-        self      = this;
-
-    if (!scheduler.isDeliverable()) {
-      scheduler.abort();
-      delete this._envelopes[message.id];
-      return;
-    }
-
-    envelope.timer = global.setTimeout(function() {
-      self.handleError(message);
-    }, scheduler.getTimeout() * 1000);
-
-    scheduler.send();
-    envelope.request = this._transport.sendMessage(message);
-  },
-
-  handleResponse: function(reply) {
-    var envelope = this._envelopes[reply.id];
-
-    if (reply.successful !== undefined && envelope) {
-      envelope.scheduler.succeed();
-      delete this._envelopes[reply.id];
-      global.clearTimeout(envelope.timer);
-    }
-
-    this.trigger('message', reply);
-
-    if (this._state === this.UP) return;
-    this._state = this.UP;
-    this._client.trigger('transport:up');
-  },
-
-  handleError: function(message, immediate) {
-    var envelope = this._envelopes[message.id],
-        request  = envelope && envelope.request,
-        self     = this;
-
-    if (!request) return;
-
-    request.then(function(req) {
-      if (req && req.abort) req.abort();
-    });
-
-    var scheduler = envelope.scheduler;
-    scheduler.fail();
-
-    global.clearTimeout(envelope.timer);
-    envelope.request = envelope.timer = null;
-
-    if (immediate) {
-      this._sendEnvelope(envelope);
-    } else {
-      envelope.timer = global.setTimeout(function() {
-        envelope.timer = null;
-        self._sendEnvelope(envelope);
-      }, scheduler.getInterval() * 1000);
-    }
-
-    if (this._state === this.DOWN) return;
-    this._state = this.DOWN;
-    this._client.trigger('transport:down');
-  }
-});
-
-Dispatcher.create = function(client, endpoint, options) {
-  return new Dispatcher(client, endpoint, options);
-};
-
-extend(Dispatcher.prototype, Publisher);
-extend(Dispatcher.prototype, Logging);
-
-module.exports = Dispatcher;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/logging":17,"../mixins/publisher":18,"../transport":29,"../util/class":38,"../util/cookies":40,"../util/extend":43,"../util/uri":47,"./scheduler":27}],23:[function(require,module,exports){
-'use strict';
-
-var Class   = require('../util/class'),
-    Grammar = require('./grammar');
-
-var Error = Class({
-  initialize: function(code, params, message) {
-    this.code    = code;
-    this.params  = Array.prototype.slice.call(params);
-    this.message = message;
-  },
-
-  toString: function() {
-    return this.code + ':' +
-           this.params.join(',') + ':' +
-           this.message;
-  }
-});
-
-Error.parse = function(message) {
-  message = message || '';
-  if (!Grammar.ERROR.test(message)) return new Error(null, [], message);
-
-  var parts   = message.split(':'),
-      code    = parseInt(parts[0]),
-      params  = parts[1].split(','),
-      message = parts[2];
-
-  return new Error(code, params, message);
-};
-
-// http://code.google.com/p/cometd/wiki/BayeuxCodes
-var errors = {
-  versionMismatch:  [300, 'Version mismatch'],
-  conntypeMismatch: [301, 'Connection types not supported'],
-  extMismatch:      [302, 'Extension mismatch'],
-  badRequest:       [400, 'Bad request'],
-  clientUnknown:    [401, 'Unknown client'],
-  parameterMissing: [402, 'Missing required parameter'],
-  channelForbidden: [403, 'Forbidden channel'],
-  channelUnknown:   [404, 'Unknown channel'],
-  channelInvalid:   [405, 'Invalid channel'],
-  extUnknown:       [406, 'Unknown extension'],
-  publishFailed:    [407, 'Failed to publish'],
-  serverError:      [500, 'Internal server error']
-};
-
-for (var name in errors)
-  (function(name) {
-    Error[name] = function() {
-      return new Error(errors[name][0], arguments, errors[name][1]).toString();
-    };
-  })(name);
-
-module.exports = Error;
-
-},{"../util/class":38,"./grammar":25}],24:[function(require,module,exports){
-'use strict';
-
-var extend  = require('../util/extend'),
-    Logging = require('../mixins/logging');
-
-var Extensible = {
-  addExtension: function(extension) {
-    this._extensions = this._extensions || [];
-    this._extensions.push(extension);
-    if (extension.added) extension.added(this);
-  },
-
-  removeExtension: function(extension) {
-    if (!this._extensions) return;
-    var i = this._extensions.length;
-    while (i--) {
-      if (this._extensions[i] !== extension) continue;
-      this._extensions.splice(i,1);
-      if (extension.removed) extension.removed(this);
-    }
-  },
-
-  pipeThroughExtensions: function(stage, message, request, callback, context) {
-    this.debug('Passing through ? extensions: ?', stage, message);
-
-    if (!this._extensions) return callback.call(context, message);
-    var extensions = this._extensions.slice();
-
-    var pipe = function(message) {
-      if (!message) return callback.call(context, message);
-
-      var extension = extensions.shift();
-      if (!extension) return callback.call(context, message);
-
-      var fn = extension[stage];
-      if (!fn) return pipe(message);
-
-      if (fn.length >= 3) extension[stage](message, request, pipe);
-      else                extension[stage](message, pipe);
-    };
-    pipe(message);
-  }
-};
-
-extend(Extensible, Logging);
-
-module.exports = Extensible;
-
-},{"../mixins/logging":17,"../util/extend":43}],25:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-  CHANNEL_NAME:     /^\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+(\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+)*$/,
-  CHANNEL_PATTERN:  /^(\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+)*\/\*{1,2}$/,
-  ERROR:            /^([0-9][0-9][0-9]:(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*(,(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*)*:(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*|[0-9][0-9][0-9]::(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*)$/,
-  VERSION:          /^([0-9])+(\.(([a-z]|[A-Z])|[0-9])(((([a-z]|[A-Z])|[0-9])|\-|\_))*)*$/
-};
-
-},{}],26:[function(require,module,exports){
-'use strict';
-
-var Class      = require('../util/class'),
-    Deferrable = require('../mixins/deferrable');
-
-module.exports = Class(Deferrable);
-
-},{"../mixins/deferrable":16,"../util/class":38}],27:[function(require,module,exports){
-'use strict';
-
-var extend = require('../util/extend');
-
-var Scheduler = function(message, options) {
-  this.message  = message;
-  this.options  = options;
-  this.attempts = 0;
-};
-
-extend(Scheduler.prototype, {
-  getTimeout: function() {
-    return this.options.timeout;
-  },
-
-  getInterval: function() {
-    return this.options.interval;
-  },
-
-  isDeliverable: function() {
-    var attempts = this.options.attempts,
-        made     = this.attempts,
-        deadline = this.options.deadline,
-        now      = new Date().getTime();
-
-    if (attempts !== undefined && made >= attempts)
-      return false;
-
-    if (deadline !== undefined && now > deadline)
-      return false;
-
-    return true;
-  },
-
-  send: function() {
-    this.attempts += 1;
-  },
-
-  succeed: function() {},
-
-  fail: function() {},
-
-  abort: function() {}
-});
-
-module.exports = Scheduler;
-
-},{"../util/extend":43}],28:[function(require,module,exports){
-'use strict';
-
-var Class      = require('../util/class'),
-    extend     = require('../util/extend'),
-    Deferrable = require('../mixins/deferrable');
-
-var Subscription = Class({
-  initialize: function(client, channels, callback, context) {
-    this._client    = client;
-    this._channels  = channels;
-    this._callback  = callback;
-    this._context   = context;
-    this._cancelled = false;
-  },
-
-  withChannel: function(callback, context) {
-    this._withChannel = [callback, context];
-    return this;
-  },
-
-  apply: function(context, args) {
-    var message = args[0];
-
-    if (this._callback)
-      this._callback.call(this._context, message.data);
-
-    if (this._withChannel)
-      this._withChannel[0].call(this._withChannel[1], message.channel, message.data);
-  },
-
-  cancel: function() {
-    if (this._cancelled) return;
-    this._client.unsubscribe(this._channels, this);
-    this._cancelled = true;
-  },
-
-  unsubscribe: function() {
-    this.cancel();
-  }
-});
-
-extend(Subscription.prototype, Deferrable);
-
-module.exports = Subscription;
-
-},{"../mixins/deferrable":16,"../util/class":38,"../util/extend":43}],29:[function(require,module,exports){
-'use strict';
-
-var Transport = require('./transport');
-
-Transport.register('websocket', require('./web_socket'));
-Transport.register('eventsource', require('./event_source'));
-Transport.register('long-polling', require('./xhr'));
-Transport.register('cross-origin-long-polling', require('./cors'));
-Transport.register('callback-polling', require('./jsonp'));
-
-module.exports = Transport;
-
-},{"./cors":30,"./event_source":31,"./jsonp":32,"./transport":33,"./web_socket":34,"./xhr":35}],30:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Class     = require('../util/class'),
-    Set       = require('../util/set'),
-    URI       = require('../util/uri'),
-    extend    = require('../util/extend'),
-    toJSON    = require('../util/to_json'),
-    Transport = require('./transport');
-
-var CORS = extend(Class(Transport, {
-  encode: function(messages) {
-    return 'message=' + encodeURIComponent(toJSON(messages));
-  },
-
-  request: function(messages) {
-    var xhrClass = global.XDomainRequest ? XDomainRequest : XMLHttpRequest,
-        xhr      = new xhrClass(),
-        id       = ++CORS._id,
-        headers  = this._dispatcher.headers,
-        self     = this,
-        key;
-
-    xhr.open('POST', URI.stringify(this.endpoint), true);
-
-    if (xhr.setRequestHeader) {
-      xhr.setRequestHeader('Pragma', 'no-cache');
-      for (key in headers) {
-        if (!headers.hasOwnProperty(key)) continue;
-        xhr.setRequestHeader(key, headers[key]);
-      }
-    }
-
-    var cleanUp = function() {
-      if (!xhr) return false;
-      CORS._pending.remove(id);
-      xhr.onload = xhr.onerror = xhr.ontimeout = xhr.onprogress = null;
-      xhr = null;
-    };
-
-    xhr.onload = function() {
-      var replies;
-      try { replies = JSON.parse(xhr.responseText) } catch (error) {}
-
-      cleanUp();
-
-      if (replies)
-        self._receive(replies);
-      else
-        self._handleError(messages);
-    };
-
-    xhr.onerror = xhr.ontimeout = function() {
-      cleanUp();
-      self._handleError(messages);
-    };
-
-    xhr.onprogress = function() {};
-
-    if (xhrClass === global.XDomainRequest)
-      CORS._pending.add({id: id, xhr: xhr});
-
-    xhr.send(this.encode(messages));
-    return xhr;
-  }
-}), {
-  _id:      0,
-  _pending: new Set(),
-
-  isUsable: function(dispatcher, endpoint, callback, context) {
-    if (URI.isSameOrigin(endpoint))
-      return callback.call(context, false);
-
-    if (global.XDomainRequest)
-      return callback.call(context, endpoint.protocol === location.protocol);
-
-    if (global.XMLHttpRequest) {
-      var xhr = new XMLHttpRequest();
-      return callback.call(context, xhr.withCredentials !== undefined);
-    }
-    return callback.call(context, false);
-  }
-});
-
-module.exports = CORS;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/class":38,"../util/extend":43,"../util/set":45,"../util/to_json":46,"../util/uri":47,"./transport":33}],31:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Class      = require('../util/class'),
-    URI        = require('../util/uri'),
-    copyObject = require('../util/copy_object'),
-    extend     = require('../util/extend'),
-    Deferrable = require('../mixins/deferrable'),
-    Transport  = require('./transport'),
-    XHR        = require('./xhr');
-
-var EventSource = extend(Class(Transport, {
-  initialize: function(dispatcher, endpoint) {
-    Transport.prototype.initialize.call(this, dispatcher, endpoint);
-    if (!global.EventSource) return this.setDeferredStatus('failed');
-
-    this._xhr = new XHR(dispatcher, endpoint);
-
-    endpoint = copyObject(endpoint);
-    endpoint.pathname += '/' + dispatcher.clientId;
-
-    var socket = new global.EventSource(URI.stringify(endpoint)),
-        self   = this;
-
-    socket.onopen = function() {
-      self._everConnected = true;
-      self.setDeferredStatus('succeeded');
-    };
-
-    socket.onerror = function() {
-      if (self._everConnected) {
-        self._handleError([]);
-      } else {
-        self.setDeferredStatus('failed');
-        socket.close();
-      }
-    };
-
-    socket.onmessage = function(event) {
-      var replies;
-      try { replies = JSON.parse(event.data) } catch (error) {}
-
-      if (replies)
-        self._receive(replies);
-      else
-        self._handleError([]);
-    };
-
-    this._socket = socket;
-  },
-
-  close: function() {
-    if (!this._socket) return;
-    this._socket.onopen = this._socket.onerror = this._socket.onmessage = null;
-    this._socket.close();
-    delete this._socket;
-  },
-
-  isUsable: function(callback, context) {
-    this.callback(function() { callback.call(context, true) });
-    this.errback(function() { callback.call(context, false) });
-  },
-
-  encode: function(messages) {
-    return this._xhr.encode(messages);
-  },
-
-  request: function(messages) {
-    return this._xhr.request(messages);
-  }
-
-}), {
-  isUsable: function(dispatcher, endpoint, callback, context) {
-    var id = dispatcher.clientId;
-    if (!id) return callback.call(context, false);
-
-    XHR.isUsable(dispatcher, endpoint, function(usable) {
-      if (!usable) return callback.call(context, false);
-      this.create(dispatcher, endpoint).isUsable(callback, context);
-    }, this);
-  },
-
-  create: function(dispatcher, endpoint) {
-    var sockets = dispatcher.transports.eventsource = dispatcher.transports.eventsource || {},
-        id      = dispatcher.clientId;
-
-    var url = copyObject(endpoint);
-    url.pathname += '/' + (id || '');
-    url = URI.stringify(url);
-
-    sockets[url] = sockets[url] || new this(dispatcher, endpoint);
-    return sockets[url];
-  }
-});
-
-extend(EventSource.prototype, Deferrable);
-
-module.exports = EventSource;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/deferrable":16,"../util/class":38,"../util/copy_object":41,"../util/extend":43,"../util/uri":47,"./transport":33,"./xhr":35}],32:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Class      = require('../util/class'),
-    URI        = require('../util/uri'),
-    copyObject = require('../util/copy_object'),
-    extend     = require('../util/extend'),
-    toJSON     = require('../util/to_json'),
-    Transport  = require('./transport');
-
-var JSONP = extend(Class(Transport, {
- encode: function(messages) {
-    var url = copyObject(this.endpoint);
-    url.query.message = toJSON(messages);
-    url.query.jsonp   = '__jsonp' + JSONP._cbCount + '__';
-    return URI.stringify(url);
-  },
-
-  request: function(messages) {
-    var head         = document.getElementsByTagName('head')[0],
-        script       = document.createElement('script'),
-        callbackName = JSONP.getCallbackName(),
-        endpoint     = copyObject(this.endpoint),
-        self         = this;
-
-    endpoint.query.message = toJSON(messages);
-    endpoint.query.jsonp   = callbackName;
-
-    var cleanup = function() {
-      if (!global[callbackName]) return false;
-      global[callbackName] = undefined;
-      try { delete global[callbackName] } catch (error) {}
-      script.parentNode.removeChild(script);
-    };
-
-    global[callbackName] = function(replies) {
-      cleanup();
-      self._receive(replies);
-    };
-
-    script.type = 'text/javascript';
-    script.src  = URI.stringify(endpoint);
-    head.appendChild(script);
-
-    script.onerror = function() {
-      cleanup();
-      self._handleError(messages);
-    };
-
-    return {abort: cleanup};
-  }
-}), {
-  _cbCount: 0,
-
-  getCallbackName: function() {
-    this._cbCount += 1;
-    return '__jsonp' + this._cbCount + '__';
-  },
-
-  isUsable: function(dispatcher, endpoint, callback, context) {
-    callback.call(context, true);
-  }
-});
-
-module.exports = JSONP;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/class":38,"../util/copy_object":41,"../util/extend":43,"../util/to_json":46,"../util/uri":47,"./transport":33}],33:[function(require,module,exports){
-(function (process){
-'use strict';
-
-var Class    = require('../util/class'),
-    Cookie   = require('../util/cookies').Cookie,
-    Promise  = require('../util/promise'),
-    URI      = require('../util/uri'),
-    array    = require('../util/array'),
-    extend   = require('../util/extend'),
-    Logging  = require('../mixins/logging'),
-    Timeouts = require('../mixins/timeouts'),
-    Channel  = require('../protocol/channel');
-
-var Transport = extend(Class({ className: 'Transport',
-  DEFAULT_PORTS: {'http:': 80, 'https:': 443, 'ws:': 80, 'wss:': 443},
-  MAX_DELAY:     0,
-
-  batching:  true,
-
-  initialize: function(dispatcher, endpoint) {
-    this._dispatcher = dispatcher;
-    this.endpoint    = endpoint;
-    this._outbox     = [];
-    this._proxy      = extend({}, this._dispatcher.proxy);
-
-    if (!this._proxy.origin)
-      this._proxy.origin = this._findProxy();
-  },
-
-  close: function() {},
-
-  encode: function(messages) {
-    return '';
-  },
-
-  sendMessage: function(message) {
-    this.debug('Client ? sending message to ?: ?',
-               this._dispatcher.clientId, URI.stringify(this.endpoint), message);
-
-    if (!this.batching) return Promise.resolve(this.request([message]));
-
-    this._outbox.push(message);
-    this._flushLargeBatch();
-
-    if (message.channel === Channel.HANDSHAKE)
-      return this._publish(0.01);
-
-    if (message.channel === Channel.CONNECT)
-      this._connectMessage = message;
-
-    return this._publish(this.MAX_DELAY);
-  },
-
-  _makePromise: function() {
-    var self = this;
-
-    this._requestPromise = this._requestPromise || new Promise(function(resolve) {
-      self._resolvePromise = resolve;
-    });
-  },
-
-  _publish: function(delay) {
-    this._makePromise();
-
-    this.addTimeout('publish', delay, function() {
-      this._flush();
-      delete this._requestPromise;
-    }, this);
-
-    return this._requestPromise;
-  },
-
-  _flush: function() {
-    this.removeTimeout('publish');
-
-    if (this._outbox.length > 1 && this._connectMessage)
-      this._connectMessage.advice = {timeout: 0};
-
-    this._resolvePromise(this.request(this._outbox));
-
-    this._connectMessage = null;
-    this._outbox = [];
-  },
-
-  _flushLargeBatch: function() {
-    var string = this.encode(this._outbox);
-    if (string.length < this._dispatcher.maxRequestSize) return;
-    var last = this._outbox.pop();
-
-    this._makePromise();
-    this._flush();
-
-    if (last) this._outbox.push(last);
-  },
-
-  _receive: function(replies) {
-    if (!replies) return;
-    replies = [].concat(replies);
-
-    this.debug('Client ? received from ? via ?: ?',
-               this._dispatcher.clientId, URI.stringify(this.endpoint), this.connectionType, replies);
-
-    for (var i = 0, n = replies.length; i < n; i++)
-      this._dispatcher.handleResponse(replies[i]);
-  },
-
-  _handleError: function(messages, immediate) {
-    messages = [].concat(messages);
-
-    this.debug('Client ? failed to send to ? via ?: ?',
-               this._dispatcher.clientId, URI.stringify(this.endpoint), this.connectionType, messages);
-
-    for (var i = 0, n = messages.length; i < n; i++)
-      this._dispatcher.handleError(messages[i]);
-  },
-
-  _getCookies: function() {
-    var cookies = this._dispatcher.cookies,
-        url     = URI.stringify(this.endpoint);
-
-    if (!cookies) return '';
-
-    return array.map(cookies.getCookiesSync(url), function(cookie) {
-      return cookie.cookieString();
-    }).join('; ');
-  },
-
-  _storeCookies: function(setCookie) {
-    var cookies = this._dispatcher.cookies,
-        url     = URI.stringify(this.endpoint),
-        cookie;
-
-    if (!setCookie || !cookies) return;
-    setCookie = [].concat(setCookie);
-
-    for (var i = 0, n = setCookie.length; i < n; i++) {
-      cookie = Cookie.parse(setCookie[i]);
-      cookies.setCookieSync(cookie, url);
-    }
-  },
-
-  _findProxy: function() {
-    if (typeof process === 'undefined') return undefined;
-
-    var protocol = this.endpoint.protocol;
-    if (!protocol) return undefined;
-
-    var name   = protocol.replace(/:$/, '').toLowerCase() + '_proxy',
-        upcase = name.toUpperCase(),
-        env    = process.env,
-        keys, proxy;
-
-    if (name === 'http_proxy' && env.REQUEST_METHOD) {
-      keys = Object.keys(env).filter(function(k) { return /^http_proxy$/i.test(k) });
-      if (keys.length === 1) {
-        if (keys[0] === name && env[upcase] === undefined)
-          proxy = env[name];
-      } else if (keys.length > 1) {
-        proxy = env[name];
-      }
-      proxy = proxy || env['CGI_' + upcase];
-    } else {
-      proxy = env[name] || env[upcase];
-      if (proxy && !env[name])
-        console.warn('The environment variable ' + upcase +
-                     ' is discouraged. Use ' + name + '.');
-    }
-    return proxy;
-  }
-
-}), {
-  get: function(dispatcher, allowed, disabled, callback, context) {
-    var endpoint = dispatcher.endpoint;
-
-    array.asyncEach(this._transports, function(pair, resume) {
-      var connType     = pair[0], klass = pair[1],
-          connEndpoint = dispatcher.endpointFor(connType);
-
-      if (array.indexOf(disabled, connType) >= 0)
-        return resume();
-
-      if (array.indexOf(allowed, connType) < 0) {
-        klass.isUsable(dispatcher, connEndpoint, function() {});
-        return resume();
-      }
-
-      klass.isUsable(dispatcher, connEndpoint, function(isUsable) {
-        if (!isUsable) return resume();
-        var transport = klass.hasOwnProperty('create') ? klass.create(dispatcher, connEndpoint) : new klass(dispatcher, connEndpoint);
-        callback.call(context, transport);
-      });
-    }, function() {
-      throw new Error('Could not find a usable connection type for ' + URI.stringify(endpoint));
-    });
-  },
-
-  register: function(type, klass) {
-    this._transports.push([type, klass]);
-    klass.prototype.connectionType = type;
-  },
-
-  getConnectionTypes: function() {
-    return array.map(this._transports, function(t) { return t[0] });
-  },
-
-  _transports: []
-});
-
-extend(Transport.prototype, Logging);
-extend(Transport.prototype, Timeouts);
-
-module.exports = Transport;
-
-}).call(this,require('_process'))
-},{"../mixins/logging":17,"../mixins/timeouts":19,"../protocol/channel":20,"../util/array":36,"../util/class":38,"../util/cookies":40,"../util/extend":43,"../util/promise":44,"../util/uri":47,"_process":67}],34:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Class      = require('../util/class'),
-    Promise    = require('../util/promise'),
-    Set        = require('../util/set'),
-    URI        = require('../util/uri'),
-    browser    = require('../util/browser'),
-    copyObject = require('../util/copy_object'),
-    extend     = require('../util/extend'),
-    toJSON     = require('../util/to_json'),
-    ws         = require('../util/websocket'),
-    Deferrable = require('../mixins/deferrable'),
-    Transport  = require('./transport');
-
-var WebSocket = extend(Class(Transport, {
-  UNCONNECTED:  1,
-  CONNECTING:   2,
-  CONNECTED:    3,
-
-  batching:     false,
-
-  isUsable: function(callback, context) {
-    this.callback(function() { callback.call(context, true) });
-    this.errback(function() { callback.call(context, false) });
-    this.connect();
-  },
-
-  request: function(messages) {
-    this._pending = this._pending || new Set();
-    for (var i = 0, n = messages.length; i < n; i++) this._pending.add(messages[i]);
-
-    var self = this;
-
-    var promise = new Promise(function(resolve, reject) {
-      self.callback(function(socket) {
-        if (!socket || socket.readyState !== 1) return;
-        socket.send(toJSON(messages));
-        resolve(socket);
-      });
-
-      self.connect();
-    });
-
-    return {
-      abort: function() { promise.then(function(ws) { ws.close() }) }
-    };
-  },
-
-  connect: function() {
-    if (WebSocket._unloaded) return;
-
-    this._state = this._state || this.UNCONNECTED;
-    if (this._state !== this.UNCONNECTED) return;
-    this._state = this.CONNECTING;
-
-    var socket = this._createSocket();
-    if (!socket) return this.setDeferredStatus('failed');
-
-    var self = this;
-
-    socket.onopen = function() {
-      if (socket.headers) self._storeCookies(socket.headers['set-cookie']);
-      self._socket = socket;
-      self._state = self.CONNECTED;
-      self._everConnected = true;
-      self._ping();
-      self.setDeferredStatus('succeeded', socket);
-    };
-
-    var closed = false;
-    socket.onclose = socket.onerror = function() {
-      if (closed) return;
-      closed = true;
-
-      var wasConnected = (self._state === self.CONNECTED);
-      socket.onopen = socket.onclose = socket.onerror = socket.onmessage = null;
-
-      delete self._socket;
-      self._state = self.UNCONNECTED;
-      self.removeTimeout('ping');
-
-      var pending = self._pending ? self._pending.toArray() : [];
-      delete self._pending;
-
-      if (wasConnected || self._everConnected) {
-        self.setDeferredStatus('unknown');
-        self._handleError(pending, wasConnected);
-      } else {
-        self.setDeferredStatus('failed');
-      }
-    };
-
-    socket.onmessage = function(event) {
-      var replies;
-      try { replies = JSON.parse(event.data) } catch (error) {}
-
-      if (!replies) return;
-
-      replies = [].concat(replies);
-
-      for (var i = 0, n = replies.length; i < n; i++) {
-        if (replies[i].successful === undefined) continue;
-        self._pending.remove(replies[i]);
-      }
-      self._receive(replies);
-    };
-  },
-
-  close: function() {
-    if (!this._socket) return;
-    this._socket.close();
-  },
-
-  _createSocket: function() {
-    var url        = WebSocket.getSocketUrl(this.endpoint),
-        headers    = this._dispatcher.headers,
-        extensions = this._dispatcher.wsExtensions,
-        cookie     = this._getCookies(),
-        tls        = this._dispatcher.tls,
-        options    = {extensions: extensions, headers: headers, proxy: this._proxy, tls: tls};
-
-    if (cookie !== '') options.headers['Cookie'] = cookie;
-
-    return ws.create(url, [], options);
-  },
-
-  _ping: function() {
-    if (!this._socket || this._socket.readyState !== 1) return;
-    this._socket.send('[]');
-    this.addTimeout('ping', this._dispatcher.timeout / 2, this._ping, this);
-  }
-
-}), {
-  PROTOCOLS: {
-    'http:':  'ws:',
-    'https:': 'wss:'
-  },
-
-  create: function(dispatcher, endpoint) {
-    var sockets = dispatcher.transports.websocket = dispatcher.transports.websocket || {};
-    sockets[endpoint.href] = sockets[endpoint.href] || new this(dispatcher, endpoint);
-    return sockets[endpoint.href];
-  },
-
-  getSocketUrl: function(endpoint) {
-    endpoint = copyObject(endpoint);
-    endpoint.protocol = this.PROTOCOLS[endpoint.protocol];
-    return URI.stringify(endpoint);
-  },
-
-  isUsable: function(dispatcher, endpoint, callback, context) {
-    this.create(dispatcher, endpoint).isUsable(callback, context);
-  }
-});
-
-extend(WebSocket.prototype, Deferrable);
-
-if (browser.Event && global.onbeforeunload !== undefined)
-  browser.Event.on(global, 'beforeunload', function() { WebSocket._unloaded = true });
-
-module.exports = WebSocket;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../mixins/deferrable":16,"../util/browser":37,"../util/class":38,"../util/copy_object":41,"../util/extend":43,"../util/promise":44,"../util/set":45,"../util/to_json":46,"../util/uri":47,"../util/websocket":49,"./transport":33}],35:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Class     = require('../util/class'),
-    URI       = require('../util/uri'),
-    browser   = require('../util/browser'),
-    extend    = require('../util/extend'),
-    toJSON    = require('../util/to_json'),
-    Transport = require('./transport');
-
-var XHR = extend(Class(Transport, {
-  encode: function(messages) {
-    return toJSON(messages);
-  },
-
-  request: function(messages) {
-    var href = this.endpoint.href,
-        self = this,
-        xhr;
-
-    // Prefer XMLHttpRequest over ActiveXObject if they both exist
-    if (global.XMLHttpRequest) {
-      xhr = new XMLHttpRequest();
-    } else if (global.ActiveXObject) {
-      xhr = new ActiveXObject('Microsoft.XMLHTTP');
-    } else {
-      return this._handleError(messages);
-    }
-
-    xhr.open('POST', href, true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('Pragma', 'no-cache');
-    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-
-    var headers = this._dispatcher.headers;
-    for (var key in headers) {
-      if (!headers.hasOwnProperty(key)) continue;
-      xhr.setRequestHeader(key, headers[key]);
-    }
-
-    var abort = function() { xhr.abort() };
-    if (global.onbeforeunload !== undefined)
-      browser.Event.on(global, 'beforeunload', abort);
-
-    xhr.onreadystatechange = function() {
-      if (!xhr || xhr.readyState !== 4) return;
-
-      var replies    = null,
-          status     = xhr.status,
-          text       = xhr.responseText,
-          successful = (status >= 200 && status < 300) || status === 304 || status === 1223;
-
-      if (global.onbeforeunload !== undefined)
-        browser.Event.detach(global, 'beforeunload', abort);
-
-      xhr.onreadystatechange = function() {};
-      xhr = null;
-
-      if (!successful) return self._handleError(messages);
-
-      try {
-        replies = JSON.parse(text);
-      } catch (error) {}
-
-      if (replies)
-        self._receive(replies);
-      else
-        self._handleError(messages);
-    };
-
-    xhr.send(this.encode(messages));
-    return xhr;
-  }
-}), {
-  isUsable: function(dispatcher, endpoint, callback, context) {
-    var usable = (navigator.product === 'ReactNative')
-              || URI.isSameOrigin(endpoint);
-
-    callback.call(context, usable);
-  }
-});
-
-module.exports = XHR;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../util/browser":37,"../util/class":38,"../util/extend":43,"../util/to_json":46,"../util/uri":47,"./transport":33}],36:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-  commonElement: function(lista, listb) {
-    for (var i = 0, n = lista.length; i < n; i++) {
-      if (this.indexOf(listb, lista[i]) !== -1)
-        return lista[i];
-    }
-    return null;
-  },
-
-  indexOf: function(list, needle) {
-    if (list.indexOf) return list.indexOf(needle);
-
-    for (var i = 0, n = list.length; i < n; i++) {
-      if (list[i] === needle) return i;
-    }
-    return -1;
-  },
-
-  map: function(object, callback, context) {
-    if (object.map) return object.map(callback, context);
-    var result = [];
-
-    if (object instanceof Array) {
-      for (var i = 0, n = object.length; i < n; i++) {
-        result.push(callback.call(context || null, object[i], i));
-      }
-    } else {
-      for (var key in object) {
-        if (!object.hasOwnProperty(key)) continue;
-        result.push(callback.call(context || null, key, object[key]));
-      }
-    }
-    return result;
-  },
-
-  filter: function(array, callback, context) {
-    if (array.filter) return array.filter(callback, context);
-    var result = [];
-    for (var i = 0, n = array.length; i < n; i++) {
-      if (callback.call(context || null, array[i], i))
-        result.push(array[i]);
-    }
-    return result;
-  },
-
-  asyncEach: function(list, iterator, callback, context) {
-    var n       = list.length,
-        i       = -1,
-        calls   = 0,
-        looping = false;
-
-    var iterate = function() {
-      calls -= 1;
-      i += 1;
-      if (i === n) return callback && callback.call(context);
-      iterator(list[i], resume);
-    };
-
-    var loop = function() {
-      if (looping) return;
-      looping = true;
-      while (calls > 0) iterate();
-      looping = false;
-    };
-
-    var resume = function() {
-      calls += 1;
-      loop();
-    };
-    resume();
-  }
-};
-
-},{}],37:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var Event = {
-  _registry: [],
-
-  on: function(element, eventName, callback, context) {
-    var wrapped = function() { callback.call(context) };
-
-    if (element.addEventListener)
-      element.addEventListener(eventName, wrapped, false);
-    else
-      element.attachEvent('on' + eventName, wrapped);
-
-    this._registry.push({
-      _element:   element,
-      _type:      eventName,
-      _callback:  callback,
-      _context:     context,
-      _handler:   wrapped
-    });
-  },
-
-  detach: function(element, eventName, callback, context) {
-    var i = this._registry.length, register;
-    while (i--) {
-      register = this._registry[i];
-
-      if ((element    && element    !== register._element)  ||
-          (eventName  && eventName  !== register._type)     ||
-          (callback   && callback   !== register._callback) ||
-          (context    && context    !== register._context))
-        continue;
-
-      if (register._element.removeEventListener)
-        register._element.removeEventListener(register._type, register._handler, false);
-      else
-        register._element.detachEvent('on' + register._type, register._handler);
-
-      this._registry.splice(i,1);
-      register = null;
-    }
-  }
-};
-
-if (global.onunload !== undefined)
-  Event.on(global, 'unload', Event.detach, Event);
-
-module.exports = {
-  Event: Event
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],38:[function(require,module,exports){
-'use strict';
-
-var extend = require('./extend');
-
-module.exports = function(parent, methods) {
-  if (typeof parent !== 'function') {
-    methods = parent;
-    parent  = Object;
-  }
-
-  var klass = function() {
-    if (!this.initialize) return this;
-    return this.initialize.apply(this, arguments) || this;
-  };
-
-  var bridge = function() {};
-  bridge.prototype = parent.prototype;
-
-  klass.prototype = new bridge();
-  extend(klass.prototype, methods);
-
-  return klass;
-};
-
-},{"./extend":43}],39:[function(require,module,exports){
-module.exports = {
-  VERSION:          '1.2.4',
-
-  BAYEUX_VERSION:   '1.0',
-  ID_LENGTH:        160,
-  JSONP_CALLBACK:   'jsonpcallback',
-  CONNECTION_TYPES: ['long-polling', 'cross-origin-long-polling', 'callback-polling', 'websocket', 'eventsource', 'in-process'],
-
-  MANDATORY_CONNECTION_TYPES: ['long-polling', 'callback-polling', 'in-process']
-};
-
-},{}],40:[function(require,module,exports){
-'use strict';
-
-module.exports = {};
-
-},{}],41:[function(require,module,exports){
-'use strict';
-
-var copyObject = function(object) {
-  var clone, i, key;
-  if (object instanceof Array) {
-    clone = [];
-    i = object.length;
-    while (i--) clone[i] = copyObject(object[i]);
-    return clone;
-  } else if (typeof object === 'object') {
-    clone = (object === null) ? null : {};
-    for (key in object) clone[key] = copyObject(object[key]);
-    return clone;
-  } else {
-    return object;
-  }
-};
-
-module.exports = copyObject;
-
-},{}],42:[function(require,module,exports){
-/*
-Copyright Joyent, Inc. and other Node contributors. All rights reserved.
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do
-so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-*/
-
-var isArray = typeof Array.isArray === 'function'
-    ? Array.isArray
-    : function (xs) {
-        return Object.prototype.toString.call(xs) === '[object Array]'
-    }
-;
-function indexOf (xs, x) {
-    if (xs.indexOf) return xs.indexOf(x);
-    for (var i = 0; i < xs.length; i++) {
-        if (x === xs[i]) return i;
-    }
-    return -1;
-}
-
-function EventEmitter() {}
-module.exports = EventEmitter;
-
-EventEmitter.prototype.emit = function(type) {
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events || !this._events.error ||
-        (isArray(this._events.error) && !this._events.error.length))
-    {
-      if (arguments[1] instanceof Error) {
-        throw arguments[1]; // Unhandled 'error' event
-      } else {
-        throw new Error("Uncaught, unspecified 'error' event.");
-      }
-      return false;
-    }
-  }
-
-  if (!this._events) return false;
-  var handler = this._events[type];
-  if (!handler) return false;
-
-  if (typeof handler == 'function') {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        var args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
-    }
-    return true;
-
-  } else if (isArray(handler)) {
-    var args = Array.prototype.slice.call(arguments, 1);
-
-    var listeners = handler.slice();
-    for (var i = 0, l = listeners.length; i < l; i++) {
-      listeners[i].apply(this, args);
-    }
-    return true;
-
-  } else {
-    return false;
-  }
-};
-
-// EventEmitter is defined in src/node_events.cc
-// EventEmitter.prototype.emit() is also defined there.
-EventEmitter.prototype.addListener = function(type, listener) {
-  if ('function' !== typeof listener) {
-    throw new Error('addListener only takes instances of Function');
-  }
-
-  if (!this._events) this._events = {};
-
-  // To avoid recursion in the case that type == "newListeners"! Before
-  // adding it to the listeners, first emit "newListeners".
-  this.emit('newListener', type, listener);
-
-  if (!this._events[type]) {
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  } else if (isArray(this._events[type])) {
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  } else {
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  var self = this;
-  self.on(type, function g() {
-    self.removeListener(type, g);
-    listener.apply(this, arguments);
-  });
-
-  return this;
-};
-
-EventEmitter.prototype.removeListener = function(type, listener) {
-  if ('function' !== typeof listener) {
-    throw new Error('removeListener only takes instances of Function');
-  }
-
-  // does not use listeners(), so no side effect of creating _events[type]
-  if (!this._events || !this._events[type]) return this;
-
-  var list = this._events[type];
-
-  if (isArray(list)) {
-    var i = indexOf(list, listener);
-    if (i < 0) return this;
-    list.splice(i, 1);
-    if (list.length == 0)
-      delete this._events[type];
-  } else if (this._events[type] === listener) {
-    delete this._events[type];
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  if (arguments.length === 0) {
-    this._events = {};
-    return this;
-  }
-
-  // does not use listeners(), so no side effect of creating _events[type]
-  if (type && this._events && this._events[type]) this._events[type] = null;
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  if (!this._events) this._events = {};
-  if (!this._events[type]) this._events[type] = [];
-  if (!isArray(this._events[type])) {
-    this._events[type] = [this._events[type]];
-  }
-  return this._events[type];
-};
-
-},{}],43:[function(require,module,exports){
-'use strict';
-
-module.exports = function(dest, source, overwrite) {
-  if (!source) return dest;
-  for (var key in source) {
-    if (!source.hasOwnProperty(key)) continue;
-    if (dest.hasOwnProperty(key) && overwrite === false) continue;
-    if (dest[key] !== source[key])
-      dest[key] = source[key];
-  }
-  return dest;
-};
-
-},{}],44:[function(require,module,exports){
-'use strict';
-
-var asap = require('asap');
-
-var PENDING   = 0,
-    FULFILLED = 1,
-    REJECTED  = 2;
-
-var RETURN = function(x) { return x },
-    THROW  = function(x) { throw  x };
-
-var Promise = function(task) {
-  this._state       = PENDING;
-  this._onFulfilled = [];
-  this._onRejected  = [];
-
-  if (typeof task !== 'function') return;
-  var self = this;
-
-  task(function(value)  { resolve(self, value) },
-       function(reason) { reject(self, reason) });
-};
-
-Promise.prototype.then = function(onFulfilled, onRejected) {
-  var next = new Promise();
-  registerOnFulfilled(this, onFulfilled, next);
-  registerOnRejected(this, onRejected, next);
-  return next;
-};
-
-Promise.prototype['catch'] = function(onRejected) {
-  return this.then(null, onRejected);
-};
-
-var registerOnFulfilled = function(promise, onFulfilled, next) {
-  if (typeof onFulfilled !== 'function') onFulfilled = RETURN;
-  var handler = function(value) { invoke(onFulfilled, value, next) };
-
-  if (promise._state === PENDING) {
-    promise._onFulfilled.push(handler);
-  } else if (promise._state === FULFILLED) {
-    handler(promise._value);
-  }
-};
-
-var registerOnRejected = function(promise, onRejected, next) {
-  if (typeof onRejected !== 'function') onRejected = THROW;
-  var handler = function(reason) { invoke(onRejected, reason, next) };
-
-  if (promise._state === PENDING) {
-    promise._onRejected.push(handler);
-  } else if (promise._state === REJECTED) {
-    handler(promise._reason);
-  }
-};
-
-var invoke = function(fn, value, next) {
-  asap(function() { _invoke(fn, value, next) });
-};
-
-var _invoke = function(fn, value, next) {
-  var outcome;
-
-  try {
-    outcome = fn(value);
-  } catch (error) {
-    return reject(next, error);
-  }
-
-  if (outcome === next) {
-    reject(next, new TypeError('Recursive promise chain detected'));
-  } else {
-    resolve(next, outcome);
-  }
-};
-
-var resolve = function(promise, value) {
-  var called = false, type, then;
-
-  try {
-    type = typeof value;
-    then = value !== null && (type === 'function' || type === 'object') && value.then;
-
-    if (typeof then !== 'function') return fulfill(promise, value);
-
-    then.call(value, function(v) {
-      if (!(called ^ (called = true))) return;
-      resolve(promise, v);
-    }, function(r) {
-      if (!(called ^ (called = true))) return;
-      reject(promise, r);
-    });
-  } catch (error) {
-    if (!(called ^ (called = true))) return;
-    reject(promise, error);
-  }
-};
-
-var fulfill = function(promise, value) {
-  if (promise._state !== PENDING) return;
-
-  promise._state      = FULFILLED;
-  promise._value      = value;
-  promise._onRejected = [];
-
-  var onFulfilled = promise._onFulfilled, fn;
-  while (fn = onFulfilled.shift()) fn(value);
-};
-
-var reject = function(promise, reason) {
-  if (promise._state !== PENDING) return;
-
-  promise._state       = REJECTED;
-  promise._reason      = reason;
-  promise._onFulfilled = [];
-
-  var onRejected = promise._onRejected, fn;
-  while (fn = onRejected.shift()) fn(reason);
-};
-
-Promise.resolve = function(value) {
-  return new Promise(function(resolve, reject) { resolve(value) });
-};
-
-Promise.reject = function(reason) {
-  return new Promise(function(resolve, reject) { reject(reason) });
-};
-
-Promise.all = function(promises) {
-  return new Promise(function(resolve, reject) {
-    var list = [], n = promises.length, i;
-
-    if (n === 0) return resolve(list);
-
-    for (i = 0; i < n; i++) (function(promise, i) {
-      Promise.resolve(promise).then(function(value) {
-        list[i] = value;
-        if (--n === 0) resolve(list);
-      }, reject);
-    })(promises[i], i);
-  });
-};
-
-Promise.race = function(promises) {
-  return new Promise(function(resolve, reject) {
-    for (var i = 0, n = promises.length; i < n; i++)
-      Promise.resolve(promises[i]).then(resolve, reject);
-  });
-};
-
-Promise.deferred = Promise.pending = function() {
-  var tuple = {};
-
-  tuple.promise = new Promise(function(resolve, reject) {
-    tuple.resolve = resolve;
-    tuple.reject  = reject;
-  });
-  return tuple;
-};
-
-module.exports = Promise;
-
-},{"asap":3}],45:[function(require,module,exports){
-'use strict';
-
-var Class = require('./class');
-
-module.exports = Class({
-  initialize: function() {
-    this._index = {};
-  },
-
-  add: function(item) {
-    var key = (item.id !== undefined) ? item.id : item;
-    if (this._index.hasOwnProperty(key)) return false;
-    this._index[key] = item;
-    return true;
-  },
-
-  forEach: function(block, context) {
-    for (var key in this._index) {
-      if (this._index.hasOwnProperty(key))
-        block.call(context, this._index[key]);
-    }
-  },
-
-  isEmpty: function() {
-    for (var key in this._index) {
-      if (this._index.hasOwnProperty(key)) return false;
-    }
-    return true;
-  },
-
-  member: function(item) {
-    for (var key in this._index) {
-      if (this._index[key] === item) return true;
-    }
-    return false;
-  },
-
-  remove: function(item) {
-    var key = (item.id !== undefined) ? item.id : item;
-    var removed = this._index[key];
-    delete this._index[key];
-    return removed;
-  },
-
-  toArray: function() {
-    var array = [];
-    this.forEach(function(item) { array.push(item) });
-    return array;
-  }
-});
-
-},{"./class":38}],46:[function(require,module,exports){
-'use strict';
-
-// http://assanka.net/content/tech/2009/09/02/json2-js-vs-prototype/
-
-module.exports = function(object) {
-  return JSON.stringify(object, function(key, value) {
-    return (this[key] instanceof Array) ? this[key] : value;
-  });
-};
-
-},{}],47:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-  isURI: function(uri) {
-    return uri && uri.protocol && uri.host && uri.path;
-  },
-
-  isSameOrigin: function(uri) {
-    return uri.protocol === location.protocol &&
-           uri.hostname === location.hostname &&
-           uri.port     === location.port;
-  },
-
-  parse: function(url) {
-    if (typeof url !== 'string') return url;
-    var uri = {}, parts, query, pairs, i, n, data;
-
-    var consume = function(name, pattern) {
-      url = url.replace(pattern, function(match) {
-        uri[name] = match;
-        return '';
-      });
-      uri[name] = uri[name] || '';
-    };
-
-    consume('protocol', /^[a-z]+\:/i);
-    consume('host',     /^\/\/[^\/\?#]+/);
-
-    if (!/^\//.test(url) && !uri.host)
-      url = location.pathname.replace(/[^\/]*$/, '') + url;
-
-    consume('pathname', /^[^\?#]*/);
-    consume('search',   /^\?[^#]*/);
-    consume('hash',     /^#.*/);
-
-    uri.protocol = uri.protocol || location.protocol;
-
-    if (uri.host) {
-      uri.host     = uri.host.substr(2);
-      parts        = uri.host.split(':');
-      uri.hostname = parts[0];
-      uri.port     = parts[1] || '';
-    } else {
-      uri.host     = location.host;
-      uri.hostname = location.hostname;
-      uri.port     = location.port;
-    }
-
-    uri.pathname = uri.pathname || '/';
-    uri.path = uri.pathname + uri.search;
-
-    query = uri.search.replace(/^\?/, '');
-    pairs = query ? query.split('&') : [];
-    data  = {};
-
-    for (i = 0, n = pairs.length; i < n; i++) {
-      parts = pairs[i].split('=');
-      data[decodeURIComponent(parts[0] || '')] = decodeURIComponent(parts[1] || '');
-    }
-
-    uri.query = data;
-
-    uri.href = this.stringify(uri);
-    return uri;
-  },
-
-  stringify: function(uri) {
-    var string = uri.protocol + '//' + uri.hostname;
-    if (uri.port) string += ':' + uri.port;
-    string += uri.pathname + this.queryString(uri.query) + (uri.hash || '');
-    return string;
-  },
-
-  queryString: function(query) {
-    var pairs = [];
-    for (var key in query) {
-      if (!query.hasOwnProperty(key)) continue;
-      pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(query[key]));
-    }
-    if (pairs.length === 0) return '';
-    return '?' + pairs.join('&');
-  }
-};
-
-},{}],48:[function(require,module,exports){
-'use strict';
-
-var array = require('./array');
-
-module.exports = function(options, validKeys) {
-  for (var key in options) {
-    if (array.indexOf(validKeys, key) < 0)
-      throw new Error('Unrecognized option: ' + key);
-  }
-};
-
-},{"./array":36}],49:[function(require,module,exports){
-(function (global){
-'use strict';
-
-var WS = global.MozWebSocket || global.WebSocket;
-
-module.exports = {
-  create: function(url, protocols, options) {
-    if (typeof WS !== 'function') return null;
-    return new WS(url);
-  }
-};
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],50:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.2.1
  * https://jquery.com/
@@ -16425,7 +10253,6921 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],51:[function(require,module,exports){
+},{}],2:[function(require,module,exports){
+//     keymaster.js
+//     (c) 2011-2013 Thomas Fuchs
+//     keymaster.js may be freely distributed under the MIT license.
+
+;(function(global){
+  var k,
+    _handlers = {},
+    _mods = { 16: false, 18: false, 17: false, 91: false },
+    _scope = 'all',
+    // modifier keys
+    _MODIFIERS = {
+      '⇧': 16, shift: 16,
+      '⌥': 18, alt: 18, option: 18,
+      '⌃': 17, ctrl: 17, control: 17,
+      '⌘': 91, command: 91
+    },
+    // special keys
+    _MAP = {
+      backspace: 8, tab: 9, clear: 12,
+      enter: 13, 'return': 13,
+      esc: 27, escape: 27, space: 32,
+      left: 37, up: 38,
+      right: 39, down: 40,
+      del: 46, 'delete': 46,
+      home: 36, end: 35,
+      pageup: 33, pagedown: 34,
+      ',': 188, '.': 190, '/': 191,
+      '`': 192, '-': 189, '=': 187,
+      ';': 186, '\'': 222,
+      '[': 219, ']': 221, '\\': 220
+    },
+    code = function(x){
+      return _MAP[x] || x.toUpperCase().charCodeAt(0);
+    },
+    _downKeys = [];
+
+  for(k=1;k<20;k++) _MAP['f'+k] = 111+k;
+
+  // IE doesn't support Array#indexOf, so have a simple replacement
+  function index(array, item){
+    var i = array.length;
+    while(i--) if(array[i]===item) return i;
+    return -1;
+  }
+
+  // for comparing mods before unassignment
+  function compareArray(a1, a2) {
+    if (a1.length != a2.length) return false;
+    for (var i = 0; i < a1.length; i++) {
+        if (a1[i] !== a2[i]) return false;
+    }
+    return true;
+  }
+
+  var modifierMap = {
+      16:'shiftKey',
+      18:'altKey',
+      17:'ctrlKey',
+      91:'metaKey'
+  };
+  function updateModifierKey(event) {
+      for(k in _mods) _mods[k] = event[modifierMap[k]];
+  };
+
+  // handle keydown event
+  function dispatch(event) {
+    var key, handler, k, i, modifiersMatch, scope;
+    key = event.keyCode;
+
+    if (index(_downKeys, key) == -1) {
+        _downKeys.push(key);
+    }
+
+    // if a modifier key, set the key.<modifierkeyname> property to true and return
+    if(key == 93 || key == 224) key = 91; // right command on webkit, command on Gecko
+    if(key in _mods) {
+      _mods[key] = true;
+      // 'assignKey' from inside this closure is exported to window.key
+      for(k in _MODIFIERS) if(_MODIFIERS[k] == key) assignKey[k] = true;
+      return;
+    }
+    updateModifierKey(event);
+
+    // see if we need to ignore the keypress (filter() can can be overridden)
+    // by default ignore key presses if a select, textarea, or input is focused
+    if(!assignKey.filter.call(this, event)) return;
+
+    // abort if no potentially matching shortcuts found
+    if (!(key in _handlers)) return;
+
+    scope = getScope();
+
+    // for each potential shortcut
+    for (i = 0; i < _handlers[key].length; i++) {
+      handler = _handlers[key][i];
+
+      // see if it's in the current scope
+      if(handler.scope == scope || handler.scope == 'all'){
+        // check if modifiers match if any
+        modifiersMatch = handler.mods.length > 0;
+        for(k in _mods)
+          if((!_mods[k] && index(handler.mods, +k) > -1) ||
+            (_mods[k] && index(handler.mods, +k) == -1)) modifiersMatch = false;
+        // call the handler and stop the event if neccessary
+        if((handler.mods.length == 0 && !_mods[16] && !_mods[18] && !_mods[17] && !_mods[91]) || modifiersMatch){
+          if(handler.method(event, handler)===false){
+            if(event.preventDefault) event.preventDefault();
+              else event.returnValue = false;
+            if(event.stopPropagation) event.stopPropagation();
+            if(event.cancelBubble) event.cancelBubble = true;
+          }
+        }
+      }
+    }
+  };
+
+  // unset modifier keys on keyup
+  function clearModifier(event){
+    var key = event.keyCode, k,
+        i = index(_downKeys, key);
+
+    // remove key from _downKeys
+    if (i >= 0) {
+        _downKeys.splice(i, 1);
+    }
+
+    if(key == 93 || key == 224) key = 91;
+    if(key in _mods) {
+      _mods[key] = false;
+      for(k in _MODIFIERS) if(_MODIFIERS[k] == key) assignKey[k] = false;
+    }
+  };
+
+  function resetModifiers() {
+    for(k in _mods) _mods[k] = false;
+    for(k in _MODIFIERS) assignKey[k] = false;
+  };
+
+  // parse and assign shortcut
+  function assignKey(key, scope, method){
+    var keys, mods;
+    keys = getKeys(key);
+    if (method === undefined) {
+      method = scope;
+      scope = 'all';
+    }
+
+    // for each shortcut
+    for (var i = 0; i < keys.length; i++) {
+      // set modifier keys if any
+      mods = [];
+      key = keys[i].split('+');
+      if (key.length > 1){
+        mods = getMods(key);
+        key = [key[key.length-1]];
+      }
+      // convert to keycode and...
+      key = key[0]
+      key = code(key);
+      // ...store handler
+      if (!(key in _handlers)) _handlers[key] = [];
+      _handlers[key].push({ shortcut: keys[i], scope: scope, method: method, key: keys[i], mods: mods });
+    }
+  };
+
+  // unbind all handlers for given key in current scope
+  function unbindKey(key, scope) {
+    var multipleKeys, keys,
+      mods = [],
+      i, j, obj;
+
+    multipleKeys = getKeys(key);
+
+    for (j = 0; j < multipleKeys.length; j++) {
+      keys = multipleKeys[j].split('+');
+
+      if (keys.length > 1) {
+        mods = getMods(keys);
+        key = keys[keys.length - 1];
+      }
+
+      key = code(key);
+
+      if (scope === undefined) {
+        scope = getScope();
+      }
+      if (!_handlers[key]) {
+        return;
+      }
+      for (i = 0; i < _handlers[key].length; i++) {
+        obj = _handlers[key][i];
+        // only clear handlers if correct scope and mods match
+        if (obj.scope === scope && compareArray(obj.mods, mods)) {
+          _handlers[key][i] = {};
+        }
+      }
+    }
+  };
+
+  // Returns true if the key with code 'keyCode' is currently down
+  // Converts strings into key codes.
+  function isPressed(keyCode) {
+      if (typeof(keyCode)=='string') {
+        keyCode = code(keyCode);
+      }
+      return index(_downKeys, keyCode) != -1;
+  }
+
+  function getPressedKeyCodes() {
+      return _downKeys.slice(0);
+  }
+
+  function filter(event){
+    var tagName = (event.target || event.srcElement).tagName;
+    // ignore keypressed in any elements that support keyboard data input
+    return !(tagName == 'INPUT' || tagName == 'SELECT' || tagName == 'TEXTAREA');
+  }
+
+  // initialize key.<modifier> to false
+  for(k in _MODIFIERS) assignKey[k] = false;
+
+  // set current scope (default 'all')
+  function setScope(scope){ _scope = scope || 'all' };
+  function getScope(){ return _scope || 'all' };
+
+  // delete all handlers for a given scope
+  function deleteScope(scope){
+    var key, handlers, i;
+
+    for (key in _handlers) {
+      handlers = _handlers[key];
+      for (i = 0; i < handlers.length; ) {
+        if (handlers[i].scope === scope) handlers.splice(i, 1);
+        else i++;
+      }
+    }
+  };
+
+  // abstract key logic for assign and unassign
+  function getKeys(key) {
+    var keys;
+    key = key.replace(/\s/g, '');
+    keys = key.split(',');
+    if ((keys[keys.length - 1]) == '') {
+      keys[keys.length - 2] += ',';
+    }
+    return keys;
+  }
+
+  // abstract mods logic for assign and unassign
+  function getMods(key) {
+    var mods = key.slice(0, key.length - 1);
+    for (var mi = 0; mi < mods.length; mi++)
+    mods[mi] = _MODIFIERS[mods[mi]];
+    return mods;
+  }
+
+  // cross-browser events
+  function addEvent(object, event, method) {
+    if (object.addEventListener)
+      object.addEventListener(event, method, false);
+    else if(object.attachEvent)
+      object.attachEvent('on'+event, function(){ method(window.event) });
+  };
+
+  // set the handlers globally on document
+  addEvent(document, 'keydown', function(event) { dispatch(event) }); // Passing _scope to a callback to ensure it remains the same by execution. Fixes #48
+  addEvent(document, 'keyup', clearModifier);
+
+  // reset modifiers to false whenever the window is (re)focused.
+  addEvent(window, 'focus', resetModifiers);
+
+  // store previously defined key
+  var previousKey = global.key;
+
+  // restore previously defined key and return reference to our key object
+  function noConflict() {
+    var k = global.key;
+    global.key = previousKey;
+    return k;
+  }
+
+  // set window.key and window.key.set/get/deleteScope, and the default filter
+  global.key = assignKey;
+  global.key.setScope = setScope;
+  global.key.getScope = getScope;
+  global.key.deleteScope = deleteScope;
+  global.key.filter = filter;
+  global.key.isPressed = isPressed;
+  global.key.getPressedKeyCodes = getPressedKeyCodes;
+  global.key.noConflict = noConflict;
+  global.key.unbind = unbindKey;
+
+  if(typeof module !== 'undefined') module.exports = assignKey;
+
+})(this);
+
+},{}],3:[function(require,module,exports){
+'use strict';
+
+var Caret = function() {
+
+}
+
+Caret.prototype = {
+
+    _getElementsContentLengthIncrement(element) {
+        if(['BR', 'IMG'].includes(element.tagName)) return 1;
+        if(!element.length) return 0;
+        return element.length;
+    },
+
+    _getContentLengthOfDOMElement: function(element, endChild) {
+        var treeWalker = document.createTreeWalker(element),
+            currentEl,
+            length = 0;
+
+        while((currentEl = treeWalker.currentNode)) {
+            if(currentEl === endChild) return length;
+
+            length += this._getElementsContentLengthIncrement(currentEl);
+
+            if(!treeWalker.nextNode()) break;
+        }
+
+        return length;
+    },
+
+    // rightMatch: when root element contains: '<p>Hello</p><p>World</p>' and contentLength is '5'
+    //             it is not clear which element to return, if rightMatch is true then '<p>World</p>' will
+    //             be returned, '<p>Hello</p>' otherwise
+    _getElementByContentLength: function(rootEl, contentLength, rightMatch) {
+        var treeWalker = document.createTreeWalker(rootEl),
+            currentEl,
+            length = 0,
+            currentElLength;
+
+        while(currentEl = treeWalker.currentNode) {
+            currentElLength = this._getElementsContentLengthIncrement(currentEl);
+
+            if((length + currentElLength) < contentLength) {
+                length += currentElLength;
+            } else if((length + currentElLength) === contentLength) {
+                return rightMatch ? (treeWalker.nextNode() || currentEl) : currentEl;
+            } else {
+                return currentEl;
+            }
+
+            if(!treeWalker.nextNode()) break;
+        }
+
+        return null;
+    },
+
+    restoreSelection: function(rootEl) {
+        var success = this.restoreSelectionViaDOMStrategy(rootEl);
+
+        if(!success) {
+            success = this.restoreSelectionViaOffsetStrategy(rootEl);
+        }
+
+        return success;
+    },
+
+    restoreSelectionViaOffsetStrategy: function(rootEl) {
+        if(this.rangeStart && this.rangeEnd) {
+
+            var range,
+                selection = window.getSelection(),
+                startNode = this._getElementByContentLength(rootEl, this.rangeStart, this.rangeStartAtZeroOffset),
+                endNode = this._getElementByContentLength(rootEl, this.rangeEnd, this.rangeEndAtZeroOffset),
+                startOffset = this.rangeStart - this._getContentLengthOfDOMElement(rootEl, startNode),
+                endOffset = this.rangeEnd - this._getContentLengthOfDOMElement(rootEl, endNode);
+
+            try {
+                range = document.createRange();
+                range.setStart(startNode, startOffset);
+                range.setEnd(endNode, endOffset);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                return true;
+            } catch(ex) {
+                console.log('failed to set caret position via offset strategy');
+                return false;
+            }
+        }
+    },
+
+    restoreSelectionViaDOMStrategy: function(rootEl) {
+        var range, selection;
+
+        if(rootEl.contains(this.selectionAnchorNode) && rootEl.contains(this.selectionFocusNode)) {
+            range = document.createRange();
+            selection = window.getSelection();
+            range.setEnd(this.selectionAnchorNode, this.selectionAnchorOffset);
+            range.setStart(this.selectionFocusNode, this.selectionFocusOffset);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            return true;
+        }
+
+        return false;
+    },
+
+    // text|text
+    // <div>text|</div><div>text</div>
+    // <div>text</div><div>|text<,/div>
+    // text|<br/><br/><br/>text
+    // text<br/>|<br/><br/>text
+    // text<br/><br/>|<br/>text
+    // text<br/><br/><br/>|text
+    // Preformatted stuff (root element includes <pre> tags)
+    saveSelection: function(rootEl) {
+        var selection = window.getSelection();
+        if(selection.anchorNode && selection.focusNode) {
+            this.rangeStart = this._getContentLengthOfDOMElement(rootEl, selection.anchorNode) + selection.anchorOffset;
+            this.rangeEnd = this._getContentLengthOfDOMElement(rootEl, selection.focusNode) + selection.focusOffset;
+            this.rangeStartAtZeroOffset = selection.anchorOffset == 0;
+            this.rangeEndAtZeroOffset = selection.focusOffset == 0;
+            this.selectionAnchorNode = selection.anchorNode;
+            this.selectionFocusNode = selection.focusNode;
+            this.selectionAnchorOffset = selection.anchorOffset;
+            this.selectionFocusOffset = selection.focusOffset;
+        }
+    },
+
+    clearSelection: function() {
+        window.getSelection().removeAllRanges();
+    },
+
+    targetElement: function() {
+        var selection = window.getSelection();
+        if(selection.anchorNode === selection.focusNode) {
+            return selection.focusNode;
+        }
+    }
+}
+
+module.exports = Caret;
+
+},{}],4:[function(require,module,exports){
+'use strict';
+
+var $ = require('jquery'),
+    key = require('keymaster'),
+    Caret = require('./caret'),
+    Utils = require('./utils');
+
+var Editor = function(domId) {
+    var self = this;
+
+    this.domId = domId;
+    this.contentElement = document.getElementById(domId);
+    this.caret = new Caret();
+    this.subscribers = [];
+
+    this.sectionTypeSelector = document.createElement('div');
+    this.sectionTypeSelector.id = 'sectionTypeSelector';
+
+    this.sectionTypeSelector.innerHTML = '<span data-type="h1">title</span> ' +
+                                         '<span data-type="h2">h2</span> ' +
+                                         '<span data-type="h3">h3</span> ' +
+                                         '<span data-type="p" class="active">paragraph</span> ';
+
+    document.body.appendChild(this.sectionTypeSelector);
+
+    this.subscribe(function() {
+        // This will update the internal attribute which stores the
+        // currently focused section. If we don't execute this function
+        // here, the focusedSection might return an outdated value.
+        self.focusSection();
+
+        self.cleanUpContent();
+    });
+
+    key('⌘+alt+up', function(){ self.moveFocusedSectionUp(); });
+    key('⌘+alt+down', function(){ self.moveFocusedSectionDown(); });
+    key('esc', function(){ self.caret.clearSelection(); this.focusedElement=null; });
+
+    this.sectionTypeSelector.addEventListener('click', function(e) {
+        var clickedButton = e.path[0];
+
+        if(clickedButton.dataset.type) {
+            self.setFocusedSectionType(clickedButton.dataset.type);
+            self.setSectionTypeSelectorSelection(clickedButton.dataset.type);
+        }
+    });
+
+    window.addEventListener('scroll', function(e) {
+        self.displaySectionTypeSelectorNextTo(self.focusedSection());
+    });
+
+    document.addEventListener('selectionchange', function(e) {
+        self.focusSection();
+        self._removeEmptySections();
+    });
+
+    window.addEventListener('resize', function(e) {
+        self.displaySectionTypeSelectorNextTo(self.focusedSection());
+    });
+
+    this.contentElement.addEventListener('mouseover', function(e) {
+        self.focusSection(e.path[0]);
+    });
+
+    this.contentElement.addEventListener('paste', function(e) {
+        self.cleanUpContent();
+        self.notifySubscribers();
+    });
+
+    $('#' + this.domId).on('input', function() {
+        self.notifySubscribers();
+    });
+}
+
+Editor.prototype = {
+    subscribe: function(callback) {
+        this.subscribers.push(callback);
+    },
+
+    notifySubscribers: function() {
+        var newContent = this._cleanHTML(this.contentElement.innerHTML);
+        this.subscribers.forEach(function(f) {
+            f(newContent);
+        });
+    },
+
+    sectionAtCaretPostion: function() {
+        var caretTarget = this.caret.targetElement(),
+            allSections = this.contentElement.children;
+
+        for(let i=0; i<allSections.length; i++) {
+            if(allSections[i].contains(caretTarget)) {
+                return allSections[i];
+            }
+        }
+    },
+
+    focusSection: function(element) {
+
+        element = this.sectionAtCaretPostion() || element || this.focusedSection();
+
+        if(!element || element.parentElement !== this.contentElement) {
+            return false;
+        }
+
+        if(this.focusedElement && this.focusedElement != element) {
+            this.focusedElement.className = '';
+        }
+
+        if(this.focusedElement !== element) {
+            this.focusedElement = element;
+            this.focusedElement.className = 'focused';
+            this.displaySectionTypeSelectorNextTo(this.focusedElement);
+        }
+
+        return true;
+    },
+
+    focusedSection: function() {
+        return this.focusedElement;
+    },
+
+    moveFocusedSectionUp: function() {
+        var focusedSection = this.focusedSection();
+        if(focusedSection && focusedSection.previousSibling) {
+            this.caret.saveSelection(this.contentElement);
+            this.contentElement.insertBefore(focusedSection, focusedSection.previousSibling);
+            this.caret.restoreSelection(this.contentElement);
+            this.notifySubscribers();
+        }
+    },
+
+    moveFocusedSectionDown: function() {
+        var focusedSection = this.focusedSection();
+        if(focusedSection && focusedSection.nextSibling && focusedSection.nextSibling.nextSibling) {
+            this.caret.saveSelection(this.contentElement);
+            this.contentElement.insertBefore(focusedSection, focusedSection.nextSibling.nextSibling);
+            this.caret.restoreSelection(this.contentElement);
+            this.notifySubscribers();
+        }
+    },
+
+    getFocusedSectionType: function() {
+        if(!this.focusedSection()) return null;
+
+        return this.focusedSection().tagName.toLowerCase();
+    },
+
+    setFocusedSectionType: function(tagName) {
+        var focusedSection = this.focusedSection();
+
+        if(focusedSection) {
+            let newEl = document.createElement(tagName);
+            newEl.innerHTML = focusedSection.innerHTML;
+
+            this.contentElement.replaceChild(newEl, focusedSection);
+
+            this.focusSection(newEl);
+
+            this.notifySubscribers();
+        }
+    },
+
+    setSectionTypeSelectorSelection: function(sectionType) {
+        var allButtons = self.sectionTypeSelector.children;
+
+        for(let i=0; i<allButtons.length; i++) {
+            allButtons[i].classList.remove('active');
+
+            if(allButtons[i].dataset.type == sectionType) {
+                allButtons[i].classList.add('active');
+            }
+        }
+    },
+
+    displaySectionTypeSelectorNextTo: function(sectionElement) {
+        if(!sectionElement) return false;
+
+        var sectionPosition = Utils.getElementPosition(sectionElement),
+            sectionTypeSelectorElement = document.getElementById('sectionTypeSelector'),
+            posX = sectionPosition.x,
+            posY = sectionPosition.y,
+            minY = window.scrollY + 5, //add 5px so that there is a small room between the end of the browser screen and the selector button
+            maxY = sectionElement.offsetHeight + sectionElement.offsetTop - sectionTypeSelectorElement.children[0].offsetHeight - 14,
+
+        posY = posY < minY ? minY : posY;
+        posY = posY > maxY ? maxY : posY;
+
+        this.setSectionTypeSelectorSelection(this.getFocusedSectionType());
+
+        if(this.displaySectionTypeSelectorTimeout)
+            clearTimeout(this.displaySectionTypeSelectorTimeout);
+
+        this.displaySectionTypeSelectorTimeout = setTimeout(function() {
+            sectionTypeSelectorElement.style.left = posX + 'px';
+            sectionTypeSelectorElement.style.top = posY + 'px';
+        }, 10);
+    },
+
+    //FIXME: maybe use the TreeWalker to cleanup the content instead of
+    // replacing it compleatly after cleanup
+    cleanUpContent: function() {
+        var startTime = Date.now();
+
+        this.caret.saveSelection(this.contentElement);
+
+        //Remember which section is focused before we destroy/replace the DOM
+        var focusedSectionIndex = Utils.getNodeIndexFromDomNodeList(document.getElementById(this.domId).childNodes, this.focusedSection());
+
+        this.contentElement.innerHTML = this._cleanHTML(this.contentElement.innerHTML);
+
+        //If there was a section focused before DOM replacement, focus this section again.
+        if(focusedSectionIndex !== -1) {
+            this.focusSection(this.contentElement.childNodes[focusedSectionIndex]);
+        }
+
+        this.caret.restoreSelection(this.contentElement);
+
+        this._removeEmptySections();
+
+        //console.log('## Replace Content via ' + '%ccleanUpContent' + '%c took ' + (Date.now() - startTime) + ' msec', 'color: #0f0', 'color: #000');
+    },
+
+    content: function(content) {
+      if(typeof content === 'undefined') {
+          return this.contentElement.innerHTML;
+      } else {
+          this.setContent(content);
+      }
+    },
+
+    setContent: function(content) {
+        var startTime = Date.now();
+        this.caret.saveSelection(this.contentElement);
+        this.contentElement.innerHTML = this._cleanHTML(content);
+        this.caret.restoreSelection(this.contentElement);
+        this.notifySubscribers();
+        //console.log('## Replace Content via ' + '%csetContent' + '%c took ' + (Date.now() - startTime) + ' msec', 'color: #0f0', 'color: #000');
+    },
+
+    _removeEmptySections: function() {
+        var sections = this.contentElement.children;
+        for(let i=0; i<sections.length; i++) {
+            if(this.isEmptySection(sections[i]) && sections[i] !== this.focusedSection()) {
+                this.contentElement.removeChild(sections[i]);
+            }
+        }
+    },
+
+    isEmptySection: function(section) {
+        var content = section.innerHTML.replace(/<.*?>/g, '');
+        content = content.replace(/<\/.*?>/g, '');
+        return content == '';
+    },
+
+    _cleanHTML: function(html) {
+        html = html.replace(/class=("|').*?("|')/g, '');
+        html = html.replace(/style=("|').*?("|')/g, '');
+        html = html.replace(/<b><\/b>|<i><\/i>|<div>\s*<\/div>|<span>|<\/span>/g, '');
+        html = html.replace(/\s(&nbsp;)+/g, ' ');
+        html = html.replace(/<div.*?>/g, '<div>');
+        html = html.replace(/<div>/g, '<p>');
+        html = html.replace(/<\/div>/g, '</p>');
+        html = html.replace(/<p.*?>/g, '<p>');
+
+        return html;
+    }
+}
+
+module.exports = Editor;
+
+},{"./caret":3,"./utils":5,"jquery":1,"keymaster":2}],5:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+    getElementPosition: function(el) {
+        var xPos = 0,
+            yPos = 0;
+
+        while (el) {
+            xPos += el.offsetLeft + el.clientLeft;
+            yPos += el.offsetTop  + el.clientTop;
+
+            el = el.offsetParent;
+        }
+
+        return {
+            x: xPos,
+            y: yPos
+        };
+    },
+
+    getNodeIndexFromDomNodeList: function(nodeList, node) {
+        for(let i=0; i<nodeList.length; i++) {
+            if(nodeList[i] === node) return i;
+        }
+        return -1;
+    }
+};
+
+},{}],6:[function(require,module,exports){
+'use strict';
+
+var Changeset = require('changesets').Changeset,
+    diffMatchPatch = require('diff_match_patch'),
+    diffEngine = new diffMatchPatch.diff_match_patch,
+    popsicle = require('popsicle'),
+    Faye = require('faye');
+
+var Buffer = function() {
+    this.value = null;
+    this.inFlightOp = null;
+};
+
+Buffer.prototype = {
+    add: function(changeset) {
+        this.value = !this.value ? changeset : this.value.merge(changeset);
+    },
+
+    // this function returns a transformed version of the foreignChange which
+    // fits into the current client state. This is required because the client
+    // could have some changes which has not been send to the server yet. So, the
+    // server don't know about these changes and the changes comming from the server
+    // would not fit into the client state.
+    transformAgainst: function(foreignChange, changeInTransmission) {
+        var c1, c2;
+
+        if(!changeInTransmission) {
+            return foreignChange;
+        }
+
+        this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
+
+        c2 = foreignChange.transformAgainst(this.inFlightOp, true);
+        this.inFlightOp = this.inFlightOp.transformAgainst(foreignChange, false);
+
+        if(!this.getValue()) return c2;
+
+        // instead of using a bridge we use c2 to transform the
+        // foreignChange (change from server) into the client state.
+        c1 = c2.transformAgainst(this.value, true);
+
+        // "Once we have this inferred operation, c2, we can use it
+        // to transform the buffer (b) "down" one step"
+        this.value = this.value.transformAgainst(c2, false);
+
+        return c1;
+    },
+
+    clear: function() {
+        this.value = null;
+        this.inFlightOp = null;
+    },
+
+    getValue: function() {
+        return this.value;
+    }
+};
+
+var RemoteVariable = function (variableId, serverURL, clientId, actorId) {
+    this.variableId = variableId;
+    this.serverURL = serverURL;
+    this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
+    this.observers = [];
+    this.buffer = new Buffer();
+
+    // because the same user can be logged on two browsers/laptops, we need
+    // a clientId and an actorId
+    this.clientId = clientId;
+    this.actorId = actorId;
+
+    // The change sent to the server but not yet acknowledged.
+    this.changeInTransmission;
+};
+
+RemoteVariable.prototype = {
+
+    load: function(done) {
+        var self = this;
+
+        popsicle.get(this.serverURL +  '/variables/' + this.variableId).then((result) => {
+            result = JSON.parse(result.body);
+            self.version = result.changeId;
+            self.value = result.value;
+            self.buffer.clear();
+            self._notifySubscribers();
+            done && done();
+        });
+
+        self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, (change) => {
+            if(change.clientId === self.clientId) {
+                self._processApproval(change);
+            } else {
+                self._processForeignChange(change);
+            }
+        });
+
+        return self;
+    },
+
+    getValue: function() {
+        return this.value;
+    },
+
+    setValue: function(newValue, callback) {
+        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+
+        if(this.changeInTransmission) {
+            this.buffer.add(changeset);
+        } else {
+            this._transmitChange(changeset, this.version);
+        }
+
+        this.value = newValue;
+    },
+
+    subscribe: function(observer) {
+        this.observers.push(observer);
+    },
+
+    _notifySubscribers: function() {
+        this.observers.forEach(function(callback) {
+            callback();
+        });
+    },
+
+    _processForeignChange: function(foreignChange) {
+        try {
+            var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
+            var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
+            this.value = transformedForeignChange.apply(this.value);
+            this.version = foreignChange.id;
+            this._notifySubscribers(transformedForeignChange);
+        } catch(ex) {
+            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
+            this.load();
+        }
+    },
+
+    _processApproval: function(approval) {
+        var bufferedChanges = this.buffer.getValue();
+        this.changeInTransmission = null;
+        this.version = approval.id;
+        this.buffer.clear();
+
+        if(bufferedChanges) {
+            this._transmitChange(bufferedChanges, approval.id);
+        }
+    },
+
+    _transmitChange: function(changeset, version) {
+
+        this.changeInTransmission = {
+            variableId: this.variableId,
+            change: {
+                changeset: changeset.pack(),
+                parentVersion: version
+            },
+            actorId: this.actorId,
+            clientId: this.clientId
+        };
+
+        this.bayeuxClient.publish('/uncommited/changes/variable/' + this.variableId, this.changeInTransmission);
+    }
+};
+
+module.exports = RemoteVariable;
+
+},{"changesets":15,"diff_match_patch":19,"faye":20,"popsicle":61}],7:[function(require,module,exports){
+'use strict';
+
+function UUID() {
+    var d = new Date().getTime();
+    this.uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = (d + Math.random()*16)%16 | 0;
+        d = Math.floor(d/16);
+        return (c=='x' ? r : (r&0x3|0x8)).toString(16);
+    });
+};
+
+UUID.prototype.getValue = function() {
+    return this.uuid;
+};
+
+module.exports = UUID;
+
+},{}],8:[function(require,module,exports){
+"use strict";
+
+// rawAsap provides everything we need except exception management.
+var rawAsap = require("./raw");
+// RawTasks are recycled to reduce GC churn.
+var freeTasks = [];
+// We queue errors to ensure they are thrown in right order (FIFO).
+// Array-as-queue is good enough here, since we are just dealing with exceptions.
+var pendingErrors = [];
+var requestErrorThrow = rawAsap.makeRequestCallFromTimer(throwFirstError);
+
+function throwFirstError() {
+    if (pendingErrors.length) {
+        throw pendingErrors.shift();
+    }
+}
+
+/**
+ * Calls a task as soon as possible after returning, in its own event, with priority
+ * over other events like animation, reflow, and repaint. An error thrown from an
+ * event will not interrupt, nor even substantially slow down the processing of
+ * other events, but will be rather postponed to a lower priority event.
+ * @param {{call}} task A callable object, typically a function that takes no
+ * arguments.
+ */
+module.exports = asap;
+function asap(task) {
+    var rawTask;
+    if (freeTasks.length) {
+        rawTask = freeTasks.pop();
+    } else {
+        rawTask = new RawTask();
+    }
+    rawTask.task = task;
+    rawAsap(rawTask);
+}
+
+// We wrap tasks with recyclable task objects.  A task object implements
+// `call`, just like a function.
+function RawTask() {
+    this.task = null;
+}
+
+// The sole purpose of wrapping the task is to catch the exception and recycle
+// the task object after its single use.
+RawTask.prototype.call = function () {
+    try {
+        this.task.call();
+    } catch (error) {
+        if (asap.onerror) {
+            // This hook exists purely for testing purposes.
+            // Its name will be periodically randomized to break any code that
+            // depends on its existence.
+            asap.onerror(error);
+        } else {
+            // In a web browser, exceptions are not fatal. However, to avoid
+            // slowing down the queue of pending tasks, we rethrow the error in a
+            // lower priority turn.
+            pendingErrors.push(error);
+            requestErrorThrow();
+        }
+    } finally {
+        this.task = null;
+        freeTasks[freeTasks.length] = this;
+    }
+};
+
+},{"./raw":9}],9:[function(require,module,exports){
+(function (global){
+"use strict";
+
+// Use the fastest means possible to execute a task in its own turn, with
+// priority over other events including IO, animation, reflow, and redraw
+// events in browsers.
+//
+// An exception thrown by a task will permanently interrupt the processing of
+// subsequent tasks. The higher level `asap` function ensures that if an
+// exception is thrown by a task, that the task queue will continue flushing as
+// soon as possible, but if you use `rawAsap` directly, you are responsible to
+// either ensure that no exceptions are thrown from your task, or to manually
+// call `rawAsap.requestFlush` if an exception is thrown.
+module.exports = rawAsap;
+function rawAsap(task) {
+    if (!queue.length) {
+        requestFlush();
+        flushing = true;
+    }
+    // Equivalent to push, but avoids a function call.
+    queue[queue.length] = task;
+}
+
+var queue = [];
+// Once a flush has been requested, no further calls to `requestFlush` are
+// necessary until the next `flush` completes.
+var flushing = false;
+// `requestFlush` is an implementation-specific method that attempts to kick
+// off a `flush` event as quickly as possible. `flush` will attempt to exhaust
+// the event queue before yielding to the browser's own event loop.
+var requestFlush;
+// The position of the next task to execute in the task queue. This is
+// preserved between calls to `flush` so that it can be resumed if
+// a task throws an exception.
+var index = 0;
+// If a task schedules additional tasks recursively, the task queue can grow
+// unbounded. To prevent memory exhaustion, the task queue will periodically
+// truncate already-completed tasks.
+var capacity = 1024;
+
+// The flush function processes all tasks that have been scheduled with
+// `rawAsap` unless and until one of those tasks throws an exception.
+// If a task throws an exception, `flush` ensures that its state will remain
+// consistent and will resume where it left off when called again.
+// However, `flush` does not make any arrangements to be called again if an
+// exception is thrown.
+function flush() {
+    while (index < queue.length) {
+        var currentIndex = index;
+        // Advance the index before calling the task. This ensures that we will
+        // begin flushing on the next task the task throws an error.
+        index = index + 1;
+        queue[currentIndex].call();
+        // Prevent leaking memory for long chains of recursive calls to `asap`.
+        // If we call `asap` within tasks scheduled by `asap`, the queue will
+        // grow, but to avoid an O(n) walk for every task we execute, we don't
+        // shift tasks off the queue after they have been executed.
+        // Instead, we periodically shift 1024 tasks off the queue.
+        if (index > capacity) {
+            // Manually shift all values starting at the index back to the
+            // beginning of the queue.
+            for (var scan = 0, newLength = queue.length - index; scan < newLength; scan++) {
+                queue[scan] = queue[scan + index];
+            }
+            queue.length -= index;
+            index = 0;
+        }
+    }
+    queue.length = 0;
+    index = 0;
+    flushing = false;
+}
+
+// `requestFlush` is implemented using a strategy based on data collected from
+// every available SauceLabs Selenium web driver worker at time of writing.
+// https://docs.google.com/spreadsheets/d/1mG-5UYGup5qxGdEMWkhP6BWCz053NUb2E1QoUTU16uA/edit#gid=783724593
+
+// Safari 6 and 6.1 for desktop, iPad, and iPhone are the only browsers that
+// have WebKitMutationObserver but not un-prefixed MutationObserver.
+// Must use `global` or `self` instead of `window` to work in both frames and web
+// workers. `global` is a provision of Browserify, Mr, Mrs, or Mop.
+
+/* globals self */
+var scope = typeof global !== "undefined" ? global : self;
+var BrowserMutationObserver = scope.MutationObserver || scope.WebKitMutationObserver;
+
+// MutationObservers are desirable because they have high priority and work
+// reliably everywhere they are implemented.
+// They are implemented in all modern browsers.
+//
+// - Android 4-4.3
+// - Chrome 26-34
+// - Firefox 14-29
+// - Internet Explorer 11
+// - iPad Safari 6-7.1
+// - iPhone Safari 7-7.1
+// - Safari 6-7
+if (typeof BrowserMutationObserver === "function") {
+    requestFlush = makeRequestCallFromMutationObserver(flush);
+
+// MessageChannels are desirable because they give direct access to the HTML
+// task queue, are implemented in Internet Explorer 10, Safari 5.0-1, and Opera
+// 11-12, and in web workers in many engines.
+// Although message channels yield to any queued rendering and IO tasks, they
+// would be better than imposing the 4ms delay of timers.
+// However, they do not work reliably in Internet Explorer or Safari.
+
+// Internet Explorer 10 is the only browser that has setImmediate but does
+// not have MutationObservers.
+// Although setImmediate yields to the browser's renderer, it would be
+// preferrable to falling back to setTimeout since it does not have
+// the minimum 4ms penalty.
+// Unfortunately there appears to be a bug in Internet Explorer 10 Mobile (and
+// Desktop to a lesser extent) that renders both setImmediate and
+// MessageChannel useless for the purposes of ASAP.
+// https://github.com/kriskowal/q/issues/396
+
+// Timers are implemented universally.
+// We fall back to timers in workers in most engines, and in foreground
+// contexts in the following browsers.
+// However, note that even this simple case requires nuances to operate in a
+// broad spectrum of browsers.
+//
+// - Firefox 3-13
+// - Internet Explorer 6-9
+// - iPad Safari 4.3
+// - Lynx 2.8.7
+} else {
+    requestFlush = makeRequestCallFromTimer(flush);
+}
+
+// `requestFlush` requests that the high priority event queue be flushed as
+// soon as possible.
+// This is useful to prevent an error thrown in a task from stalling the event
+// queue if the exception handled by Node.js’s
+// `process.on("uncaughtException")` or by a domain.
+rawAsap.requestFlush = requestFlush;
+
+// To request a high priority event, we induce a mutation observer by toggling
+// the text of a text node between "1" and "-1".
+function makeRequestCallFromMutationObserver(callback) {
+    var toggle = 1;
+    var observer = new BrowserMutationObserver(callback);
+    var node = document.createTextNode("");
+    observer.observe(node, {characterData: true});
+    return function requestCall() {
+        toggle = -toggle;
+        node.data = toggle;
+    };
+}
+
+// The message channel technique was discovered by Malte Ubl and was the
+// original foundation for this library.
+// http://www.nonblocking.io/2011/06/windownexttick.html
+
+// Safari 6.0.5 (at least) intermittently fails to create message ports on a
+// page's first load. Thankfully, this version of Safari supports
+// MutationObservers, so we don't need to fall back in that case.
+
+// function makeRequestCallFromMessageChannel(callback) {
+//     var channel = new MessageChannel();
+//     channel.port1.onmessage = callback;
+//     return function requestCall() {
+//         channel.port2.postMessage(0);
+//     };
+// }
+
+// For reasons explained above, we are also unable to use `setImmediate`
+// under any circumstances.
+// Even if we were, there is another bug in Internet Explorer 10.
+// It is not sufficient to assign `setImmediate` to `requestFlush` because
+// `setImmediate` must be called *by name* and therefore must be wrapped in a
+// closure.
+// Never forget.
+
+// function makeRequestCallFromSetImmediate(callback) {
+//     return function requestCall() {
+//         setImmediate(callback);
+//     };
+// }
+
+// Safari 6.0 has a problem where timers will get lost while the user is
+// scrolling. This problem does not impact ASAP because Safari 6.0 supports
+// mutation observers, so that implementation is used instead.
+// However, if we ever elect to use timers in Safari, the prevalent work-around
+// is to add a scroll event listener that calls for a flush.
+
+// `setTimeout` does not call the passed callback if the delay is less than
+// approximately 7 in web workers in Firefox 8 through 18, and sometimes not
+// even then.
+
+function makeRequestCallFromTimer(callback) {
+    return function requestCall() {
+        // We dispatch a timeout with a specified delay of 0 for engines that
+        // can reliably accommodate that request. This will usually be snapped
+        // to a 4 milisecond delay, but once we're flushing, there's no delay
+        // between events.
+        var timeoutHandle = setTimeout(handleTimer, 0);
+        // However, since this timer gets frequently dropped in Firefox
+        // workers, we enlist an interval handle that will try to fire
+        // an event 20 times per second until it succeeds.
+        var intervalHandle = setInterval(handleTimer, 50);
+
+        function handleTimer() {
+            // Whichever timer succeeds will cancel both timers and
+            // execute the callback.
+            clearTimeout(timeoutHandle);
+            clearInterval(intervalHandle);
+            callback();
+        }
+    };
+}
+
+// This is for `asap.js` only.
+// Its name will be periodically randomized to break any code that depends on
+// its existence.
+rawAsap.makeRequestCallFromTimer = makeRequestCallFromTimer;
+
+// ASAP was originally a nextTick shim included in Q. This was factored out
+// into this ASAP package. It was later adapted to RSVP which made further
+// amendments. These decisions, particularly to marginalize MessageChannel and
+// to capture the MutationObserver implementation in a closure, were integrated
+// back into ASAP proper.
+// https://github.com/tildeio/rsvp.js/blob/cddf7232546a9cf858524b75cde6f9edf72620a7/lib/rsvp/asap.js
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],10:[function(require,module,exports){
+var Changeset = require('./Changeset')
+  , Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
+  , Insert = require('./operations/Insert')
+
+function Builder() {
+  this.ops = []
+  this.addendum = ''
+  this.removendum = ''
+}
+
+module.exports = Builder
+
+Builder.prototype.keep =
+Builder.prototype.retain = function(len) {
+  this.ops.push(new Retain(len))
+  return this
+}
+
+Builder.prototype.delete =
+Builder.prototype.skip = function(str) {
+  this.removendum += str
+  this.ops.push(new Skip(str.length))
+  return this
+}
+
+Builder.prototype.add =
+Builder.prototype.insert = function(str) {
+  this.addendum += str
+  this.ops.push(new Insert(str.length))
+  return this
+}
+
+Builder.prototype.end = function() {
+  var cs = new Changeset(this.ops)
+  cs.addendum = this.addendum
+  cs.removendum = this.removendum
+  return cs
+}
+
+},{"./Changeset":11,"./operations/Insert":16,"./operations/Retain":17,"./operations/Skip":18}],11:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+/**
+ * A sequence of consecutive operations
+ *
+ * @param ops.. <Operation> all passed operations will be added to the changeset
+ */
+function Changeset(ops/*or ops..*/) {
+  this.addendum = ""
+  this.removendum = ""
+  this.inputLength = 0
+  this.outputLength = 0
+
+  if(!Array.isArray(ops)) ops = arguments
+  for(var i=0; i<ops.length; i++) {
+    this.push(ops[i])
+    this.inputLength += ops[i].input
+    this.outputLength += ops[i].output
+  }
+}
+
+// True inheritance
+Changeset.prototype = Object.create(Array.prototype, {
+  constructor: {
+    value: Changeset,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Changeset
+
+var TextTransform = require('./TextTransform')
+  , ChangesetTransform = require('./ChangesetTransform')
+
+var Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
+  , Insert = require('./operations/Insert')
+
+var Builder = require('./Builder')
+
+/**
+ * Returns an array containing the ops that are within the passed range
+ * (only op.input is counted; thus not counting inserts to the range length, yet they are part of the range)
+ */
+Changeset.prototype.subrange = function(start, len) {
+  var range = []
+    , op, oplen
+    , l=0
+  for(var i=0, pos=0; i<this.length && l < len; i++) {
+    op = this[i]
+    if(op.input+pos >= start) {
+      if(op.input) {
+        if(op.length != Infinity) oplen = op.length -Math.max(0, start-pos) -Math.max(0, (op.length+pos)-(start+len))
+        else oplen = len
+        if (oplen !== 0) range.push( op.derive(oplen) ) // (Don't copy over more than len param allows)
+      }
+      else {
+        range.push( op.derive(op.length) )
+        oplen = 0
+      }
+      l += oplen
+    }
+    pos += op.input
+  }
+  return range
+}
+
+/**
+ * Merge two changesets (that are based on the same state!) so that the resulting changseset
+ * has the same effect as both orignal ones applied one after the other
+ *
+ * @param otherCs <Changeset>
+ * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely))
+ * @returns <Changeset>
+ */
+Changeset.prototype.merge = function(otherCs, left) {
+  if(!(otherCs instanceof Changeset)) {
+    throw new Error('Argument must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
+  }
+
+  if(otherCs.inputLength !== this.outputLength) {
+    throw new Error("Changeset lengths for merging don't match! Input length of younger cs: "+otherCs.inputLength+', output length of older cs:'+this.outputLength)
+  }
+
+  var newops = []
+    , addPtr1 = 0
+    , remPtr1 = 0
+    , addPtr2 = 0
+    , remPtr2 = 0
+    , newaddendum = ''
+    , newremovendum = ''
+
+  zip(this, otherCs, function(op1, op2) {
+    // console.log(newops)
+    // console.log(op1, op2)
+
+    // I'm deleting something -- the other cs can't know that, so just overtake my op
+    if(op1 && !op1.output) {
+      newops.push(op1.merge().clone())
+      newremovendum += this.removendum.substr(remPtr1, op1.length) // overtake added chars
+      remPtr1 += op1.length
+      op1.length = 0 // don't gimme that one again.
+      return
+    }
+
+    // op2 is an insert
+    if(op2 && !op2.input) {
+      newops.push(op2.merge().clone())
+      newaddendum += otherCs.addendum.substr(addPtr2, op2.length) // overtake added chars
+      addPtr2 += op2.length
+      op2.length = 0 // don't gimme that one again.
+      return
+    }
+
+    // op2 is either a retain or a skip
+    if(op2 && op2.input && op1) {
+      // op2 retains whatever we do here (retain or insert), so just clone my op
+      if(op2.output) {
+        newops.push(op1.merge(op2).clone())
+        if(!op1.input) { // overtake addendum
+          newaddendum += this.addendum.substr(addPtr1, op1.length)
+          addPtr1 += op1.length
+        }
+        op1.length = 0 // don't gimme these again
+        op2.length = 0
+      }else
+
+      // op2 deletes my retain here, so just clone the delete
+      // (op1 can only be a retain and no skip here, cause we've handled skips above already)
+      if(!op2.output && op1.input) {
+        newops.push(op2.merge(op1).clone())
+        newremovendum += otherCs.removendum.substr(remPtr2, op2.length) // overtake added chars
+        remPtr2 += op2.length
+        op1.length = 0 // don't gimme these again
+        op2.length = 0
+      }else
+
+      //otherCs deletes something I added (-1) +1 = 0
+      {
+        addPtr1 += op1.length
+        op1.length = 0 // don't gimme these again
+        op2.length = 0
+      }
+      return
+    }
+
+    console.log('oops', arguments)
+    throw new Error('oops. This case hasn\'t been considered by the developer (error code: PBCAC)')
+  }.bind(this))
+
+  var newCs = new Changeset(newops)
+  newCs.addendum = newaddendum
+  newCs.removendum = newremovendum
+
+  return newCs
+}
+
+/**
+ * A private and quite handy function that slices ops into equally long pieces and applies them on a mapping function
+ * that can determine the iteration steps by setting op.length to 0 on an op (equals using .next() in a usual iterator)
+ */
+function zip(cs1, cs2, func) {
+  var opstack1 = cs1.map(function(op) {return op.clone()}) // copy ops
+    , opstack2 = cs2.map(function(op) {return op.clone()})
+
+  var op2, op1
+  while(opstack1.length || opstack2.length) {// iterate through all outstanding ops of this cs
+    op1 = opstack1[0]? opstack1[0].clone() : null
+    op2 = opstack2[0]? opstack2[0].clone() : null
+
+    if(op1) {
+      if(op2) op1 = op1.derive(Math.min(op1.length, op2.length)) // slice 'em into equally long pieces
+      if(opstack1[0].length > op1.length) opstack1[0] = opstack1[0].derive(opstack1[0].length-op1.length)
+      else opstack1.shift()
+    }
+
+    if(op2) {
+      if(op1) op2 = op2.derive(Math.min(op1.length, op2.length)) // slice 'em into equally long pieces
+      if(opstack2[0].length > op2.length) opstack2[0] = opstack2[0].derive(opstack2[0].length-op2.length)
+      else opstack2.shift()
+    }
+
+    func(op1, op2)
+
+    if(op1 && op1.length) opstack1.unshift(op1)
+    if(op2 && op2.length) opstack2.unshift(op2)
+  }
+}
+
+/**
+ * Inclusion Transformation (IT) or Forward Transformation
+ *
+ * transforms the operations of the current changeset against the
+ * all operations in another changeset in such a way that the
+ * effects of the latter are effectively included.
+ * This is basically like a applying the other cs on this one.
+ *
+ * @param otherCs <Changeset>
+ * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
+ *
+ * @returns <Changeset>
+ */
+Changeset.prototype.transformAgainst = function(otherCs, left) {
+  if(!(otherCs instanceof Changeset)) {
+    throw new Error('Argument to Changeset#transformAgainst must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
+  }
+
+  if(this.inputLength != otherCs.inputLength) {
+    throw new Error('Can\'t transform changesets with differing inputLength: '+this.inputLength+' and '+otherCs.inputLength)
+  }
+
+  var transformation = new ChangesetTransform(this, [new Retain(Infinity)])
+  otherCs.forEach(function(op) {
+    var nextOp = this.subrange(transformation.pos, Infinity)[0] // next op of this cs
+    if(nextOp && !nextOp.input && !op.input) { // two inserts tied; left breaks it
+      if (left) transformation.writeOutput(transformation.readInput(nextOp.length))
+    }
+    op.apply(transformation)
+  }.bind(this))
+
+  return transformation.result()
+}
+
+/**
+ * Exclusion Transformation (ET) or Backwards Transformation
+ *
+ * transforms all operations in the current changeset against the operations
+ * in another changeset in such a way that the impact of the latter are effectively excluded
+ *
+ * @param changeset <Changeset> the changeset to substract from this one
+ * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
+ * @returns <Changeset>
+ */
+Changeset.prototype.substract = function(changeset, left) {
+  // The current operations assume that the changes in
+  // `changeset` happened before, so for each of those ops
+  // we create an operation that undoes its effect and
+  // transform all our operations on top of the inverse changes
+  return this.transformAgainst(changeset.invert(), left)
+}
+
+/**
+ * Returns the inverse Changeset of the current one
+ *
+ * Changeset.invert().apply(Changeset.apply(document)) == document
+ */
+Changeset.prototype.invert = function() {
+  // invert all ops
+  var newCs = new Changeset(this.map(function(op) {
+    return op.invert()
+  }))
+
+  // removendum becomes addendum and vice versa
+  newCs.addendum = this.removendum
+  newCs.removendum = this.addendum
+
+  return newCs
+}
+
+/**
+ * Applies this changeset on a text
+ */
+Changeset.prototype.apply = function(input) {
+  // pre-requisites
+  if(input.length != this.inputLength) throw new Error('Input length doesn\'t match expected length. expected: '+this.inputLength+'; actual: '+input.length)
+
+  var operation = new TextTransform(input, this.addendum, this.removendum)
+
+  this.forEach(function(op) {
+    // each Operation has access to all pointers as well as the input, addendum and removendum (the latter are immutable)
+    op.apply(operation)
+  }.bind(this))
+
+  return operation.result()
+}
+
+/**
+ * Returns an array of strings describing this changeset's operations
+ */
+Changeset.prototype.inspect = function() {
+  var j = 0
+  return this.map(function(op) {
+    var string = ''
+
+    if(!op.input) { // if Insert
+      string = this.addendum.substr(j,op.length)
+      j += op.length
+      return string
+    }
+
+    for(var i=0; i<op.length; i++) string += op.symbol
+    return string
+  }.bind(this)).join('')
+}
+
+/**
+ * Serializes the given changeset in order to return a (hopefully) more compact representation
+ * than json that can be sent through a network or stored in a database
+ *
+ * Numbers are converted to the base 36, unsafe chars in the text are urlencoded
+ *
+ * @param cs <Changeset> The changeset to be serialized
+ * @returns <String> The serialized changeset
+ */
+Changeset.prototype.pack = function() {
+  var packed = this.map(function(op) {
+    return op.pack()
+  }).join('')
+
+  var addendum = this.addendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
+    , removendum = this.removendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
+  return packed+'|'+addendum+'|'+removendum
+}
+Changeset.prototype.toString = function() {
+  return this.pack()
+}
+
+/**
+ * Unserializes the output of cs.text.Changeset#toString()
+ *
+ * @param packed <String> The serialized changeset
+ * @param <cs.Changeset>
+ */
+Changeset.unpack = function(packed) {
+  if(packed == '') throw new Error('Cannot unpack from empty string')
+  var components = packed.split('|')
+    , opstring = components[0]
+    , addendum = components[1].replace(/%7c/gi, '|').replace(/%25/g, '%')
+    , removendum = components[2].replace(/%7c/gi, '|').replace(/%25/g, '%')
+
+  var matches = opstring.match(/[=+-]([^=+-])+/g)
+  if(!matches) throw new Error('Cannot unpack invalidly serialized op string')
+
+  var ops = []
+  matches.forEach(function(s) {
+    var symbol = s.substr(0,1)
+      , data = s.substr(1)
+    if(Skip.prototype.symbol == symbol) return ops.push(Skip.unpack(data))
+    if(Insert.prototype.symbol == symbol) return ops.push(Insert.unpack(data))
+    if(Retain.prototype.symbol == symbol) return ops.push(Retain.unpack(data))
+    throw new Error('Invalid changeset representation passed to Changeset.unpack')
+  })
+
+  var cs = new Changeset(ops)
+  cs.addendum = addendum
+  cs.removendum = removendum
+
+  return cs
+}
+
+Changeset.create = function() {
+  return new Builder
+}
+
+/**
+ * Returns a Changeset containing the operations needed to transform text1 into text2
+ *
+ * @param text1 <String>
+ * @param text2 <String>
+ */
+Changeset.fromDiff = function(diff) {
+  /**
+   * The data structure representing a diff is an array of tuples:
+   * [[DIFF_DELETE, 'Hello'], [DIFF_INSERT, 'Goodbye'], [DIFF_EQUAL, ' world.']]
+   * which means: delete 'Hello', add 'Goodbye' and keep ' world.'
+   */
+  var DIFF_DELETE = -1;
+  var DIFF_INSERT = 1;
+  var DIFF_EQUAL = 0;
+
+  var ops = []
+    , removendum = ''
+    , addendum = ''
+
+  diff.forEach(function(d) {
+    if (DIFF_DELETE == d[0]) {
+      ops.push(new Skip(d[1].length))
+      removendum += d[1]
+    }
+
+    if (DIFF_INSERT == d[0]) {
+      ops.push(new Insert(d[1].length))
+      addendum += d[1]
+    }
+
+    if(DIFF_EQUAL == d[0]) {
+      ops.push(new Retain(d[1].length))
+    }
+  })
+
+  var cs = new Changeset(ops)
+  cs.addendum = addendum
+  cs.removendum = removendum
+  return cs
+}
+
+},{"./Builder":10,"./ChangesetTransform":12,"./TextTransform":14,"./operations/Insert":16,"./operations/Retain":17,"./operations/Skip":18}],12:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational ChangesetTransform (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
+  , Insert = require('./operations/Insert')
+  , Changeset = require('./Changeset')
+
+
+function ChangesetTransform(inputCs, addendum) {
+  this.output = []
+  this.addendum = addendum
+  this.newRemovendum = ''
+  this.newAddendum = ''
+
+  this.cs = inputCs
+  this.pos = 0
+  this.addendumPointer = 0
+  this.removendumPointer = 0
+}
+module.exports = ChangesetTransform
+
+ChangesetTransform.prototype.readInput = function (len) {
+  var ret = this.cs.subrange(this.pos, len)
+  this.pos += len
+  return ret
+}
+
+ChangesetTransform.prototype.readAddendum = function (len) {
+  //return [new Retain(len)]
+  var ret = this.subrange(this.addendum, this.addendumPointer, len)
+  this.addendumPointer += len
+  return ret
+}
+
+ChangesetTransform.prototype.writeRemovendum = function (range) {
+  range
+    .filter(function(op) {return !op.output})
+    .forEach(function(op) {
+      this.removendumPointer += op.length
+    }.bind(this))
+}
+
+ChangesetTransform.prototype.writeOutput = function (range) {
+  this.output = this.output.concat(range)
+  range
+    .filter(function(op) {return !op.output})
+    .forEach(function(op) {
+      this.newRemovendum += this.cs.removendum.substr(this.removendumPointer, op.length)
+      this.removendumPointer += op.length
+    }.bind(this))
+}
+
+ChangesetTransform.prototype.subrange = function (range, start, len) {
+  if(len) return this.cs.subrange.call(range, start, len)
+  else return range.filter(function(op){ return !op.input})
+}
+
+ChangesetTransform.prototype.result = function() {
+  this.writeOutput(this.readInput(Infinity))
+  var newCs = new Changeset(this.output)
+  newCs.addendum = this.cs.addendum
+  newCs.removendum = this.newRemovendum
+  return newCs
+}
+
+},{"./Changeset":11,"./operations/Insert":16,"./operations/Retain":17,"./operations/Skip":18}],13:[function(require,module,exports){
+function Operator() {
+}
+
+module.exports = Operator
+
+Operator.prototype.clone = function() {
+  return this.derive(this.length)
+}
+
+Operator.prototype.derive = function(len) {
+  return new (this.constructor)(len)
+}
+
+Operator.prototype.pack = function() {
+  return this.symbol + (this.length).toString(36)
+}
+
+},{}],14:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational Apply (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
+  , Insert = require('./operations/Insert')
+  , Insert = require('./Changeset')
+
+
+function TextTransform(input, addendum, removendum) {
+  this.output = ''
+
+  this.input = input
+  this.addendum = addendum
+  this.removendum = removendum
+  this.pos = 0
+  this.addPos = 0
+  this.remPos = 0
+}
+module.exports = TextTransform
+
+TextTransform.prototype.readInput = function (len) {
+  var ret = this.input.substr(this.pos, len)
+  this.pos += len
+  return ret
+}
+
+TextTransform.prototype.readAddendum = function (len) {
+  var ret = this.addendum.substr(this.addPos, len)
+  this.addPos += len
+  return ret
+}
+
+TextTransform.prototype.writeRemovendum = function (range) {
+  //var expected = this.removendum.substr(this.remPos, range.length)
+  //if(range != expected) throw new Error('Removed chars don\'t match removendum. expected: '+expected+'; actual: '+range)
+  this.remPos += range.length
+}
+
+TextTransform.prototype.writeOutput = function (range) {
+  this.output += range
+}
+
+TextTransform.prototype.subrange = function (range, start, len) {
+  return range.substr(start, len)
+}
+
+TextTransform.prototype.result = function() {
+  this.writeOutput(this.readInput(Infinity))
+  return this.output
+}
+
+},{"./Changeset":11,"./operations/Insert":16,"./operations/Retain":17,"./operations/Skip":18}],15:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Changeset = require('./Changeset')
+  , Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
+  , Insert = require('./operations/Insert')
+
+exports.Operator = require('./Operator')
+exports.Changeset = Changeset
+exports.Insert = Insert
+exports.Retain = Retain
+exports.Skip = Skip
+
+if('undefined' != typeof window) window.changesets = exports
+
+/**
+ * Serializes the given changeset in order to return a (hopefully) more compact representation
+ * that can be sent through a network or stored in a database
+ * @alias cs.text.Changeset#pack
+ */
+exports.pack = function(cs) {
+  return cs.pack()
+}
+
+/**
+ * Unserializes the output of cs.text.pack
+ * @alias cs.text.Changeset.unpack
+ */
+exports.unpack = function(packed) {
+  return Changeset.unpack(packed)
+}
+
+
+
+
+/**
+ * shareJS ot type API sepc support
+ */
+
+exports.name = 'changesets'
+exports.url = 'https://github.com/marcelklehr/changesets'
+
+/**
+ * create([initialText])
+ *
+ * creates a snapshot (optionally with supplied intial text)
+ */
+exports.create = function(initText) {
+  return initText || ''
+}
+
+/**
+ * Apply a changeset on a snapshot creating a new one
+ *
+ * The old snapshot object mustn't be used after calling apply on it
+ * returns the resulting
+ */
+exports.apply = function(snapshot, op) {
+  op = exports.unpack(op)
+  return op.apply(snapshot)
+}
+
+/**
+ * Transform changeset1 against changeset2
+ */
+exports.transform = function (op1, op2, side) {
+  op1 = exports.unpack(op1)
+  op2 = exports.unpack(op2)
+  return exports.pack(op1.transformAgainst(op2, ('left'==side)))
+}
+
+/**
+ * Merge two changesets into one
+ */
+exports.compose = function (op1, op2) {
+  op1 = exports.unpack(op1)
+  op2 = exports.unpack(op2)
+  return exports.pack(op1.merge(op2))
+}
+
+/**
+ * Invert a changeset
+ */
+exports.invert = function(op) {
+  return exports.pack(exports.unpack(op).invert())
+}
+
+},{"./Changeset":11,"./Operator":13,"./operations/Insert":16,"./operations/Retain":17,"./operations/Skip":18}],16:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Operator = require('../Operator')
+
+/**
+ * Insert Operator
+ * Defined by:
+ * - length
+ * - input=0
+ * - output=length
+ *
+ * @param length <Number> How many chars to be inserted
+ */
+function Insert(length) {
+  this.length = length
+  this.input = 0
+  this.output = length
+}
+
+// True inheritance
+Insert.prototype = Object.create(Operator.prototype, {
+  constructor: {
+    value: Insert,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Insert
+Insert.prototype.symbol = '+'
+
+var Skip = require('./Skip')
+  , Retain = require('./Retain')
+
+Insert.prototype.apply = function(t) {
+  t.writeOutput(t.readAddendum(this.output))
+}
+
+Insert.prototype.merge = function() {
+  return this
+}
+
+Insert.prototype.invert = function() {
+  return new Skip(this.length)
+}
+
+Insert.unpack = function(data) {
+  return new Insert(parseInt(data, 36))
+}
+
+},{"../Operator":13,"./Retain":17,"./Skip":18}],17:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Operator = require('../Operator')
+
+/**
+ * Retain Operator
+ * Defined by:
+ * - length
+ * - input=output=length
+ *
+ * @param length <Number> How many chars to retain
+ */
+function Retain(length) {
+  this.length = length
+  this.input = length
+  this.output = length
+}
+
+// True inheritance
+Retain.prototype = Object.create(Operator.prototype, {
+  constructor: {
+    value: Retain,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Retain
+Retain.prototype.symbol = '='
+
+Retain.prototype.apply = function(t) {
+  t.writeOutput(t.readInput(this.input))
+}
+
+Retain.prototype.invert = function() {
+  return this
+}
+
+Retain.prototype.merge = function(op2) {
+  return this
+}
+
+Retain.unpack = function(data) {
+  return new Retain(parseInt(data, 36))
+}
+
+},{"../Operator":13}],18:[function(require,module,exports){
+/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Operator = require('../Operator')
+
+/**
+ * Skip Operator
+ * Defined by:
+ * - length
+ * - input=length
+ * - output=0
+ *
+ * @param length <Number> How many chars to be Skip
+ */
+function Skip(length) {
+  this.length = length
+  this.input = length
+  this.output = 0
+}
+
+// True inheritance
+Skip.prototype = Object.create(Operator.prototype, {
+  constructor: {
+    value: Skip,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Skip
+Skip.prototype.symbol = '-'
+
+var Insert = require('./Insert')
+  , Retain = require('./Retain')
+  , Changeset = require('../Changeset')
+
+Skip.prototype.apply = function(t) {
+  var input = t.readInput(this.input)
+  t.writeRemovendum(input)
+  t.writeOutput(t.subrange(input, 0, this.output)) // retain Inserts in my range
+}
+
+Skip.prototype.merge = function(op2) {
+  return this
+}
+
+Skip.prototype.invert = function() {
+  return new Insert(this.length)
+}
+
+Skip.unpack = function(data) {
+  return new Skip(parseInt(data, 36))
+}
+
+},{"../Changeset":11,"../Operator":13,"./Insert":16,"./Retain":17}],19:[function(require,module,exports){
+/**
+ * Diff Match and Patch
+ *
+ * Copyright 2006 Google Inc.
+ * http://code.google.com/p/google-diff-match-patch/
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * @fileoverview Computes the difference between two texts to create a patch.
+ * Applies the patch onto another text, allowing for errors.
+ * @author fraser@google.com (Neil Fraser)
+ */
+
+/**
+ * Class containing the diff, match and patch methods.
+ * @constructor
+ */
+function diff_match_patch() {
+
+  // Defaults.
+  // Redefine these in your program to override the defaults.
+
+  // Number of seconds to map a diff before giving up (0 for infinity).
+  this.Diff_Timeout = 1.0;
+  // Cost of an empty edit operation in terms of edit characters.
+  this.Diff_EditCost = 4;
+  // The size beyond which the double-ended diff activates.
+  // Double-ending is twice as fast, but less accurate.
+  this.Diff_DualThreshold = 32;
+  // At what point is no match declared (0.0 = perfection, 1.0 = very loose).
+  this.Match_Threshold = 0.5;
+  // How far to search for a match (0 = exact location, 1000+ = broad match).
+  // A match this many characters away from the expected location will add
+  // 1.0 to the score (0.0 is a perfect match).
+  this.Match_Distance = 1000;
+  // When deleting a large block of text (over ~64 characters), how close does
+  // the contents have to match the expected contents. (0.0 = perfection,
+  // 1.0 = very loose).  Note that Match_Threshold controls how closely the
+  // end points of a delete need to match.
+  this.Patch_DeleteThreshold = 0.5;
+  // Chunk size for context length.
+  this.Patch_Margin = 4;
+
+  /**
+   * Compute the number of bits in an int.
+   * The normal answer for JavaScript is 32.
+   * @return {number} Max bits
+   */
+  function getMaxBits() {
+    var maxbits = 0;
+    var oldi = 1;
+    var newi = 2;
+    while (oldi != newi) {
+      maxbits++;
+      oldi = newi;
+      newi = newi << 1;
+    }
+    return maxbits;
+  }
+  // How many bits in a number?
+  this.Match_MaxBits = getMaxBits();
+}
+
+
+//  DIFF FUNCTIONS
+
+
+/**
+ * The data structure representing a diff is an array of tuples:
+ * [[DIFF_DELETE, 'Hello'], [DIFF_INSERT, 'Goodbye'], [DIFF_EQUAL, ' world.']]
+ * which means: delete 'Hello', add 'Goodbye' and keep ' world.'
+ */
+var DIFF_DELETE = -1;
+var DIFF_INSERT = 1;
+var DIFF_EQUAL = 0;
+
+
+/**
+ * Find the differences between two texts.  Simplifies the problem by stripping
+ * any common prefix or suffix off the texts before diffing.
+ * @param {string} text1 Old string to be diffed.
+ * @param {string} text2 New string to be diffed.
+ * @param {boolean} opt_checklines Optional speedup flag.  If present and false,
+ *     then don't run a line-level diff first to identify the changed areas.
+ *     Defaults to true, which does a faster, slightly less optimal diff
+ * @return {Array.<Array.<number|string>>} Array of diff tuples.
+ */
+diff_match_patch.prototype.diff_main = function(text1, text2, opt_checklines) {
+  // Check for null inputs.
+  if (text1 == null || text2 == null) {
+    throw new Error('Null input. (diff_main)');
+  }
+
+  // Check for equality (speedup).
+  if (text1 == text2) {
+    return [[DIFF_EQUAL, text1]];
+  }
+
+  if (typeof opt_checklines == 'undefined') {
+    opt_checklines = true;
+  }
+  var checklines = opt_checklines;
+
+  // Trim off common prefix (speedup).
+  var commonlength = this.diff_commonPrefix(text1, text2);
+  var commonprefix = text1.substring(0, commonlength);
+  text1 = text1.substring(commonlength);
+  text2 = text2.substring(commonlength);
+
+  // Trim off common suffix (speedup).
+  commonlength = this.diff_commonSuffix(text1, text2);
+  var commonsuffix = text1.substring(text1.length - commonlength);
+  text1 = text1.substring(0, text1.length - commonlength);
+  text2 = text2.substring(0, text2.length - commonlength);
+
+  // Compute the diff on the middle block.
+  var diffs = this.diff_compute(text1, text2, checklines);
+
+  // Restore the prefix and suffix.
+  if (commonprefix) {
+    diffs.unshift([DIFF_EQUAL, commonprefix]);
+  }
+  if (commonsuffix) {
+    diffs.push([DIFF_EQUAL, commonsuffix]);
+  }
+  this.diff_cleanupMerge(diffs);
+  return diffs;
+};
+
+
+/**
+ * Find the differences between two texts.  Assumes that the texts do not
+ * have any common prefix or suffix.
+ * @param {string} text1 Old string to be diffed.
+ * @param {string} text2 New string to be diffed.
+ * @param {boolean} checklines Speedup flag.  If false, then don't run a
+ *     line-level diff first to identify the changed areas.
+ *     If true, then run a faster, slightly less optimal diff
+ * @return {Array.<Array.<number|string>>} Array of diff tuples.
+ * @private
+ */
+diff_match_patch.prototype.diff_compute = function(text1, text2, checklines) {
+  var diffs;
+
+  if (!text1) {
+    // Just add some text (speedup).
+    return [[DIFF_INSERT, text2]];
+  }
+
+  if (!text2) {
+    // Just delete some text (speedup).
+    return [[DIFF_DELETE, text1]];
+  }
+
+  var longtext = text1.length > text2.length ? text1 : text2;
+  var shorttext = text1.length > text2.length ? text2 : text1;
+  var i = longtext.indexOf(shorttext);
+  if (i != -1) {
+    // Shorter text is inside the longer text (speedup).
+    diffs = [[DIFF_INSERT, longtext.substring(0, i)],
+             [DIFF_EQUAL, shorttext],
+             [DIFF_INSERT, longtext.substring(i + shorttext.length)]];
+    // Swap insertions for deletions if diff is reversed.
+    if (text1.length > text2.length) {
+      diffs[0][0] = diffs[2][0] = DIFF_DELETE;
+    }
+    return diffs;
+  }
+  longtext = shorttext = null;  // Garbage collect.
+
+  // Check to see if the problem can be split in two.
+  var hm = this.diff_halfMatch(text1, text2);
+  if (hm) {
+    // A half-match was found, sort out the return data.
+    var text1_a = hm[0];
+    var text1_b = hm[1];
+    var text2_a = hm[2];
+    var text2_b = hm[3];
+    var mid_common = hm[4];
+    // Send both pairs off for separate processing.
+    var diffs_a = this.diff_main(text1_a, text2_a, checklines);
+    var diffs_b = this.diff_main(text1_b, text2_b, checklines);
+    // Merge the results.
+    return diffs_a.concat([[DIFF_EQUAL, mid_common]], diffs_b);
+  }
+
+  // Perform a real diff.
+  if (checklines && (text1.length < 100 || text2.length < 100)) {
+    // Too trivial for the overhead.
+    checklines = false;
+  }
+  var linearray;
+  if (checklines) {
+    // Scan the text on a line-by-line basis first.
+    var a = this.diff_linesToChars(text1, text2);
+    text1 = a[0];
+    text2 = a[1];
+    linearray = a[2];
+  }
+  diffs = this.diff_map(text1, text2);
+  if (!diffs) {
+    // No acceptable result.
+    diffs = [[DIFF_DELETE, text1], [DIFF_INSERT, text2]];
+  }
+  if (checklines) {
+    // Convert the diff back to original text.
+    this.diff_charsToLines(diffs, linearray);
+    // Eliminate freak matches (e.g. blank lines)
+    this.diff_cleanupSemantic(diffs);
+
+    // Rediff any replacement blocks, this time character-by-character.
+    // Add a dummy entry at the end.
+    diffs.push([DIFF_EQUAL, '']);
+    var pointer = 0;
+    var count_delete = 0;
+    var count_insert = 0;
+    var text_delete = '';
+    var text_insert = '';
+    while (pointer < diffs.length) {
+      switch (diffs[pointer][0]) {
+        case DIFF_INSERT:
+          count_insert++;
+          text_insert += diffs[pointer][1];
+          break;
+        case DIFF_DELETE:
+          count_delete++;
+          text_delete += diffs[pointer][1];
+          break;
+        case DIFF_EQUAL:
+          // Upon reaching an equality, check for prior redundancies.
+          if (count_delete >= 1 && count_insert >= 1) {
+            // Delete the offending records and add the merged ones.
+            var a = this.diff_main(text_delete, text_insert, false);
+            diffs.splice(pointer - count_delete - count_insert,
+                         count_delete + count_insert);
+            pointer = pointer - count_delete - count_insert;
+            for (var j = a.length - 1; j >= 0; j--) {
+              diffs.splice(pointer, 0, a[j]);
+            }
+            pointer = pointer + a.length;
+          }
+          count_insert = 0;
+          count_delete = 0;
+          text_delete = '';
+          text_insert = '';
+          break;
+      }
+     pointer++;
+    }
+    diffs.pop();  // Remove the dummy entry at the end.
+  }
+  return diffs;
+};
+
+
+/**
+ * Split two texts into an array of strings.  Reduce the texts to a string of
+ * hashes where each Unicode character represents one line.
+ * @param {string} text1 First string.
+ * @param {string} text2 Second string.
+ * @return {Array.<string|Array.<string>>} Three element Array, containing the
+ *     encoded text1, the encoded text2 and the array of unique strings.  The
+ *     zeroth element of the array of unique strings is intentionally blank.
+ * @private
+ */
+diff_match_patch.prototype.diff_linesToChars = function(text1, text2) {
+  var lineArray = [];  // e.g. lineArray[4] == 'Hello\n'
+  var lineHash = {};   // e.g. lineHash['Hello\n'] == 4
+
+  // '\x00' is a valid character, but various debuggers don't like it.
+  // So we'll insert a junk entry to avoid generating a null character.
+  lineArray[0] = '';
+
+  /**
+   * Split a text into an array of strings.  Reduce the texts to a string of
+   * hashes where each Unicode character represents one line.
+   * Modifies linearray and linehash through being a closure.
+   * @param {string} text String to encode.
+   * @return {string} Encoded string.
+   * @private
+   */
+  function diff_linesToCharsMunge(text) {
+    var chars = '';
+    // Walk the text, pulling out a substring for each line.
+    // text.split('\n') would would temporarily double our memory footprint.
+    // Modifying text would create many large strings to garbage collect.
+    var lineStart = 0;
+    var lineEnd = -1;
+    // Keeping our own length variable is faster than looking it up.
+    var lineArrayLength = lineArray.length;
+    while (lineEnd < text.length - 1) {
+      lineEnd = text.indexOf('\n', lineStart);
+      if (lineEnd == -1) {
+        lineEnd = text.length - 1;
+      }
+      var line = text.substring(lineStart, lineEnd + 1);
+      lineStart = lineEnd + 1;
+
+      if (lineHash.hasOwnProperty ? lineHash.hasOwnProperty(line) :
+          (lineHash[line] !== undefined)) {
+        chars += String.fromCharCode(lineHash[line]);
+      } else {
+        chars += String.fromCharCode(lineArrayLength);
+        lineHash[line] = lineArrayLength;
+        lineArray[lineArrayLength++] = line;
+      }
+    }
+    return chars;
+  }
+
+  var chars1 = diff_linesToCharsMunge(text1);
+  var chars2 = diff_linesToCharsMunge(text2);
+  return [chars1, chars2, lineArray];
+};
+
+
+/**
+ * Rehydrate the text in a diff from a string of line hashes to real lines of
+ * text.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @param {Array.<string>} lineArray Array of unique strings.
+ * @private
+ */
+diff_match_patch.prototype.diff_charsToLines = function(diffs, lineArray) {
+  for (var x = 0; x < diffs.length; x++) {
+    var chars = diffs[x][1];
+    var text = [];
+    for (var y = 0; y < chars.length; y++) {
+      text[y] = lineArray[chars.charCodeAt(y)];
+    }
+    diffs[x][1] = text.join('');
+  }
+};
+
+
+/**
+ * Explore the intersection points between the two texts.
+ * @param {string} text1 Old string to be diffed.
+ * @param {string} text2 New string to be diffed.
+ * @return {?Array.<Array.<number|string>>} Array of diff tuples or null if no
+ *     diff available.
+ * @private
+ */
+diff_match_patch.prototype.diff_map = function(text1, text2) {
+  // Don't run for too long.
+  var ms_end = (new Date()).getTime() + this.Diff_Timeout * 1000;
+  // Cache the text lengths to prevent multiple calls.
+  var text1_length = text1.length;
+  var text2_length = text2.length;
+  var max_d = text1_length + text2_length - 1;
+  var doubleEnd = this.Diff_DualThreshold * 2 < max_d;
+  // JavaScript efficiency note: (x << 32) + y doesn't work since numbers are
+  // only 32 bit.  Use x + ',' + y to create a hash instead.
+  var v_map1 = [];
+  var v_map2 = [];
+  var v1 = {};
+  var v2 = {};
+  v1[1] = 0;
+  v2[1] = 0;
+  var x, y;
+  var footstep;  // Used to track overlapping paths.
+  var footsteps = {};
+  var done = false;
+  // If the total number of characters is odd, then the front path will collide
+  // with the reverse path.
+  var front = (text1_length + text2_length) % 2;
+  for (var d = 0; d < max_d; d++) {
+    // Bail out if timeout reached.
+    if (this.Diff_Timeout > 0 && (new Date()).getTime() > ms_end) {
+      return null;
+    }
+
+    // Walk the front path one step.
+    v_map1[d] = {};
+    for (var k = -d; k <= d; k += 2) {
+      if (k == -d || k != d && v1[k - 1] < v1[k + 1]) {
+        x = v1[k + 1];
+      } else {
+        x = v1[k - 1] + 1;
+      }
+      y = x - k;
+      if (doubleEnd) {
+        footstep = x + ',' + y;
+        if (front && footsteps[footstep] !== undefined) {
+          done = true;
+        }
+        if (!front) {
+          footsteps[footstep] = d;
+        }
+      }
+      while (!done && x < text1_length && y < text2_length &&
+             text1.charAt(x) == text2.charAt(y)) {
+        x++;
+        y++;
+        if (doubleEnd) {
+          footstep = x + ',' + y;
+          if (front && footsteps[footstep] !== undefined) {
+            done = true;
+          }
+          if (!front) {
+            footsteps[footstep] = d;
+          }
+        }
+      }
+      v1[k] = x;
+      v_map1[d][x + ',' + y] = true;
+      if (x == text1_length && y == text2_length) {
+        // Reached the end in single-path mode.
+        return this.diff_path1(v_map1, text1, text2);
+      } else if (done) {
+        // Front path ran over reverse path.
+        v_map2 = v_map2.slice(0, footsteps[footstep] + 1);
+        var a = this.diff_path1(v_map1, text1.substring(0, x),
+                                text2.substring(0, y));
+        return a.concat(this.diff_path2(v_map2, text1.substring(x),
+                                        text2.substring(y)));
+      }
+    }
+
+    if (doubleEnd) {
+      // Walk the reverse path one step.
+      v_map2[d] = {};
+      for (var k = -d; k <= d; k += 2) {
+        if (k == -d || k != d && v2[k - 1] < v2[k + 1]) {
+          x = v2[k + 1];
+        } else {
+          x = v2[k - 1] + 1;
+        }
+        y = x - k;
+        footstep = (text1_length - x) + ',' + (text2_length - y);
+        if (!front && footsteps[footstep] !== undefined) {
+          done = true;
+        }
+        if (front) {
+          footsteps[footstep] = d;
+        }
+        while (!done && x < text1_length && y < text2_length &&
+               text1.charAt(text1_length - x - 1) ==
+               text2.charAt(text2_length - y - 1)) {
+          x++;
+          y++;
+          footstep = (text1_length - x) + ',' + (text2_length - y);
+          if (!front && footsteps[footstep] !== undefined) {
+            done = true;
+          }
+          if (front) {
+            footsteps[footstep] = d;
+          }
+        }
+        v2[k] = x;
+        v_map2[d][x + ',' + y] = true;
+        if (done) {
+          // Reverse path ran over front path.
+          v_map1 = v_map1.slice(0, footsteps[footstep] + 1);
+          var a = this.diff_path1(v_map1, text1.substring(0, text1_length - x),
+                                  text2.substring(0, text2_length - y));
+          return a.concat(this.diff_path2(v_map2,
+                          text1.substring(text1_length - x),
+                          text2.substring(text2_length - y)));
+        }
+      }
+    }
+  }
+  // Number of diffs equals number of characters, no commonality at all.
+  return null;
+};
+
+
+/**
+ * Work from the middle back to the start to determine the path.
+ * @param {Array.<Object>} v_map Array of paths.
+ * @param {string} text1 Old string fragment to be diffed.
+ * @param {string} text2 New string fragment to be diffed.
+ * @return {Array.<Array.<number|string>>} Array of diff tuples.
+ * @private
+ */
+diff_match_patch.prototype.diff_path1 = function(v_map, text1, text2) {
+  var path = [];
+  var x = text1.length;
+  var y = text2.length;
+  /** @type {?number} */
+  var last_op = null;
+  for (var d = v_map.length - 2; d >= 0; d--) {
+    while (1) {
+      if (v_map[d][(x - 1) + ',' + y] !== undefined) {
+        x--;
+        if (last_op === DIFF_DELETE) {
+          path[0][1] = text1.charAt(x) + path[0][1];
+        } else {
+          path.unshift([DIFF_DELETE, text1.charAt(x)]);
+        }
+        last_op = DIFF_DELETE;
+        break;
+      } else if (v_map[d][x + ',' + (y - 1)] !== undefined) {
+        y--;
+        if (last_op === DIFF_INSERT) {
+          path[0][1] = text2.charAt(y) + path[0][1];
+        } else {
+          path.unshift([DIFF_INSERT, text2.charAt(y)]);
+        }
+        last_op = DIFF_INSERT;
+        break;
+      } else {
+        x--;
+        y--;
+        if (text1.charAt(x) != text2.charAt(y)) {
+          throw new Error('No diagonal.  Can\'t happen. (diff_path1)');
+        }
+        if (last_op === DIFF_EQUAL) {
+          path[0][1] = text1.charAt(x) + path[0][1];
+        } else {
+          path.unshift([DIFF_EQUAL, text1.charAt(x)]);
+        }
+        last_op = DIFF_EQUAL;
+      }
+    }
+  }
+  return path;
+};
+
+
+/**
+ * Work from the middle back to the end to determine the path.
+ * @param {Array.<Object>} v_map Array of paths.
+ * @param {string} text1 Old string fragment to be diffed.
+ * @param {string} text2 New string fragment to be diffed.
+ * @return {Array.<Array.<number|string>>} Array of diff tuples.
+ * @private
+ */
+diff_match_patch.prototype.diff_path2 = function(v_map, text1, text2) {
+  var path = [];
+  var pathLength = 0;
+  var x = text1.length;
+  var y = text2.length;
+  /** @type {?number} */
+  var last_op = null;
+  for (var d = v_map.length - 2; d >= 0; d--) {
+    while (1) {
+      if (v_map[d][(x - 1) + ',' + y] !== undefined) {
+        x--;
+        if (last_op === DIFF_DELETE) {
+          path[pathLength - 1][1] += text1.charAt(text1.length - x - 1);
+        } else {
+          path[pathLength++] =
+              [DIFF_DELETE, text1.charAt(text1.length - x - 1)];
+        }
+        last_op = DIFF_DELETE;
+        break;
+      } else if (v_map[d][x + ',' + (y - 1)] !== undefined) {
+        y--;
+        if (last_op === DIFF_INSERT) {
+          path[pathLength - 1][1] += text2.charAt(text2.length - y - 1);
+        } else {
+          path[pathLength++] =
+              [DIFF_INSERT, text2.charAt(text2.length - y - 1)];
+        }
+        last_op = DIFF_INSERT;
+        break;
+      } else {
+        x--;
+        y--;
+        if (text1.charAt(text1.length - x - 1) !=
+            text2.charAt(text2.length - y - 1)) {
+          throw new Error('No diagonal.  Can\'t happen. (diff_path2)');
+        }
+        if (last_op === DIFF_EQUAL) {
+          path[pathLength - 1][1] += text1.charAt(text1.length - x - 1);
+        } else {
+          path[pathLength++] =
+              [DIFF_EQUAL, text1.charAt(text1.length - x - 1)];
+        }
+        last_op = DIFF_EQUAL;
+      }
+    }
+  }
+  return path;
+};
+
+
+/**
+ * Determine the common prefix of two strings
+ * @param {string} text1 First string.
+ * @param {string} text2 Second string.
+ * @return {number} The number of characters common to the start of each
+ *     string.
+ */
+diff_match_patch.prototype.diff_commonPrefix = function(text1, text2) {
+  // Quick check for common null cases.
+  if (!text1 || !text2 || text1.charAt(0) != text2.charAt(0)) {
+    return 0;
+  }
+  // Binary search.
+  // Performance analysis: http://neil.fraser.name/news/2007/10/09/
+  var pointermin = 0;
+  var pointermax = Math.min(text1.length, text2.length);
+  var pointermid = pointermax;
+  var pointerstart = 0;
+  while (pointermin < pointermid) {
+    if (text1.substring(pointerstart, pointermid) ==
+        text2.substring(pointerstart, pointermid)) {
+      pointermin = pointermid;
+      pointerstart = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
+  }
+  return pointermid;
+};
+
+
+/**
+ * Determine the common suffix of two strings
+ * @param {string} text1 First string.
+ * @param {string} text2 Second string.
+ * @return {number} The number of characters common to the end of each string.
+ */
+diff_match_patch.prototype.diff_commonSuffix = function(text1, text2) {
+  // Quick check for common null cases.
+  if (!text1 || !text2 || text1.charAt(text1.length - 1) !=
+                          text2.charAt(text2.length - 1)) {
+    return 0;
+  }
+  // Binary search.
+  // Performance analysis: http://neil.fraser.name/news/2007/10/09/
+  var pointermin = 0;
+  var pointermax = Math.min(text1.length, text2.length);
+  var pointermid = pointermax;
+  var pointerend = 0;
+  while (pointermin < pointermid) {
+    if (text1.substring(text1.length - pointermid, text1.length - pointerend) ==
+        text2.substring(text2.length - pointermid, text2.length - pointerend)) {
+      pointermin = pointermid;
+      pointerend = pointermin;
+    } else {
+      pointermax = pointermid;
+    }
+    pointermid = Math.floor((pointermax - pointermin) / 2 + pointermin);
+  }
+  return pointermid;
+};
+
+
+/**
+ * Do the two texts share a substring which is at least half the length of the
+ * longer text?
+ * @param {string} text1 First string.
+ * @param {string} text2 Second string.
+ * @return {?Array.<string>} Five element Array, containing the prefix of
+ *     text1, the suffix of text1, the prefix of text2, the suffix of
+ *     text2 and the common middle.  Or null if there was no match.
+ */
+diff_match_patch.prototype.diff_halfMatch = function(text1, text2) {
+  var longtext = text1.length > text2.length ? text1 : text2;
+  var shorttext = text1.length > text2.length ? text2 : text1;
+  if (longtext.length < 10 || shorttext.length < 1) {
+    return null;  // Pointless.
+  }
+  var dmp = this;  // 'this' becomes 'window' in a closure.
+
+  /**
+   * Does a substring of shorttext exist within longtext such that the substring
+   * is at least half the length of longtext?
+   * Closure, but does not reference any external variables.
+   * @param {string} longtext Longer string.
+   * @param {string} shorttext Shorter string.
+   * @param {number} i Start index of quarter length substring within longtext
+   * @return {?Array.<string>} Five element Array, containing the prefix of
+   *     longtext, the suffix of longtext, the prefix of shorttext, the suffix
+   *     of shorttext and the common middle.  Or null if there was no match.
+   * @private
+   */
+  function diff_halfMatchI(longtext, shorttext, i) {
+    // Start with a 1/4 length substring at position i as a seed.
+    var seed = longtext.substring(i, i + Math.floor(longtext.length / 4));
+    var j = -1;
+    var best_common = '';
+    var best_longtext_a, best_longtext_b, best_shorttext_a, best_shorttext_b;
+    while ((j = shorttext.indexOf(seed, j + 1)) != -1) {
+      var prefixLength = dmp.diff_commonPrefix(longtext.substring(i),
+                                               shorttext.substring(j));
+      var suffixLength = dmp.diff_commonSuffix(longtext.substring(0, i),
+                                               shorttext.substring(0, j));
+      if (best_common.length < suffixLength + prefixLength) {
+        best_common = shorttext.substring(j - suffixLength, j) +
+            shorttext.substring(j, j + prefixLength);
+        best_longtext_a = longtext.substring(0, i - suffixLength);
+        best_longtext_b = longtext.substring(i + prefixLength);
+        best_shorttext_a = shorttext.substring(0, j - suffixLength);
+        best_shorttext_b = shorttext.substring(j + prefixLength);
+      }
+    }
+    if (best_common.length >= longtext.length / 2) {
+      return [best_longtext_a, best_longtext_b,
+              best_shorttext_a, best_shorttext_b, best_common];
+    } else {
+      return null;
+    }
+  }
+
+  // First check if the second quarter is the seed for a half-match.
+  var hm1 = diff_halfMatchI(longtext, shorttext,
+                            Math.ceil(longtext.length / 4));
+  // Check again based on the third quarter.
+  var hm2 = diff_halfMatchI(longtext, shorttext,
+                            Math.ceil(longtext.length / 2));
+  var hm;
+  if (!hm1 && !hm2) {
+    return null;
+  } else if (!hm2) {
+    hm = hm1;
+  } else if (!hm1) {
+    hm = hm2;
+  } else {
+    // Both matched.  Select the longest.
+    hm = hm1[4].length > hm2[4].length ? hm1 : hm2;
+  }
+
+  // A half-match was found, sort out the return data.
+  var text1_a, text1_b, text2_a, text2_b;
+  if (text1.length > text2.length) {
+    text1_a = hm[0];
+    text1_b = hm[1];
+    text2_a = hm[2];
+    text2_b = hm[3];
+  } else {
+    text2_a = hm[0];
+    text2_b = hm[1];
+    text1_a = hm[2];
+    text1_b = hm[3];
+  }
+  var mid_common = hm[4];
+  return [text1_a, text1_b, text2_a, text2_b, mid_common];
+};
+
+
+/**
+ * Reduce the number of edits by eliminating semantically trivial equalities.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ */
+diff_match_patch.prototype.diff_cleanupSemantic = function(diffs) {
+  var changes = false;
+  var equalities = [];  // Stack of indices where equalities are found.
+  var equalitiesLength = 0;  // Keeping our own length var is faster in JS.
+  var lastequality = null;  // Always equal to equalities[equalitiesLength-1][1]
+  var pointer = 0;  // Index of current position.
+  // Number of characters that changed prior to the equality.
+  var length_changes1 = 0;
+  // Number of characters that changed after the equality.
+  var length_changes2 = 0;
+  while (pointer < diffs.length) {
+    if (diffs[pointer][0] == DIFF_EQUAL) {  // equality found
+      equalities[equalitiesLength++] = pointer;
+      length_changes1 = length_changes2;
+      length_changes2 = 0;
+      lastequality = diffs[pointer][1];
+    } else {  // an insertion or deletion
+      length_changes2 += diffs[pointer][1].length;
+      if (lastequality !== null && (lastequality.length <= length_changes1) &&
+          (lastequality.length <= length_changes2)) {
+        // Duplicate record
+        diffs.splice(equalities[equalitiesLength - 1], 0,
+                     [DIFF_DELETE, lastequality]);
+        // Change second copy to insert.
+        diffs[equalities[equalitiesLength - 1] + 1][0] = DIFF_INSERT;
+        // Throw away the equality we just deleted.
+        equalitiesLength--;
+        // Throw away the previous equality (it needs to be reevaluated).
+        equalitiesLength--;
+        pointer = equalitiesLength > 0 ? equalities[equalitiesLength - 1] : -1;
+        length_changes1 = 0;  // Reset the counters.
+        length_changes2 = 0;
+        lastequality = null;
+        changes = true;
+      }
+    }
+    pointer++;
+  }
+  if (changes) {
+    this.diff_cleanupMerge(diffs);
+  }
+  this.diff_cleanupSemanticLossless(diffs);
+};
+
+
+/**
+ * Look for single edits surrounded on both sides by equalities
+ * which can be shifted sideways to align the edit to a word boundary.
+ * e.g: The c<ins>at c</ins>ame. -> The <ins>cat </ins>came.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ */
+diff_match_patch.prototype.diff_cleanupSemanticLossless = function(diffs) {
+  // Define some regex patterns for matching boundaries.
+  var punctuation = /[^a-zA-Z0-9]/;
+  var whitespace = /\s/;
+  var linebreak = /[\r\n]/;
+  var blanklineEnd = /\n\r?\n$/;
+  var blanklineStart = /^\r?\n\r?\n/;
+
+  /**
+   * Given two strings, compute a score representing whether the internal
+   * boundary falls on logical boundaries.
+   * Scores range from 5 (best) to 0 (worst).
+   * Closure, makes reference to regex patterns defined above.
+   * @param {string} one First string.
+   * @param {string} two Second string.
+   * @return {number} The score.
+   */
+  function diff_cleanupSemanticScore(one, two) {
+    if (!one || !two) {
+      // Edges are the best.
+      return 5;
+    }
+
+    // Each port of this function behaves slightly differently due to
+    // subtle differences in each language's definition of things like
+    // 'whitespace'.  Since this function's purpose is largely cosmetic,
+    // the choice has been made to use each language's native features
+    // rather than force total conformity.
+    var score = 0;
+    // One point for non-alphanumeric.
+    if (one.charAt(one.length - 1).match(punctuation) ||
+        two.charAt(0).match(punctuation)) {
+      score++;
+      // Two points for whitespace.
+      if (one.charAt(one.length - 1).match(whitespace) ||
+          two.charAt(0).match(whitespace)) {
+        score++;
+        // Three points for line breaks.
+        if (one.charAt(one.length - 1).match(linebreak) ||
+            two.charAt(0).match(linebreak)) {
+          score++;
+          // Four points for blank lines.
+          if (one.match(blanklineEnd) || two.match(blanklineStart)) {
+            score++;
+          }
+        }
+      }
+    }
+    return score;
+  }
+
+  var pointer = 1;
+  // Intentionally ignore the first and last element (don't need checking).
+  while (pointer < diffs.length - 1) {
+    if (diffs[pointer - 1][0] == DIFF_EQUAL &&
+        diffs[pointer + 1][0] == DIFF_EQUAL) {
+      // This is a single edit surrounded by equalities.
+      var equality1 = diffs[pointer - 1][1];
+      var edit = diffs[pointer][1];
+      var equality2 = diffs[pointer + 1][1];
+
+      // First, shift the edit as far left as possible.
+      var commonOffset = this.diff_commonSuffix(equality1, edit);
+      if (commonOffset) {
+        var commonString = edit.substring(edit.length - commonOffset);
+        equality1 = equality1.substring(0, equality1.length - commonOffset);
+        edit = commonString + edit.substring(0, edit.length - commonOffset);
+        equality2 = commonString + equality2;
+      }
+
+      // Second, step character by character right, looking for the best fit.
+      var bestEquality1 = equality1;
+      var bestEdit = edit;
+      var bestEquality2 = equality2;
+      var bestScore = diff_cleanupSemanticScore(equality1, edit) +
+          diff_cleanupSemanticScore(edit, equality2);
+      while (edit.charAt(0) === equality2.charAt(0)) {
+        equality1 += edit.charAt(0);
+        edit = edit.substring(1) + equality2.charAt(0);
+        equality2 = equality2.substring(1);
+        var score = diff_cleanupSemanticScore(equality1, edit) +
+            diff_cleanupSemanticScore(edit, equality2);
+        // The >= encourages trailing rather than leading whitespace on edits.
+        if (score >= bestScore) {
+          bestScore = score;
+          bestEquality1 = equality1;
+          bestEdit = edit;
+          bestEquality2 = equality2;
+        }
+      }
+
+      if (diffs[pointer - 1][1] != bestEquality1) {
+        // We have an improvement, save it back to the diff.
+        if (bestEquality1) {
+          diffs[pointer - 1][1] = bestEquality1;
+        } else {
+          diffs.splice(pointer - 1, 1);
+          pointer--;
+        }
+        diffs[pointer][1] = bestEdit;
+        if (bestEquality2) {
+          diffs[pointer + 1][1] = bestEquality2;
+        } else {
+          diffs.splice(pointer + 1, 1);
+          pointer--;
+        }
+      }
+    }
+    pointer++;
+  }
+};
+
+
+/**
+ * Reduce the number of edits by eliminating operationally trivial equalities.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ */
+diff_match_patch.prototype.diff_cleanupEfficiency = function(diffs) {
+  var changes = false;
+  var equalities = [];  // Stack of indices where equalities are found.
+  var equalitiesLength = 0;  // Keeping our own length var is faster in JS.
+  var lastequality = '';  // Always equal to equalities[equalitiesLength-1][1]
+  var pointer = 0;  // Index of current position.
+  // Is there an insertion operation before the last equality.
+  var pre_ins = false;
+  // Is there a deletion operation before the last equality.
+  var pre_del = false;
+  // Is there an insertion operation after the last equality.
+  var post_ins = false;
+  // Is there a deletion operation after the last equality.
+  var post_del = false;
+  while (pointer < diffs.length) {
+    if (diffs[pointer][0] == DIFF_EQUAL) {  // equality found
+      if (diffs[pointer][1].length < this.Diff_EditCost &&
+          (post_ins || post_del)) {
+        // Candidate found.
+        equalities[equalitiesLength++] = pointer;
+        pre_ins = post_ins;
+        pre_del = post_del;
+        lastequality = diffs[pointer][1];
+      } else {
+        // Not a candidate, and can never become one.
+        equalitiesLength = 0;
+        lastequality = '';
+      }
+      post_ins = post_del = false;
+    } else {  // an insertion or deletion
+      if (diffs[pointer][0] == DIFF_DELETE) {
+        post_del = true;
+      } else {
+        post_ins = true;
+      }
+      /*
+       * Five types to be split:
+       * <ins>A</ins><del>B</del>XY<ins>C</ins><del>D</del>
+       * <ins>A</ins>X<ins>C</ins><del>D</del>
+       * <ins>A</ins><del>B</del>X<ins>C</ins>
+       * <ins>A</del>X<ins>C</ins><del>D</del>
+       * <ins>A</ins><del>B</del>X<del>C</del>
+       */
+      if (lastequality && ((pre_ins && pre_del && post_ins && post_del) ||
+                           ((lastequality.length < this.Diff_EditCost / 2) &&
+                            (pre_ins + pre_del + post_ins + post_del) == 3))) {
+        // Duplicate record
+        diffs.splice(equalities[equalitiesLength - 1], 0,
+                     [DIFF_DELETE, lastequality]);
+        // Change second copy to insert.
+        diffs[equalities[equalitiesLength - 1] + 1][0] = DIFF_INSERT;
+        equalitiesLength--;  // Throw away the equality we just deleted;
+        lastequality = '';
+        if (pre_ins && pre_del) {
+          // No changes made which could affect previous entry, keep going.
+          post_ins = post_del = true;
+          equalitiesLength = 0;
+        } else {
+          equalitiesLength--;  // Throw away the previous equality;
+          pointer = equalitiesLength > 0 ?
+              equalities[equalitiesLength - 1] : -1;
+          post_ins = post_del = false;
+        }
+        changes = true;
+      }
+    }
+    pointer++;
+  }
+
+  if (changes) {
+    this.diff_cleanupMerge(diffs);
+  }
+};
+
+
+/**
+ * Reorder and merge like edit sections.  Merge equalities.
+ * Any edit section can move as long as it doesn't cross an equality.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ */
+diff_match_patch.prototype.diff_cleanupMerge = function(diffs) {
+  diffs.push([DIFF_EQUAL, '']);  // Add a dummy entry at the end.
+  var pointer = 0;
+  var count_delete = 0;
+  var count_insert = 0;
+  var text_delete = '';
+  var text_insert = '';
+  var commonlength;
+  while (pointer < diffs.length) {
+    switch (diffs[pointer][0]) {
+      case DIFF_INSERT:
+        count_insert++;
+        text_insert += diffs[pointer][1];
+        pointer++;
+        break;
+      case DIFF_DELETE:
+        count_delete++;
+        text_delete += diffs[pointer][1];
+        pointer++;
+        break;
+      case DIFF_EQUAL:
+        // Upon reaching an equality, check for prior redundancies.
+        if (count_delete !== 0 || count_insert !== 0) {
+          if (count_delete !== 0 && count_insert !== 0) {
+            // Factor out any common prefixies.
+            commonlength = this.diff_commonPrefix(text_insert, text_delete);
+            if (commonlength !== 0) {
+              if ((pointer - count_delete - count_insert) > 0 &&
+                  diffs[pointer - count_delete - count_insert - 1][0] ==
+                  DIFF_EQUAL) {
+                diffs[pointer - count_delete - count_insert - 1][1] +=
+                    text_insert.substring(0, commonlength);
+              } else {
+                diffs.splice(0, 0, [DIFF_EQUAL,
+                    text_insert.substring(0, commonlength)]);
+                pointer++;
+              }
+              text_insert = text_insert.substring(commonlength);
+              text_delete = text_delete.substring(commonlength);
+            }
+            // Factor out any common suffixies.
+            commonlength = this.diff_commonSuffix(text_insert, text_delete);
+            if (commonlength !== 0) {
+              diffs[pointer][1] = text_insert.substring(text_insert.length -
+                  commonlength) + diffs[pointer][1];
+              text_insert = text_insert.substring(0, text_insert.length -
+                  commonlength);
+              text_delete = text_delete.substring(0, text_delete.length -
+                  commonlength);
+            }
+          }
+          // Delete the offending records and add the merged ones.
+          if (count_delete === 0) {
+            diffs.splice(pointer - count_delete - count_insert,
+                count_delete + count_insert, [DIFF_INSERT, text_insert]);
+          } else if (count_insert === 0) {
+            diffs.splice(pointer - count_delete - count_insert,
+                count_delete + count_insert, [DIFF_DELETE, text_delete]);
+          } else {
+            diffs.splice(pointer - count_delete - count_insert,
+                count_delete + count_insert, [DIFF_DELETE, text_delete],
+                [DIFF_INSERT, text_insert]);
+          }
+          pointer = pointer - count_delete - count_insert +
+                    (count_delete ? 1 : 0) + (count_insert ? 1 : 0) + 1;
+        } else if (pointer !== 0 && diffs[pointer - 1][0] == DIFF_EQUAL) {
+          // Merge this equality with the previous one.
+          diffs[pointer - 1][1] += diffs[pointer][1];
+          diffs.splice(pointer, 1);
+        } else {
+          pointer++;
+        }
+        count_insert = 0;
+        count_delete = 0;
+        text_delete = '';
+        text_insert = '';
+        break;
+    }
+  }
+  if (diffs[diffs.length - 1][1] === '') {
+    diffs.pop();  // Remove the dummy entry at the end.
+  }
+
+  // Second pass: look for single edits surrounded on both sides by equalities
+  // which can be shifted sideways to eliminate an equality.
+  // e.g: A<ins>BA</ins>C -> <ins>AB</ins>AC
+  var changes = false;
+  pointer = 1;
+  // Intentionally ignore the first and last element (don't need checking).
+  while (pointer < diffs.length - 1) {
+    if (diffs[pointer - 1][0] == DIFF_EQUAL &&
+        diffs[pointer + 1][0] == DIFF_EQUAL) {
+      // This is a single edit surrounded by equalities.
+      if (diffs[pointer][1].substring(diffs[pointer][1].length -
+          diffs[pointer - 1][1].length) == diffs[pointer - 1][1]) {
+        // Shift the edit over the previous equality.
+        diffs[pointer][1] = diffs[pointer - 1][1] +
+            diffs[pointer][1].substring(0, diffs[pointer][1].length -
+                                        diffs[pointer - 1][1].length);
+        diffs[pointer + 1][1] = diffs[pointer - 1][1] + diffs[pointer + 1][1];
+        diffs.splice(pointer - 1, 1);
+        changes = true;
+      } else if (diffs[pointer][1].substring(0, diffs[pointer + 1][1].length) ==
+          diffs[pointer + 1][1]) {
+        // Shift the edit over the next equality.
+        diffs[pointer - 1][1] += diffs[pointer + 1][1];
+        diffs[pointer][1] =
+            diffs[pointer][1].substring(diffs[pointer + 1][1].length) +
+            diffs[pointer + 1][1];
+        diffs.splice(pointer + 1, 1);
+        changes = true;
+      }
+    }
+    pointer++;
+  }
+  // If shifts were made, the diff needs reordering and another shift sweep.
+  if (changes) {
+    this.diff_cleanupMerge(diffs);
+  }
+};
+
+
+/**
+ * loc is a location in text1, compute and return the equivalent location in
+ * text2.
+ * e.g. 'The cat' vs 'The big cat', 1->1, 5->8
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @param {number} loc Location within text1.
+ * @return {number} Location within text2.
+ */
+diff_match_patch.prototype.diff_xIndex = function(diffs, loc) {
+  var chars1 = 0;
+  var chars2 = 0;
+  var last_chars1 = 0;
+  var last_chars2 = 0;
+  var x;
+  for (x = 0; x < diffs.length; x++) {
+    if (diffs[x][0] !== DIFF_INSERT) {  // Equality or deletion.
+      chars1 += diffs[x][1].length;
+    }
+    if (diffs[x][0] !== DIFF_DELETE) {  // Equality or insertion.
+      chars2 += diffs[x][1].length;
+    }
+    if (chars1 > loc) {  // Overshot the location.
+      break;
+    }
+    last_chars1 = chars1;
+    last_chars2 = chars2;
+  }
+  // Was the location was deleted?
+  if (diffs.length != x && diffs[x][0] === DIFF_DELETE) {
+    return last_chars2;
+  }
+  // Add the remaining character length.
+  return last_chars2 + (loc - last_chars1);
+};
+
+
+/**
+ * Convert a diff array into a pretty HTML report.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @return {string} HTML representation.
+ */
+diff_match_patch.prototype.diff_prettyHtml = function(diffs) {
+  var html = [];
+  var i = 0;
+  for (var x = 0; x < diffs.length; x++) {
+    var op = diffs[x][0];    // Operation (insert, delete, equal)
+    var data = diffs[x][1];  // Text of change.
+    var text = data.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/\n/g, '&para;<BR>');
+    switch (op) {
+      case DIFF_INSERT:
+        html[x] = '<INS STYLE="background:#E6FFE6;" TITLE="i=' + i + '">' +
+                text + '</INS>';
+        break;
+      case DIFF_DELETE:
+        html[x] = '<DEL STYLE="background:#FFE6E6;" TITLE="i=' + i + '">' +
+                text + '</DEL>';
+        break;
+      case DIFF_EQUAL:
+        html[x] = '<SPAN TITLE="i=' + i + '">' + text + '</SPAN>';
+        break;
+    }
+    if (op !== DIFF_DELETE) {
+      i += data.length;
+    }
+  }
+  return html.join('');
+};
+
+
+/**
+ * Compute and return the source text (all equalities and deletions).
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @return {string} Source text.
+ */
+diff_match_patch.prototype.diff_text1 = function(diffs) {
+  var text = [];
+  for (var x = 0; x < diffs.length; x++) {
+    if (diffs[x][0] !== DIFF_INSERT) {
+      text[x] = diffs[x][1];
+    }
+  }
+  return text.join('');
+};
+
+
+/**
+ * Compute and return the destination text (all equalities and insertions).
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @return {string} Destination text.
+ */
+diff_match_patch.prototype.diff_text2 = function(diffs) {
+  var text = [];
+  for (var x = 0; x < diffs.length; x++) {
+    if (diffs[x][0] !== DIFF_DELETE) {
+      text[x] = diffs[x][1];
+    }
+  }
+  return text.join('');
+};
+
+
+/**
+ * Compute the Levenshtein distance; the number of inserted, deleted or
+ * substituted characters.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @return {number} Number of changes.
+ */
+diff_match_patch.prototype.diff_levenshtein = function(diffs) {
+  var levenshtein = 0;
+  var insertions = 0;
+  var deletions = 0;
+  for (var x = 0; x < diffs.length; x++) {
+    var op = diffs[x][0];
+    var data = diffs[x][1];
+    switch (op) {
+      case DIFF_INSERT:
+        insertions += data.length;
+        break;
+      case DIFF_DELETE:
+        deletions += data.length;
+        break;
+      case DIFF_EQUAL:
+        // A deletion and an insertion is one substitution.
+        levenshtein += Math.max(insertions, deletions);
+        insertions = 0;
+        deletions = 0;
+        break;
+    }
+  }
+  levenshtein += Math.max(insertions, deletions);
+  return levenshtein;
+};
+
+
+/**
+ * Crush the diff into an encoded string which describes the operations
+ * required to transform text1 into text2.
+ * E.g. =3\t-2\t+ing  -> Keep 3 chars, delete 2 chars, insert 'ing'.
+ * Operations are tab-separated.  Inserted text is escaped using %xx notation.
+ * @param {Array.<Array.<number|string>>} diffs Array of diff tuples.
+ * @return {string} Delta text.
+ */
+diff_match_patch.prototype.diff_toDelta = function(diffs) {
+  var text = [];
+  for (var x = 0; x < diffs.length; x++) {
+    switch (diffs[x][0]) {
+      case DIFF_INSERT:
+        text[x] = '+' + encodeURI(diffs[x][1]);
+        break;
+      case DIFF_DELETE:
+        text[x] = '-' + diffs[x][1].length;
+        break;
+      case DIFF_EQUAL:
+        text[x] = '=' + diffs[x][1].length;
+        break;
+    }
+  }
+  // Opera doesn't know how to encode char 0.
+  return text.join('\t').replace(/\x00/g, '%00').replace(/%20/g, ' ');
+};
+
+
+/**
+ * Given the original text1, and an encoded string which describes the
+ * operations required to transform text1 into text2, compute the full diff.
+ * @param {string} text1 Source string for the diff.
+ * @param {string} delta Delta text.
+ * @return {Array.<Array.<number|string>>} Array of diff tuples.
+ * @throws {Error} If invalid input.
+ */
+diff_match_patch.prototype.diff_fromDelta = function(text1, delta) {
+  var diffs = [];
+  var diffsLength = 0;  // Keeping our own length var is faster in JS.
+  var pointer = 0;  // Cursor in text1
+  // Opera doesn't know how to decode char 0.
+  delta = delta.replace(/%00/g, '\0');
+  var tokens = delta.split(/\t/g);
+  for (var x = 0; x < tokens.length; x++) {
+    // Each token begins with a one character parameter which specifies the
+    // operation of this token (delete, insert, equality).
+    var param = tokens[x].substring(1);
+    switch (tokens[x].charAt(0)) {
+      case '+':
+        try {
+          diffs[diffsLength++] = [DIFF_INSERT, decodeURI(param)];
+        } catch (ex) {
+          // Malformed URI sequence.
+          throw new Error('Illegal escape in diff_fromDelta: ' + param);
+        }
+        break;
+      case '-':
+        // Fall through.
+      case '=':
+        var n = parseInt(param, 10);
+        if (isNaN(n) || n < 0) {
+          throw new Error('Invalid number in diff_fromDelta: ' + param);
+        }
+        var text = text1.substring(pointer, pointer += n);
+        if (tokens[x].charAt(0) == '=') {
+          diffs[diffsLength++] = [DIFF_EQUAL, text];
+        } else {
+          diffs[diffsLength++] = [DIFF_DELETE, text];
+        }
+        break;
+      default:
+        // Blank tokens are ok (from a trailing \t).
+        // Anything else is an error.
+        if (tokens[x]) {
+          throw new Error('Invalid diff operation in diff_fromDelta: ' +
+                          tokens[x]);
+        }
+    }
+  }
+  if (pointer != text1.length) {
+    throw new Error('Delta length (' + pointer +
+        ') does not equal source text length (' + text1.length + ').');
+  }
+  return diffs;
+};
+
+
+//  MATCH FUNCTIONS
+
+
+/**
+ * Locate the best instance of 'pattern' in 'text' near 'loc'.
+ * @param {string} text The text to search.
+ * @param {string} pattern The pattern to search for.
+ * @param {number} loc The location to search around.
+ * @return {number} Best match index or -1.
+ */
+diff_match_patch.prototype.match_main = function(text, pattern, loc) {
+  // Check for null inputs.
+  if (text == null || pattern == null || loc == null) {
+    throw new Error('Null input. (match_main)');
+  }
+
+  loc = Math.max(0, Math.min(loc, text.length));
+  if (text == pattern) {
+    // Shortcut (potentially not guaranteed by the algorithm)
+    return 0;
+  } else if (!text.length) {
+    // Nothing to match.
+    return -1;
+  } else if (text.substring(loc, loc + pattern.length) == pattern) {
+    // Perfect match at the perfect spot!  (Includes case of null pattern)
+    return loc;
+  } else {
+    // Do a fuzzy compare.
+    return this.match_bitap(text, pattern, loc);
+  }
+};
+
+
+/**
+ * Locate the best instance of 'pattern' in 'text' near 'loc' using the
+ * Bitap algorithm.
+ * @param {string} text The text to search.
+ * @param {string} pattern The pattern to search for.
+ * @param {number} loc The location to search around.
+ * @return {number} Best match index or -1.
+ * @private
+ */
+diff_match_patch.prototype.match_bitap = function(text, pattern, loc) {
+  if (pattern.length > this.Match_MaxBits) {
+    throw new Error('Pattern too long for this browser.');
+  }
+
+  // Initialise the alphabet.
+  var s = this.match_alphabet(pattern);
+
+  var dmp = this;  // 'this' becomes 'window' in a closure.
+
+  /**
+   * Compute and return the score for a match with e errors and x location.
+   * Accesses loc and pattern through being a closure.
+   * @param {number} e Number of errors in match.
+   * @param {number} x Location of match.
+   * @return {number} Overall score for match (0.0 = good, 1.0 = bad).
+   * @private
+   */
+  function match_bitapScore(e, x) {
+    var accuracy = e / pattern.length;
+    var proximity = Math.abs(loc - x);
+    if (!dmp.Match_Distance) {
+      // Dodge divide by zero error.
+      return proximity ? 1.0 : accuracy;
+    }
+    return accuracy + (proximity / dmp.Match_Distance);
+  }
+
+  // Highest score beyond which we give up.
+  var score_threshold = this.Match_Threshold;
+  // Is there a nearby exact match? (speedup)
+  var best_loc = text.indexOf(pattern, loc);
+  if (best_loc != -1) {
+    score_threshold = Math.min(match_bitapScore(0, best_loc), score_threshold);
+    // What about in the other direction? (speedup)
+    best_loc = text.lastIndexOf(pattern, loc + pattern.length);
+    if (best_loc != -1) {
+      score_threshold =
+          Math.min(match_bitapScore(0, best_loc), score_threshold);
+    }
+  }
+
+  // Initialise the bit arrays.
+  var matchmask = 1 << (pattern.length - 1);
+  best_loc = -1;
+
+  var bin_min, bin_mid;
+  var bin_max = pattern.length + text.length;
+  var last_rd;
+  for (var d = 0; d < pattern.length; d++) {
+    // Scan for the best match; each iteration allows for one more error.
+    // Run a binary search to determine how far from 'loc' we can stray at this
+    // error level.
+    bin_min = 0;
+    bin_mid = bin_max;
+    while (bin_min < bin_mid) {
+      if (match_bitapScore(d, loc + bin_mid) <= score_threshold) {
+        bin_min = bin_mid;
+      } else {
+        bin_max = bin_mid;
+      }
+      bin_mid = Math.floor((bin_max - bin_min) / 2 + bin_min);
+    }
+    // Use the result from this iteration as the maximum for the next.
+    bin_max = bin_mid;
+    var start = Math.max(1, loc - bin_mid + 1);
+    var finish = Math.min(loc + bin_mid, text.length) + pattern.length;
+
+    var rd = Array(finish + 2);
+    rd[finish + 1] = (1 << d) - 1;
+    for (var j = finish; j >= start; j--) {
+      // The alphabet (s) is a sparse hash, so the following line generates
+      // warnings.
+      var charMatch = s[text.charAt(j - 1)];
+      if (d === 0) {  // First pass: exact match.
+        rd[j] = ((rd[j + 1] << 1) | 1) & charMatch;
+      } else {  // Subsequent passes: fuzzy match.
+        rd[j] = ((rd[j + 1] << 1) | 1) & charMatch |
+                (((last_rd[j + 1] | last_rd[j]) << 1) | 1) |
+                last_rd[j + 1];
+      }
+      if (rd[j] & matchmask) {
+        var score = match_bitapScore(d, j - 1);
+        // This match will almost certainly be better than any existing match.
+        // But check anyway.
+        if (score <= score_threshold) {
+          // Told you so.
+          score_threshold = score;
+          best_loc = j - 1;
+          if (best_loc > loc) {
+            // When passing loc, don't exceed our current distance from loc.
+            start = Math.max(1, 2 * loc - best_loc);
+          } else {
+            // Already passed loc, downhill from here on in.
+            break;
+          }
+        }
+      }
+    }
+    // No hope for a (better) match at greater error levels.
+    if (match_bitapScore(d + 1, loc) > score_threshold) {
+      break;
+    }
+    last_rd = rd;
+  }
+  return best_loc;
+};
+
+
+/**
+ * Initialise the alphabet for the Bitap algorithm.
+ * @param {string} pattern The text to encode.
+ * @return {Object} Hash of character locations.
+ * @private
+ */
+diff_match_patch.prototype.match_alphabet = function(pattern) {
+  var s = {};
+  for (var i = 0; i < pattern.length; i++) {
+    s[pattern.charAt(i)] = 0;
+  }
+  for (var i = 0; i < pattern.length; i++) {
+    s[pattern.charAt(i)] |= 1 << (pattern.length - i - 1);
+  }
+  return s;
+};
+
+
+//  PATCH FUNCTIONS
+
+
+/**
+ * Increase the context until it is unique,
+ * but don't let the pattern expand beyond Match_MaxBits.
+ * @param {patch_obj} patch The patch to grow.
+ * @param {string} text Source text.
+ * @private
+ */
+diff_match_patch.prototype.patch_addContext = function(patch, text) {
+  if (text.length == 0) {
+    return;
+  }
+  var pattern = text.substring(patch.start2, patch.start2 + patch.length1);
+  var padding = 0;
+
+  // Look for the first and last matches of pattern in text.  If two different
+  // matches are found, increase the pattern length.
+  while (text.indexOf(pattern) != text.lastIndexOf(pattern) &&
+         pattern.length < this.Match_MaxBits - this.Patch_Margin -
+         this.Patch_Margin) {
+    padding += this.Patch_Margin;
+    pattern = text.substring(patch.start2 - padding,
+                             patch.start2 + patch.length1 + padding);
+  }
+  // Add one chunk for good luck.
+  padding += this.Patch_Margin;
+
+  // Add the prefix.
+  var prefix = text.substring(patch.start2 - padding, patch.start2);
+  if (prefix) {
+    patch.diffs.unshift([DIFF_EQUAL, prefix]);
+  }
+  // Add the suffix.
+  var suffix = text.substring(patch.start2 + patch.length1,
+                              patch.start2 + patch.length1 + padding);
+  if (suffix) {
+    patch.diffs.push([DIFF_EQUAL, suffix]);
+  }
+
+  // Roll back the start points.
+  patch.start1 -= prefix.length;
+  patch.start2 -= prefix.length;
+  // Extend the lengths.
+  patch.length1 += prefix.length + suffix.length;
+  patch.length2 += prefix.length + suffix.length;
+};
+
+
+/**
+ * Compute a list of patches to turn text1 into text2.
+ * Use diffs if provided, otherwise compute it ourselves.
+ * There are four ways to call this function, depending on what data is
+ * available to the caller:
+ * Method 1:
+ * a = text1, b = text2
+ * Method 2:
+ * a = diffs
+ * Method 3 (optimal):
+ * a = text1, b = diffs
+ * Method 4 (deprecated, use method 3):
+ * a = text1, b = text2, c = diffs
+ *
+ * @param {string|Array.<Array.<number|string>>} a text1 (methods 1,3,4) or
+ * Array of diff tuples for text1 to text2 (method 2).
+ * @param {string|Array.<Array.<number|string>>} opt_b text2 (methods 1,4) or
+ * Array of diff tuples for text1 to text2 (method 3) or undefined (method 2).
+ * @param {string|Array.<Array.<number|string>>} opt_c Array of diff tuples for
+ * text1 to text2 (method 4) or undefined (methods 1,2,3).
+ * @return {Array.<patch_obj>} Array of patch objects.
+ */
+diff_match_patch.prototype.patch_make = function(a, opt_b, opt_c) {
+  var text1, diffs;
+  if (typeof a == 'string' && typeof opt_b == 'string' &&
+      typeof opt_c == 'undefined') {
+    // Method 1: text1, text2
+    // Compute diffs from text1 and text2.
+    text1 = a;
+    diffs = this.diff_main(text1, opt_b, true);
+    if (diffs.length > 2) {
+      this.diff_cleanupSemantic(diffs);
+      this.diff_cleanupEfficiency(diffs);
+    }
+  } else if (a && typeof a == 'object' && typeof opt_b == 'undefined' &&
+      typeof opt_c == 'undefined') {
+    // Method 2: diffs
+    // Compute text1 from diffs.
+    diffs = a;
+    text1 = this.diff_text1(diffs);
+  } else if (typeof a == 'string' && opt_b && typeof opt_b == 'object' &&
+      typeof opt_c == 'undefined') {
+    // Method 3: text1, diffs
+    text1 = a;
+    diffs = opt_b;
+  } else if (typeof a == 'string' && typeof opt_b == 'string' &&
+      opt_c && typeof opt_c == 'object') {
+    // Method 4: text1, text2, diffs
+    // text2 is not used.
+    text1 = a;
+    diffs = opt_c;
+  } else {
+    throw new Error('Unknown call format to patch_make.');
+  }
+
+  if (diffs.length === 0) {
+    return [];  // Get rid of the null case.
+  }
+  var patches = [];
+  var patch = new patch_obj();
+  var patchDiffLength = 0;  // Keeping our own length var is faster in JS.
+  var char_count1 = 0;  // Number of characters into the text1 string.
+  var char_count2 = 0;  // Number of characters into the text2 string.
+  // Start with text1 (prepatch_text) and apply the diffs until we arrive at
+  // text2 (postpatch_text).  We recreate the patches one by one to determine
+  // context info.
+  var prepatch_text = text1;
+  var postpatch_text = text1;
+  for (var x = 0; x < diffs.length; x++) {
+    var diff_type = diffs[x][0];
+    var diff_text = diffs[x][1];
+
+    if (!patchDiffLength && diff_type !== DIFF_EQUAL) {
+      // A new patch starts here.
+      patch.start1 = char_count1;
+      patch.start2 = char_count2;
+    }
+
+    switch (diff_type) {
+      case DIFF_INSERT:
+        patch.diffs[patchDiffLength++] = diffs[x];
+        patch.length2 += diff_text.length;
+        postpatch_text = postpatch_text.substring(0, char_count2) + diff_text +
+                         postpatch_text.substring(char_count2);
+        break;
+      case DIFF_DELETE:
+        patch.length1 += diff_text.length;
+        patch.diffs[patchDiffLength++] = diffs[x];
+        postpatch_text = postpatch_text.substring(0, char_count2) +
+                         postpatch_text.substring(char_count2 +
+                             diff_text.length);
+        break;
+      case DIFF_EQUAL:
+        if (diff_text.length <= 2 * this.Patch_Margin &&
+            patchDiffLength && diffs.length != x + 1) {
+          // Small equality inside a patch.
+          patch.diffs[patchDiffLength++] = diffs[x];
+          patch.length1 += diff_text.length;
+          patch.length2 += diff_text.length;
+        } else if (diff_text.length >= 2 * this.Patch_Margin) {
+          // Time for a new patch.
+          if (patchDiffLength) {
+            this.patch_addContext(patch, prepatch_text);
+            patches.push(patch);
+            patch = new patch_obj();
+            patchDiffLength = 0;
+            // Unlike Unidiff, our patch lists have a rolling context.
+            // http://code.google.com/p/google-diff-match-patch/wiki/Unidiff
+            // Update prepatch text & pos to reflect the application of the
+            // just completed patch.
+            prepatch_text = postpatch_text;
+            char_count1 = char_count2;
+          }
+        }
+        break;
+    }
+
+    // Update the current character count.
+    if (diff_type !== DIFF_INSERT) {
+      char_count1 += diff_text.length;
+    }
+    if (diff_type !== DIFF_DELETE) {
+      char_count2 += diff_text.length;
+    }
+  }
+  // Pick up the leftover patch if not empty.
+  if (patchDiffLength) {
+    this.patch_addContext(patch, prepatch_text);
+    patches.push(patch);
+  }
+
+  return patches;
+};
+
+
+/**
+ * Given an array of patches, return another array that is identical.
+ * @param {Array.<patch_obj>} patches Array of patch objects.
+ * @return {Array.<patch_obj>} Array of patch objects.
+ */
+diff_match_patch.prototype.patch_deepCopy = function(patches) {
+  // Making deep copies is hard in JavaScript.
+  var patchesCopy = [];
+  for (var x = 0; x < patches.length; x++) {
+    var patch = patches[x];
+    var patchCopy = new patch_obj();
+    patchCopy.diffs = [];
+    for (var y = 0; y < patch.diffs.length; y++) {
+      patchCopy.diffs[y] = patch.diffs[y].slice();
+    }
+    patchCopy.start1 = patch.start1;
+    patchCopy.start2 = patch.start2;
+    patchCopy.length1 = patch.length1;
+    patchCopy.length2 = patch.length2;
+    patchesCopy[x] = patchCopy;
+  }
+  return patchesCopy;
+};
+
+
+/**
+ * Merge a set of patches onto the text.  Return a patched text, as well
+ * as a list of true/false values indicating which patches were applied.
+ * @param {Array.<patch_obj>} patches Array of patch objects.
+ * @param {string} text Old text.
+ * @return {Array.<string|Array.<boolean>>} Two element Array, containing the
+ *      new text and an array of boolean values.
+ */
+diff_match_patch.prototype.patch_apply = function(patches, text) {
+  if (patches.length == 0) {
+    return [text, []];
+  }
+
+  // Deep copy the patches so that no changes are made to originals.
+  patches = this.patch_deepCopy(patches);
+
+  var nullPadding = this.patch_addPadding(patches);
+  text = nullPadding + text + nullPadding;
+
+  this.patch_splitMax(patches);
+  // delta keeps track of the offset between the expected and actual location
+  // of the previous patch.  If there are patches expected at positions 10 and
+  // 20, but the first patch was found at 12, delta is 2 and the second patch
+  // has an effective expected position of 22.
+  var delta = 0;
+  var results = [];
+  for (var x = 0; x < patches.length; x++) {
+    var expected_loc = patches[x].start2 + delta;
+    var text1 = this.diff_text1(patches[x].diffs);
+    var start_loc;
+    var end_loc = -1;
+    if (text1.length > this.Match_MaxBits) {
+      // patch_splitMax will only provide an oversized pattern in the case of
+      // a monster delete.
+      start_loc = this.match_main(text, text1.substring(0, this.Match_MaxBits),
+                                  expected_loc);
+      if (start_loc != -1) {
+        end_loc = this.match_main(text,
+            text1.substring(text1.length - this.Match_MaxBits),
+            expected_loc + text1.length - this.Match_MaxBits);
+        if (end_loc == -1 || start_loc >= end_loc) {
+          // Can't find valid trailing context.  Drop this patch.
+          start_loc = -1;
+        }
+      }
+    } else {
+      start_loc = this.match_main(text, text1, expected_loc);
+    }
+    if (start_loc == -1) {
+      // No match found.  :(
+      results[x] = false;
+      // Subtract the delta for this failed patch from subsequent patches.
+      delta -= patches[x].length2 - patches[x].length1;
+    } else {
+      // Found a match.  :)
+      results[x] = true;
+      delta = start_loc - expected_loc;
+      var text2;
+      if (end_loc == -1) {
+        text2 = text.substring(start_loc, start_loc + text1.length);
+      } else {
+        text2 = text.substring(start_loc, end_loc + this.Match_MaxBits);
+      }
+      if (text1 == text2) {
+        // Perfect match, just shove the replacement text in.
+        text = text.substring(0, start_loc) +
+               this.diff_text2(patches[x].diffs) +
+               text.substring(start_loc + text1.length);
+      } else {
+        // Imperfect match.  Run a diff to get a framework of equivalent
+        // indices.
+        var diffs = this.diff_main(text1, text2, false);
+        if (text1.length > this.Match_MaxBits &&
+            this.diff_levenshtein(diffs) / text1.length >
+            this.Patch_DeleteThreshold) {
+          // The end points match, but the content is unacceptably bad.
+          results[x] = false;
+        } else {
+          this.diff_cleanupSemanticLossless(diffs);
+          var index1 = 0;
+          var index2;
+          for (var y = 0; y < patches[x].diffs.length; y++) {
+            var mod = patches[x].diffs[y];
+            if (mod[0] !== DIFF_EQUAL) {
+              index2 = this.diff_xIndex(diffs, index1);
+            }
+            if (mod[0] === DIFF_INSERT) {  // Insertion
+              text = text.substring(0, start_loc + index2) + mod[1] +
+                     text.substring(start_loc + index2);
+            } else if (mod[0] === DIFF_DELETE) {  // Deletion
+              text = text.substring(0, start_loc + index2) +
+                     text.substring(start_loc + this.diff_xIndex(diffs,
+                         index1 + mod[1].length));
+            }
+            if (mod[0] !== DIFF_DELETE) {
+              index1 += mod[1].length;
+            }
+          }
+        }
+      }
+    }
+  }
+  // Strip the padding off.
+  text = text.substring(nullPadding.length, text.length - nullPadding.length);
+  return [text, results];
+};
+
+
+/**
+ * Add some padding on text start and end so that edges can match something.
+ * Intended to be called only from within patch_apply.
+ * @param {Array.<patch_obj>} patches Array of patch objects.
+ * @return {string} The padding string added to each side.
+ */
+diff_match_patch.prototype.patch_addPadding = function(patches) {
+  var paddingLength = this.Patch_Margin;
+  var nullPadding = '';
+  for (var x = 1; x <= paddingLength; x++) {
+    nullPadding += String.fromCharCode(x);
+  }
+
+  // Bump all the patches forward.
+  for (var x = 0; x < patches.length; x++) {
+    patches[x].start1 += paddingLength;
+    patches[x].start2 += paddingLength;
+  }
+
+  // Add some padding on start of first diff.
+  var patch = patches[0];
+  var diffs = patch.diffs;
+  if (diffs.length == 0 || diffs[0][0] != DIFF_EQUAL) {
+    // Add nullPadding equality.
+    diffs.unshift([DIFF_EQUAL, nullPadding]);
+    patch.start1 -= paddingLength;  // Should be 0.
+    patch.start2 -= paddingLength;  // Should be 0.
+    patch.length1 += paddingLength;
+    patch.length2 += paddingLength;
+  } else if (paddingLength > diffs[0][1].length) {
+    // Grow first equality.
+    var extraLength = paddingLength - diffs[0][1].length;
+    diffs[0][1] = nullPadding.substring(diffs[0][1].length) + diffs[0][1];
+    patch.start1 -= extraLength;
+    patch.start2 -= extraLength;
+    patch.length1 += extraLength;
+    patch.length2 += extraLength;
+  }
+
+  // Add some padding on end of last diff.
+  patch = patches[patches.length - 1];
+  diffs = patch.diffs;
+  if (diffs.length == 0 || diffs[diffs.length - 1][0] != DIFF_EQUAL) {
+    // Add nullPadding equality.
+    diffs.push([DIFF_EQUAL, nullPadding]);
+    patch.length1 += paddingLength;
+    patch.length2 += paddingLength;
+  } else if (paddingLength > diffs[diffs.length - 1][1].length) {
+    // Grow last equality.
+    var extraLength = paddingLength - diffs[diffs.length - 1][1].length;
+    diffs[diffs.length - 1][1] += nullPadding.substring(0, extraLength);
+    patch.length1 += extraLength;
+    patch.length2 += extraLength;
+  }
+
+  return nullPadding;
+};
+
+
+/**
+ * Look through the patches and break up any which are longer than the maximum
+ * limit of the match algorithm.
+ * @param {Array.<patch_obj>} patches Array of patch objects.
+ */
+diff_match_patch.prototype.patch_splitMax = function(patches) {
+  for (var x = 0; x < patches.length; x++) {
+    if (patches[x].length1 > this.Match_MaxBits) {
+      var bigpatch = patches[x];
+      // Remove the big old patch.
+      patches.splice(x--, 1);
+      var patch_size = this.Match_MaxBits;
+      var start1 = bigpatch.start1;
+      var start2 = bigpatch.start2;
+      var precontext = '';
+      while (bigpatch.diffs.length !== 0) {
+        // Create one of several smaller patches.
+        var patch = new patch_obj();
+        var empty = true;
+        patch.start1 = start1 - precontext.length;
+        patch.start2 = start2 - precontext.length;
+        if (precontext !== '') {
+          patch.length1 = patch.length2 = precontext.length;
+          patch.diffs.push([DIFF_EQUAL, precontext]);
+        }
+        while (bigpatch.diffs.length !== 0 &&
+               patch.length1 < patch_size - this.Patch_Margin) {
+          var diff_type = bigpatch.diffs[0][0];
+          var diff_text = bigpatch.diffs[0][1];
+          if (diff_type === DIFF_INSERT) {
+            // Insertions are harmless.
+            patch.length2 += diff_text.length;
+            start2 += diff_text.length;
+            patch.diffs.push(bigpatch.diffs.shift());
+            empty = false;
+          } else if (diff_type === DIFF_DELETE && patch.diffs.length == 1 &&
+                     patch.diffs[0][0] == DIFF_EQUAL &&
+                     diff_text.length > 2 * patch_size) {
+            // This is a large deletion.  Let it pass in one chunk.
+            patch.length1 += diff_text.length;
+            start1 += diff_text.length;
+            empty = false;
+            patch.diffs.push([diff_type, diff_text]);
+            bigpatch.diffs.shift();
+          } else {
+            // Deletion or equality.  Only take as much as we can stomach.
+            diff_text = diff_text.substring(0, patch_size - patch.length1 -
+                                               this.Patch_Margin);
+            patch.length1 += diff_text.length;
+            start1 += diff_text.length;
+            if (diff_type === DIFF_EQUAL) {
+              patch.length2 += diff_text.length;
+              start2 += diff_text.length;
+            } else {
+              empty = false;
+            }
+            patch.diffs.push([diff_type, diff_text]);
+            if (diff_text == bigpatch.diffs[0][1]) {
+              bigpatch.diffs.shift();
+            } else {
+              bigpatch.diffs[0][1] =
+                  bigpatch.diffs[0][1].substring(diff_text.length);
+            }
+          }
+        }
+        // Compute the head context for the next patch.
+        precontext = this.diff_text2(patch.diffs);
+        precontext =
+            precontext.substring(precontext.length - this.Patch_Margin);
+        // Append the end context for this patch.
+        var postcontext = this.diff_text1(bigpatch.diffs)
+                              .substring(0, this.Patch_Margin);
+        if (postcontext !== '') {
+          patch.length1 += postcontext.length;
+          patch.length2 += postcontext.length;
+          if (patch.diffs.length !== 0 &&
+              patch.diffs[patch.diffs.length - 1][0] === DIFF_EQUAL) {
+            patch.diffs[patch.diffs.length - 1][1] += postcontext;
+          } else {
+            patch.diffs.push([DIFF_EQUAL, postcontext]);
+          }
+        }
+        if (!empty) {
+          patches.splice(++x, 0, patch);
+        }
+      }
+    }
+  }
+};
+
+
+/**
+ * Take a list of patches and return a textual representation.
+ * @param {Array.<patch_obj>} patches Array of patch objects.
+ * @return {string} Text representation of patches.
+ */
+diff_match_patch.prototype.patch_toText = function(patches) {
+  var text = [];
+  for (var x = 0; x < patches.length; x++) {
+    text[x] = patches[x];
+  }
+  return text.join('');
+};
+
+
+/**
+ * Parse a textual representation of patches and return a list of patch objects.
+ * @param {string} textline Text representation of patches.
+ * @return {Array.<patch_obj>} Array of patch objects.
+ * @throws {Error} If invalid input.
+ */
+diff_match_patch.prototype.patch_fromText = function(textline) {
+  var patches = [];
+  if (!textline) {
+    return patches;
+  }
+  // Opera doesn't know how to decode char 0.
+  textline = textline.replace(/%00/g, '\0');
+  var text = textline.split('\n');
+  var textPointer = 0;
+  while (textPointer < text.length) {
+    var m = text[textPointer].match(/^@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@$/);
+    if (!m) {
+      throw new Error('Invalid patch string: ' + text[textPointer]);
+    }
+    var patch = new patch_obj();
+    patches.push(patch);
+    patch.start1 = parseInt(m[1], 10);
+    if (m[2] === '') {
+      patch.start1--;
+      patch.length1 = 1;
+    } else if (m[2] == '0') {
+      patch.length1 = 0;
+    } else {
+      patch.start1--;
+      patch.length1 = parseInt(m[2], 10);
+    }
+
+    patch.start2 = parseInt(m[3], 10);
+    if (m[4] === '') {
+      patch.start2--;
+      patch.length2 = 1;
+    } else if (m[4] == '0') {
+      patch.length2 = 0;
+    } else {
+      patch.start2--;
+      patch.length2 = parseInt(m[4], 10);
+    }
+    textPointer++;
+
+    while (textPointer < text.length) {
+      var sign = text[textPointer].charAt(0);
+      try {
+        var line = decodeURI(text[textPointer].substring(1));
+      } catch (ex) {
+        // Malformed URI sequence.
+        throw new Error('Illegal escape in patch_fromText: ' + line);
+      }
+      if (sign == '-') {
+        // Deletion.
+        patch.diffs.push([DIFF_DELETE, line]);
+      } else if (sign == '+') {
+        // Insertion.
+        patch.diffs.push([DIFF_INSERT, line]);
+      } else if (sign == ' ') {
+        // Minor equality.
+        patch.diffs.push([DIFF_EQUAL, line]);
+      } else if (sign == '@') {
+        // Start of next patch.
+        break;
+      } else if (sign === '') {
+        // Blank line?  Whatever.
+      } else {
+        // WTF?
+        throw new Error('Invalid patch mode "' + sign + '" in: ' + line);
+      }
+      textPointer++;
+    }
+  }
+  return patches;
+};
+
+
+/**
+ * Class representing one patch operation.
+ * @constructor
+ */
+function patch_obj() {
+  /** @type {Array.<Array.<number|string>>} */
+  this.diffs = [];
+  /** @type {?number} */
+  this.start1 = null;
+  /** @type {?number} */
+  this.start2 = null;
+  /** @type {number} */
+  this.length1 = 0;
+  /** @type {number} */
+  this.length2 = 0;
+}
+
+
+/**
+ * Emmulate GNU diff's format.
+ * Header: @@ -382,8 +481,9 @@
+ * Indicies are printed as 1-based, not 0-based.
+ * @return {string} The GNU diff string.
+ */
+patch_obj.prototype.toString = function() {
+  var coords1, coords2;
+  if (this.length1 === 0) {
+    coords1 = this.start1 + ',0';
+  } else if (this.length1 == 1) {
+    coords1 = this.start1 + 1;
+  } else {
+    coords1 = (this.start1 + 1) + ',' + this.length1;
+  }
+  if (this.length2 === 0) {
+    coords2 = this.start2 + ',0';
+  } else if (this.length2 == 1) {
+    coords2 = this.start2 + 1;
+  } else {
+    coords2 = (this.start2 + 1) + ',' + this.length2;
+  }
+  var text = ['@@ -' + coords1 + ' +' + coords2 + ' @@\n'];
+  var op;
+  // Escape the body of the patch with %xx notation.
+  for (var x = 0; x < this.diffs.length; x++) {
+    switch (this.diffs[x][0]) {
+      case DIFF_INSERT:
+        op = '+';
+        break;
+      case DIFF_DELETE:
+        op = '-';
+        break;
+      case DIFF_EQUAL:
+        op = ' ';
+        break;
+    }
+    text[x + 1] = op + encodeURI(this.diffs[x][1]) + '\n';
+  }
+  // Opera doesn't know how to encode char 0.
+  return text.join('').replace(/\x00/g, '%00').replace(/%20/g, ' ');
+};
+
+
+// Export these global variables so that they survive Google's JS compiler.
+/*changed by lfborjas: changed `window` for `exports` to make it suitable for the node.js module conventions*/
+exports['diff_match_patch'] = diff_match_patch;
+exports['patch_obj'] = patch_obj;
+exports['DIFF_DELETE'] = DIFF_DELETE;
+exports['DIFF_INSERT'] = DIFF_INSERT;
+exports['DIFF_EQUAL'] = DIFF_EQUAL;
+
+},{}],20:[function(require,module,exports){
+'use strict';
+
+var constants = require('./util/constants'),
+    Logging   = require('./mixins/logging');
+
+var Faye = {
+  VERSION:    constants.VERSION,
+
+  Client:     require('./protocol/client'),
+  Scheduler:  require('./protocol/scheduler')
+};
+
+Logging.wrapper = Faye;
+
+module.exports = Faye;
+
+},{"./mixins/logging":22,"./protocol/client":26,"./protocol/scheduler":32,"./util/constants":44}],21:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Promise   = require('../util/promise');
+
+module.exports = {
+  then: function(callback, errback) {
+    var self = this;
+    if (!this._promise)
+      this._promise = new Promise(function(resolve, reject) {
+        self._resolve = resolve;
+        self._reject  = reject;
+      });
+
+    if (arguments.length === 0)
+      return this._promise;
+    else
+      return this._promise.then(callback, errback);
+  },
+
+  callback: function(callback, context) {
+    return this.then(function(value) { callback.call(context, value) });
+  },
+
+  errback: function(callback, context) {
+    return this.then(null, function(reason) { callback.call(context, reason) });
+  },
+
+  timeout: function(seconds, message) {
+    this.then();
+    var self = this;
+    this._timer = global.setTimeout(function() {
+      self._reject(message);
+    }, seconds * 1000);
+  },
+
+  setDeferredStatus: function(status, value) {
+    if (this._timer) global.clearTimeout(this._timer);
+
+    this.then();
+
+    if (status === 'succeeded')
+      this._resolve(value);
+    else if (status === 'failed')
+      this._reject(value);
+    else
+      delete this._promise;
+  }
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../util/promise":49}],22:[function(require,module,exports){
+'use strict';
+
+var toJSON = require('../util/to_json');
+
+var Logging = {
+  LOG_LEVELS: {
+    fatal:  4,
+    error:  3,
+    warn:   2,
+    info:   1,
+    debug:  0
+  },
+
+  writeLog: function(messageArgs, level) {
+    var logger = Logging.logger || (Logging.wrapper || Logging).logger;
+    if (!logger) return;
+
+    var args   = Array.prototype.slice.apply(messageArgs),
+        banner = '[Faye',
+        klass  = this.className,
+
+        message = args.shift().replace(/\?/g, function() {
+          try {
+            return toJSON(args.shift());
+          } catch (error) {
+            return '[Object]';
+          }
+        });
+
+    if (klass) banner += '.' + klass;
+    banner += '] ';
+
+    if (typeof logger[level] === 'function')
+      logger[level](banner + message);
+    else if (typeof logger === 'function')
+      logger(banner + message);
+  }
+};
+
+for (var key in Logging.LOG_LEVELS)
+  (function(level) {
+    Logging[level] = function() {
+      this.writeLog(arguments, level);
+    };
+  })(key);
+
+module.exports = Logging;
+
+},{"../util/to_json":51}],23:[function(require,module,exports){
+'use strict';
+
+var extend       = require('../util/extend'),
+    EventEmitter = require('../util/event_emitter');
+
+var Publisher = {
+  countListeners: function(eventType) {
+    return this.listeners(eventType).length;
+  },
+
+  bind: function(eventType, listener, context) {
+    var slice   = Array.prototype.slice,
+        handler = function() { listener.apply(context, slice.call(arguments)) };
+
+    this._listeners = this._listeners || [];
+    this._listeners.push([eventType, listener, context, handler]);
+    return this.on(eventType, handler);
+  },
+
+  unbind: function(eventType, listener, context) {
+    this._listeners = this._listeners || [];
+    var n = this._listeners.length, tuple;
+
+    while (n--) {
+      tuple = this._listeners[n];
+      if (tuple[0] !== eventType) continue;
+      if (listener && (tuple[1] !== listener || tuple[2] !== context)) continue;
+      this._listeners.splice(n, 1);
+      this.removeListener(eventType, tuple[3]);
+    }
+  }
+};
+
+extend(Publisher, EventEmitter.prototype);
+Publisher.trigger = Publisher.emit;
+
+module.exports = Publisher;
+
+},{"../util/event_emitter":47,"../util/extend":48}],24:[function(require,module,exports){
+(function (global){
+'use strict';
+
+module.exports = {
+  addTimeout: function(name, delay, callback, context) {
+    this._timeouts = this._timeouts || {};
+    if (this._timeouts.hasOwnProperty(name)) return;
+    var self = this;
+    this._timeouts[name] = global.setTimeout(function() {
+      delete self._timeouts[name];
+      callback.call(context);
+    }, 1000 * delay);
+  },
+
+  removeTimeout: function(name) {
+    this._timeouts = this._timeouts || {};
+    var timeout = this._timeouts[name];
+    if (!timeout) return;
+    global.clearTimeout(timeout);
+    delete this._timeouts[name];
+  },
+
+  removeAllTimeouts: function() {
+    this._timeouts = this._timeouts || {};
+    for (var name in this._timeouts) this.removeTimeout(name);
+  }
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],25:[function(require,module,exports){
+'use strict';
+
+var Class     = require('../util/class'),
+    extend    = require('../util/extend'),
+    Publisher = require('../mixins/publisher'),
+    Grammar   = require('./grammar');
+
+var Channel = Class({
+  initialize: function(name) {
+    this.id = this.name = name;
+  },
+
+  push: function(message) {
+    this.trigger('message', message);
+  },
+
+  isUnused: function() {
+    return this.countListeners('message') === 0;
+  }
+});
+
+extend(Channel.prototype, Publisher);
+
+extend(Channel, {
+  HANDSHAKE:    '/meta/handshake',
+  CONNECT:      '/meta/connect',
+  SUBSCRIBE:    '/meta/subscribe',
+  UNSUBSCRIBE:  '/meta/unsubscribe',
+  DISCONNECT:   '/meta/disconnect',
+
+  META:         'meta',
+  SERVICE:      'service',
+
+  expand: function(name) {
+    var segments = this.parse(name),
+        channels = ['/**', name];
+
+    var copy = segments.slice();
+    copy[copy.length - 1] = '*';
+    channels.push(this.unparse(copy));
+
+    for (var i = 1, n = segments.length; i < n; i++) {
+      copy = segments.slice(0, i);
+      copy.push('**');
+      channels.push(this.unparse(copy));
+    }
+
+    return channels;
+  },
+
+  isValid: function(name) {
+    return Grammar.CHANNEL_NAME.test(name) ||
+           Grammar.CHANNEL_PATTERN.test(name);
+  },
+
+  parse: function(name) {
+    if (!this.isValid(name)) return null;
+    return name.split('/').slice(1);
+  },
+
+  unparse: function(segments) {
+    return '/' + segments.join('/');
+  },
+
+  isMeta: function(name) {
+    var segments = this.parse(name);
+    return segments ? (segments[0] === this.META) : null;
+  },
+
+  isService: function(name) {
+    var segments = this.parse(name);
+    return segments ? (segments[0] === this.SERVICE) : null;
+  },
+
+  isSubscribable: function(name) {
+    if (!this.isValid(name)) return null;
+    return !this.isMeta(name) && !this.isService(name);
+  },
+
+  Set: Class({
+    initialize: function() {
+      this._channels = {};
+    },
+
+    getKeys: function() {
+      var keys = [];
+      for (var key in this._channels) keys.push(key);
+      return keys;
+    },
+
+    remove: function(name) {
+      delete this._channels[name];
+    },
+
+    hasSubscription: function(name) {
+      return this._channels.hasOwnProperty(name);
+    },
+
+    subscribe: function(names, subscription) {
+      var name;
+      for (var i = 0, n = names.length; i < n; i++) {
+        name = names[i];
+        var channel = this._channels[name] = this._channels[name] || new Channel(name);
+        channel.bind('message', subscription);
+      }
+    },
+
+    unsubscribe: function(name, subscription) {
+      var channel = this._channels[name];
+      if (!channel) return false;
+      channel.unbind('message', subscription);
+
+      if (channel.isUnused()) {
+        this.remove(name);
+        return true;
+      } else {
+        return false;
+      }
+    },
+
+    distributeMessage: function(message) {
+      var channels = Channel.expand(message.channel);
+
+      for (var i = 0, n = channels.length; i < n; i++) {
+        var channel = this._channels[channels[i]];
+        if (channel) channel.trigger('message', message);
+      }
+    }
+  })
+});
+
+module.exports = Channel;
+
+},{"../mixins/publisher":23,"../util/class":43,"../util/extend":48,"./grammar":30}],26:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var asap            = require('asap'),
+    Class           = require('../util/class'),
+    Promise         = require('../util/promise'),
+    URI             = require('../util/uri'),
+    array           = require('../util/array'),
+    browser         = require('../util/browser'),
+    constants       = require('../util/constants'),
+    extend          = require('../util/extend'),
+    validateOptions = require('../util/validate_options'),
+    Deferrable      = require('../mixins/deferrable'),
+    Logging         = require('../mixins/logging'),
+    Publisher       = require('../mixins/publisher'),
+    Channel         = require('./channel'),
+    Dispatcher      = require('./dispatcher'),
+    Error           = require('./error'),
+    Extensible      = require('./extensible'),
+    Publication     = require('./publication'),
+    Subscription    = require('./subscription');
+
+var Client = Class({ className: 'Client',
+  UNCONNECTED:        1,
+  CONNECTING:         2,
+  CONNECTED:          3,
+  DISCONNECTED:       4,
+
+  HANDSHAKE:          'handshake',
+  RETRY:              'retry',
+  NONE:               'none',
+
+  CONNECTION_TIMEOUT: 60,
+
+  DEFAULT_ENDPOINT:   '/bayeux',
+  INTERVAL:           0,
+
+  initialize: function(endpoint, options) {
+    this.info('New client created for ?', endpoint);
+    options = options || {};
+
+    validateOptions(options, ['interval', 'timeout', 'endpoints', 'proxy', 'retry', 'scheduler', 'websocketExtensions', 'tls', 'ca']);
+
+    this._channels   = new Channel.Set();
+    this._dispatcher = Dispatcher.create(this, endpoint || this.DEFAULT_ENDPOINT, options);
+
+    this._messageId = 0;
+    this._state     = this.UNCONNECTED;
+
+    this._responseCallbacks = {};
+
+    this._advice = {
+      reconnect: this.RETRY,
+      interval:  1000 * (options.interval || this.INTERVAL),
+      timeout:   1000 * (options.timeout  || this.CONNECTION_TIMEOUT)
+    };
+    this._dispatcher.timeout = this._advice.timeout / 1000;
+
+    this._dispatcher.bind('message', this._receiveMessage, this);
+
+    if (browser.Event && global.onbeforeunload !== undefined)
+      browser.Event.on(global, 'beforeunload', function() {
+        if (array.indexOf(this._dispatcher._disabled, 'autodisconnect') < 0)
+          this.disconnect();
+      }, this);
+  },
+
+  addWebsocketExtension: function(extension) {
+    return this._dispatcher.addWebsocketExtension(extension);
+  },
+
+  disable: function(feature) {
+    return this._dispatcher.disable(feature);
+  },
+
+  setHeader: function(name, value) {
+    return this._dispatcher.setHeader(name, value);
+  },
+
+  // Request
+  // MUST include:  * channel
+  //                * version
+  //                * supportedConnectionTypes
+  // MAY include:   * minimumVersion
+  //                * ext
+  //                * id
+  //
+  // Success Response                             Failed Response
+  // MUST include:  * channel                     MUST include:  * channel
+  //                * version                                    * successful
+  //                * supportedConnectionTypes                   * error
+  //                * clientId                    MAY include:   * supportedConnectionTypes
+  //                * successful                                 * advice
+  // MAY include:   * minimumVersion                             * version
+  //                * advice                                     * minimumVersion
+  //                * ext                                        * ext
+  //                * id                                         * id
+  //                * authSuccessful
+  handshake: function(callback, context) {
+    if (this._advice.reconnect === this.NONE) return;
+    if (this._state !== this.UNCONNECTED) return;
+
+    this._state = this.CONNECTING;
+    var self = this;
+
+    this.info('Initiating handshake with ?', URI.stringify(this._dispatcher.endpoint));
+    this._dispatcher.selectTransport(constants.MANDATORY_CONNECTION_TYPES);
+
+    this._sendMessage({
+      channel:                  Channel.HANDSHAKE,
+      version:                  constants.BAYEUX_VERSION,
+      supportedConnectionTypes: this._dispatcher.getConnectionTypes()
+
+    }, {}, function(response) {
+
+      if (response.successful) {
+        this._state = this.CONNECTED;
+        this._dispatcher.clientId  = response.clientId;
+
+        this._dispatcher.selectTransport(response.supportedConnectionTypes);
+
+        this.info('Handshake successful: ?', this._dispatcher.clientId);
+
+        this.subscribe(this._channels.getKeys(), true);
+        if (callback) asap(function() { callback.call(context) });
+
+      } else {
+        this.info('Handshake unsuccessful');
+        global.setTimeout(function() { self.handshake(callback, context) }, this._dispatcher.retry * 1000);
+        this._state = this.UNCONNECTED;
+      }
+    }, this);
+  },
+
+  // Request                              Response
+  // MUST include:  * channel             MUST include:  * channel
+  //                * clientId                           * successful
+  //                * connectionType                     * clientId
+  // MAY include:   * ext                 MAY include:   * error
+  //                * id                                 * advice
+  //                                                     * ext
+  //                                                     * id
+  //                                                     * timestamp
+  connect: function(callback, context) {
+    if (this._advice.reconnect === this.NONE) return;
+    if (this._state === this.DISCONNECTED) return;
+
+    if (this._state === this.UNCONNECTED)
+      return this.handshake(function() { this.connect(callback, context) }, this);
+
+    this.callback(callback, context);
+    if (this._state !== this.CONNECTED) return;
+
+    this.info('Calling deferred actions for ?', this._dispatcher.clientId);
+    this.setDeferredStatus('succeeded');
+    this.setDeferredStatus('unknown');
+
+    if (this._connectRequest) return;
+    this._connectRequest = true;
+
+    this.info('Initiating connection for ?', this._dispatcher.clientId);
+
+    this._sendMessage({
+      channel:        Channel.CONNECT,
+      clientId:       this._dispatcher.clientId,
+      connectionType: this._dispatcher.connectionType
+
+    }, {}, this._cycleConnection, this);
+  },
+
+  // Request                              Response
+  // MUST include:  * channel             MUST include:  * channel
+  //                * clientId                           * successful
+  // MAY include:   * ext                                * clientId
+  //                * id                  MAY include:   * error
+  //                                                     * ext
+  //                                                     * id
+  disconnect: function() {
+    if (this._state !== this.CONNECTED) return;
+    this._state = this.DISCONNECTED;
+
+    this.info('Disconnecting ?', this._dispatcher.clientId);
+    var promise = new Publication();
+
+    this._sendMessage({
+      channel:  Channel.DISCONNECT,
+      clientId: this._dispatcher.clientId
+
+    }, {}, function(response) {
+      if (response.successful) {
+        this._dispatcher.close();
+        promise.setDeferredStatus('succeeded');
+      } else {
+        promise.setDeferredStatus('failed', Error.parse(response.error));
+      }
+    }, this);
+
+    this.info('Clearing channel listeners for ?', this._dispatcher.clientId);
+    this._channels = new Channel.Set();
+
+    return promise;
+  },
+
+  // Request                              Response
+  // MUST include:  * channel             MUST include:  * channel
+  //                * clientId                           * successful
+  //                * subscription                       * clientId
+  // MAY include:   * ext                                * subscription
+  //                * id                  MAY include:   * error
+  //                                                     * advice
+  //                                                     * ext
+  //                                                     * id
+  //                                                     * timestamp
+  subscribe: function(channel, callback, context) {
+    if (channel instanceof Array)
+      return array.map(channel, function(c) {
+        return this.subscribe(c, callback, context);
+      }, this);
+
+    var subscription = new Subscription(this, channel, callback, context),
+        force        = (callback === true),
+        hasSubscribe = this._channels.hasSubscription(channel);
+
+    if (hasSubscribe && !force) {
+      this._channels.subscribe([channel], subscription);
+      subscription.setDeferredStatus('succeeded');
+      return subscription;
+    }
+
+    this.connect(function() {
+      this.info('Client ? attempting to subscribe to ?', this._dispatcher.clientId, channel);
+      if (!force) this._channels.subscribe([channel], subscription);
+
+      this._sendMessage({
+        channel:      Channel.SUBSCRIBE,
+        clientId:     this._dispatcher.clientId,
+        subscription: channel
+
+      }, {}, function(response) {
+        if (!response.successful) {
+          subscription.setDeferredStatus('failed', Error.parse(response.error));
+          return this._channels.unsubscribe(channel, subscription);
+        }
+
+        var channels = [].concat(response.subscription);
+        this.info('Subscription acknowledged for ? to ?', this._dispatcher.clientId, channels);
+        subscription.setDeferredStatus('succeeded');
+      }, this);
+    }, this);
+
+    return subscription;
+  },
+
+  // Request                              Response
+  // MUST include:  * channel             MUST include:  * channel
+  //                * clientId                           * successful
+  //                * subscription                       * clientId
+  // MAY include:   * ext                                * subscription
+  //                * id                  MAY include:   * error
+  //                                                     * advice
+  //                                                     * ext
+  //                                                     * id
+  //                                                     * timestamp
+  unsubscribe: function(channel, subscription) {
+    if (channel instanceof Array)
+      return array.map(channel, function(c) {
+        return this.unsubscribe(c, subscription);
+      }, this);
+
+    var dead = this._channels.unsubscribe(channel, subscription);
+    if (!dead) return;
+
+    this.connect(function() {
+      this.info('Client ? attempting to unsubscribe from ?', this._dispatcher.clientId, channel);
+
+      this._sendMessage({
+        channel:      Channel.UNSUBSCRIBE,
+        clientId:     this._dispatcher.clientId,
+        subscription: channel
+
+      }, {}, function(response) {
+        if (!response.successful) return;
+
+        var channels = [].concat(response.subscription);
+        this.info('Unsubscription acknowledged for ? from ?', this._dispatcher.clientId, channels);
+      }, this);
+    }, this);
+  },
+
+  // Request                              Response
+  // MUST include:  * channel             MUST include:  * channel
+  //                * data                               * successful
+  // MAY include:   * clientId            MAY include:   * id
+  //                * id                                 * error
+  //                * ext                                * ext
+  publish: function(channel, data, options) {
+    validateOptions(options || {}, ['attempts', 'deadline']);
+    var publication = new Publication();
+
+    this.connect(function() {
+      this.info('Client ? queueing published message to ?: ?', this._dispatcher.clientId, channel, data);
+
+      this._sendMessage({
+        channel:  channel,
+        data:     data,
+        clientId: this._dispatcher.clientId
+
+      }, options, function(response) {
+        if (response.successful)
+          publication.setDeferredStatus('succeeded');
+        else
+          publication.setDeferredStatus('failed', Error.parse(response.error));
+      }, this);
+    }, this);
+
+    return publication;
+  },
+
+  _sendMessage: function(message, options, callback, context) {
+    message.id = this._generateMessageId();
+
+    var timeout = this._advice.timeout
+                ? 1.2 * this._advice.timeout / 1000
+                : 1.2 * this._dispatcher.retry;
+
+    this.pipeThroughExtensions('outgoing', message, null, function(message) {
+      if (!message) return;
+      if (callback) this._responseCallbacks[message.id] = [callback, context];
+      this._dispatcher.sendMessage(message, timeout, options || {});
+    }, this);
+  },
+
+  _generateMessageId: function() {
+    this._messageId += 1;
+    if (this._messageId >= Math.pow(2,32)) this._messageId = 0;
+    return this._messageId.toString(36);
+  },
+
+  _receiveMessage: function(message) {
+    var id = message.id, callback;
+
+    if (message.successful !== undefined) {
+      callback = this._responseCallbacks[id];
+      delete this._responseCallbacks[id];
+    }
+
+    this.pipeThroughExtensions('incoming', message, null, function(message) {
+      if (!message) return;
+      if (message.advice) this._handleAdvice(message.advice);
+      this._deliverMessage(message);
+      if (callback) callback[0].call(callback[1], message);
+    }, this);
+  },
+
+  _handleAdvice: function(advice) {
+    extend(this._advice, advice);
+    this._dispatcher.timeout = this._advice.timeout / 1000;
+
+    if (this._advice.reconnect === this.HANDSHAKE && this._state !== this.DISCONNECTED) {
+      this._state = this.UNCONNECTED;
+      this._dispatcher.clientId = null;
+      this._cycleConnection();
+    }
+  },
+
+  _deliverMessage: function(message) {
+    if (!message.channel || message.data === undefined) return;
+    this.info('Client ? calling listeners for ? with ?', this._dispatcher.clientId, message.channel, message.data);
+    this._channels.distributeMessage(message);
+  },
+
+  _cycleConnection: function() {
+    if (this._connectRequest) {
+      this._connectRequest = null;
+      this.info('Closed connection for ?', this._dispatcher.clientId);
+    }
+    var self = this;
+    global.setTimeout(function() { self.connect() }, this._advice.interval);
+  }
+});
+
+extend(Client.prototype, Deferrable);
+extend(Client.prototype, Publisher);
+extend(Client.prototype, Logging);
+extend(Client.prototype, Extensible);
+
+module.exports = Client;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../mixins/deferrable":21,"../mixins/logging":22,"../mixins/publisher":23,"../util/array":41,"../util/browser":42,"../util/class":43,"../util/constants":44,"../util/extend":48,"../util/promise":49,"../util/uri":52,"../util/validate_options":53,"./channel":25,"./dispatcher":27,"./error":28,"./extensible":29,"./publication":31,"./subscription":33,"asap":8}],27:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Class     = require('../util/class'),
+    URI       = require('../util/uri'),
+    cookies   = require('../util/cookies'),
+    extend    = require('../util/extend'),
+    Logging   = require('../mixins/logging'),
+    Publisher = require('../mixins/publisher'),
+    Transport = require('../transport'),
+    Scheduler = require('./scheduler');
+
+var Dispatcher = Class({ className: 'Dispatcher',
+  MAX_REQUEST_SIZE: 2048,
+  DEFAULT_RETRY:    5,
+
+  UP:   1,
+  DOWN: 2,
+
+  initialize: function(client, endpoint, options) {
+    this._client     = client;
+    this.endpoint    = URI.parse(endpoint);
+    this._alternates = options.endpoints || {};
+
+    this.cookies      = cookies.CookieJar && new cookies.CookieJar();
+    this._disabled    = [];
+    this._envelopes   = {};
+    this.headers      = {};
+    this.retry        = options.retry || this.DEFAULT_RETRY;
+    this._scheduler   = options.scheduler || Scheduler;
+    this._state       = 0;
+    this.transports   = {};
+    this.wsExtensions = [];
+
+    this.proxy = options.proxy || {};
+    if (typeof this._proxy === 'string') this._proxy = {origin: this._proxy};
+
+    var exts = options.websocketExtensions;
+    if (exts) {
+      exts = [].concat(exts);
+      for (var i = 0, n = exts.length; i < n; i++)
+        this.addWebsocketExtension(exts[i]);
+    }
+
+    this.tls = options.tls || {};
+    this.tls.ca = this.tls.ca || options.ca;
+
+    for (var type in this._alternates)
+      this._alternates[type] = URI.parse(this._alternates[type]);
+
+    this.maxRequestSize = this.MAX_REQUEST_SIZE;
+  },
+
+  endpointFor: function(connectionType) {
+    return this._alternates[connectionType] || this.endpoint;
+  },
+
+  addWebsocketExtension: function(extension) {
+    this.wsExtensions.push(extension);
+  },
+
+  disable: function(feature) {
+    this._disabled.push(feature);
+  },
+
+  setHeader: function(name, value) {
+    this.headers[name] = value;
+  },
+
+  close: function() {
+    var transport = this._transport;
+    delete this._transport;
+    if (transport) transport.close();
+  },
+
+  getConnectionTypes: function() {
+    return Transport.getConnectionTypes();
+  },
+
+  selectTransport: function(transportTypes) {
+    Transport.get(this, transportTypes, this._disabled, function(transport) {
+      this.debug('Selected ? transport for ?', transport.connectionType, URI.stringify(transport.endpoint));
+
+      if (transport === this._transport) return;
+      if (this._transport) this._transport.close();
+
+      this._transport = transport;
+      this.connectionType = transport.connectionType;
+    }, this);
+  },
+
+  sendMessage: function(message, timeout, options) {
+    options = options || {};
+
+    var id       = message.id,
+        attempts = options.attempts,
+        deadline = options.deadline && new Date().getTime() + (options.deadline * 1000),
+        envelope = this._envelopes[id],
+        scheduler;
+
+    if (!envelope) {
+      scheduler = new this._scheduler(message, {timeout: timeout, interval: this.retry, attempts: attempts, deadline: deadline});
+      envelope  = this._envelopes[id] = {message: message, scheduler: scheduler};
+    }
+
+    this._sendEnvelope(envelope);
+  },
+
+  _sendEnvelope: function(envelope) {
+    if (!this._transport) return;
+    if (envelope.request || envelope.timer) return;
+
+    var message   = envelope.message,
+        scheduler = envelope.scheduler,
+        self      = this;
+
+    if (!scheduler.isDeliverable()) {
+      scheduler.abort();
+      delete this._envelopes[message.id];
+      return;
+    }
+
+    envelope.timer = global.setTimeout(function() {
+      self.handleError(message);
+    }, scheduler.getTimeout() * 1000);
+
+    scheduler.send();
+    envelope.request = this._transport.sendMessage(message);
+  },
+
+  handleResponse: function(reply) {
+    var envelope = this._envelopes[reply.id];
+
+    if (reply.successful !== undefined && envelope) {
+      envelope.scheduler.succeed();
+      delete this._envelopes[reply.id];
+      global.clearTimeout(envelope.timer);
+    }
+
+    this.trigger('message', reply);
+
+    if (this._state === this.UP) return;
+    this._state = this.UP;
+    this._client.trigger('transport:up');
+  },
+
+  handleError: function(message, immediate) {
+    var envelope = this._envelopes[message.id],
+        request  = envelope && envelope.request,
+        self     = this;
+
+    if (!request) return;
+
+    request.then(function(req) {
+      if (req && req.abort) req.abort();
+    });
+
+    var scheduler = envelope.scheduler;
+    scheduler.fail();
+
+    global.clearTimeout(envelope.timer);
+    envelope.request = envelope.timer = null;
+
+    if (immediate) {
+      this._sendEnvelope(envelope);
+    } else {
+      envelope.timer = global.setTimeout(function() {
+        envelope.timer = null;
+        self._sendEnvelope(envelope);
+      }, scheduler.getInterval() * 1000);
+    }
+
+    if (this._state === this.DOWN) return;
+    this._state = this.DOWN;
+    this._client.trigger('transport:down');
+  }
+});
+
+Dispatcher.create = function(client, endpoint, options) {
+  return new Dispatcher(client, endpoint, options);
+};
+
+extend(Dispatcher.prototype, Publisher);
+extend(Dispatcher.prototype, Logging);
+
+module.exports = Dispatcher;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../mixins/logging":22,"../mixins/publisher":23,"../transport":34,"../util/class":43,"../util/cookies":45,"../util/extend":48,"../util/uri":52,"./scheduler":32}],28:[function(require,module,exports){
+'use strict';
+
+var Class   = require('../util/class'),
+    Grammar = require('./grammar');
+
+var Error = Class({
+  initialize: function(code, params, message) {
+    this.code    = code;
+    this.params  = Array.prototype.slice.call(params);
+    this.message = message;
+  },
+
+  toString: function() {
+    return this.code + ':' +
+           this.params.join(',') + ':' +
+           this.message;
+  }
+});
+
+Error.parse = function(message) {
+  message = message || '';
+  if (!Grammar.ERROR.test(message)) return new Error(null, [], message);
+
+  var parts   = message.split(':'),
+      code    = parseInt(parts[0]),
+      params  = parts[1].split(','),
+      message = parts[2];
+
+  return new Error(code, params, message);
+};
+
+// http://code.google.com/p/cometd/wiki/BayeuxCodes
+var errors = {
+  versionMismatch:  [300, 'Version mismatch'],
+  conntypeMismatch: [301, 'Connection types not supported'],
+  extMismatch:      [302, 'Extension mismatch'],
+  badRequest:       [400, 'Bad request'],
+  clientUnknown:    [401, 'Unknown client'],
+  parameterMissing: [402, 'Missing required parameter'],
+  channelForbidden: [403, 'Forbidden channel'],
+  channelUnknown:   [404, 'Unknown channel'],
+  channelInvalid:   [405, 'Invalid channel'],
+  extUnknown:       [406, 'Unknown extension'],
+  publishFailed:    [407, 'Failed to publish'],
+  serverError:      [500, 'Internal server error']
+};
+
+for (var name in errors)
+  (function(name) {
+    Error[name] = function() {
+      return new Error(errors[name][0], arguments, errors[name][1]).toString();
+    };
+  })(name);
+
+module.exports = Error;
+
+},{"../util/class":43,"./grammar":30}],29:[function(require,module,exports){
+'use strict';
+
+var extend  = require('../util/extend'),
+    Logging = require('../mixins/logging');
+
+var Extensible = {
+  addExtension: function(extension) {
+    this._extensions = this._extensions || [];
+    this._extensions.push(extension);
+    if (extension.added) extension.added(this);
+  },
+
+  removeExtension: function(extension) {
+    if (!this._extensions) return;
+    var i = this._extensions.length;
+    while (i--) {
+      if (this._extensions[i] !== extension) continue;
+      this._extensions.splice(i,1);
+      if (extension.removed) extension.removed(this);
+    }
+  },
+
+  pipeThroughExtensions: function(stage, message, request, callback, context) {
+    this.debug('Passing through ? extensions: ?', stage, message);
+
+    if (!this._extensions) return callback.call(context, message);
+    var extensions = this._extensions.slice();
+
+    var pipe = function(message) {
+      if (!message) return callback.call(context, message);
+
+      var extension = extensions.shift();
+      if (!extension) return callback.call(context, message);
+
+      var fn = extension[stage];
+      if (!fn) return pipe(message);
+
+      if (fn.length >= 3) extension[stage](message, request, pipe);
+      else                extension[stage](message, pipe);
+    };
+    pipe(message);
+  }
+};
+
+extend(Extensible, Logging);
+
+module.exports = Extensible;
+
+},{"../mixins/logging":22,"../util/extend":48}],30:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+  CHANNEL_NAME:     /^\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+(\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+)*$/,
+  CHANNEL_PATTERN:  /^(\/(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)))+)*\/\*{1,2}$/,
+  ERROR:            /^([0-9][0-9][0-9]:(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*(,(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*)*:(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*|[0-9][0-9][0-9]::(((([a-z]|[A-Z])|[0-9])|(\-|\_|\!|\~|\(|\)|\$|\@)| |\/|\*|\.))*)$/,
+  VERSION:          /^([0-9])+(\.(([a-z]|[A-Z])|[0-9])(((([a-z]|[A-Z])|[0-9])|\-|\_))*)*$/
+};
+
+},{}],31:[function(require,module,exports){
+'use strict';
+
+var Class      = require('../util/class'),
+    Deferrable = require('../mixins/deferrable');
+
+module.exports = Class(Deferrable);
+
+},{"../mixins/deferrable":21,"../util/class":43}],32:[function(require,module,exports){
+'use strict';
+
+var extend = require('../util/extend');
+
+var Scheduler = function(message, options) {
+  this.message  = message;
+  this.options  = options;
+  this.attempts = 0;
+};
+
+extend(Scheduler.prototype, {
+  getTimeout: function() {
+    return this.options.timeout;
+  },
+
+  getInterval: function() {
+    return this.options.interval;
+  },
+
+  isDeliverable: function() {
+    var attempts = this.options.attempts,
+        made     = this.attempts,
+        deadline = this.options.deadline,
+        now      = new Date().getTime();
+
+    if (attempts !== undefined && made >= attempts)
+      return false;
+
+    if (deadline !== undefined && now > deadline)
+      return false;
+
+    return true;
+  },
+
+  send: function() {
+    this.attempts += 1;
+  },
+
+  succeed: function() {},
+
+  fail: function() {},
+
+  abort: function() {}
+});
+
+module.exports = Scheduler;
+
+},{"../util/extend":48}],33:[function(require,module,exports){
+'use strict';
+
+var Class      = require('../util/class'),
+    extend     = require('../util/extend'),
+    Deferrable = require('../mixins/deferrable');
+
+var Subscription = Class({
+  initialize: function(client, channels, callback, context) {
+    this._client    = client;
+    this._channels  = channels;
+    this._callback  = callback;
+    this._context   = context;
+    this._cancelled = false;
+  },
+
+  withChannel: function(callback, context) {
+    this._withChannel = [callback, context];
+    return this;
+  },
+
+  apply: function(context, args) {
+    var message = args[0];
+
+    if (this._callback)
+      this._callback.call(this._context, message.data);
+
+    if (this._withChannel)
+      this._withChannel[0].call(this._withChannel[1], message.channel, message.data);
+  },
+
+  cancel: function() {
+    if (this._cancelled) return;
+    this._client.unsubscribe(this._channels, this);
+    this._cancelled = true;
+  },
+
+  unsubscribe: function() {
+    this.cancel();
+  }
+});
+
+extend(Subscription.prototype, Deferrable);
+
+module.exports = Subscription;
+
+},{"../mixins/deferrable":21,"../util/class":43,"../util/extend":48}],34:[function(require,module,exports){
+'use strict';
+
+var Transport = require('./transport');
+
+Transport.register('websocket', require('./web_socket'));
+Transport.register('eventsource', require('./event_source'));
+Transport.register('long-polling', require('./xhr'));
+Transport.register('cross-origin-long-polling', require('./cors'));
+Transport.register('callback-polling', require('./jsonp'));
+
+module.exports = Transport;
+
+},{"./cors":35,"./event_source":36,"./jsonp":37,"./transport":38,"./web_socket":39,"./xhr":40}],35:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Class     = require('../util/class'),
+    Set       = require('../util/set'),
+    URI       = require('../util/uri'),
+    extend    = require('../util/extend'),
+    toJSON    = require('../util/to_json'),
+    Transport = require('./transport');
+
+var CORS = extend(Class(Transport, {
+  encode: function(messages) {
+    return 'message=' + encodeURIComponent(toJSON(messages));
+  },
+
+  request: function(messages) {
+    var xhrClass = global.XDomainRequest ? XDomainRequest : XMLHttpRequest,
+        xhr      = new xhrClass(),
+        id       = ++CORS._id,
+        headers  = this._dispatcher.headers,
+        self     = this,
+        key;
+
+    xhr.open('POST', URI.stringify(this.endpoint), true);
+
+    if (xhr.setRequestHeader) {
+      xhr.setRequestHeader('Pragma', 'no-cache');
+      for (key in headers) {
+        if (!headers.hasOwnProperty(key)) continue;
+        xhr.setRequestHeader(key, headers[key]);
+      }
+    }
+
+    var cleanUp = function() {
+      if (!xhr) return false;
+      CORS._pending.remove(id);
+      xhr.onload = xhr.onerror = xhr.ontimeout = xhr.onprogress = null;
+      xhr = null;
+    };
+
+    xhr.onload = function() {
+      var replies;
+      try { replies = JSON.parse(xhr.responseText) } catch (error) {}
+
+      cleanUp();
+
+      if (replies)
+        self._receive(replies);
+      else
+        self._handleError(messages);
+    };
+
+    xhr.onerror = xhr.ontimeout = function() {
+      cleanUp();
+      self._handleError(messages);
+    };
+
+    xhr.onprogress = function() {};
+
+    if (xhrClass === global.XDomainRequest)
+      CORS._pending.add({id: id, xhr: xhr});
+
+    xhr.send(this.encode(messages));
+    return xhr;
+  }
+}), {
+  _id:      0,
+  _pending: new Set(),
+
+  isUsable: function(dispatcher, endpoint, callback, context) {
+    if (URI.isSameOrigin(endpoint))
+      return callback.call(context, false);
+
+    if (global.XDomainRequest)
+      return callback.call(context, endpoint.protocol === location.protocol);
+
+    if (global.XMLHttpRequest) {
+      var xhr = new XMLHttpRequest();
+      return callback.call(context, xhr.withCredentials !== undefined);
+    }
+    return callback.call(context, false);
+  }
+});
+
+module.exports = CORS;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../util/class":43,"../util/extend":48,"../util/set":50,"../util/to_json":51,"../util/uri":52,"./transport":38}],36:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Class      = require('../util/class'),
+    URI        = require('../util/uri'),
+    copyObject = require('../util/copy_object'),
+    extend     = require('../util/extend'),
+    Deferrable = require('../mixins/deferrable'),
+    Transport  = require('./transport'),
+    XHR        = require('./xhr');
+
+var EventSource = extend(Class(Transport, {
+  initialize: function(dispatcher, endpoint) {
+    Transport.prototype.initialize.call(this, dispatcher, endpoint);
+    if (!global.EventSource) return this.setDeferredStatus('failed');
+
+    this._xhr = new XHR(dispatcher, endpoint);
+
+    endpoint = copyObject(endpoint);
+    endpoint.pathname += '/' + dispatcher.clientId;
+
+    var socket = new global.EventSource(URI.stringify(endpoint)),
+        self   = this;
+
+    socket.onopen = function() {
+      self._everConnected = true;
+      self.setDeferredStatus('succeeded');
+    };
+
+    socket.onerror = function() {
+      if (self._everConnected) {
+        self._handleError([]);
+      } else {
+        self.setDeferredStatus('failed');
+        socket.close();
+      }
+    };
+
+    socket.onmessage = function(event) {
+      var replies;
+      try { replies = JSON.parse(event.data) } catch (error) {}
+
+      if (replies)
+        self._receive(replies);
+      else
+        self._handleError([]);
+    };
+
+    this._socket = socket;
+  },
+
+  close: function() {
+    if (!this._socket) return;
+    this._socket.onopen = this._socket.onerror = this._socket.onmessage = null;
+    this._socket.close();
+    delete this._socket;
+  },
+
+  isUsable: function(callback, context) {
+    this.callback(function() { callback.call(context, true) });
+    this.errback(function() { callback.call(context, false) });
+  },
+
+  encode: function(messages) {
+    return this._xhr.encode(messages);
+  },
+
+  request: function(messages) {
+    return this._xhr.request(messages);
+  }
+
+}), {
+  isUsable: function(dispatcher, endpoint, callback, context) {
+    var id = dispatcher.clientId;
+    if (!id) return callback.call(context, false);
+
+    XHR.isUsable(dispatcher, endpoint, function(usable) {
+      if (!usable) return callback.call(context, false);
+      this.create(dispatcher, endpoint).isUsable(callback, context);
+    }, this);
+  },
+
+  create: function(dispatcher, endpoint) {
+    var sockets = dispatcher.transports.eventsource = dispatcher.transports.eventsource || {},
+        id      = dispatcher.clientId;
+
+    var url = copyObject(endpoint);
+    url.pathname += '/' + (id || '');
+    url = URI.stringify(url);
+
+    sockets[url] = sockets[url] || new this(dispatcher, endpoint);
+    return sockets[url];
+  }
+});
+
+extend(EventSource.prototype, Deferrable);
+
+module.exports = EventSource;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../mixins/deferrable":21,"../util/class":43,"../util/copy_object":46,"../util/extend":48,"../util/uri":52,"./transport":38,"./xhr":40}],37:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Class      = require('../util/class'),
+    URI        = require('../util/uri'),
+    copyObject = require('../util/copy_object'),
+    extend     = require('../util/extend'),
+    toJSON     = require('../util/to_json'),
+    Transport  = require('./transport');
+
+var JSONP = extend(Class(Transport, {
+ encode: function(messages) {
+    var url = copyObject(this.endpoint);
+    url.query.message = toJSON(messages);
+    url.query.jsonp   = '__jsonp' + JSONP._cbCount + '__';
+    return URI.stringify(url);
+  },
+
+  request: function(messages) {
+    var head         = document.getElementsByTagName('head')[0],
+        script       = document.createElement('script'),
+        callbackName = JSONP.getCallbackName(),
+        endpoint     = copyObject(this.endpoint),
+        self         = this;
+
+    endpoint.query.message = toJSON(messages);
+    endpoint.query.jsonp   = callbackName;
+
+    var cleanup = function() {
+      if (!global[callbackName]) return false;
+      global[callbackName] = undefined;
+      try { delete global[callbackName] } catch (error) {}
+      script.parentNode.removeChild(script);
+    };
+
+    global[callbackName] = function(replies) {
+      cleanup();
+      self._receive(replies);
+    };
+
+    script.type = 'text/javascript';
+    script.src  = URI.stringify(endpoint);
+    head.appendChild(script);
+
+    script.onerror = function() {
+      cleanup();
+      self._handleError(messages);
+    };
+
+    return {abort: cleanup};
+  }
+}), {
+  _cbCount: 0,
+
+  getCallbackName: function() {
+    this._cbCount += 1;
+    return '__jsonp' + this._cbCount + '__';
+  },
+
+  isUsable: function(dispatcher, endpoint, callback, context) {
+    callback.call(context, true);
+  }
+});
+
+module.exports = JSONP;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../util/class":43,"../util/copy_object":46,"../util/extend":48,"../util/to_json":51,"../util/uri":52,"./transport":38}],38:[function(require,module,exports){
+(function (process){
+'use strict';
+
+var Class    = require('../util/class'),
+    Cookie   = require('../util/cookies').Cookie,
+    Promise  = require('../util/promise'),
+    URI      = require('../util/uri'),
+    array    = require('../util/array'),
+    extend   = require('../util/extend'),
+    Logging  = require('../mixins/logging'),
+    Timeouts = require('../mixins/timeouts'),
+    Channel  = require('../protocol/channel');
+
+var Transport = extend(Class({ className: 'Transport',
+  DEFAULT_PORTS: {'http:': 80, 'https:': 443, 'ws:': 80, 'wss:': 443},
+  MAX_DELAY:     0,
+
+  batching:  true,
+
+  initialize: function(dispatcher, endpoint) {
+    this._dispatcher = dispatcher;
+    this.endpoint    = endpoint;
+    this._outbox     = [];
+    this._proxy      = extend({}, this._dispatcher.proxy);
+
+    if (!this._proxy.origin)
+      this._proxy.origin = this._findProxy();
+  },
+
+  close: function() {},
+
+  encode: function(messages) {
+    return '';
+  },
+
+  sendMessage: function(message) {
+    this.debug('Client ? sending message to ?: ?',
+               this._dispatcher.clientId, URI.stringify(this.endpoint), message);
+
+    if (!this.batching) return Promise.resolve(this.request([message]));
+
+    this._outbox.push(message);
+    this._flushLargeBatch();
+
+    if (message.channel === Channel.HANDSHAKE)
+      return this._publish(0.01);
+
+    if (message.channel === Channel.CONNECT)
+      this._connectMessage = message;
+
+    return this._publish(this.MAX_DELAY);
+  },
+
+  _makePromise: function() {
+    var self = this;
+
+    this._requestPromise = this._requestPromise || new Promise(function(resolve) {
+      self._resolvePromise = resolve;
+    });
+  },
+
+  _publish: function(delay) {
+    this._makePromise();
+
+    this.addTimeout('publish', delay, function() {
+      this._flush();
+      delete this._requestPromise;
+    }, this);
+
+    return this._requestPromise;
+  },
+
+  _flush: function() {
+    this.removeTimeout('publish');
+
+    if (this._outbox.length > 1 && this._connectMessage)
+      this._connectMessage.advice = {timeout: 0};
+
+    this._resolvePromise(this.request(this._outbox));
+
+    this._connectMessage = null;
+    this._outbox = [];
+  },
+
+  _flushLargeBatch: function() {
+    var string = this.encode(this._outbox);
+    if (string.length < this._dispatcher.maxRequestSize) return;
+    var last = this._outbox.pop();
+
+    this._makePromise();
+    this._flush();
+
+    if (last) this._outbox.push(last);
+  },
+
+  _receive: function(replies) {
+    if (!replies) return;
+    replies = [].concat(replies);
+
+    this.debug('Client ? received from ? via ?: ?',
+               this._dispatcher.clientId, URI.stringify(this.endpoint), this.connectionType, replies);
+
+    for (var i = 0, n = replies.length; i < n; i++)
+      this._dispatcher.handleResponse(replies[i]);
+  },
+
+  _handleError: function(messages, immediate) {
+    messages = [].concat(messages);
+
+    this.debug('Client ? failed to send to ? via ?: ?',
+               this._dispatcher.clientId, URI.stringify(this.endpoint), this.connectionType, messages);
+
+    for (var i = 0, n = messages.length; i < n; i++)
+      this._dispatcher.handleError(messages[i]);
+  },
+
+  _getCookies: function() {
+    var cookies = this._dispatcher.cookies,
+        url     = URI.stringify(this.endpoint);
+
+    if (!cookies) return '';
+
+    return array.map(cookies.getCookiesSync(url), function(cookie) {
+      return cookie.cookieString();
+    }).join('; ');
+  },
+
+  _storeCookies: function(setCookie) {
+    var cookies = this._dispatcher.cookies,
+        url     = URI.stringify(this.endpoint),
+        cookie;
+
+    if (!setCookie || !cookies) return;
+    setCookie = [].concat(setCookie);
+
+    for (var i = 0, n = setCookie.length; i < n; i++) {
+      cookie = Cookie.parse(setCookie[i]);
+      cookies.setCookieSync(cookie, url);
+    }
+  },
+
+  _findProxy: function() {
+    if (typeof process === 'undefined') return undefined;
+
+    var protocol = this.endpoint.protocol;
+    if (!protocol) return undefined;
+
+    var name   = protocol.replace(/:$/, '').toLowerCase() + '_proxy',
+        upcase = name.toUpperCase(),
+        env    = process.env,
+        keys, proxy;
+
+    if (name === 'http_proxy' && env.REQUEST_METHOD) {
+      keys = Object.keys(env).filter(function(k) { return /^http_proxy$/i.test(k) });
+      if (keys.length === 1) {
+        if (keys[0] === name && env[upcase] === undefined)
+          proxy = env[name];
+      } else if (keys.length > 1) {
+        proxy = env[name];
+      }
+      proxy = proxy || env['CGI_' + upcase];
+    } else {
+      proxy = env[name] || env[upcase];
+      if (proxy && !env[name])
+        console.warn('The environment variable ' + upcase +
+                     ' is discouraged. Use ' + name + '.');
+    }
+    return proxy;
+  }
+
+}), {
+  get: function(dispatcher, allowed, disabled, callback, context) {
+    var endpoint = dispatcher.endpoint;
+
+    array.asyncEach(this._transports, function(pair, resume) {
+      var connType     = pair[0], klass = pair[1],
+          connEndpoint = dispatcher.endpointFor(connType);
+
+      if (array.indexOf(disabled, connType) >= 0)
+        return resume();
+
+      if (array.indexOf(allowed, connType) < 0) {
+        klass.isUsable(dispatcher, connEndpoint, function() {});
+        return resume();
+      }
+
+      klass.isUsable(dispatcher, connEndpoint, function(isUsable) {
+        if (!isUsable) return resume();
+        var transport = klass.hasOwnProperty('create') ? klass.create(dispatcher, connEndpoint) : new klass(dispatcher, connEndpoint);
+        callback.call(context, transport);
+      });
+    }, function() {
+      throw new Error('Could not find a usable connection type for ' + URI.stringify(endpoint));
+    });
+  },
+
+  register: function(type, klass) {
+    this._transports.push([type, klass]);
+    klass.prototype.connectionType = type;
+  },
+
+  getConnectionTypes: function() {
+    return array.map(this._transports, function(t) { return t[0] });
+  },
+
+  _transports: []
+});
+
+extend(Transport.prototype, Logging);
+extend(Transport.prototype, Timeouts);
+
+module.exports = Transport;
+
+}).call(this,require('_process'))
+},{"../mixins/logging":22,"../mixins/timeouts":24,"../protocol/channel":25,"../util/array":41,"../util/class":43,"../util/cookies":45,"../util/extend":48,"../util/promise":49,"../util/uri":52,"_process":72}],39:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Class      = require('../util/class'),
+    Promise    = require('../util/promise'),
+    Set        = require('../util/set'),
+    URI        = require('../util/uri'),
+    browser    = require('../util/browser'),
+    copyObject = require('../util/copy_object'),
+    extend     = require('../util/extend'),
+    toJSON     = require('../util/to_json'),
+    ws         = require('../util/websocket'),
+    Deferrable = require('../mixins/deferrable'),
+    Transport  = require('./transport');
+
+var WebSocket = extend(Class(Transport, {
+  UNCONNECTED:  1,
+  CONNECTING:   2,
+  CONNECTED:    3,
+
+  batching:     false,
+
+  isUsable: function(callback, context) {
+    this.callback(function() { callback.call(context, true) });
+    this.errback(function() { callback.call(context, false) });
+    this.connect();
+  },
+
+  request: function(messages) {
+    this._pending = this._pending || new Set();
+    for (var i = 0, n = messages.length; i < n; i++) this._pending.add(messages[i]);
+
+    var self = this;
+
+    var promise = new Promise(function(resolve, reject) {
+      self.callback(function(socket) {
+        if (!socket || socket.readyState !== 1) return;
+        socket.send(toJSON(messages));
+        resolve(socket);
+      });
+
+      self.connect();
+    });
+
+    return {
+      abort: function() { promise.then(function(ws) { ws.close() }) }
+    };
+  },
+
+  connect: function() {
+    if (WebSocket._unloaded) return;
+
+    this._state = this._state || this.UNCONNECTED;
+    if (this._state !== this.UNCONNECTED) return;
+    this._state = this.CONNECTING;
+
+    var socket = this._createSocket();
+    if (!socket) return this.setDeferredStatus('failed');
+
+    var self = this;
+
+    socket.onopen = function() {
+      if (socket.headers) self._storeCookies(socket.headers['set-cookie']);
+      self._socket = socket;
+      self._state = self.CONNECTED;
+      self._everConnected = true;
+      self._ping();
+      self.setDeferredStatus('succeeded', socket);
+    };
+
+    var closed = false;
+    socket.onclose = socket.onerror = function() {
+      if (closed) return;
+      closed = true;
+
+      var wasConnected = (self._state === self.CONNECTED);
+      socket.onopen = socket.onclose = socket.onerror = socket.onmessage = null;
+
+      delete self._socket;
+      self._state = self.UNCONNECTED;
+      self.removeTimeout('ping');
+
+      var pending = self._pending ? self._pending.toArray() : [];
+      delete self._pending;
+
+      if (wasConnected || self._everConnected) {
+        self.setDeferredStatus('unknown');
+        self._handleError(pending, wasConnected);
+      } else {
+        self.setDeferredStatus('failed');
+      }
+    };
+
+    socket.onmessage = function(event) {
+      var replies;
+      try { replies = JSON.parse(event.data) } catch (error) {}
+
+      if (!replies) return;
+
+      replies = [].concat(replies);
+
+      for (var i = 0, n = replies.length; i < n; i++) {
+        if (replies[i].successful === undefined) continue;
+        self._pending.remove(replies[i]);
+      }
+      self._receive(replies);
+    };
+  },
+
+  close: function() {
+    if (!this._socket) return;
+    this._socket.close();
+  },
+
+  _createSocket: function() {
+    var url        = WebSocket.getSocketUrl(this.endpoint),
+        headers    = this._dispatcher.headers,
+        extensions = this._dispatcher.wsExtensions,
+        cookie     = this._getCookies(),
+        tls        = this._dispatcher.tls,
+        options    = {extensions: extensions, headers: headers, proxy: this._proxy, tls: tls};
+
+    if (cookie !== '') options.headers['Cookie'] = cookie;
+
+    return ws.create(url, [], options);
+  },
+
+  _ping: function() {
+    if (!this._socket || this._socket.readyState !== 1) return;
+    this._socket.send('[]');
+    this.addTimeout('ping', this._dispatcher.timeout / 2, this._ping, this);
+  }
+
+}), {
+  PROTOCOLS: {
+    'http:':  'ws:',
+    'https:': 'wss:'
+  },
+
+  create: function(dispatcher, endpoint) {
+    var sockets = dispatcher.transports.websocket = dispatcher.transports.websocket || {};
+    sockets[endpoint.href] = sockets[endpoint.href] || new this(dispatcher, endpoint);
+    return sockets[endpoint.href];
+  },
+
+  getSocketUrl: function(endpoint) {
+    endpoint = copyObject(endpoint);
+    endpoint.protocol = this.PROTOCOLS[endpoint.protocol];
+    return URI.stringify(endpoint);
+  },
+
+  isUsable: function(dispatcher, endpoint, callback, context) {
+    this.create(dispatcher, endpoint).isUsable(callback, context);
+  }
+});
+
+extend(WebSocket.prototype, Deferrable);
+
+if (browser.Event && global.onbeforeunload !== undefined)
+  browser.Event.on(global, 'beforeunload', function() { WebSocket._unloaded = true });
+
+module.exports = WebSocket;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../mixins/deferrable":21,"../util/browser":42,"../util/class":43,"../util/copy_object":46,"../util/extend":48,"../util/promise":49,"../util/set":50,"../util/to_json":51,"../util/uri":52,"../util/websocket":54,"./transport":38}],40:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Class     = require('../util/class'),
+    URI       = require('../util/uri'),
+    browser   = require('../util/browser'),
+    extend    = require('../util/extend'),
+    toJSON    = require('../util/to_json'),
+    Transport = require('./transport');
+
+var XHR = extend(Class(Transport, {
+  encode: function(messages) {
+    return toJSON(messages);
+  },
+
+  request: function(messages) {
+    var href = this.endpoint.href,
+        self = this,
+        xhr;
+
+    // Prefer XMLHttpRequest over ActiveXObject if they both exist
+    if (global.XMLHttpRequest) {
+      xhr = new XMLHttpRequest();
+    } else if (global.ActiveXObject) {
+      xhr = new ActiveXObject('Microsoft.XMLHTTP');
+    } else {
+      return this._handleError(messages);
+    }
+
+    xhr.open('POST', href, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Pragma', 'no-cache');
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+    var headers = this._dispatcher.headers;
+    for (var key in headers) {
+      if (!headers.hasOwnProperty(key)) continue;
+      xhr.setRequestHeader(key, headers[key]);
+    }
+
+    var abort = function() { xhr.abort() };
+    if (global.onbeforeunload !== undefined)
+      browser.Event.on(global, 'beforeunload', abort);
+
+    xhr.onreadystatechange = function() {
+      if (!xhr || xhr.readyState !== 4) return;
+
+      var replies    = null,
+          status     = xhr.status,
+          text       = xhr.responseText,
+          successful = (status >= 200 && status < 300) || status === 304 || status === 1223;
+
+      if (global.onbeforeunload !== undefined)
+        browser.Event.detach(global, 'beforeunload', abort);
+
+      xhr.onreadystatechange = function() {};
+      xhr = null;
+
+      if (!successful) return self._handleError(messages);
+
+      try {
+        replies = JSON.parse(text);
+      } catch (error) {}
+
+      if (replies)
+        self._receive(replies);
+      else
+        self._handleError(messages);
+    };
+
+    xhr.send(this.encode(messages));
+    return xhr;
+  }
+}), {
+  isUsable: function(dispatcher, endpoint, callback, context) {
+    var usable = (navigator.product === 'ReactNative')
+              || URI.isSameOrigin(endpoint);
+
+    callback.call(context, usable);
+  }
+});
+
+module.exports = XHR;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"../util/browser":42,"../util/class":43,"../util/extend":48,"../util/to_json":51,"../util/uri":52,"./transport":38}],41:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+  commonElement: function(lista, listb) {
+    for (var i = 0, n = lista.length; i < n; i++) {
+      if (this.indexOf(listb, lista[i]) !== -1)
+        return lista[i];
+    }
+    return null;
+  },
+
+  indexOf: function(list, needle) {
+    if (list.indexOf) return list.indexOf(needle);
+
+    for (var i = 0, n = list.length; i < n; i++) {
+      if (list[i] === needle) return i;
+    }
+    return -1;
+  },
+
+  map: function(object, callback, context) {
+    if (object.map) return object.map(callback, context);
+    var result = [];
+
+    if (object instanceof Array) {
+      for (var i = 0, n = object.length; i < n; i++) {
+        result.push(callback.call(context || null, object[i], i));
+      }
+    } else {
+      for (var key in object) {
+        if (!object.hasOwnProperty(key)) continue;
+        result.push(callback.call(context || null, key, object[key]));
+      }
+    }
+    return result;
+  },
+
+  filter: function(array, callback, context) {
+    if (array.filter) return array.filter(callback, context);
+    var result = [];
+    for (var i = 0, n = array.length; i < n; i++) {
+      if (callback.call(context || null, array[i], i))
+        result.push(array[i]);
+    }
+    return result;
+  },
+
+  asyncEach: function(list, iterator, callback, context) {
+    var n       = list.length,
+        i       = -1,
+        calls   = 0,
+        looping = false;
+
+    var iterate = function() {
+      calls -= 1;
+      i += 1;
+      if (i === n) return callback && callback.call(context);
+      iterator(list[i], resume);
+    };
+
+    var loop = function() {
+      if (looping) return;
+      looping = true;
+      while (calls > 0) iterate();
+      looping = false;
+    };
+
+    var resume = function() {
+      calls += 1;
+      loop();
+    };
+    resume();
+  }
+};
+
+},{}],42:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var Event = {
+  _registry: [],
+
+  on: function(element, eventName, callback, context) {
+    var wrapped = function() { callback.call(context) };
+
+    if (element.addEventListener)
+      element.addEventListener(eventName, wrapped, false);
+    else
+      element.attachEvent('on' + eventName, wrapped);
+
+    this._registry.push({
+      _element:   element,
+      _type:      eventName,
+      _callback:  callback,
+      _context:     context,
+      _handler:   wrapped
+    });
+  },
+
+  detach: function(element, eventName, callback, context) {
+    var i = this._registry.length, register;
+    while (i--) {
+      register = this._registry[i];
+
+      if ((element    && element    !== register._element)  ||
+          (eventName  && eventName  !== register._type)     ||
+          (callback   && callback   !== register._callback) ||
+          (context    && context    !== register._context))
+        continue;
+
+      if (register._element.removeEventListener)
+        register._element.removeEventListener(register._type, register._handler, false);
+      else
+        register._element.detachEvent('on' + register._type, register._handler);
+
+      this._registry.splice(i,1);
+      register = null;
+    }
+  }
+};
+
+if (global.onunload !== undefined)
+  Event.on(global, 'unload', Event.detach, Event);
+
+module.exports = {
+  Event: Event
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],43:[function(require,module,exports){
+'use strict';
+
+var extend = require('./extend');
+
+module.exports = function(parent, methods) {
+  if (typeof parent !== 'function') {
+    methods = parent;
+    parent  = Object;
+  }
+
+  var klass = function() {
+    if (!this.initialize) return this;
+    return this.initialize.apply(this, arguments) || this;
+  };
+
+  var bridge = function() {};
+  bridge.prototype = parent.prototype;
+
+  klass.prototype = new bridge();
+  extend(klass.prototype, methods);
+
+  return klass;
+};
+
+},{"./extend":48}],44:[function(require,module,exports){
+module.exports = {
+  VERSION:          '1.2.4',
+
+  BAYEUX_VERSION:   '1.0',
+  ID_LENGTH:        160,
+  JSONP_CALLBACK:   'jsonpcallback',
+  CONNECTION_TYPES: ['long-polling', 'cross-origin-long-polling', 'callback-polling', 'websocket', 'eventsource', 'in-process'],
+
+  MANDATORY_CONNECTION_TYPES: ['long-polling', 'callback-polling', 'in-process']
+};
+
+},{}],45:[function(require,module,exports){
+'use strict';
+
+module.exports = {};
+
+},{}],46:[function(require,module,exports){
+'use strict';
+
+var copyObject = function(object) {
+  var clone, i, key;
+  if (object instanceof Array) {
+    clone = [];
+    i = object.length;
+    while (i--) clone[i] = copyObject(object[i]);
+    return clone;
+  } else if (typeof object === 'object') {
+    clone = (object === null) ? null : {};
+    for (key in object) clone[key] = copyObject(object[key]);
+    return clone;
+  } else {
+    return object;
+  }
+};
+
+module.exports = copyObject;
+
+},{}],47:[function(require,module,exports){
+/*
+Copyright Joyent, Inc. and other Node contributors. All rights reserved.
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+var isArray = typeof Array.isArray === 'function'
+    ? Array.isArray
+    : function (xs) {
+        return Object.prototype.toString.call(xs) === '[object Array]'
+    }
+;
+function indexOf (xs, x) {
+    if (xs.indexOf) return xs.indexOf(x);
+    for (var i = 0; i < xs.length; i++) {
+        if (x === xs[i]) return i;
+    }
+    return -1;
+}
+
+function EventEmitter() {}
+module.exports = EventEmitter;
+
+EventEmitter.prototype.emit = function(type) {
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events || !this._events.error ||
+        (isArray(this._events.error) && !this._events.error.length))
+    {
+      if (arguments[1] instanceof Error) {
+        throw arguments[1]; // Unhandled 'error' event
+      } else {
+        throw new Error("Uncaught, unspecified 'error' event.");
+      }
+      return false;
+    }
+  }
+
+  if (!this._events) return false;
+  var handler = this._events[type];
+  if (!handler) return false;
+
+  if (typeof handler == 'function') {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        var args = Array.prototype.slice.call(arguments, 1);
+        handler.apply(this, args);
+    }
+    return true;
+
+  } else if (isArray(handler)) {
+    var args = Array.prototype.slice.call(arguments, 1);
+
+    var listeners = handler.slice();
+    for (var i = 0, l = listeners.length; i < l; i++) {
+      listeners[i].apply(this, args);
+    }
+    return true;
+
+  } else {
+    return false;
+  }
+};
+
+// EventEmitter is defined in src/node_events.cc
+// EventEmitter.prototype.emit() is also defined there.
+EventEmitter.prototype.addListener = function(type, listener) {
+  if ('function' !== typeof listener) {
+    throw new Error('addListener only takes instances of Function');
+  }
+
+  if (!this._events) this._events = {};
+
+  // To avoid recursion in the case that type == "newListeners"! Before
+  // adding it to the listeners, first emit "newListeners".
+  this.emit('newListener', type, listener);
+
+  if (!this._events[type]) {
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  } else if (isArray(this._events[type])) {
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  } else {
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  var self = this;
+  self.on(type, function g() {
+    self.removeListener(type, g);
+    listener.apply(this, arguments);
+  });
+
+  return this;
+};
+
+EventEmitter.prototype.removeListener = function(type, listener) {
+  if ('function' !== typeof listener) {
+    throw new Error('removeListener only takes instances of Function');
+  }
+
+  // does not use listeners(), so no side effect of creating _events[type]
+  if (!this._events || !this._events[type]) return this;
+
+  var list = this._events[type];
+
+  if (isArray(list)) {
+    var i = indexOf(list, listener);
+    if (i < 0) return this;
+    list.splice(i, 1);
+    if (list.length == 0)
+      delete this._events[type];
+  } else if (this._events[type] === listener) {
+    delete this._events[type];
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  if (arguments.length === 0) {
+    this._events = {};
+    return this;
+  }
+
+  // does not use listeners(), so no side effect of creating _events[type]
+  if (type && this._events && this._events[type]) this._events[type] = null;
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  if (!this._events) this._events = {};
+  if (!this._events[type]) this._events[type] = [];
+  if (!isArray(this._events[type])) {
+    this._events[type] = [this._events[type]];
+  }
+  return this._events[type];
+};
+
+},{}],48:[function(require,module,exports){
+'use strict';
+
+module.exports = function(dest, source, overwrite) {
+  if (!source) return dest;
+  for (var key in source) {
+    if (!source.hasOwnProperty(key)) continue;
+    if (dest.hasOwnProperty(key) && overwrite === false) continue;
+    if (dest[key] !== source[key])
+      dest[key] = source[key];
+  }
+  return dest;
+};
+
+},{}],49:[function(require,module,exports){
+'use strict';
+
+var asap = require('asap');
+
+var PENDING   = 0,
+    FULFILLED = 1,
+    REJECTED  = 2;
+
+var RETURN = function(x) { return x },
+    THROW  = function(x) { throw  x };
+
+var Promise = function(task) {
+  this._state       = PENDING;
+  this._onFulfilled = [];
+  this._onRejected  = [];
+
+  if (typeof task !== 'function') return;
+  var self = this;
+
+  task(function(value)  { resolve(self, value) },
+       function(reason) { reject(self, reason) });
+};
+
+Promise.prototype.then = function(onFulfilled, onRejected) {
+  var next = new Promise();
+  registerOnFulfilled(this, onFulfilled, next);
+  registerOnRejected(this, onRejected, next);
+  return next;
+};
+
+Promise.prototype['catch'] = function(onRejected) {
+  return this.then(null, onRejected);
+};
+
+var registerOnFulfilled = function(promise, onFulfilled, next) {
+  if (typeof onFulfilled !== 'function') onFulfilled = RETURN;
+  var handler = function(value) { invoke(onFulfilled, value, next) };
+
+  if (promise._state === PENDING) {
+    promise._onFulfilled.push(handler);
+  } else if (promise._state === FULFILLED) {
+    handler(promise._value);
+  }
+};
+
+var registerOnRejected = function(promise, onRejected, next) {
+  if (typeof onRejected !== 'function') onRejected = THROW;
+  var handler = function(reason) { invoke(onRejected, reason, next) };
+
+  if (promise._state === PENDING) {
+    promise._onRejected.push(handler);
+  } else if (promise._state === REJECTED) {
+    handler(promise._reason);
+  }
+};
+
+var invoke = function(fn, value, next) {
+  asap(function() { _invoke(fn, value, next) });
+};
+
+var _invoke = function(fn, value, next) {
+  var outcome;
+
+  try {
+    outcome = fn(value);
+  } catch (error) {
+    return reject(next, error);
+  }
+
+  if (outcome === next) {
+    reject(next, new TypeError('Recursive promise chain detected'));
+  } else {
+    resolve(next, outcome);
+  }
+};
+
+var resolve = function(promise, value) {
+  var called = false, type, then;
+
+  try {
+    type = typeof value;
+    then = value !== null && (type === 'function' || type === 'object') && value.then;
+
+    if (typeof then !== 'function') return fulfill(promise, value);
+
+    then.call(value, function(v) {
+      if (!(called ^ (called = true))) return;
+      resolve(promise, v);
+    }, function(r) {
+      if (!(called ^ (called = true))) return;
+      reject(promise, r);
+    });
+  } catch (error) {
+    if (!(called ^ (called = true))) return;
+    reject(promise, error);
+  }
+};
+
+var fulfill = function(promise, value) {
+  if (promise._state !== PENDING) return;
+
+  promise._state      = FULFILLED;
+  promise._value      = value;
+  promise._onRejected = [];
+
+  var onFulfilled = promise._onFulfilled, fn;
+  while (fn = onFulfilled.shift()) fn(value);
+};
+
+var reject = function(promise, reason) {
+  if (promise._state !== PENDING) return;
+
+  promise._state       = REJECTED;
+  promise._reason      = reason;
+  promise._onFulfilled = [];
+
+  var onRejected = promise._onRejected, fn;
+  while (fn = onRejected.shift()) fn(reason);
+};
+
+Promise.resolve = function(value) {
+  return new Promise(function(resolve, reject) { resolve(value) });
+};
+
+Promise.reject = function(reason) {
+  return new Promise(function(resolve, reject) { reject(reason) });
+};
+
+Promise.all = function(promises) {
+  return new Promise(function(resolve, reject) {
+    var list = [], n = promises.length, i;
+
+    if (n === 0) return resolve(list);
+
+    for (i = 0; i < n; i++) (function(promise, i) {
+      Promise.resolve(promise).then(function(value) {
+        list[i] = value;
+        if (--n === 0) resolve(list);
+      }, reject);
+    })(promises[i], i);
+  });
+};
+
+Promise.race = function(promises) {
+  return new Promise(function(resolve, reject) {
+    for (var i = 0, n = promises.length; i < n; i++)
+      Promise.resolve(promises[i]).then(resolve, reject);
+  });
+};
+
+Promise.deferred = Promise.pending = function() {
+  var tuple = {};
+
+  tuple.promise = new Promise(function(resolve, reject) {
+    tuple.resolve = resolve;
+    tuple.reject  = reject;
+  });
+  return tuple;
+};
+
+module.exports = Promise;
+
+},{"asap":8}],50:[function(require,module,exports){
+'use strict';
+
+var Class = require('./class');
+
+module.exports = Class({
+  initialize: function() {
+    this._index = {};
+  },
+
+  add: function(item) {
+    var key = (item.id !== undefined) ? item.id : item;
+    if (this._index.hasOwnProperty(key)) return false;
+    this._index[key] = item;
+    return true;
+  },
+
+  forEach: function(block, context) {
+    for (var key in this._index) {
+      if (this._index.hasOwnProperty(key))
+        block.call(context, this._index[key]);
+    }
+  },
+
+  isEmpty: function() {
+    for (var key in this._index) {
+      if (this._index.hasOwnProperty(key)) return false;
+    }
+    return true;
+  },
+
+  member: function(item) {
+    for (var key in this._index) {
+      if (this._index[key] === item) return true;
+    }
+    return false;
+  },
+
+  remove: function(item) {
+    var key = (item.id !== undefined) ? item.id : item;
+    var removed = this._index[key];
+    delete this._index[key];
+    return removed;
+  },
+
+  toArray: function() {
+    var array = [];
+    this.forEach(function(item) { array.push(item) });
+    return array;
+  }
+});
+
+},{"./class":43}],51:[function(require,module,exports){
+'use strict';
+
+// http://assanka.net/content/tech/2009/09/02/json2-js-vs-prototype/
+
+module.exports = function(object) {
+  return JSON.stringify(object, function(key, value) {
+    return (this[key] instanceof Array) ? this[key] : value;
+  });
+};
+
+},{}],52:[function(require,module,exports){
+'use strict';
+
+module.exports = {
+  isURI: function(uri) {
+    return uri && uri.protocol && uri.host && uri.path;
+  },
+
+  isSameOrigin: function(uri) {
+    return uri.protocol === location.protocol &&
+           uri.hostname === location.hostname &&
+           uri.port     === location.port;
+  },
+
+  parse: function(url) {
+    if (typeof url !== 'string') return url;
+    var uri = {}, parts, query, pairs, i, n, data;
+
+    var consume = function(name, pattern) {
+      url = url.replace(pattern, function(match) {
+        uri[name] = match;
+        return '';
+      });
+      uri[name] = uri[name] || '';
+    };
+
+    consume('protocol', /^[a-z]+\:/i);
+    consume('host',     /^\/\/[^\/\?#]+/);
+
+    if (!/^\//.test(url) && !uri.host)
+      url = location.pathname.replace(/[^\/]*$/, '') + url;
+
+    consume('pathname', /^[^\?#]*/);
+    consume('search',   /^\?[^#]*/);
+    consume('hash',     /^#.*/);
+
+    uri.protocol = uri.protocol || location.protocol;
+
+    if (uri.host) {
+      uri.host     = uri.host.substr(2);
+      parts        = uri.host.split(':');
+      uri.hostname = parts[0];
+      uri.port     = parts[1] || '';
+    } else {
+      uri.host     = location.host;
+      uri.hostname = location.hostname;
+      uri.port     = location.port;
+    }
+
+    uri.pathname = uri.pathname || '/';
+    uri.path = uri.pathname + uri.search;
+
+    query = uri.search.replace(/^\?/, '');
+    pairs = query ? query.split('&') : [];
+    data  = {};
+
+    for (i = 0, n = pairs.length; i < n; i++) {
+      parts = pairs[i].split('=');
+      data[decodeURIComponent(parts[0] || '')] = decodeURIComponent(parts[1] || '');
+    }
+
+    uri.query = data;
+
+    uri.href = this.stringify(uri);
+    return uri;
+  },
+
+  stringify: function(uri) {
+    var string = uri.protocol + '//' + uri.hostname;
+    if (uri.port) string += ':' + uri.port;
+    string += uri.pathname + this.queryString(uri.query) + (uri.hash || '');
+    return string;
+  },
+
+  queryString: function(query) {
+    var pairs = [];
+    for (var key in query) {
+      if (!query.hasOwnProperty(key)) continue;
+      pairs.push(encodeURIComponent(key) + '=' + encodeURIComponent(query[key]));
+    }
+    if (pairs.length === 0) return '';
+    return '?' + pairs.join('&');
+  }
+};
+
+},{}],53:[function(require,module,exports){
+'use strict';
+
+var array = require('./array');
+
+module.exports = function(options, validKeys) {
+  for (var key in options) {
+    if (array.indexOf(validKeys, key) < 0)
+      throw new Error('Unrecognized option: ' + key);
+  }
+};
+
+},{"./array":41}],54:[function(require,module,exports){
+(function (global){
+'use strict';
+
+var WS = global.MozWebSocket || global.WebSocket;
+
+module.exports = {
+  create: function(url, protocols, options) {
+    if (typeof WS !== 'function') return null;
+    return new WS(url);
+  }
+};
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],55:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -16454,7 +17196,7 @@ var makeErrorCause;
 })(makeErrorCause || (makeErrorCause = {}));
 module.exports = makeErrorCause;
 
-},{"make-error":52}],52:[function(require,module,exports){
+},{"make-error":56}],56:[function(require,module,exports){
 // ISC @ Julien Fontanet
 
 'use strict'
@@ -16598,7 +17340,7 @@ function makeError (constructor, super_) {
 exports = module.exports = makeError
 exports.BaseError = BaseError
 
-},{}],53:[function(require,module,exports){
+},{}],57:[function(require,module,exports){
 "use strict";
 var url_1 = require("url");
 var querystring_1 = require("querystring");
@@ -16760,7 +17502,7 @@ var Base = (function () {
 }());
 exports.Base = Base;
 
-},{"./support":66,"querystring":71,"url":75}],54:[function(require,module,exports){
+},{"./support":70,"querystring":76,"url":77}],58:[function(require,module,exports){
 "use strict";
 var response_1 = require("./response");
 var index_1 = require("./plugins/index");
@@ -16865,11 +17607,11 @@ function parseToRawHeaders(headers) {
     return rawHeaders;
 }
 
-},{"./plugins/index":61,"./response":65}],55:[function(require,module,exports){
+},{"./plugins/index":65,"./response":69}],59:[function(require,module,exports){
 "use strict";
 module.exports = FormData;
 
-},{}],56:[function(require,module,exports){
+},{}],60:[function(require,module,exports){
 "use strict";
 var CookieJar = (function () {
     function CookieJar() {
@@ -16879,7 +17621,7 @@ var CookieJar = (function () {
 }());
 exports.CookieJar = CookieJar;
 
-},{}],57:[function(require,module,exports){
+},{}],61:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
@@ -16922,7 +17664,7 @@ __export(require("./response"));
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = exports.request;
 
-},{"./base":53,"./error":58,"./form":59,"./index":54,"./jar":60,"./plugins/index":61,"./request":64,"./response":65,"form-data":55}],58:[function(require,module,exports){
+},{"./base":57,"./error":62,"./form":63,"./index":58,"./jar":64,"./plugins/index":65,"./request":68,"./response":69,"form-data":59}],62:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -16944,7 +17686,7 @@ var PopsicleError = (function (_super) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = PopsicleError;
 
-},{"make-error-cause":51}],59:[function(require,module,exports){
+},{"make-error-cause":55}],63:[function(require,module,exports){
 "use strict";
 var FormData = require("form-data");
 function form(obj) {
@@ -16959,7 +17701,7 @@ function form(obj) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = form;
 
-},{"form-data":55}],60:[function(require,module,exports){
+},{"form-data":59}],64:[function(require,module,exports){
 "use strict";
 var tough_cookie_1 = require("tough-cookie");
 function cookieJar(store) {
@@ -16968,14 +17710,14 @@ function cookieJar(store) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = cookieJar;
 
-},{"tough-cookie":56}],61:[function(require,module,exports){
+},{"tough-cookie":60}],65:[function(require,module,exports){
 "use strict";
 function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 __export(require("./common"));
 
-},{"./common":62}],62:[function(require,module,exports){
+},{"./common":66}],66:[function(require,module,exports){
 "use strict";
 var FormData = require("form-data");
 var querystring_1 = require("querystring");
@@ -17077,7 +17819,7 @@ function parse(type, strict) {
 }
 exports.parse = parse;
 
-},{"../form":59,"./is-host/index":63,"form-data":55,"querystring":71}],63:[function(require,module,exports){
+},{"../form":63,"./is-host/index":67,"form-data":59,"querystring":76}],67:[function(require,module,exports){
 "use strict";
 function isHostObject(object) {
     var str = Object.prototype.toString.call(object);
@@ -17094,7 +17836,7 @@ function isHostObject(object) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = isHostObject;
 
-},{}],64:[function(require,module,exports){
+},{}],68:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17333,7 +18075,7 @@ function exec(req) {
     return dispatch(0);
 }
 
-},{"./base":53,"./error":58,"./support":66}],65:[function(require,module,exports){
+},{"./base":57,"./error":62,"./support":70}],69:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17366,7 +18108,7 @@ var Response = (function (_super) {
 }(base_1.Base));
 exports.Response = Response;
 
-},{"./base":53}],66:[function(require,module,exports){
+},{"./base":57}],70:[function(require,module,exports){
 "use strict";
 function splice(arr, start, count) {
     if (count === void 0) { count = 1; }
@@ -17377,7 +18119,27 @@ function splice(arr, start, count) {
 }
 exports.splice = splice;
 
-},{}],67:[function(require,module,exports){
+},{}],71:[function(require,module,exports){
+var RemoteVariable = require('../js_sdk/remote_variable'),
+    UUID = require('../js_sdk/uuid'),
+    Editor = require('structured-text-editor/src/editor');
+
+document.addEventListener("DOMContentLoaded", function(event) {
+    var clientId = actorId = (new UUID()).getValue(),
+        variableId = new URLSearchParams(window.location.search).get('variable-id'),
+        remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId).load(),
+        editor = new Editor('value');
+
+    remoteVariable.subscribe(function(changeset) {
+        editor.setContent(remoteVariable.getValue());
+    });
+
+    editor.subscribe(function(content) {
+        remoteVariable.setValue(content);
+    });
+});
+
+},{"../js_sdk/remote_variable":6,"../js_sdk/uuid":7,"structured-text-editor/src/editor":4}],72:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -17563,7 +18325,7 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],68:[function(require,module,exports){
+},{}],73:[function(require,module,exports){
 (function (global){
 /*! https://mths.be/punycode v1.4.1 by @mathias */
 ;(function(root) {
@@ -18100,7 +18862,7 @@ process.umask = function() { return 0; };
 }(this));
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],69:[function(require,module,exports){
+},{}],74:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18186,7 +18948,7 @@ var isArray = Array.isArray || function (xs) {
   return Object.prototype.toString.call(xs) === '[object Array]';
 };
 
-},{}],70:[function(require,module,exports){
+},{}],75:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -18273,259 +19035,13 @@ var objectKeys = Object.keys || function (obj) {
   return res;
 };
 
-},{}],71:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 'use strict';
 
 exports.decode = exports.parse = require('./decode');
 exports.encode = exports.stringify = require('./encode');
 
-},{"./decode":69,"./encode":70}],72:[function(require,module,exports){
-'use strict';
-
-var Caret = function() {
-
-}
-
-Caret.prototype = {
-
-    _getElementsContentLengthIncrement(element) {
-        if(['BR', 'IMG'].includes(element.tagName)) return 1;
-        if(!element.length) return 0;
-        return element.length;
-    },
-
-    _getContentLengthOfDOMElement: function(element, endChild) {
-        var treeWalker = document.createTreeWalker(element),
-            currentEl,
-            length = 0;
-
-        while(currentEl = treeWalker.currentNode) {
-            if(currentEl === endChild) return length;
-
-            length += this._getElementsContentLengthIncrement(currentEl);
-
-            treeWalker.nextNode();
-        }
-
-        return length;
-    },
-
-    // rightMatch: when root element contains: '<p>Hello</p><p>World</p>' and contentLength is '5'
-    //             it is not clear which element to return, if rightMatch is true then '<p>World</p>' will
-    //             be returned, '<p>Hello</p>' otherwise
-    _getElementByContentLength: function(rootEl, contentLength, rightMatch) {
-        var treeWalker = document.createTreeWalker(rootEl),
-            currentEl,
-            length = 0,
-            currentElLength;
-
-        while(currentEl = treeWalker.currentNode) {
-            currentElLength = this._getElementsContentLengthIncrement(currentEl);
-
-            if((length + currentElLength) < contentLength) {
-                length += currentElLength;
-            } else if((length + currentElLength) === contentLength) {
-                return rightMatch ? (treeWalker.nextNode() || currentEl) : currentEl;
-            } else {
-                return currentEl;
-            }
-
-            treeWalker.nextNode();
-        }
-
-        return null;
-    },
-
-    restoreSelection: function(rootEl) {
-        if(this.rangeStart && this.rangeEnd) {
-
-            var range,
-                selection = window.getSelection(),
-                startNode = this._getElementByContentLength(rootEl, this.rangeStart, this.rangeStartAtZeroOffset),
-                endNode = this._getElementByContentLength(rootEl, this.rangeEnd, this.rangeEndAtZeroOffset),
-                startOffset = this.rangeStart - this._getContentLengthOfDOMElement(rootEl, startNode),
-                endOffset = this.rangeEnd - this._getContentLengthOfDOMElement(rootEl, endNode);
-
-            try {
-                range = document.createRange();
-                range.setStart(startNode, startOffset);
-                range.setEnd(endNode, endOffset);
-                selection.removeAllRanges();
-                selection.addRange(range);
-            } catch(ex) { console.log('failed to set caret position') }
-        }
-    },
-
-    // text|text
-    // <div>text|</div><div>text</div>
-    // <div>text</div><div>|text<,/div>
-    // text|<br/><br/><br/>text
-    // text<br/>|<br/><br/>text
-    // text<br/><br/>|<br/>text
-    // text<br/><br/><br/>|text
-    // Preformatted stuff (root element includes <pre> tags)
-    saveSelection: function(rootEl) {
-        var selection = window.getSelection();
-        if(selection.anchorNode && selection.focusNode) {
-            this.rangeStart = this._getContentLengthOfDOMElement(rootEl, selection.anchorNode) + selection.anchorOffset;
-            this.rangeEnd = this._getContentLengthOfDOMElement(rootEl, selection.focusNode) + selection.focusOffset;
-            this.rangeStartAtZeroOffset = selection.anchorOffset == 0;
-            this.rangeEndAtZeroOffset = selection.focusOffset == 0;
-        }
-    },
-
-    targetElement: function() {
-        var selection = window.getSelection();
-        if(selection.anchorNode === selection.focusNode) {
-            return selection.focusNode;
-        }
-    }
-}
-
-module.exports = Caret;
-
-},{}],73:[function(require,module,exports){
-'use strict';
-
-var $ = require('jquery'),
-    Caret = require('./caret'),
-    Utils = require('./utils');
-
-var Editor = function(domId) {
-    var self = this;
-
-    this.domId = domId;
-    this.contentElement = document.getElementById(domId);
-    this.caret = new Caret();
-
-    this.sectionTypeSelector = document.createElement('div');
-    this.sectionTypeSelector.id = 'sectionTypeSelector';
-    this.sectionTypeSelector.innerHTML = "<div>paragraph</div>";
-    document.body.appendChild(this.sectionTypeSelector);
-
-    this.subscribe(function() {
-        self.cleanUpContent();
-    });
-
-    document.addEventListener('selectionchange', function(e) {
-        self.focusSection();
-    });
-
-    this.contentElement.addEventListener('mouseover', function(e) {
-        self.focusSection(e.path[0]);
-    });
-}
-
-Editor.prototype = {
-    subscribe: function(callback) {
-        var self = this;
-        $('#' + this.domId).on('input', function() {
-            callback(self._cleanHTML(self.contentElement.innerHTML));
-        });
-    },
-
-    focusSection: function(element) {
-
-        element = this.focusedSection() || element || this.focusedElement;
-
-        if(!element || element.parentElement !== this.contentElement) {
-            return false;
-        }
-
-        if(this.focusedElement && this.focusedElement != element) {
-            this.focusedElement.className = '';
-        }
-
-        if(this.focusedElement != element) {
-            this.focusedElement = element;
-            this.focusedElement.className = 'focused';
-            this.displaySectionTypeSelectorNextTo(this.focusedElement);
-        }
-
-        return true;
-    },
-
-    displaySectionTypeSelectorNextTo: function(focusedElement) {
-        var focusedElementPosition = Utils.getElementPosition(focusedElement),
-            sectionTypeSelectorElement = document.getElementById('sectionTypeSelector'),
-            posX,
-            posY;
-
-        if(focusedElement) {
-            posX = focusedElementPosition.x + focusedElement.offsetWidth - Math.floor(sectionTypeSelectorElement.offsetWidth/2);
-            posY = focusedElementPosition.y;
-
-            if(posY > focusedElementPosition.y + focusedElementPosition.offsetHeight) {
-                posY = focusedElementPosition.y + focusedElementPosition.offsetHeight;
-            }
-
-            sectionTypeSelectorElement.style.left = posX + 'px';
-            sectionTypeSelectorElement.style.top = posY + 'px';
-        }
-    },
-
-    focusedSection: function() {
-        var caretTarget = this.caret.targetElement();
-
-        if(caretTarget && caretTarget.parentElement) {
-            if(caretTarget.parentElement.parentElement === this.contentElement) {
-                return caretTarget.parentElement;
-            } else if (caretTarget.parentElement === this.contentElement) {
-                return caretTarget;
-            }
-        }
-    },
-
-    //FIXME: maybe use the TreeWalker to cleanup the content instead of
-    // replacing it compleatly after cleanup
-    cleanUpContent: function() {
-        this.caret.saveSelection(this.contentElement);
-        this.contentElement.innerHTML = this._cleanHTML(this.contentElement.innerHTML);
-        this.caret.restoreSelection(this.contentElement);
-        this.focusSection();
-    },
-
-    setContent: function(content) {
-        this.caret.saveSelection(this.contentElement);
-        this.contentElement.innerHTML = 'test';
-        this.caret.restoreSelection(this.contentElement);
-    },
-
-    _cleanHTML: function(html) {
-        html = html.replace(/<b><\/b>|<i><\/i>|<div>\s*<\/div>/g, '');
-        html = html.replace(/<div>/g, '<p>');
-        html = html.replace(/<\/div>/g, '</p>');
-        html = html.replace(/<p.*?>/g, '<p>');
-        html = html.replace(/<p>(\s*|<br>)<\/p>(<p>(\s*|<br>)<\/p>)+/g, '<p><br></p>');
-        return html;
-    }
-}
-
-module.exports = Editor;
-
-},{"./caret":72,"./utils":74,"jquery":50}],74:[function(require,module,exports){
-'use strict';
-
-module.exports = {
-    getElementPosition: function (el) {
-        var xPos = 0,
-            yPos = 0;
-
-        while (el) {
-            xPos += el.offsetLeft + el.clientLeft;
-            yPos += el.offsetTop  + el.clientTop;
-
-            el = el.offsetParent;
-        }
-
-        return {
-            x: xPos,
-            y: yPos
-        };
-    }
-};
-
-},{}],75:[function(require,module,exports){
+},{"./decode":74,"./encode":75}],77:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -19259,7 +19775,7 @@ Url.prototype.parseHost = function() {
   if (host) this.hostname = host;
 };
 
-},{"./util":76,"punycode":68,"querystring":71}],76:[function(require,module,exports){
+},{"./util":78,"punycode":73,"querystring":76}],78:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -19277,24 +19793,4 @@ module.exports = {
   }
 };
 
-},{}],77:[function(require,module,exports){
-var RemoteVariable = require('../js_sdk/remote_variable'),
-    UUID = require('../js_sdk/uuid'),
-    Editor = require('structured-text-editor/src/editor');
-
-document.addEventListener("DOMContentLoaded", function(event) {
-    var clientId = actorId = (new UUID()).getValue(),
-        variableId = new URLSearchParams(window.location.search).get('variable-id'),
-        remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId).load(),
-        editor = new Editor('value');
-
-    remoteVariable.subscribe(function(changeset) {
-        editor.setContent(remoteVariable.getValue());
-    });
-
-    editor.subscribe(function(content) {
-        remoteVariable.setValue(content);
-    });
-});
-
-},{"../js_sdk/remote_variable":1,"../js_sdk/uuid":2,"structured-text-editor/src/editor":73}]},{},[77]);
+},{}]},{},[71]);
