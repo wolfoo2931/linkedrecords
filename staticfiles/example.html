@@ -1,7 +1,9 @@
 <html>
     <head>
         <script type="text/javascript" src="example.packaged.js"></script>
-        <link href="https://fonts.googleapis.com/css?family=Lora:400,700" rel="stylesheet" type="text/css">
+
+        <link href="https://fonts.googleapis.com/css?family=Rubik:400|Dosis" rel="stylesheet">
+
 
         <style>
             body {
@@ -16,6 +18,7 @@
                 min-height: 300px;
                 border-left: 3px solid #E9DDC6;
                 padding: 9px;
+                padding-bottom: 800px;
                 padding-left: 20px;
                 line-height: 150%;
             }
@@ -24,7 +27,7 @@
                 outline: none;
             }
 
-            p {
+            p, h1, h2, h3 {
                 border: 1px dashed #fff;
                 display: block;
                 min-height: 20px;
@@ -32,34 +35,81 @@
                 margin-top: 6px;
                 margin-bottom: 6px;
                 border-radius: 4px;
-                font-family: Lora;
+                font-family: Dosis;
+                letter-spacing: 1px;
                 position: relative;
+                color: #46add8;
+            }
+
+            p {
+                font-family: Rubik;
+                font-size: 0.85em;
+                color: #545454;
+            }
+
+            p b {
+              color: #444;
+            }
+
+            h1 {
+                line-height: 150%;
+            }
+
+            h2 {
+                line-height: 150%;
+            }
+
+            h3 {
+                line-height: 150%;
             }
 
             .focused {
-                border: 1px dashed #EEE5D4;
+                border: 1px dashed #c1b59f;
             }
 
             #sectionTypeSelector {
                 position: absolute;
 
-                border: 1px solid #ddd;
-                border-radius: 4px;
-
-                color: #999;
-                font-size: 0.8em;
-                text-align: center;
-                font-family: monospace;
-
-                margin-top: 2px;
-                margin-left: 40px;
-                padding: 2px 6px 4px 6px;
+                margin-top: 5px;
+                margin-left: 580px;
 
                 top: -10000px;
                 left: -10000px;
 
-                opacity: 0.7;
+                width: 200px;
+            }
 
+            #sectionTypeSelector span {
+                display: none;
+
+                margin-left: 2px;
+
+                border: 1px solid #a1a1a1;
+                border-radius: 4px;
+
+                padding: 2px 6px 4px 6px;
+
+                line-height: 22px;
+                color: #a1a1a1;
+                font-size: 0.8em;
+                text-align: center;
+                font-family: monospace;
+
+                opacity: 0.4;
+            }
+
+            #sectionTypeSelector span:hover {
+                opacity: 1.0;
+                cursor: pointer;
+            }
+
+            #sectionTypeSelector:hover span {
+                display: inline;
+            }
+
+            #sectionTypeSelector .active {
+                display: inline;
+                opacity: 0.4;
             }
 
         </style>

@@ -11,8 +11,10 @@ bayeux.attach(server);
 
 bayeux.getClient().subscribe('/uncommited/changes/variable/*', (change) => {
     console.log('receive commit');
+    var startTime = Date.now();
     Attribute.changeVariable(change, (commitedChange) => {
         bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
+        console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
     });
 });
 
@@ -24,11 +26,14 @@ app.use(function(req, res, next) {
 });
 
 app.get('/variables/:id', function (req, res) {
+    console.log('get variable');
+    var startTime = Date.now();
     Attribute.getVariable({variableId: req.params.id}, (result) => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
         } else {
             res.send(result);
+            console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
         }
     })
 });
