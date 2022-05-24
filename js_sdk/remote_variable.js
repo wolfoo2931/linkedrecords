@@ -6,22 +6,22 @@ var Changeset = require('changesets').Changeset,
     popsicle = require('popsicle'),
     Faye = require('faye');
 
-var Buffer = function() {
-    this.value = null;
-    this.inFlightOp = null;
-};
+class Buffer {
+    constructor() {
+        this.value = null;
+        this.inFlightOp = null;
+    }
 
-Buffer.prototype = {
-    add: function(changeset) {
+    add(changeset) {
         this.value = !this.value ? changeset : this.value.merge(changeset);
-    },
+    }
 
     // this function returns a transformed version of the foreignChange which
     // fits into the current client state. This is required because the client
     // could have some changes which has not been send to the server yet. So, the
     // server don't know about these changes and the changes comming from the server
     // would not fit into the client state.
-    transformAgainst: function(foreignChange, changeInTransmission) {
+    transformAgainst(foreignChange, changeInTransmission) {
         var c1, c2;
 
         if(!changeInTransmission) {
@@ -44,37 +44,36 @@ Buffer.prototype = {
         this.value = this.value.transformAgainst(c2, false);
 
         return c1;
-    },
+    }
 
-    clear: function() {
+    clear() {
         this.value = null;
         this.inFlightOp = null;
-    },
+    }
 
-    getValue: function() {
+    getValue() {
         return this.value;
     }
-};
+}
+class RemoteVariable {
 
-var RemoteVariable = function (variableId, serverURL, clientId, actorId) {
-    this.variableId = variableId;
-    this.serverURL = serverURL;
-    this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
-    this.observers = [];
-    this.buffer = new Buffer();
+    constructor(variableId, serverURL, clientId, actorId) {
+        this.variableId = variableId;
+        this.serverURL = serverURL;
+        this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
+        this.observers = [];
+        this.buffer = new Buffer();
 
-    // because the same user can be logged on two browsers/laptops, we need
-    // a clientId and an actorId
-    this.clientId = clientId;
-    this.actorId = actorId;
+        // because the same user can be logged on two browsers/laptops, we need
+        // a clientId and an actorId
+        this.clientId = clientId;
+        this.actorId = actorId;
 
-    // The change sent to the server but not yet acknowledged.
-    this.changeInTransmission;
-};
+        // The change sent to the server but not yet acknowledged.
+        this.changeInTransmission;
+    }
 
-RemoteVariable.prototype = {
-
-    load: function(done) {
+    load(done) {
         var self = this;
 
         popsicle.get(this.serverURL +  '/variables/' + this.variableId).then((result) => {
@@ -95,20 +94,19 @@ RemoteVariable.prototype = {
         });
 
         return self;
-    },
+    }
 
-    getValue: function() {
+    getValue() {
         return this.value;
-    },
+    }
 
-    setValue: function(newValue, callback) {
+    setValue(newValue, callback) {
 
         if(newValue === this.value) {
             return;
         }
 
         var changeset  = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
-
 
         if(this.changeInTransmission) {
             this.buffer.add(changeset);
@@ -117,19 +115,19 @@ RemoteVariable.prototype = {
         }
 
         this.value = newValue;
-    },
+    }
 
-    subscribe: function(observer) {
+    subscribe(observer) {
         this.observers.push(observer);
-    },
+    }
 
-    _notifySubscribers: function(change) {
+    _notifySubscribers(change) {
         this.observers.forEach(function(callback) {
             callback(change);
         });
-    },
+    }
 
-    _processForeignChange: function(foreignChange) {
+    _processForeignChange(foreignChange) {
         try {
             var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
@@ -140,9 +138,9 @@ RemoteVariable.prototype = {
             console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
             this.load();
         }
-    },
+    }
 
-    _processApproval: function(approval) {
+    _processApproval (approval) {
         var bufferedChanges = this.buffer.getValue();
         this.changeInTransmission = null;
         this.version = approval.id;
@@ -151,9 +149,9 @@ RemoteVariable.prototype = {
         if(bufferedChanges) {
             this._transmitChange(bufferedChanges, approval.id);
         }
-    },
+    }
 
-    _transmitChange: function(changeset, version) {
+    _transmitChange (changeset, version) {
 
         this.changeInTransmission = {
             variableId: this.variableId,
