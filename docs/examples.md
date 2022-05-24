@@ -22,7 +22,7 @@
 
     // petersAge is set to 23 now
 
-    Attribute.changeVariable({
+    Attribute.set({
         valueId: ageValueId,
         value: '24'
     });
