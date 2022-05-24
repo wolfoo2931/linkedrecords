@@ -3,7 +3,6 @@
 var Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
     diffEngine = new diffMatchPatch.diff_match_patch,
-    popsicle = require('popsicle'),
     Faye = require('faye');
 
 class Buffer {
@@ -76,8 +75,7 @@ class RemoteVariable {
     load(done) {
         var self = this;
 
-        popsicle.get(this.serverURL +  '/variables/' + this.variableId).then((result) => {
-            result = JSON.parse(result.body);
+        fetch(this.serverURL +  '/variables/' + this.variableId).then(result => result.json()).then((result) => {
             self.version = result.changeId;
             self.value = result.value;
             self.buffer.clear();
