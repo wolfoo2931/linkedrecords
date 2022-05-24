@@ -1,18 +1,28 @@
 var RemoteVariable = require('../js_sdk/remote_variable'),
     UUID = require('../js_sdk/uuid'),
-    Editor = require('structured-text-editor/src/editor');
+    Editor = require('structured-text-editor/src/editor'),
+    remoteVariable;
 
 document.addEventListener("DOMContentLoaded", function(event) {
     var clientId = actorId = (new UUID()).getValue(),
         variableId = new URLSearchParams(window.location.search).get('variable-id'),
-        remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId).load(),
         editor = new Editor('value');
 
-    remoteVariable.subscribe(function(changeset) {
-        editor.setContent(remoteVariable.getValue());
-    });
+    remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId)
 
-    editor.subscribe(function(content) {
-        remoteVariable.setValue(content);
+    remoteVariable.load(() => {
+        editor.setContent(remoteVariable.getValue())
+
+        remoteVariable.subscribe(function(changeset) {
+            console.log('setValue', remoteVariable.getValue());
+
+            editor.setContent(remoteVariable.getValue());
+        });
+
+        editor.subscribe(function(content) {
+            const c = editor.getContent().replace(/ class="focused"/g, '').replace(/ class=""/g, '')
+            console.log('setValue', c)
+            remoteVariable.setValue(c);
+        });
     });
 });

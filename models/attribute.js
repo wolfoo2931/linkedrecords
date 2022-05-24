@@ -2,7 +2,7 @@
 
 var pg = require('pg'),
     uuid = require('uuid/v4'),
-    pgPool = new pg.Pool(),
+    pgPool = new pg.Pool({ max: 2 }),
     Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
     diffEngine = new diffMatchPatch.diff_match_patch,

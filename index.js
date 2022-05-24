@@ -10,7 +10,6 @@ var Attribute = require('./models/attribute.js'),
 bayeux.attach(server);
 
 bayeux.getClient().subscribe('/uncommited/changes/variable/*', (change) => {
-    console.log('receive commit');
     var startTime = Date.now();
     Attribute.changeVariable(change, (commitedChange) => {
         bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
@@ -40,7 +39,7 @@ app.get('/variables/:id', function (req, res) {
 
 app.use(express.static('staticfiles'));
 
-server.listen(process.env.PORT || 3000);
+server.listen(process.env.PORT || 3000);
 
 // new Attribute({
 //     name: 'content',
