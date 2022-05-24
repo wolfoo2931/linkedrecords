@@ -72,26 +72,21 @@ class RemoteVariable {
         this.changeInTransmission;
     }
 
-    load(done) {
-        var self = this;
+    async load() {
+        const result = await fetch(`${this.serverURL}/variables/${this.variableId}`).then(result => result.json())
 
-        fetch(this.serverURL +  '/variables/' + this.variableId).then(result => result.json()).then((result) => {
-            self.version = result.changeId;
-            self.value = result.value;
-            self.buffer.clear();
-            self._notifySubscribers();
-            done && done();
-        });
+        this.version = result.changeId;
+        this.value = result.value;
+        this.buffer.clear();
+        this._notifySubscribers();
 
-        self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, (change) => {
-            if(change.clientId === self.clientId) {
-                self._processApproval(change);
+        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/variable/' + this.variableId, (change) => {
+            if(change.clientId === this.clientId) {
+                this._processApproval(change);
             } else {
-                self._processForeignChange(change);
+                this._processForeignChange(change);
             }
         });
-
-        return self;
     }
 
     getValue() {
