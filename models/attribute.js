@@ -1,5 +1,3 @@
-'use strict';
-
 var pg = require('pg'),
     uuid = require('uuid/v4'),
     pgPool = new pg.Pool({ max: 2 }),
@@ -9,7 +7,7 @@ var pg = require('pg'),
     queue = require('queue')({concurrency: 1, autostart: true});
 
 
-class Variable {
+class Attribute {
     static newVariable(args, deliver) {
         var variableID = uuid(),
             pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_').toLowerCase(),
@@ -91,7 +89,7 @@ class Variable {
 
     static changeVariable(args, deliver) {
         queue.push((cb) => {
-            Variable._changeVariable(args, (result) => {
+            this._changeVariable(args, (result) => {
                 deliver(result);
                 cb();
             });
@@ -139,9 +137,9 @@ class Variable {
         }
 
         if(args.value) {
-            Variable._changeVariableByValue(args, deliver);
+            this._changeVariableByValue(args, deliver);
         } else if(args.change) {
-            Variable._changeVariableByChangeset(args, deliver);
+            this._changeVariableByChangeset(args, deliver);
         }
     }
 
@@ -205,7 +203,7 @@ class Variable {
 
 
         fetchVariableVersionPromises.push(new Promise((resolve, reject) => {
-            Variable.getVariable({variableId: args.variableId, changeId: args.change.parentVersion}, (result) => {
+            this.getVariable({variableId: args.variableId, changeId: args.change.parentVersion}, (result) => {
                 if(result.value) {
                     parentVersion = result.value;
                     resolve(result.value);
@@ -217,7 +215,7 @@ class Variable {
         }));
 
         fetchVariableVersionPromises.push(new Promise((resolve, reject) => {
-            Variable.getVariable({variableId: args.variableId}, (result) => {
+            this.getVariable({variableId: args.variableId}, (result) => {
                 if(result.value) {
                     currentVersion = result.value;
                     resolve(result.value);
@@ -275,4 +273,4 @@ class Variable {
     }
 }
 
-module.exports = Variable;
+module.exports = Attribute;
