@@ -86,7 +86,7 @@ RemoteVariable.prototype = {
             done && done();
         });
 
-        self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, (change) => {
+        self.subscription = self.subscription || self.bayeuxClient.subscribe('/changes/variable/' + self.variableId, (change) => {
             if(change.clientId === self.clientId) {
                 self._processApproval(change);
             } else {
@@ -102,7 +102,13 @@ RemoteVariable.prototype = {
     },
 
     setValue: function(newValue, callback) {
-        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+
+        if(newValue === this.value) {
+            return;
+        }
+
+        var changeset  = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+
 
         if(this.changeInTransmission) {
             this.buffer.add(changeset);

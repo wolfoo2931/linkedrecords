@@ -2,8 +2,14 @@
     <head>
         <script type="text/javascript" src="example.packaged.js"></script>
 
-        <link href="https://fonts.googleapis.com/css?family=Rubik:400|Dosis" rel="stylesheet">
+        <script src="../../structured-text-editor/assets/fontawesome-free-5.0.6/svg-with-js/js/fa-solid.min.js"></script>
+        <script src="../../structured-text-editor/assets/fontawesome-free-5.0.6/svg-with-js/js/fontawesome.min.js"></script>
 
+        <link href="../../structured-text-editor/assets/lib/prism.css" rel="stylesheet">
+        <link href="../../structured-text-editor/assets/lib/declarativ_form.css" rel="stylesheet">
+        <link href="../../structured-text-editor/assets/default.css" rel="stylesheet">
+
+        <link href="https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css" rel="stylesheet">
 
         <style>
             body {
@@ -12,106 +18,9 @@
                 background-color: #FDFEFE;
             }
 
-            #value {
-                margin: 0px auto;
-                width: 560px;
-                min-height: 300px;
-                border-left: 3px solid #E9DDC6;
-                padding: 9px;
-                padding-bottom: 800px;
-                padding-left: 20px;
-                line-height: 150%;
-            }
-
-            #value:focus {
+            .structured-text-editor-container {
                 outline: none;
             }
-
-            p, h1, h2, h3 {
-                border: 1px dashed #fff;
-                display: block;
-                min-height: 20px;
-                padding: 4px 15px 4px 8px;
-                margin-top: 6px;
-                margin-bottom: 6px;
-                border-radius: 4px;
-                font-family: Dosis;
-                letter-spacing: 1px;
-                position: relative;
-                color: #46add8;
-            }
-
-            p {
-                font-family: Rubik;
-                font-size: 0.85em;
-                color: #545454;
-            }
-
-            p b {
-              color: #444;
-            }
-
-            h1 {
-                line-height: 150%;
-            }
-
-            h2 {
-                line-height: 150%;
-            }
-
-            h3 {
-                line-height: 150%;
-            }
-
-            .focused {
-                border: 1px dashed #c1b59f;
-            }
-
-            #sectionTypeSelector {
-                position: absolute;
-
-                margin-top: 5px;
-                margin-left: 580px;
-
-                top: -10000px;
-                left: -10000px;
-
-                width: 200px;
-            }
-
-            #sectionTypeSelector span {
-                display: none;
-
-                margin-left: 2px;
-
-                border: 1px solid #a1a1a1;
-                border-radius: 4px;
-
-                padding: 2px 6px 4px 6px;
-
-                line-height: 22px;
-                color: #a1a1a1;
-                font-size: 0.8em;
-                text-align: center;
-                font-family: monospace;
-
-                opacity: 0.4;
-            }
-
-            #sectionTypeSelector span:hover {
-                opacity: 1.0;
-                cursor: pointer;
-            }
-
-            #sectionTypeSelector:hover span {
-                display: inline;
-            }
-
-            #sectionTypeSelector .active {
-                display: inline;
-                opacity: 0.4;
-            }
-
         </style>
 
     </head>
@@ -120,7 +29,10 @@
         <!-- <button  onclick="document.execCommand('bold',false,null);">Bold</button>
         <button  onclick="document.execCommand('italic',false,null);">Italic</button> -->
 
-        <div contenteditable="true" id="value" spellcheck="false"></div>
+        <div id="value" spellcheck="false"></div>
 
     </body>
+
+    <script src="../../structured-text-editor/assets/mermaid.js" defer></script>
+    <script src="../../structured-text-editor/assets/katex.js" defer></script>
 </html>

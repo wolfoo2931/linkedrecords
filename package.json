@@ -26,7 +26,7 @@
   },
   "homepage": "https://github.com/specifyio/yabaas#readme",
   "dependencies": {
-    "structured-text-editor": "~0.1.0",
+    "structured-text-editor": "../structured-text-editor",
     "changesets": "~1.0.2",
     "diff_match_patch": "~0.1.1",
     "express": "~4.14.0",
