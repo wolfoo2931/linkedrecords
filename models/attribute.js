@@ -6,9 +6,8 @@ var pg = require('pg'),
     diffEngine = new diffMatchPatch.diff_match_patch,
     queue = require('queue')({concurrency: 1, autostart: true});
 
-
 class Attribute {
-    static newVariable(args, deliver) {
+    static create(args, deliver) {
         var variableID = uuid(),
             pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_').toLowerCase(),
             createVariableTableQuery,
@@ -41,7 +40,7 @@ class Attribute {
         });
     }
 
-    static getVariable(args, deliver) {
+    static get(args, deliver) {
         var pgTableName, value, changeId, actorId, changeIdLimitationSQLAddition = '';
 
         if(!args.variableId) {
@@ -87,7 +86,7 @@ class Attribute {
         });
     }
 
-    static changeVariable(args, deliver) {
+    static set(args, deliver) {
         queue.push((cb) => {
             this._changeVariable(args, (result) => {
                 deliver(result);
@@ -203,7 +202,7 @@ class Attribute {
 
 
         fetchVariableVersionPromises.push(new Promise((resolve, reject) => {
-            this.getVariable({variableId: args.variableId, changeId: args.change.parentVersion}, (result) => {
+            this.get({variableId: args.variableId, changeId: args.change.parentVersion}, (result) => {
                 if(result.value) {
                     parentVersion = result.value;
                     resolve(result.value);
@@ -215,7 +214,7 @@ class Attribute {
         }));
 
         fetchVariableVersionPromises.push(new Promise((resolve, reject) => {
-            this.getVariable({variableId: args.variableId}, (result) => {
+            this.get({variableId: args.variableId}, (result) => {
                 if(result.value) {
                     currentVersion = result.value;
                     resolve(result.value);

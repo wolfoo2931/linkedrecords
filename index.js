@@ -11,7 +11,7 @@ bayeux.attach(server);
 
 bayeux.getClient().subscribe('/uncommited/changes/variable/*', (change) => {
     var startTime = Date.now();
-    Attribute.changeVariable(change, (commitedChange) => {
+    Attribute.set(change, (commitedChange) => {
         bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
         console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
     });
@@ -27,7 +27,7 @@ app.use(function(req, res, next) {
 app.get('/variables/:id', function (req, res) {
     console.log('get variable');
     var startTime = Date.now();
-    Attribute.getVariable({variableId: req.params.id}, (result) => {
+    Attribute.get({variableId: req.params.id}, (result) => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
         } else {
@@ -48,7 +48,7 @@ server.listen(process.env.PORT || 3000);
 //     revisioning: {active: true},
 // }).save(() => {})
 //
-// Attribute.newVariable({
+// Attribute.create({
 //     actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
 //     belonging: {concept: 'blog', id: '4711'},
 //     attribute: 'content',
