@@ -145,7 +145,6 @@ class RemoteVariable {
     }
 
     _transmitChange (changeset, version) {
-
         this.changeInTransmission = {
             variableId: this.variableId,
             change: {

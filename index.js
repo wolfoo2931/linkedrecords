@@ -9,25 +9,26 @@ var Attribute = require('./models/attribute.js'),
 
 bayeux.attach(server);
 
-bayeux.getClient().subscribe('/uncommited/changes/variable/*', (change) => {
+app.use(function(req, res, next) {
+    //FIXME: be more restrictive
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
+
+bayeux.getClient().subscribe('/uncommited/changes/variable/*', change => {
     var startTime = Date.now();
-    Attribute.set(change, (commitedChange) => {
+
+    Attribute.set(change).then(commitedChange => {
         bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
         console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
     });
 });
 
-app.use(function(req, res, next) {
-  //FIXME: be more restrictive
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
-});
-
 app.get('/variables/:id', function (req, res) {
     console.log('get variable');
     var startTime = Date.now();
-    Attribute.get({variableId: req.params.id}, (result) => {
+    Attribute.get({variableId: req.params.id}).then(result => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
         } else {
