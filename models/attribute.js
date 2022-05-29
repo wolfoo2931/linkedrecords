@@ -1,7 +1,7 @@
 var Changeset = require('changesets').Changeset,
     diffMatchPatch = require('diff_match_patch'),
     diffEngine = new diffMatchPatch.diff_match_patch,
-    queue = require('queue')({concurrency: 1, autostart: true}),
+    queue = require('queue')({ concurrency: 1, autostart: true }),
     Storage = require('./db/psql');
 
 class Attribute {
@@ -94,13 +94,13 @@ class Attribute {
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    static async _changeVariableByChangeset(args) {
-        const parentVersion = await this.get({variableId: args.variableId, changeId: args.change.parentVersion});
-        const currentVersion = await this.get({variableId: args.variableId});
+    static async _changeVariableByChangeset({ variableId, change, actorId, clientId }) {
+        const parentVersion = await this.get({ variableId: variableId, changeId: change.parentVersion });
+        const currentVersion = await this.get({ variableId: variableId });
 
         // the a in the simple one-step diamond problem
         // the changeset comming from the client, probably made on an older version of the variable (the server version migth be newr)
-        const clientChange = Changeset.unpack(args.change.changeset);
+        const clientChange = Changeset.unpack(change.changeset);
 
         // the b in the simple one-step diamond problem
         //the compound changes on the server side which are missing on the client site (the changeset from the client site does not consider this changes)
@@ -119,16 +119,17 @@ class Attribute {
         const transformedServerChange = serverChange.transformAgainst(clientChange, true).pack();
 
         const changeID = await Storage.insertAttributeChange(
-            args.variableId,
-            args.actorId,
+            variableId,
+            actorId,
             transformedClientChange
         );
 
         return {
             id: changeID,
-            clientId: args.clientId,
-            transformedServerChange: transformedServerChange,
-            transformedClientChange: transformedClientChange
+            clientId,
+            actorId,
+            transformedServerChange,
+            transformedClientChange
         }
     }
 }
