@@ -26,9 +26,8 @@ bayeux.getClient().subscribe('/uncommited/changes/variable/*', change => {
 });
 
 app.get('/variables/:id', function (req, res) {
-    console.log('get variable');
     var startTime = Date.now();
-    Attribute.get({variableId: req.params.id}).then(result => {
+    Attribute.get({ variableId: req.params.id }).then(result => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
         } else {

@@ -32,8 +32,8 @@ class Attribute {
 
         changes.forEach((change) => {
             result.value = Changeset.unpack(change.value).apply(result.value);
-            result.changeId = change.change_id;
-            result.actorId = change.actor_id;
+            result.changeId = change.changeId;
+            result.actorId = change.actorId;
         })
 
         return result
