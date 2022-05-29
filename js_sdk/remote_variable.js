@@ -114,9 +114,9 @@ class RemoteVariable {
         this.observers.push(observer);
     }
 
-    _notifySubscribers(change) {
+    _notifySubscribers(change, fullChangeInfo) {
         this.observers.forEach(function(callback) {
-            callback(change);
+            callback(change, fullChangeInfo);
         });
     }
 
@@ -126,7 +126,7 @@ class RemoteVariable {
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
             this.value = transformedForeignChange.apply(this.value);
             this.version = foreignChange.id;
-            this._notifySubscribers(transformedForeignChange);
+            this._notifySubscribers(transformedForeignChange, foreignChange);
         } catch(ex) {
             console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
             this.load();
