@@ -56,7 +56,6 @@ class Buffer {
 }
 
 class RemoteVariable {
-
     constructor(variableId, serverURL, clientId, actorId) {
         this.variableId = variableId;
         this.serverURL = serverURL;
@@ -94,7 +93,7 @@ class RemoteVariable {
         return this.value;
     }
 
-    setValue(newValue, callback) {
+    setValue(newValue) {
 
         if(newValue === this.value) {
             return;
@@ -134,7 +133,7 @@ class RemoteVariable {
         }
     }
 
-    _processApproval (approval) {
+    _processApproval(approval) {
         var bufferedChanges = this.buffer.getValue();
         this.changeInTransmission = null;
         this.version = approval.id;
@@ -145,7 +144,7 @@ class RemoteVariable {
         }
     }
 
-    _transmitChange (changeset, version) {
+    _transmitChange(changeset, version) {
         this.changeInTransmission = {
             variableId: this.variableId,
             change: {
