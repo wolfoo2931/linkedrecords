@@ -1,6 +1,7 @@
 var RemoteVariable = require('../js_sdk/remote_variable'),
     UUID = require('../js_sdk/uuid'),
     Editor = require('structured-text-editor/src/editor'),
+    Changeset = require('changesets').Changeset,
     remoteVariable;
 
 document.addEventListener("DOMContentLoaded", async function(event) {
@@ -14,11 +15,14 @@ document.addEventListener("DOMContentLoaded", async function(event) {
     editor.setContent(remoteVariable.getValue())
 
     remoteVariable.subscribe(function(changeset) {
-        editor.setContent(remoteVariable.getValue());
+        editor.setContent(
+            remoteVariable.getValue(),
+            { actor: { id: 'xx' } }
+        );
     });
 
-    editor.subscribe(function(content) {
-        const c = editor.getContent().replace(/ class="focused"/g, '').replace(/ class=""/g, '')
+    editor.subscribe(function(modificationLog) {
+        const c = editor.getOriginalContent();
         remoteVariable.setValue(c);
     });
 });
