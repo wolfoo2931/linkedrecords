@@ -42,9 +42,9 @@ app.use(express.static('staticfiles'));
 server.listen(process.env.PORT || 3000);
 
 
-await = AttribteType.create({
-    name: 'content'
-})
+// await = AttribteType.create({
+//     name: 'content'
+// })
 
 // blogPostContent = await Attribute.create({
 //     actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
