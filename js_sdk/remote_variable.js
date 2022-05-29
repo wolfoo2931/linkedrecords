@@ -54,6 +54,7 @@ class Buffer {
         return this.value;
     }
 }
+
 class RemoteVariable {
 
     constructor(variableId, serverURL, clientId, actorId) {
