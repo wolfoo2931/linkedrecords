@@ -14,10 +14,10 @@ document.addEventListener("DOMContentLoaded", async function(event) {
 
     editor.setContent(remoteVariable.getValue())
 
-    remoteVariable.subscribe(function(changeset) {
+    remoteVariable.subscribe(function(changeset, changeInfo) {
         editor.setContent(
             remoteVariable.getValue(),
-            { actor: { id: 'xx' } }
+            { actor: { id: changeInfo.actorId } }
         );
     });
 
