@@ -99,15 +99,19 @@ class RemoteVariable {
             return;
         }
 
-        var changeset  = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+
+        this.applyChangeset(changeset);
+    }
+
+    applyChangeset(changeset) {
+        this.value = changeset.apply(this.value);
 
         if(this.changeInTransmission) {
             this.buffer.add(changeset);
         } else {
             this._transmitChange(changeset, this.version);
         }
-
-        this.value = newValue;
     }
 
     subscribe(observer) {

@@ -9,20 +9,19 @@ document.addEventListener("DOMContentLoaded", async function(event) {
         variableId = new URLSearchParams(window.location.search).get('variable-id'),
         editor = new Editor('value');
 
-    remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId)
-    await remoteVariable.load()
+    remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId);
+    await remoteVariable.load();
 
-    editor.setContent(remoteVariable.getValue())
+    editor.setContent(remoteVariable.getValue());
 
     remoteVariable.subscribe(function(changeset, changeInfo) {
-        editor.setContent(
-            remoteVariable.getValue(),
-            { actor: { id: changeInfo.actorId } }
-        );
+        const attr = { actor: { id: changeInfo && changeInfo.actorId } };
+        editor.setContent(remoteVariable.getValue(), attr);
     });
 
     editor.subscribe(function(modificationLog) {
-        const c = editor.getOriginalContent();
-        remoteVariable.setValue(c);
+        if(!modificationLog.actor) {
+            remoteVariable.applyChangeset(modificationLog.toChangeset(Changeset));
+        }
     });
 });
