@@ -7,7 +7,7 @@ class PsqlStorage {
         const variableID = uuid();
         const pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_').toLowerCase();
         const query = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);
-                       INSERT INTO  ${pgTableName} (actor_id, time, value, delta) VALUES ('${actorId}', NOW(), '${value}', false)`;
+                       INSERT INTO  ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, false)`;
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -15,7 +15,7 @@ class PsqlStorage {
                     reject(err);
                     return;
                 }
-                pgclient.query(query, (err, result) => {
+                pgclient.query(query, [actorId, value], (err, result) => {
                     if(err) {
                         reject(err);
                         return;
@@ -47,9 +47,9 @@ class PsqlStorage {
                         actor_id
                     FROM ${pgTableName}
                     WHERE delta=false
-                    AND change_id <= ${maxChangeId}
+                    AND change_id <= $1
                     ORDER BY change_id
-                    DESC LIMIT 1`, (err, snapshots) => {
+                    DESC LIMIT 1`, [maxChangeId], (err, snapshots) => {
 
                     if(err) {
                         reject(err);
@@ -91,10 +91,10 @@ class PsqlStorage {
                         change_id,
                         actor_id
                     FROM ${pgTableName}
-                    WHERE change_id > ${minChangeId}
-                    AND change_id <= ${maxChangeId}
+                    WHERE change_id > $1
+                    AND change_id <= $2
                     AND delta=true
-                    ORDER BY change_id ASC`, (err, changes) => {
+                    ORDER BY change_id ASC`, [minChangeId, maxChangeId], (err, changes) => {
 
                     if(err) {
                         reject(err)
@@ -125,7 +125,7 @@ class PsqlStorage {
                     return;
                 }
 
-                pgclient.query("INSERT INTO " + pgTableName + " (actor_id, time, value, delta) VALUES ('" + actorId + "', NOW(), '" + change + "', true) RETURNING change_id", (err, result) => {
+                pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, true) RETURNING change_id`, [actorId, change], (err, result) => {
                     if(err) {
                         reject(err)
                         return;
@@ -148,7 +148,7 @@ class PsqlStorage {
                     return;
                 }
 
-                pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ('${actorId}', NOW(), '${value}', false) RETURNING change_id`, (err, result) => {
+                pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, false) RETURNING change_id`, [actorId, value], (err, result) => {
                     if(err) {
                         reject(err)
                         return;
