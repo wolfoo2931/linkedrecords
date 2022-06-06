@@ -15,13 +15,18 @@ document.addEventListener("DOMContentLoaded", async function(event) {
     editor.setContent(remoteVariable.getValue());
 
     remoteVariable.subscribe(function(changeset, changeInfo) {
-        const attr = { actor: { id: changeInfo && changeInfo.actorId } };
+        const attr = { actor: { id: changeInfo.actorId } };
         editor.setContent(remoteVariable.getValue(), attr);
     });
 
     editor.subscribe(function(modificationLog) {
         if(!modificationLog.actor) {
-            remoteVariable.applyChangeset(modificationLog.toChangeset(Changeset));
+            try {
+                remoteVariable.applyChangeset(modificationLog.toChangeset(Changeset));
+            } catch(ex) {
+                console.log('error appling changeseet to remote variable. Falling back to replace whole variable content', ex);
+                remoteVariable.setValue(editor.getOriginalContent());
+            }
         }
     });
 });

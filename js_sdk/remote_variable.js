@@ -132,7 +132,7 @@ class RemoteVariable {
             this.version = foreignChange.id;
             this._notifySubscribers(transformedForeignChange, foreignChange);
         } catch(ex) {
-            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.');
+            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
             this.load();
         }
     }
