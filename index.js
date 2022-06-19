@@ -42,15 +42,3 @@ app.use(express.static('staticfiles'));
 server.listen(process.env.PORT || 3000);
 
 
-// await = AttribteType.create({
-//     name: 'content'
-// })
-
-// blogPostContent = await Attribute.create({
-//     actorId: '698aafe8-dcd5-4ced-b969-ffc34a43f645',
-//     attributeType: 'content'
-//     entityConcept: 'blog'
-//     entityId: "60f1768b-61d7-467b-a020-822b96d999ee",
-//     type: 'text', // Others: Blob, JSON
-//     value: 'initial content'
-// })

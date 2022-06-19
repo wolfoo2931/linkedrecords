@@ -16,7 +16,13 @@ document.addEventListener("DOMContentLoaded", async function(event) {
 
     remoteVariable.subscribe(function(changeset, changeInfo) {
         const attr = { actor: { id: changeInfo.actorId } };
-        editor.setContent(remoteVariable.getValue(), attr);
+
+        try {
+            editor.applyChangeset(changeset, attr);
+        } catch(ex) {
+            console.log('failed to apply changeset to editors content. Falling back to replace the whole editors content', ex)
+            editor.setContent(remoteVariable.getValue(), attr);
+        }
     });
 
     editor.subscribe(function(modificationLog) {
