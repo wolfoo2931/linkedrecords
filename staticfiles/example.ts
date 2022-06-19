@@ -5,7 +5,8 @@ var RemoteVariable = require('../js_sdk/remote_variable'),
     remoteVariable;
 
 document.addEventListener("DOMContentLoaded", async function(event) {
-    var clientId = actorId = (new UUID()).getValue(),
+    var clientId = (new UUID()).getValue(),
+        actorId = clientId,
         variableId = new URLSearchParams(window.location.search).get('variable-id'),
         editor = new Editor('value');
 
