@@ -4,6 +4,7 @@ import { Attribute } from './models/attribute.js';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
+import 'dotenv/config';
 
 const app = express();
 const server = new Server(app);

@@ -26,13 +26,14 @@
   },
   "homepage": "https://github.com/specifyio/yabaas#readme",
   "dependencies": {
-    "structured-text-editor": "../structured-text-editor",
     "changesets": "~1.0.2",
     "diff_match_patch": "~0.1.1",
+    "dotenv": "^16.0.1",
     "express": "~4.18.1",
     "faye": "~1.4.0",
     "pg": "~8.7.3",
     "queue": "4.2.1",
+    "structured-text-editor": "../structured-text-editor",
     "uuid": "~8.3.2"
   },
   "devDependencies": {
