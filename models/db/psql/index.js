@@ -1,8 +1,9 @@
-const pg = require('pg');
-const pgPool = new pg.Pool({ max: 2 });
-const uuid = require('uuid/v4');
+import pg from 'pg';
+import { v4 as uuid } from 'uuid';
 
-class PsqlStorage {
+const pgPool = new pg.Pool({ max: 2 });
+
+export class PsqlStorage {
     static createAttribute(actorId, value) {
         const variableID = uuid();
         const pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_').toLowerCase();
@@ -161,6 +162,4 @@ class PsqlStorage {
         });
     }
 }
-
-module.exports = PsqlStorage
 

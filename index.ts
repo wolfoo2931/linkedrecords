@@ -1,11 +1,13 @@
 'use strict';
 
-var Attribute = require('./models/attribute.js'),
-    express = require('express'),
-    app = express(),
-    server = require('http').Server(app),
-    faye = require('faye'),
-    bayeux = new faye.NodeAdapter({mount: '/bayeux', timeout: 45});
+import { Attribute } from './models/attribute.js';
+import { Server } from 'http';
+import express from 'express';
+import faye from 'faye';
+
+const app = express();
+const server = new Server(app);
+const bayeux = new faye.NodeAdapter({mount: '/bayeux', timeout: 45});
 
 bayeux.attach(server);
 

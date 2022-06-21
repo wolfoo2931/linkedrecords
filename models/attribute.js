@@ -1,10 +1,11 @@
-var Changeset = require('changesets').Changeset,
-    diffMatchPatch = require('diff_match_patch'),
-    diffEngine = new diffMatchPatch.diff_match_patch,
-    queue = require('queue')({ concurrency: 1, autostart: true }),
-    Storage = require('./db/psql');
+import { Changeset } from 'changesets';
+import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
+import { PsqlStorage as Storage } from './db/psql';
 
-class Attribute {
+const diffEngine = new DiffMatchPatch();
+const queue = require('queue')({ concurrency: 1, autostart: true });
+
+export class Attribute {
     static async create(args) {
         if(!args.actorId) {
             throw new Error('actorId argument must be present');
@@ -133,5 +134,3 @@ class Attribute {
         }
     }
 }
-
-module.exports = Attribute;

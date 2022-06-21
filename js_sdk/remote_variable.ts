@@ -1,11 +1,16 @@
 'use strict';
 
-var Changeset = require('changesets').Changeset,
-    diffMatchPatch = require('diff_match_patch'),
-    diffEngine = new diffMatchPatch.diff_match_patch,
-    Faye = require('faye');
+import { Changeset } from 'changesets';
+import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
+import Faye from 'faye';
+
+const diffEngine = new DiffMatchPatch();
 
 class Buffer {
+
+    value: any;
+    inFlightOp: any;
+
     constructor() {
         this.value = null;
         this.inFlightOp = null;
@@ -55,7 +60,21 @@ class Buffer {
     }
 }
 
-class RemoteVariable {
+export class RemoteVariable {
+
+    variableId: string;
+    actorId: string;
+    clientId: string;
+    serverURL: string;
+    bayeuxClient: any;
+    observers: any[];
+    buffer: Buffer;
+    changeInTransmission: any;
+    subscription: any | null;
+
+    version: number | null;
+    value: string | null;
+
     constructor(variableId, serverURL, clientId, actorId) {
         this.variableId = variableId;
         this.serverURL = serverURL;
@@ -70,6 +89,10 @@ class RemoteVariable {
 
         // The change sent to the server but not yet acknowledged.
         this.changeInTransmission;
+
+        this.version = null;
+        this.value = null;
+        this.subscription = null;
     }
 
     async load() {
@@ -78,7 +101,7 @@ class RemoteVariable {
         this.version = result.changeId;
         this.value = result.value;
         this.buffer.clear();
-        this._notifySubscribers();
+        this._notifySubscribers(undefined, undefined);
 
         this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/variable/' + this.variableId, (change) => {
             if(change.clientId === this.clientId) {
@@ -162,5 +185,3 @@ class RemoteVariable {
         this.bayeuxClient.publish('/uncommited/changes/variable/' + this.variableId, this.changeInTransmission);
     }
 };
-
-module.exports = RemoteVariable;

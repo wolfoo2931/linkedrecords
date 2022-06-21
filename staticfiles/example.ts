@@ -1,11 +1,12 @@
-var RemoteVariable = require('../js_sdk/remote_variable'),
-    UUID = require('../js_sdk/uuid'),
-    Editor = require('structured-text-editor/src/editor'),
-    Changeset = require('changesets').Changeset,
-    remoteVariable;
+import { Changeset } from 'changesets';
+import { RemoteVariable } from '../js_sdk/remote_variable';
+import { v4 as uuid } from 'uuid';
+import Editor from 'structured-text-editor/src/editor';
+
+var remoteVariable;
 
 document.addEventListener("DOMContentLoaded", async function(event) {
-    var clientId = (new UUID()).getValue(),
+    var clientId = uuid(),
         actorId = clientId,
         variableId = new URLSearchParams(window.location.search).get('variable-id'),
         editor = new Editor('value');
