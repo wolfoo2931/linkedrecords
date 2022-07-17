@@ -4,6 +4,7 @@ import { Attribute } from './models/attribute';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
+import cors from 'cors';
 import 'dotenv/config';
 
 const app = express();
@@ -12,31 +13,20 @@ const bayeux = new faye.NodeAdapter({mount: '/bayeux', timeout: 45});
 
 bayeux.attach(server);
 
-app.use((req, res, next) => {
-    //FIXME: be more restrictive
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-    next();
-});
+app.use(cors());
 
-bayeux.getClient().subscribe('/uncommited/changes/variable/*', async ({id, change, actorId, clientId}) => {
-    const startTime = Date.now();
+bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({id, change, actorId, clientId}) => {
     const commitedChange = await Attribute.change(id, change, actorId, clientId);
-
-    bayeux.getClient().publish('/changes/variable/' + id, commitedChange);
-
-    console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
+    bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
 });
 
-app.get('/variables/:id', async (req, res) => {
-    const startTime = Date.now();
+app.get('/attributes/:id', async (req, res) => {
     const result = await Attribute.get(req.params.id);
 
     if(result instanceof Error) {
         res.status(404).send({error: result.message});
     } else {
         res.send(result);
-        console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
     }
 });
 

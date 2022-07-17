@@ -47,7 +47,7 @@ export class Attribute {
 
         return new Promise(resolve => {
             queue.push(async cb => {
-                const result = await this._changeVariableByChangeset(id, change, actorId, clientId);
+                const result = await this._changeByChangeset(id, change, actorId, clientId);
                 resolve(result);
                 cb();
             });
@@ -58,12 +58,12 @@ export class Attribute {
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    static async _changeVariableByChangeset(id: string, change: any, actorId: string, clientId: string) {
+    static async _changeByChangeset(id: string, change: any, actorId: string, clientId: string) {
         const parentVersion = await this.get(id, change.parentVersion);
         const currentVersion = await this.get(id);
 
         // the a in the simple one-step diamond problem
-        // the changeset comming from the client, probably made on an older version of the variable (the server version migth be newr)
+        // the changeset comming from the client, probably made on an older version of the attribute (the server version migth be newr)
         const clientChange = Changeset.unpack(change.changeset);
 
         // the b in the simple one-step diamond problem

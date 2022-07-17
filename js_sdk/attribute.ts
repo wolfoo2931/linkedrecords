@@ -96,14 +96,14 @@ export class Attribute {
     }
 
     async load() {
-        const result = await fetch(`${this.serverURL}/variables/${this.id}`).then(result => result.json())
+        const result = await fetch(`${this.serverURL}/attributes/${this.id}`).then(result => result.json())
 
         this.version = result.changeId;
         this.value = result.value;
         this.buffer.clear();
         this._notifySubscribers(undefined, undefined);
 
-        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/variable/' + this.id, (change) => {
+        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/attribute/' + this.id, (change) => {
             if(change.clientId === this.clientId) {
                 this._processApproval(change);
             } else {
@@ -181,6 +181,6 @@ export class Attribute {
             clientId: this.clientId
         };
 
-        this.bayeuxClient.publish('/uncommited/changes/variable/' + this.id, this.changeInTransmission);
+        this.bayeuxClient.publish('/uncommited/changes/attribute/' + this.id, this.changeInTransmission);
     }
 };
