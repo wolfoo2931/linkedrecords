@@ -30,7 +30,7 @@ export class PsqlStorage {
         });
     }
 
-    static getAttributeLatestSnapshot(attributeId, { maxChangeId = 2147483647 }) {
+    static getAttributeLatestSnapshot(attributeId, { maxChangeId = '2147483647' }) : Promise<{value: string, changeId: string, actorId: string}> {
         const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
         return new Promise((resolve, reject) => {
@@ -75,7 +75,7 @@ export class PsqlStorage {
         });
     }
 
-    static getAttributeChanges(attributeId, { minChangeId = 0, maxChangeId = 2147483647 } = {}) {
+    static getAttributeChanges(attributeId, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
         const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
         return new Promise((resolve, reject) => {

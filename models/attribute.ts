@@ -15,13 +15,13 @@ export class Attribute {
         const result = await Storage.getAttributeLatestSnapshot(id, queryOptions);
         const changes = await Storage.getAttributeChanges(id, queryOptions);
 
-        changes.forEach((change) => {
+        changes.forEach(change => {
             result.value = Changeset.unpack(change.value).apply(result.value);
             result.changeId = change.changeId;
             result.actorId = change.actorId;
         })
 
-        return result
+        return result;
     }
 
     static set(id, actorId, value) {
