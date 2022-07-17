@@ -12,32 +12,32 @@ const bayeux = new faye.NodeAdapter({mount: '/bayeux', timeout: 45});
 
 bayeux.attach(server);
 
-app.use(function(req, res, next) {
+app.use((req, res, next) => {
     //FIXME: be more restrictive
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
 });
 
-bayeux.getClient().subscribe('/uncommited/changes/variable/*', ({id, change, actorId, clientId}) => {
-    var startTime = Date.now();
+bayeux.getClient().subscribe('/uncommited/changes/variable/*', async ({id, change, actorId, clientId}) => {
+    const startTime = Date.now();
+    const commitedChange = await Attribute.change(id, change, actorId, clientId);
 
-    Attribute.change(id, change, actorId, clientId).then(commitedChange => {
-        bayeux.getClient().publish('/changes/variable/' + id, commitedChange);
-        console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
-    });
+    bayeux.getClient().publish('/changes/variable/' + id, commitedChange);
+
+    console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
 });
 
-app.get('/variables/:id', function (req, res) {
-    var startTime = Date.now();
-    Attribute.get(req.params.id).then(result => {
-        if(result instanceof Error) {
-            res.status(404).send({error: result.message});
-        } else {
-            res.send(result);
-            console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
-        }
-    })
+app.get('/variables/:id', async (req, res) => {
+    const startTime = Date.now();
+    const result = await Attribute.get(req.params.id);
+
+    if(result instanceof Error) {
+        res.status(404).send({error: result.message});
+    } else {
+        res.send(result);
+        console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
+    }
 });
 
 app.use(express.static('staticfiles'));
