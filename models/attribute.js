@@ -23,13 +23,13 @@ export class Attribute {
     }
 
     static async get(args) {
-        if(!args.variableId) {
-            throw new Error('variableId argument must be present');
+        if(!args.id) {
+            throw new Error('id argument must be present');
         }
 
         const queryOptions = args.changeId ? { maxChangeId: args.changeId } : {};
-        const result = await Storage.getAttributeLatestSnapshot(args.variableId, queryOptions);
-        const changes = await Storage.getAttributeChanges(args.variableId, queryOptions);
+        const result = await Storage.getAttributeLatestSnapshot(args.id, queryOptions);
+        const changes = await Storage.getAttributeChanges(args.id, queryOptions);
 
         changes.forEach((change) => {
             result.value = Changeset.unpack(change.value).apply(result.value);
@@ -52,8 +52,8 @@ export class Attribute {
     }
 
     static async _changeVariable(args) {
-        if(!args.variableId) {
-            throw new Error('variableId argument must be present');
+        if(!args.id) {
+            throw new Error('id argument must be present');
         }
 
         if(!args.value && !args.change) {
@@ -85,7 +85,7 @@ export class Attribute {
         }
 
         if(args.value) {
-            return await Storage.insertAttributeSnapshot(args.variableId, args.actorId, args.value);
+            return await Storage.insertAttributeSnapshot(args.id, args.actorId, args.value);
         } else if(args.change) {
             return await this._changeVariableByChangeset(args);
         }
@@ -95,9 +95,9 @@ export class Attribute {
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    static async _changeVariableByChangeset({ variableId, change, actorId, clientId }) {
-        const parentVersion = await this.get({ variableId: variableId, changeId: change.parentVersion });
-        const currentVersion = await this.get({ variableId: variableId });
+    static async _changeVariableByChangeset({ id, change, actorId, clientId }) {
+        const parentVersion = await this.get({ id: id, changeId: change.parentVersion });
+        const currentVersion = await this.get({ id: id });
 
         // the a in the simple one-step diamond problem
         // the changeset comming from the client, probably made on an older version of the variable (the server version migth be newr)
@@ -120,7 +120,7 @@ export class Attribute {
         const transformedServerChange = serverChange.transformAgainst(clientChange, true).pack();
 
         const changeID = await Storage.insertAttributeChange(
-            variableId,
+            id,
             actorId,
             transformedClientChange
         );
