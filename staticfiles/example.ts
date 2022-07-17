@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", async function(event) {
             try {
                 attribute.change(modificationLog.toChangeset(Changeset));
             } catch(ex) {
-                console.log('error appling changeseet to remote variable. Falling back to replace whole variable content', ex);
+                console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
                 attribute.set(editor.getOriginalContent());
             }
         }
