@@ -6,30 +6,14 @@ const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
 export class Attribute {
-    static async create(args) {
-        if(!args.actorId) {
-            throw new Error('actorId argument must be present');
-        }
-
-        if(!args.value) {
-            throw new Error('value argument must be present');
-        }
-
-        if(!args.actorId.match(/^[0-9A-F]{8}-[0-9A-F]{4}-[4][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i)) {
-            throw new Error('actorId is "' + args.actorId + '" but it must be a valid uuid');
-        }
-
+    static async create(actorId: string, value: string) {
         return await Storage.createAttribute(actorId, value)
     }
 
-    static async get(args) {
-        if(!args.id) {
-            throw new Error('id argument must be present');
-        }
-
-        const queryOptions = args.changeId ? { maxChangeId: args.changeId } : {};
-        const result = await Storage.getAttributeLatestSnapshot(args.id, queryOptions);
-        const changes = await Storage.getAttributeChanges(args.id, queryOptions);
+    static async get(id: string, changeId?: string) {
+        const queryOptions = changeId ? { maxChangeId: changeId } : {};
+        const result = await Storage.getAttributeLatestSnapshot(id, queryOptions);
+        const changes = await Storage.getAttributeChanges(id, queryOptions);
 
         changes.forEach((change) => {
             result.value = Changeset.unpack(change.value).apply(result.value);
@@ -40,64 +24,43 @@ export class Attribute {
         return result
     }
 
-    static set(args) {
+    static set(id, actorId, value) {
         return new Promise(resolve => {
-            queue.push((cb) => {
-                this._changeVariable(args).then((result) => {
-                    resolve(result);
-                    cb();
-                });
+            queue.push(async cb => {
+                const result = await Storage.insertAttributeSnapshot(id, actorId, value);
+                resolve(result);
+                cb();
             });
-        })
+        });
     }
 
-    static async _changeVariable(args) {
-        if(!args.id) {
-            throw new Error('id argument must be present');
+    static change(id: string, change: any, actorId: string, clientId: string) {
+        try {
+            Changeset.unpack(change.changeset);
+        } catch(err) {
+            throw new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)');
         }
 
-        if(!args.value && !args.change) {
-            throw new Error('either value or changeset argument must be present');
+        if(!change.parentVersion) {
+            throw new Error('the changeset must also contain a parent version');
         }
 
-        if(args.value && args.change) {
-            throw new Error('either value or change argument must be present (specifying both is not allowed)');
-        }
-
-        if(args.change) {
-            try {
-                Changeset.unpack(args.change.changeset);
-            } catch(err) {
-                throw new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)');
-            }
-
-            if(!args.change.parentVersion) {
-                throw new Error('the changeset must also contain a parent version');
-            }
-        }
-
-        if(!args.actorId) {
-            throw new Error('actorId argument must be present');
-        }
-
-        if(!args.actorId.match(/^[0-9A-F]{8}-[0-9A-F]{4}-[4][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i)) {
-            throw new Error('actorId is "' + args.actorId + '" but it must be a valid uuid');
-        }
-
-        if(args.value) {
-            return await Storage.insertAttributeSnapshot(args.id, args.actorId, args.value);
-        } else if(args.change) {
-            return await this._changeVariableByChangeset(args);
-        }
+        return new Promise(resolve => {
+            queue.push(async cb => {
+                const result = await this._changeVariableByChangeset(id, change, actorId, clientId);
+                resolve(result);
+                cb();
+            });
+        });
     }
 
     // Applies the changeset which can be based on an older version of the veriable value.
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    static async _changeVariableByChangeset({ id, change, actorId, clientId }) {
-        const parentVersion = await this.get({ id: id, changeId: change.parentVersion });
-        const currentVersion = await this.get({ id: id });
+    static async _changeVariableByChangeset(id: string, change: any, actorId: string, clientId: string) {
+        const parentVersion = await this.get(id, change.parentVersion);
+        const currentVersion = await this.get(id);
 
         // the a in the simple one-step diamond problem
         // the changeset comming from the client, probably made on an older version of the variable (the server version migth be newr)

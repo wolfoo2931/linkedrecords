@@ -112,22 +112,21 @@ export class Attribute {
         });
     }
 
-    getValue() {
+    get() {
         return this.value;
     }
 
-    setValue(newValue) {
-
+    set(newValue) {
         if(newValue === this.value) {
             return;
         }
 
         var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
 
-        this.applyChangeset(changeset);
+        this.change(changeset);
     }
 
-    applyChangeset(changeset) {
+    change(changeset) {
         this.value = changeset.apply(this.value);
 
         if(this.changeInTransmission) {
