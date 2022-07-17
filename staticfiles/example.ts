@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", async function(event) {
 
     await attribute.load();
 
-    editor.setContent(attribute.getValue());
+    editor.setContent(attribute.get());
 
     attribute.subscribe(function(changeset, changeInfo) {
         const attr = { actor: { id: changeInfo.actorId } };
@@ -23,17 +23,17 @@ document.addEventListener("DOMContentLoaded", async function(event) {
             editor.applyChangeset(changeset, attr);
         } catch(ex) {
             console.log('failed to apply changeset to editors content. Falling back to replace the whole editors content', ex)
-            editor.setContent(attribute.getValue(), attr);
+            editor.setContent(attribute.get(), attr);
         }
     });
 
     editor.subscribe(function(modificationLog) {
         if(!modificationLog.actor) {
             try {
-                attribute.applyChangeset(modificationLog.toChangeset(Changeset));
+                attribute.change(modificationLog.toChangeset(Changeset));
             } catch(ex) {
                 console.log('error appling changeseet to remote variable. Falling back to replace whole variable content', ex);
-                attribute.setValue(editor.getOriginalContent());
+                attribute.set(editor.getOriginalContent());
             }
         }
     });

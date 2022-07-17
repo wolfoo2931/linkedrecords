@@ -1,6 +1,6 @@
 'use strict';
 
-import { Attribute } from './models/attribute.js';
+import { Attribute } from './models/attribute';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
@@ -19,18 +19,18 @@ app.use(function(req, res, next) {
     next();
 });
 
-bayeux.getClient().subscribe('/uncommited/changes/variable/*', change => {
+bayeux.getClient().subscribe('/uncommited/changes/variable/*', ({id, change, actorId, clientId}) => {
     var startTime = Date.now();
 
-    Attribute.set(change).then(commitedChange => {
-        bayeux.getClient().publish('/changes/variable/' + change.id, commitedChange);
+    Attribute.change(id, change, actorId, clientId).then(commitedChange => {
+        bayeux.getClient().publish('/changes/variable/' + id, commitedChange);
         console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
     });
 });
 
 app.get('/variables/:id', function (req, res) {
     var startTime = Date.now();
-    Attribute.get({ id: req.params.id }).then(result => {
+    Attribute.get(req.params.id).then(result => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
         } else {
