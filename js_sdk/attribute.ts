@@ -75,7 +75,7 @@ export class Attribute {
     version: number | null;
     value: string | null;
 
-    constructor(id, serverURL, clientId, actorId) {
+    constructor(id, clientId, actorId, serverURL) {
         this.id = id;
         this.serverURL = serverURL;
         this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');

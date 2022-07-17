@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", async function(event) {
         actorId = clientId,
         attributeId = new URLSearchParams(window.location.search).get('variable-id'),
         editor = new Editor('value'),
-        attribute = new Attribute(attributeId, 'http://localhost:3000', clientId, actorId);
+        attribute = new Attribute(attributeId, clientId, actorId, 'http://localhost:3000');
 
     await attribute.load();
 
