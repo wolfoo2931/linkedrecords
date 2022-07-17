@@ -6,6 +6,147 @@ import Faye from 'faye';
 
 const diffEngine = new DiffMatchPatch();
 
+export class Attribute {
+
+    id: string;
+    actorId: string;
+    clientId: string;
+    serverURL: string;
+    bayeuxClient: any;
+    observers: any[];
+    buffer: Buffer;
+    changeInTransmission: any;
+    subscription: any | null;
+    isInitialized: boolean;
+
+    version: number | null;
+    value: string | null;
+
+    constructor(id, clientId, actorId, serverURL) {
+        this.id = id;
+        this.serverURL = serverURL;
+        this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
+        this.observers = [];
+        this.buffer = new Buffer();
+
+        // because the same user can be logged on two browsers/laptops, we need
+        // a clientId and an actorId
+        this.clientId = clientId;
+        this.actorId = actorId;
+
+        // The change sent to the server but not yet acknowledged.
+        this.changeInTransmission;
+
+        this.version = null;
+        this.value = null;
+        this.subscription = null;
+        this.isInitialized = false;
+    }
+
+    async get() {
+        await this.load();
+
+        return this.value;
+    }
+
+    async set(newValue) {
+        await this.load();
+
+        if(newValue === this.value) {
+            return;
+        }
+
+        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+
+        this.change(changeset);
+    }
+
+    async change(changeset) {
+        await this.load();
+
+        this.value = changeset.apply(this.value);
+
+        if(this.changeInTransmission) {
+            this.buffer.add(changeset);
+        } else {
+            this.transmitChange(changeset, this.version);
+        }
+    }
+
+    async subscribe(observer) {
+        await this.load();
+
+        this.observers.push(observer);
+    }
+
+    private async load() {
+        if(this.isInitialized) {
+            return;
+        }
+
+        this.isInitialized = true;
+
+        const result = await fetch(`${this.serverURL}/attributes/${this.id}`).then(result => result.json())
+
+        this.version = result.changeId;
+        this.value = result.value;
+        this.buffer.clear();
+        this.notifySubscribers(undefined, undefined);
+
+        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/attribute/' + this.id, (change) => {
+            if(change.clientId === this.clientId) {
+                this.processApproval(change);
+            } else {
+                this.processForeignChange(change);
+            }
+        });
+    }
+
+    private notifySubscribers(change, fullChangeInfo) {
+        this.observers.forEach(function(callback) {
+            callback(change, fullChangeInfo);
+        });
+    }
+
+    private processForeignChange(foreignChange) {
+        try {
+            var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
+            var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
+            this.value = transformedForeignChange.apply(this.value);
+            this.version = foreignChange.id;
+            this.notifySubscribers(transformedForeignChange, foreignChange);
+        } catch(ex) {
+            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
+            this.load();
+        }
+    }
+
+    private processApproval(approval) {
+        var bufferedChanges = this.buffer.getValue();
+        this.changeInTransmission = null;
+        this.version = approval.id;
+        this.buffer.clear();
+
+        if(bufferedChanges) {
+            this.transmitChange(bufferedChanges, approval.id);
+        }
+    }
+
+    private transmitChange(changeset, version) {
+        this.changeInTransmission = {
+            id: this.id,
+            change: {
+                changeset: changeset.pack(),
+                parentVersion: version
+            },
+            actorId: this.actorId,
+            clientId: this.clientId
+        };
+
+        this.bayeuxClient.publish('/uncommited/changes/attribute/' + this.id, this.changeInTransmission);
+    }
+};
+
 class Buffer {
 
     value: any;
@@ -57,130 +198,5 @@ class Buffer {
 
     getValue() {
         return this.value;
-    }
-}
-
-export class Attribute {
-
-    id: string;
-    actorId: string;
-    clientId: string;
-    serverURL: string;
-    bayeuxClient: any;
-    observers: any[];
-    buffer: Buffer;
-    changeInTransmission: any;
-    subscription: any | null;
-
-    version: number | null;
-    value: string | null;
-
-    constructor(id, clientId, actorId, serverURL) {
-        this.id = id;
-        this.serverURL = serverURL;
-        this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
-        this.observers = [];
-        this.buffer = new Buffer();
-
-        // because the same user can be logged on two browsers/laptops, we need
-        // a clientId and an actorId
-        this.clientId = clientId;
-        this.actorId = actorId;
-
-        // The change sent to the server but not yet acknowledged.
-        this.changeInTransmission;
-
-        this.version = null;
-        this.value = null;
-        this.subscription = null;
-    }
-
-    async load() {
-        const result = await fetch(`${this.serverURL}/attributes/${this.id}`).then(result => result.json())
-
-        this.version = result.changeId;
-        this.value = result.value;
-        this.buffer.clear();
-        this._notifySubscribers(undefined, undefined);
-
-        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/attribute/' + this.id, (change) => {
-            if(change.clientId === this.clientId) {
-                this._processApproval(change);
-            } else {
-                this._processForeignChange(change);
-            }
-        });
-    }
-
-    get() {
-        return this.value;
-    }
-
-    set(newValue) {
-        if(newValue === this.value) {
-            return;
-        }
-
-        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
-
-        this.change(changeset);
-    }
-
-    change(changeset) {
-        this.value = changeset.apply(this.value);
-
-        if(this.changeInTransmission) {
-            this.buffer.add(changeset);
-        } else {
-            this._transmitChange(changeset, this.version);
-        }
-    }
-
-    subscribe(observer) {
-        this.observers.push(observer);
-    }
-
-    _notifySubscribers(change, fullChangeInfo) {
-        this.observers.forEach(function(callback) {
-            callback(change, fullChangeInfo);
-        });
-    }
-
-    _processForeignChange(foreignChange) {
-        try {
-            var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
-            var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
-            this.value = transformedForeignChange.apply(this.value);
-            this.version = foreignChange.id;
-            this._notifySubscribers(transformedForeignChange, foreignChange);
-        } catch(ex) {
-            console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
-            this.load();
-        }
-    }
-
-    _processApproval(approval) {
-        var bufferedChanges = this.buffer.getValue();
-        this.changeInTransmission = null;
-        this.version = approval.id;
-        this.buffer.clear();
-
-        if(bufferedChanges) {
-            this._transmitChange(bufferedChanges, approval.id);
-        }
-    }
-
-    _transmitChange(changeset, version) {
-        this.changeInTransmission = {
-            id: this.id,
-            change: {
-                changeset: changeset.pack(),
-                parentVersion: version
-            },
-            actorId: this.actorId,
-            clientId: this.clientId
-        };
-
-        this.bayeuxClient.publish('/uncommited/changes/attribute/' + this.id, this.changeInTransmission);
     }
 };
