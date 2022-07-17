@@ -60,9 +60,9 @@ class Buffer {
     }
 }
 
-export class RemoteVariable {
+export class Attribute {
 
-    variableId: string;
+    id: string;
     actorId: string;
     clientId: string;
     serverURL: string;
@@ -75,8 +75,8 @@ export class RemoteVariable {
     version: number | null;
     value: string | null;
 
-    constructor(variableId, serverURL, clientId, actorId) {
-        this.variableId = variableId;
+    constructor(id, serverURL, clientId, actorId) {
+        this.id = id;
         this.serverURL = serverURL;
         this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
         this.observers = [];
@@ -96,14 +96,14 @@ export class RemoteVariable {
     }
 
     async load() {
-        const result = await fetch(`${this.serverURL}/variables/${this.variableId}`).then(result => result.json())
+        const result = await fetch(`${this.serverURL}/variables/${this.id}`).then(result => result.json())
 
         this.version = result.changeId;
         this.value = result.value;
         this.buffer.clear();
         this._notifySubscribers(undefined, undefined);
 
-        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/variable/' + this.variableId, (change) => {
+        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/variable/' + this.id, (change) => {
             if(change.clientId === this.clientId) {
                 this._processApproval(change);
             } else {
@@ -173,7 +173,7 @@ export class RemoteVariable {
 
     _transmitChange(changeset, version) {
         this.changeInTransmission = {
-            variableId: this.variableId,
+            id: this.id,
             change: {
                 changeset: changeset.pack(),
                 parentVersion: version
@@ -182,6 +182,6 @@ export class RemoteVariable {
             clientId: this.clientId
         };
 
-        this.bayeuxClient.publish('/uncommited/changes/variable/' + this.variableId, this.changeInTransmission);
+        this.bayeuxClient.publish('/uncommited/changes/variable/' + this.id, this.changeInTransmission);
     }
 };

@@ -23,14 +23,14 @@ bayeux.getClient().subscribe('/uncommited/changes/variable/*', change => {
     var startTime = Date.now();
 
     Attribute.set(change).then(commitedChange => {
-        bayeux.getClient().publish('/changes/variable/' + change.variableId, commitedChange);
+        bayeux.getClient().publish('/changes/variable/' + change.id, commitedChange);
         console.log('    processed in: ' + (Date.now() - startTime) + ' msec');
     });
 });
 
 app.get('/variables/:id', function (req, res) {
     var startTime = Date.now();
-    Attribute.get({ variableId: req.params.id }).then(result => {
+    Attribute.get({ id: req.params.id }).then(result => {
         if(result instanceof Error) {
             res.status(404).send({error: result.message});
         } else {

@@ -1,39 +1,39 @@
 import { Changeset } from 'changesets';
-import { RemoteVariable } from '../js_sdk/remote_variable';
+import { Attribute } from '../js_sdk/attribute';
 import { v4 as uuid } from 'uuid';
 import Editor from 'structured-text-editor/src/editor';
 
-var remoteVariable;
+var attribute;
 
 document.addEventListener("DOMContentLoaded", async function(event) {
     var clientId = uuid(),
         actorId = clientId,
-        variableId = new URLSearchParams(window.location.search).get('variable-id'),
-        editor = new Editor('value');
+        attributeId = new URLSearchParams(window.location.search).get('variable-id'),
+        editor = new Editor('value'),
+        attribute = new Attribute(attributeId, 'http://localhost:3000', clientId, actorId);
 
-    remoteVariable = new RemoteVariable(variableId, 'http://localhost:3000', clientId, actorId);
-    await remoteVariable.load();
+    await attribute.load();
 
-    editor.setContent(remoteVariable.getValue());
+    editor.setContent(attribute.getValue());
 
-    remoteVariable.subscribe(function(changeset, changeInfo) {
+    attribute.subscribe(function(changeset, changeInfo) {
         const attr = { actor: { id: changeInfo.actorId } };
 
         try {
             editor.applyChangeset(changeset, attr);
         } catch(ex) {
             console.log('failed to apply changeset to editors content. Falling back to replace the whole editors content', ex)
-            editor.setContent(remoteVariable.getValue(), attr);
+            editor.setContent(attribute.getValue(), attr);
         }
     });
 
     editor.subscribe(function(modificationLog) {
         if(!modificationLog.actor) {
             try {
-                remoteVariable.applyChangeset(modificationLog.toChangeset(Changeset));
+                attribute.applyChangeset(modificationLog.toChangeset(Changeset));
             } catch(ex) {
                 console.log('error appling changeseet to remote variable. Falling back to replace whole variable content', ex);
-                remoteVariable.setValue(editor.getOriginalContent());
+                attribute.setValue(editor.getOriginalContent());
             }
         }
     });

@@ -5,8 +5,8 @@ const pgPool = new pg.Pool({ max: 2 });
 
 export class PsqlStorage {
     static createAttribute(actorId, value) {
-        const variableID = uuid();
-        const pgTableName = 'var_' + variableID.replace(new RegExp('-', 'g'), '_').toLowerCase();
+        const attributeId = uuid();
+        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
         const query = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);
                        INSERT INTO  ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, false)`;
 
@@ -23,15 +23,15 @@ export class PsqlStorage {
                     }
 
                     releaseDBConnection();
-                    resolve(variableID);
+                    resolve(attributeId);
                     return;
                 });
             });
         });
     }
 
-    static getAttributeLatestSnapshot(variableId, { maxChangeId = 2147483647 }) {
-        const pgTableName = 'var_' + variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+    static getAttributeLatestSnapshot(attributeId, { maxChangeId = 2147483647 }) {
+        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -75,8 +75,8 @@ export class PsqlStorage {
         });
     }
 
-    static getAttributeChanges(variableId, { minChangeId = 0, maxChangeId = 2147483647 } = {}) {
-        const pgTableName = 'var_' + variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+    static getAttributeChanges(attributeId, { minChangeId = 0, maxChangeId = 2147483647 } = {}) {
+        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -116,8 +116,8 @@ export class PsqlStorage {
         });
     }
 
-    static insertAttributeChange(variableId, actorId, change) {
-        const pgTableName = 'var_' + variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+    static insertAttributeChange(attributeId, actorId, change) {
+        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -139,8 +139,8 @@ export class PsqlStorage {
         });
     }
 
-    static insertAttributeSnapshot(variableId, actorId, value) {
-        const pgTableName = 'var_' + variableId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+    static insertAttributeSnapshot(attributeId, actorId, value) {
+        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
