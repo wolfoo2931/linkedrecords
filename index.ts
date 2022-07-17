@@ -16,12 +16,14 @@ bayeux.attach(server);
 app.use(cors());
 
 bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({id, change, actorId, clientId}) => {
-    const commitedChange = await Attribute.change(id, change, actorId, clientId);
+    const attribute = new Attribute(id, actorId, clientId);
+    const commitedChange = await attribute.change(change);
     bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
 });
 
 app.get('/attributes/:id', async (req, res) => {
-    const result = await Attribute.get(req.params.id);
+    const attribute = new Attribute(req.params.id, undefined, undefined);
+    const result = await attribute.get();
 
     if(result instanceof Error) {
         res.status(404).send({error: result.message});

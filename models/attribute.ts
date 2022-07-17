@@ -6,35 +6,36 @@ const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
 export class Attribute {
-    static async create(actorId: string, value: string) {
-        return await Storage.createAttribute(actorId, value)
+
+    id: string;
+    actorId: string;
+    clientId: string;
+
+    constructor(id, clientId, actorId) {
+        this.id = id;
+        this.clientId = clientId;
+        this.actorId = actorId;
     }
 
-    static async get(id: string, changeId?: string) {
-        const queryOptions = changeId ? { maxChangeId: changeId } : {};
-        const result = await Storage.getAttributeLatestSnapshot(id, queryOptions);
-        const changes = await Storage.getAttributeChanges(id, queryOptions);
-
-        changes.forEach(change => {
-            result.value = Changeset.unpack(change.value).apply(result.value);
-            result.changeId = change.changeId;
-            result.actorId = change.actorId;
-        })
-
-        return result;
+    async create(value: string) {
+        return await Storage.createAttribute(this.actorId, value);
     }
 
-    static set(id, actorId, value) {
-        return new Promise(resolve => {
+    async get() {
+        return await this.getByChangeId('2147483647');
+    }
+
+    async set(value) {
+        return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await Storage.insertAttributeSnapshot(id, actorId, value);
+                const result = await Storage.insertAttributeSnapshot(this.id, this.actorId, value);
                 resolve(result);
                 cb();
             });
         });
     }
 
-    static change(id: string, change: any, actorId: string, clientId: string) {
+    async change(change: any) {
         try {
             Changeset.unpack(change.changeset);
         } catch(err) {
@@ -45,22 +46,36 @@ export class Attribute {
             throw new Error('the changeset must also contain a parent version');
         }
 
-        return new Promise(resolve => {
+        return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await this._changeByChangeset(id, change, actorId, clientId);
+                const result = await this.changeByChangeset(change);
                 resolve(result);
                 cb();
             });
         });
     }
 
+    private async getByChangeId(changeId: string) {
+        const queryOptions = { maxChangeId: changeId };
+        const result = await Storage.getAttributeLatestSnapshot(this.id, queryOptions);
+        const changes = await Storage.getAttributeChanges(this.id, queryOptions);
+
+        changes.forEach(change => {
+            result.value = Changeset.unpack(change.value).apply(result.value);
+            result.changeId = change.changeId;
+            result.actorId = change.actorId;
+        })
+
+        return result;
+    }
+
     // Applies the changeset which can be based on an older version of the veriable value.
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    static async _changeByChangeset(id: string, change: any, actorId: string, clientId: string) {
-        const parentVersion = await this.get(id, change.parentVersion);
-        const currentVersion = await this.get(id);
+    private async changeByChangeset(change: any) {
+        const parentVersion = await this.getByChangeId(change.parentVersion);
+        const currentVersion = await this.get();
 
         // the a in the simple one-step diamond problem
         // the changeset comming from the client, probably made on an older version of the attribute (the server version migth be newr)
@@ -83,15 +98,15 @@ export class Attribute {
         const transformedServerChange = serverChange.transformAgainst(clientChange, true).pack();
 
         const changeID = await Storage.insertAttributeChange(
-            id,
-            actorId,
+            this.id,
+            this.actorId,
             transformedClientChange
         );
 
         return {
             id: changeID,
-            clientId,
-            actorId,
+            clientId: this.clientId,
+            actorId: this.actorId,
             transformedServerChange,
             transformedClientChange
         }
