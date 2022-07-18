@@ -11,7 +11,7 @@ export class Attribute {
     actorId: string;
     clientId: string;
 
-    constructor(id, clientId, actorId) {
+    constructor(id: string, clientId: string, actorId: string) {
         this.id = id;
         this.clientId = clientId;
         this.actorId = actorId;
@@ -21,11 +21,11 @@ export class Attribute {
         return await Storage.createAttribute(this.actorId, value);
     }
 
-    async get() {
+    async get() : Promise<{ value: string, changeId: string, actorId: string }> {
         return await this.getByChangeId('2147483647');
     }
 
-    async set(value) {
+    async set(value: string) {
         return await new Promise(resolve => {
             queue.push(async cb => {
                 const result = await Storage.insertAttributeSnapshot(this.id, this.actorId, value);
@@ -35,20 +35,20 @@ export class Attribute {
         });
     }
 
-    async change(change: any) {
+    async change(changeset: any, parentVersion: string) {
         try {
-            Changeset.unpack(change.changeset);
+            Changeset.unpack(changeset);
         } catch(err) {
             throw new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)');
         }
 
-        if(!change.parentVersion) {
+        if(!parentVersion) {
             throw new Error('the changeset must also contain a parent version');
         }
 
         return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await this.changeByChangeset(change);
+                const result = await this.changeByChangeset(changeset, parentVersion);
                 resolve(result);
                 cb();
             });
@@ -73,17 +73,17 @@ export class Attribute {
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    private async changeByChangeset(change: any) {
-        const parentVersion = await this.getByChangeId(change.parentVersion);
-        const currentVersion = await this.get();
+    private async changeByChangeset(changeset: any, parentVersion: string) {
+        const parentVersionState = await this.getByChangeId(parentVersion);
+        const currentVersionState = await this.get();
 
         // the a in the simple one-step diamond problem
         // the changeset comming from the client, probably made on an older version of the attribute (the server version migth be newr)
-        const clientChange = Changeset.unpack(change.changeset);
+        const clientChange = Changeset.unpack(changeset);
 
         // the b in the simple one-step diamond problem
         //the compound changes on the server side which are missing on the client site (the changeset from the client site does not consider this changes)
-        const serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersion.value, currentVersion.value));
+        const serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersionState.value, currentVersionState.value));
 
         // the a' in the simple one-step diamond problem
         // this changeset will be applied to the current server sate and send to all clients
