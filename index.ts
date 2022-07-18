@@ -1,6 +1,6 @@
 'use strict';
 
-import { LongTextAttribute } from './src/attributes/long_text_attribute/server';
+import { LongTextAttribute } from './src/attributes/long_text/server';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
