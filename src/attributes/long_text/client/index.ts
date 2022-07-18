@@ -1,7 +1,9 @@
 'use strict';
 
+import { LinkedRecords } from '../../../browser_sdk/index'
 import { Changeset } from 'changesets';
 import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
+import { v4 as uuid } from 'uuid';
 import Faye from 'faye';
 
 const diffEngine = new DiffMatchPatch();
@@ -11,7 +13,7 @@ export class LongTextAttribute {
     id: string;
     actorId: string;
     clientId: string;
-    serverURL: string;
+    serverURL: URL;
     bayeuxClient: any;
     observers: any[];
     buffer: Buffer;
@@ -21,17 +23,22 @@ export class LongTextAttribute {
     version: string;
     value: string;
 
-    constructor(id: string, clientId: string, actorId: string, serverURL) {
+    static async create(value: string, linkedRecords: LinkedRecords) {
+        const id = `lta:${uuid()}`
+        const result = await fetch(`${linkedRecords.serverURL}attributes/${id}`).then(result => result.json())
+    }
+
+    constructor(id: string, linkedRecords: LinkedRecords) {
         this.id = id;
-        this.serverURL = serverURL;
-        this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
+        this.serverURL = linkedRecords.serverURL;
+        this.bayeuxClient = new Faye.Client(this.serverURL + 'bayeux');
         this.observers = [];
         this.buffer = new Buffer();
 
         // because the same user can be logged on two browsers/laptops, we need
         // a clientId and an actorId
-        this.clientId = clientId;
-        this.actorId = actorId;
+        this.clientId = linkedRecords.clientId;
+        this.actorId = linkedRecords.actorId;
 
         // The change sent to the server but not yet acknowledged.
         this.changeInTransmission;
@@ -89,7 +96,9 @@ export class LongTextAttribute {
 
         this.isInitialized = true;
 
-        const result = await fetch(`${this.serverURL}/attributes/${this.id}`).then(result => result.json())
+        console.log('id', this.id)
+
+        const result = await fetch(`${this.serverURL}attributes/${this.id}`).then(result => result.json())
 
         this.version = result.changeId;
         this.value = result.value;

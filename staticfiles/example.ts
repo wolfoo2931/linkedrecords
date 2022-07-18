@@ -1,22 +1,18 @@
 import { Changeset } from 'changesets';
-import { LongTextAttribute } from '../src/attributes/long_text_attribute/client';
-import { v4 as uuid } from 'uuid';
+import { LongTextAttribute } from '../src/attributes/long_text/client';
+import { LinkedRecords } from '../src/browser_sdk/index';
 import Editor from 'structured-text-editor/src/editor';
 
-var attribute;
-
 document.addEventListener("DOMContentLoaded", async event => {
-    const clientId = uuid();
-    const actorId = clientId;
     const attributeId = new URLSearchParams(window.location.search).get('variable-id') || '';
     const editor = new Editor('value');
-    const attribute = new LongTextAttribute(attributeId, clientId, actorId, 'http://localhost:3000');
+    const linkedRecords = new LinkedRecords(new URL('http://localhost:3000'));
+    const attribute = new LongTextAttribute(attributeId, linkedRecords);
     const intialValue = await attribute.get();
 
     editor.setContent(intialValue.value);
 
     attribute.subscribe(async (changeset, changeInfo) => {
-        console.log('changeInfo:', changeInfo)
         const attr = { actor: { id: changeInfo.actorId } };
         const attrState = await attribute.get();
 
