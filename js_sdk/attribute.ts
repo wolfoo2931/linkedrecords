@@ -18,11 +18,10 @@ export class Attribute {
     changeInTransmission: any;
     subscription: any | null;
     isInitialized: boolean;
+    version: string;
+    value: string;
 
-    version: number | null;
-    value: string | null;
-
-    constructor(id, clientId, actorId, serverURL) {
+    constructor(id: string, clientId: string, actorId: string, serverURL) {
         this.id = id;
         this.serverURL = serverURL;
         this.bayeuxClient = new Faye.Client(serverURL + '/bayeux');
@@ -37,19 +36,23 @@ export class Attribute {
         // The change sent to the server but not yet acknowledged.
         this.changeInTransmission;
 
-        this.version = null;
-        this.value = null;
+        this.version = '0';
+        this.value = '';
         this.subscription = null;
         this.isInitialized = false;
     }
 
-    async get() {
+    async get() : Promise<{ value: string, changeId: string, actorId: string }> {
         await this.load();
 
-        return this.value;
+        return {
+            value: this.value,
+            changeId: this.version,
+            actorId: this.actorId,
+        };
     }
 
-    async set(newValue) {
+    async set(newValue: string) {
         await this.load();
 
         if(newValue === this.value) {
@@ -103,7 +106,7 @@ export class Attribute {
     }
 
     private notifySubscribers(change, fullChangeInfo) {
-        this.observers.forEach(function(callback) {
+        this.observers.forEach(callback => {
             callback(change, fullChangeInfo);
         });
     }
