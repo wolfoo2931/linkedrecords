@@ -1,5 +1,5 @@
 import { Changeset } from 'changesets';
-import { Attribute } from '../js_sdk/attribute';
+import { LongTextAttribute } from '../src/attributes/long_text_attribute/client';
 import { v4 as uuid } from 'uuid';
 import Editor from 'structured-text-editor/src/editor';
 
@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", async event => {
     const actorId = clientId;
     const attributeId = new URLSearchParams(window.location.search).get('variable-id') || '';
     const editor = new Editor('value');
-    const attribute = new Attribute(attributeId, clientId, actorId, 'http://localhost:3000');
+    const attribute = new LongTextAttribute(attributeId, clientId, actorId, 'http://localhost:3000');
     const intialValue = await attribute.get();
 
     editor.setContent(intialValue.value);

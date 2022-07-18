@@ -5,7 +5,7 @@ import { PsqlStorage as Storage } from './db/psql';
 const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
-export class Attribute {
+export class LongTextAttribute {
 
     id: string;
     actorId: string;
