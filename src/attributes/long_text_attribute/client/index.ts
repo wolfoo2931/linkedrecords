@@ -6,7 +6,7 @@ import Faye from 'faye';
 
 const diffEngine = new DiffMatchPatch();
 
-export class Attribute {
+export class LongTextAttribute {
 
     id: string;
     actorId: string;

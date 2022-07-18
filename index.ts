@@ -1,6 +1,6 @@
 'use strict';
 
-import { Attribute } from './models/attribute';
+import { LongTextAttribute } from './src/attributes/long_text_attribute/server';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
@@ -16,13 +16,13 @@ bayeux.attach(server);
 app.use(cors());
 
 bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({id, change, actorId, clientId}) => {
-    const attribute = new Attribute(id, actorId, clientId);
+    const attribute = new LongTextAttribute(id, actorId, clientId);
     const commitedChange = await attribute.change(change.changeset, change.parentVersion);
     bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
 });
 
 app.get('/attributes/:id', async (req, res) => {
-    const attribute = new Attribute(req.params.id, req.params.clientId, req.params.actorId);
+    const attribute = new LongTextAttribute(req.params.id, req.params.clientId, req.params.actorId);
     const result = await attribute.get();
 
     if(result instanceof Error) {
