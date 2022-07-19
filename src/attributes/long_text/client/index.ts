@@ -96,8 +96,6 @@ export class LongTextAttribute {
 
         this.isInitialized = true;
 
-        console.log('id', this.id)
-
         const result = await fetch(`${this.serverURL}attributes/${this.id}`).then(result => result.json())
 
         this.version = result.changeId;
