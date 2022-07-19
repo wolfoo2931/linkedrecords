@@ -2,7 +2,7 @@
   "name": "yabaas",
   "version": "0.1.0",
   "description": "A backend as a service for declarative and functional API development",
-  "main": "index.js",
+  "main": "src/server/index.js",
   "scripts": {
     "test": "node_modules/jasmine/bin/jasmine.js",
     "run:dev": "nodemon build/index.js",

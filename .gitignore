@@ -5,5 +5,5 @@ race_condition_test_results.txt
 manifest.yml
 npm-debug.log
 staticfiles/sdk.min.js
-staticfiles/example.packaged.js
+example/index.packaged.js
 .env
