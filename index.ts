@@ -16,9 +16,13 @@ bayeux.attach(server);
 app.use(cors());
 
 bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({id, change, actorId, clientId}) => {
-    const attribute = new LongTextAttribute(id, actorId, clientId);
-    const commitedChange = await attribute.change(change.changeset, change.parentVersion);
-    bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
+    try {
+        const attribute = new LongTextAttribute(id, clientId, actorId);
+        const commitedChange = await attribute.change(change.changeset, change.parentVersion);
+        bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
+    } catch(ex) {
+        console.error(`error in /uncommited/changes/attribute/${id}`, ex);
+    }
 });
 
 app.get('/attributes/:id', async (req, res) => {
@@ -26,6 +30,7 @@ app.get('/attributes/:id', async (req, res) => {
     const result = await attribute.get();
 
     if(result instanceof Error) {
+        console.error(`error in GET /attributes/${req.params.id}`, result.message);
         res.status(404).send({error: result.message});
     } else {
         res.send(result);
