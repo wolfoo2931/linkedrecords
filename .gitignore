@@ -7,3 +7,4 @@ npm-debug.log
 staticfiles/sdk.min.js
 example/index.packaged.js
 .env
+.DS_Store

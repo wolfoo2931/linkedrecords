@@ -17,9 +17,11 @@ app.use(cors());
 
 bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({id, change, actorId, clientId}) => {
     try {
+        const starTime = Date.now();
         const attribute = new LongTextAttribute(id, clientId, actorId);
         const commitedChange = await attribute.change(change.changeset, change.parentVersion);
         bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
+        console.log('Change attribute (' + id + ') finished in ', Date.now() - starTime);
     } catch(ex) {
         console.error(`error in /uncommited/changes/attribute/${id}`, ex);
     }
