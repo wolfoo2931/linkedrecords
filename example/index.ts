@@ -29,8 +29,10 @@ document.addEventListener("DOMContentLoaded", async event => {
             try {
                 await attribute.change(modificationLog.toChangeset(Changeset));
             } catch(ex) {
+                const attrState = await attribute.get();
+                editor.setContent(attrState.value);
+
                 console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
-                await attribute.set(editor.getOriginalContent());
             }
         }
     });
