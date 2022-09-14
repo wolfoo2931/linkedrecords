@@ -1,22 +1,24 @@
 import pg from 'pg';
-import { v4 as uuid } from 'uuid';
-
 const pgPool = new pg.Pool({ max: 2 });
 
 export class PsqlStorage {
-    static createAttribute(actorId, value) {
-        const attributeId = uuid();
-        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
-        const query = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);
-                       INSERT INTO  ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, false)`;
 
-        return new Promise((resolve, reject) => {
+    static getAttributeTableName(attributeId) {
+        return 'var_' + attributeId.replace(new RegExp('[-:]', 'g'), '_').toLowerCase();
+    }
+
+    static async createAttribute(attributeId: string, actorId: string, value: string) {
+        const pgTableName = this.getAttributeTableName(attributeId);
+        const createQuery = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
+
+        await new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
                 if(err) {
                     reject(err);
                     return;
                 }
-                pgclient.query(query, [actorId, value], (err, result) => {
+
+                pgclient.query(createQuery, [], (err, result) => {
                     if(err) {
                         reject(err);
                         return;
@@ -28,10 +30,14 @@ export class PsqlStorage {
                 });
             });
         });
+
+        await this.insertAttributeSnapshot(attributeId, actorId, value);
+
+        return attributeId;
     }
 
     static getAttributeLatestSnapshot(attributeId, { maxChangeId = '2147483647' }) : Promise<{value: string, changeId: string, actorId: string}> {
-        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+        const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -76,7 +82,7 @@ export class PsqlStorage {
     }
 
     static getAttributeChanges(attributeId, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
-        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+        const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -117,7 +123,7 @@ export class PsqlStorage {
     }
 
     static insertAttributeChange(attributeId, actorId, change) {
-        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+        const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
@@ -140,7 +146,7 @@ export class PsqlStorage {
     }
 
     static insertAttributeSnapshot(attributeId, actorId, value) {
-        const pgTableName = 'var_' + attributeId.replace(new RegExp('-', 'g'), '_').toLowerCase();
+        const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
             pgPool.connect((err, pgclient, releaseDBConnection) => {
