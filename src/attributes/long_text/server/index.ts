@@ -1,7 +1,8 @@
 import { Changeset } from 'changesets';
 import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
-import { PsqlStorage as Storage } from './db/psql';
+import { Storage, PsqlStorage } from './db';
 
+const storage: Storage = new PsqlStorage();
 const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
@@ -21,7 +22,7 @@ export class LongTextAttribute {
     }
 
     async create(value: string) : Promise<string> {
-        return await Storage.createAttribute(this.id, this.actorId, value);
+        return await storage.createAttribute(this.id, this.actorId, value);
     }
 
     async get() : Promise<{ value: string, changeId: string, actorId: string }> {
@@ -31,7 +32,7 @@ export class LongTextAttribute {
     async set(value: string) : Promise<{id: string}> {
         return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await Storage.insertAttributeSnapshot(this.id, this.actorId, value);
+                const result = await storage.insertAttributeSnapshot(this.id, this.actorId, value);
                 resolve(result);
                 cb();
             });
@@ -60,8 +61,8 @@ export class LongTextAttribute {
 
     private async getByChangeId(changeId: string) : Promise<{value: string, changeId: string, actorId: string}> {
         const queryOptions = { maxChangeId: changeId };
-        const result = await Storage.getAttributeLatestSnapshot(this.id, queryOptions);
-        const changes = await Storage.getAttributeChanges(this.id, queryOptions);
+        const result = await storage.getAttributeLatestSnapshot(this.id, queryOptions);
+        const changes = await storage.getAttributeChanges(this.id, queryOptions);
 
         changes.forEach(change => {
             result.value = Changeset.unpack(change.value).apply(result.value);
@@ -100,7 +101,7 @@ export class LongTextAttribute {
         // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
         const transformedServerChange = serverChange.transformAgainst(clientChange, true).pack();
 
-        const changeID = await Storage.insertAttributeChange(
+        const changeID = await storage.insertAttributeChange(
             this.id,
             this.actorId,
             transformedClientChange
