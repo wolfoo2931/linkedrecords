@@ -1,19 +1,37 @@
 import { v4 as uuid } from 'uuid';
 import { LongTextAttribute } from '../attributes/long_text/client';
 
-const attributeMap = {
-    longText: LongTextAttribute
-}
-
-class Attribute {
+class AttributeRepository {
     linkedRecords: LinkedRecords;
+
+    private static attributeTypes = [ LongTextAttribute ];
 
     constructor(linkedRecords: LinkedRecords) {
         this.linkedRecords = linkedRecords;
     }
 
-    static async create(dataType: string, value: any) {
-        const attributeClass = attributeMap[dataType];
+    async create(attributeType: string, value: any) {
+        const attributeClass = AttributeRepository.attributeTypes.find(c => c.DATA_TYPE_NAME === attributeType);
+
+        if(!attributeClass) {
+            throw `Attribute Type ${attributeType} is unknown`;
+        }
+
+        const attribute = new attributeClass(this.linkedRecords);
+
+        await attribute.create(value);
+        return attribute;
+    }
+
+    async find(attributeId: string) {
+        const [attributeTypePrefix] = attributeId.split('-');
+        const attributeClass = AttributeRepository.attributeTypes.find(c => c.DATA_TYPE_PREFIX === attributeTypePrefix);
+
+        if(!attributeClass) {
+            throw `Attribute ID ${attributeId} is unknown`;
+        }
+
+        return new attributeClass(this.linkedRecords, attributeId);
     }
 }
 
@@ -21,12 +39,12 @@ export class LinkedRecords {
     serverURL: URL;
     clientId: string;
     actorId: string;
-    Attribute: Attribute;
+    Attribute: AttributeRepository;
 
     constructor(serverURL: URL) {
         this.serverURL = serverURL;
         this.actorId = uuid();
         this.clientId = uuid();
-        this.Attribute = new Attribute(this);
+        this.Attribute = new AttributeRepository(this);
     }
 }

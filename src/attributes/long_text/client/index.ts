@@ -10,7 +10,11 @@ const diffEngine = new DiffMatchPatch();
 
 export class LongTextAttribute {
 
-    id: string;
+    static readonly DATA_TYPE_NAME = 'longText';
+    static readonly DATA_TYPE_PREFIX = 'l';
+
+    linkedRecords: LinkedRecords;
+    id?: string;
     actorId: string;
     clientId: string;
     serverURL: URL;
@@ -23,13 +27,9 @@ export class LongTextAttribute {
     version: string;
     value: string;
 
-    static async create(value: string, linkedRecords: LinkedRecords) {
-        const id = `lta:${uuid()}`
-        const result = await fetch(`${linkedRecords.serverURL}attributes/${id}`).then(result => result.json())
-    }
-
-    constructor(id: string, linkedRecords: LinkedRecords) {
+    constructor(linkedRecords: LinkedRecords, id?: string) {
         this.id = id;
+        this.linkedRecords = linkedRecords;
         this.serverURL = linkedRecords.serverURL;
         this.bayeuxClient = new Faye.Client(this.serverURL + 'bayeux');
         this.observers = [];
@@ -47,6 +47,33 @@ export class LongTextAttribute {
         this.value = '';
         this.subscription = null;
         this.isInitialized = false;
+    }
+
+    async create(value: string) {
+        if(this.id) {
+            throw `Cannot create attribute because it has an id assigned (${this.id})`
+        }
+
+        this.id = `${LongTextAttribute.DATA_TYPE_PREFIX}-${uuid()}`;
+
+        const response = await fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                clientId: this.clientId,
+                actorId: this.actorId,
+                value: value
+            })
+        });
+
+        if(response.status !== 200) {
+            throw `Error creating attribute: ${await response.text()}`;
+        }
+
+        const responseBody = await response.json();
+        await this.load(responseBody);
     }
 
     async get() : Promise<{ value: string, changeId: string, actorId: string }> {
@@ -89,14 +116,18 @@ export class LongTextAttribute {
         this.observers.push(observer);
     }
 
-    private async load() {
+    private async load(serverState?) {
         if(this.isInitialized) {
             return;
         }
 
+        if(!this.id) {
+            throw `cannot load an attribute without id`;
+        }
+
         this.isInitialized = true;
 
-        const result = await fetch(`${this.serverURL}attributes/${this.id}`).then(result => result.json())
+        const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}`).then(result => result.json())
 
         this.version = result.changeId;
         this.value = result.value;
@@ -143,6 +174,11 @@ export class LongTextAttribute {
     }
 
     private transmitChange(changeset, version) {
+
+        if(!this.id) {
+            throw `change can not be transmitted because attribute does not has an id`;
+        }
+
         this.changeInTransmission = {
             id: this.id,
             change: {

@@ -7,6 +7,9 @@ const queue = require('queue')({ concurrency: 1, autostart: true });
 
 export class LongTextAttribute {
 
+    static readonly DATA_TYPE_NAME = 'longText';
+    static readonly DATA_TYPE_PREFIX = 'l';
+
     id: string;
     actorId: string;
     clientId: string;
@@ -18,7 +21,7 @@ export class LongTextAttribute {
     }
 
     async create(value: string) {
-        return await Storage.createAttribute(this.actorId, value);
+        return await Storage.createAttribute(this.id, this.actorId, value);
     }
 
     async get() : Promise<{ value: string, changeId: string, actorId: string }> {
