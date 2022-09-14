@@ -21,11 +21,11 @@ export class LongTextAttribute extends AbstractAttributeClient<string, any> {
     }
 
     public getDataTypePrefix() : string {
-        return 'l';
+        return LongTextAttribute.getDataTypePrefix();
     }
 
     public getDataTypeName() : string {
-        return 'longText';
+        return LongTextAttribute.getDataTypeName();
     }
 
     public getDefaultValue() : string {

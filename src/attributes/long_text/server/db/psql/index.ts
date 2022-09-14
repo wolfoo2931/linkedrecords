@@ -1,13 +1,10 @@
 import pg from 'pg';
+import { Storage } from '../storage';
 const pgPool = new pg.Pool({ max: 2 });
 
-export class PsqlStorage {
+export class PsqlStorage implements Storage {
 
-    static getAttributeTableName(attributeId) {
-        return 'var_' + attributeId.replace(new RegExp('[-:]', 'g'), '_').toLowerCase();
-    }
-
-    static async createAttribute(attributeId: string, actorId: string, value: string) : Promise<string> {
+    async createAttribute(attributeId: string, actorId: string, value: string) : Promise<string> {
         const pgTableName = this.getAttributeTableName(attributeId);
         const createQuery = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
 
@@ -36,7 +33,7 @@ export class PsqlStorage {
         return attributeId;
     }
 
-    static getAttributeLatestSnapshot(attributeId, { maxChangeId = '2147483647' }) : Promise<{value: string, changeId: string, actorId: string}> {
+    getAttributeLatestSnapshot(attributeId: string, { maxChangeId = '2147483647' }) : Promise<{value: string, changeId: string, actorId: string}> {
         const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
@@ -81,7 +78,7 @@ export class PsqlStorage {
         });
     }
 
-    static getAttributeChanges(attributeId, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
+    getAttributeChanges(attributeId: string, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
         const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
@@ -122,7 +119,7 @@ export class PsqlStorage {
         });
     }
 
-    static insertAttributeChange(attributeId, actorId, change) : Promise<string> {
+    insertAttributeChange(attributeId: string, actorId: string, change: string) : Promise<string> {
         const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
@@ -145,7 +142,7 @@ export class PsqlStorage {
         });
     }
 
-    static insertAttributeSnapshot(attributeId, actorId, value) : Promise<{ id: string }> {
+    insertAttributeSnapshot(attributeId: string, actorId: string, value: string) : Promise<{ id: string }> {
         const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
@@ -166,6 +163,10 @@ export class PsqlStorage {
                 });
             });
         });
+    }
+
+    private getAttributeTableName(attributeId: string): string {
+        return 'var_' + attributeId.replace(new RegExp('[-:]', 'g'), '_').toLowerCase();
     }
 }
 
