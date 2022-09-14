@@ -1,8 +1,9 @@
 import { Changeset } from 'changesets';
 import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
-import { Storage, PsqlStorage } from './db';
+import { Storage } from './db';
+export { Storage }  from './db/storage';
+export { PsqlStorage }  from './db/psql';
 
-const storage: Storage = new PsqlStorage();
 const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
@@ -14,15 +15,17 @@ export class LongTextAttribute {
     id: string;
     actorId: string;
     clientId: string;
+    storage: Storage;
 
-    constructor(id: string, clientId: string, actorId: string) {
+    constructor(id: string, clientId: string, actorId: string, storage: Storage) {
         this.id = id;
         this.clientId = clientId;
         this.actorId = actorId;
+        this.storage = storage;
     }
 
     async create(value: string) : Promise<string> {
-        return await storage.createAttribute(this.id, this.actorId, value);
+        return await this.storage.createAttribute(this.id, this.actorId, value);
     }
 
     async get() : Promise<{ value: string, changeId: string, actorId: string }> {
@@ -32,7 +35,7 @@ export class LongTextAttribute {
     async set(value: string) : Promise<{id: string}> {
         return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await storage.insertAttributeSnapshot(this.id, this.actorId, value);
+                const result = await this.storage.insertAttributeSnapshot(this.id, this.actorId, value);
                 resolve(result);
                 cb();
             });
@@ -61,8 +64,8 @@ export class LongTextAttribute {
 
     private async getByChangeId(changeId: string) : Promise<{value: string, changeId: string, actorId: string}> {
         const queryOptions = { maxChangeId: changeId };
-        const result = await storage.getAttributeLatestSnapshot(this.id, queryOptions);
-        const changes = await storage.getAttributeChanges(this.id, queryOptions);
+        const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
+        const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
 
         changes.forEach(change => {
             result.value = Changeset.unpack(change.value).apply(result.value);
@@ -101,7 +104,7 @@ export class LongTextAttribute {
         // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
         const transformedServerChange = serverChange.transformAgainst(clientChange, true).pack();
 
-        const changeID = await storage.insertAttributeChange(
+        const changeID = await this.storage.insertAttributeChange(
             this.id,
             this.actorId,
             transformedClientChange
