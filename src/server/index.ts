@@ -1,6 +1,6 @@
 'use strict';
 
-import { LongTextAttribute } from '../attributes/long_text/server';
+import { LongTextAttribute, PsqlStorage } from '../attributes/long_text/server';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
@@ -10,6 +10,7 @@ import 'dotenv/config';
 const app = express();
 const server = new Server(app);
 const bayeux = new faye.NodeAdapter({mount: '/bayeux', timeout: 45});
+const storage = new PsqlStorage();
 
 bayeux.attach(server);
 
@@ -34,7 +35,7 @@ bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({ id, cha
         }
 
         const starTime = Date.now();
-        const attribute = new attributeClass(id, clientId, actorId);
+        const attribute = new attributeClass(id, clientId, actorId, storage);
         const commitedChange = await attribute.change(change.changeset, change.parentVersion);
         bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
         console.log('Change attribute (' + id + ') finished in ', Date.now() - starTime);
@@ -51,7 +52,7 @@ app.get('/attributes/:id', async (req, res) => {
         return;
     }
 
-    const attribute = new attributeClass(req.params.id, req.params.clientId, req.params.actorId);
+    const attribute = new attributeClass(req.params.id, req.params.clientId, req.params.actorId, storage);
     const result = await attribute.get();
 
     if(result instanceof Error) {
@@ -70,7 +71,7 @@ app.post('/attributes/:id', async (req, res) => {
         return;
     }
 
-    const attribute = new attributeClass(req.params.id, req.body.clientId, req.body.actorId);
+    const attribute = new attributeClass(req.params.id, req.body.clientId, req.body.actorId, storage);
     await attribute.create(req.body.value);
     const result = await attribute.get();
 
