@@ -1,5 +1,5 @@
 import pg from 'pg';
-import { AttributeStorage } from '../storage';
+import { AttributeStorage } from '../attribute_storage';
 const pgPool = new pg.Pool({ max: 2 });
 
 export class PsqlStorage implements AttributeStorage {

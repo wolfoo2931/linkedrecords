@@ -1,5 +1,6 @@
 import { Changeset } from 'changesets';
 import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
+import { AttributeStorage }  from './db';
 export { PsqlStorage, AttributeStorage }  from './db';
 
 const diffEngine = new DiffMatchPatch();
@@ -13,9 +14,9 @@ export class LongTextAttribute {
     id: string;
     actorId: string;
     clientId: string;
-    storage: Storage;
+    storage: AttributeStorage;
 
-    constructor(id: string, clientId: string, actorId: string, storage: Storage) {
+    constructor(id: string, clientId: string, actorId: string, storage: AttributeStorage) {
         this.id = id;
         this.clientId = clientId;
         this.actorId = actorId;
