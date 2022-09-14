@@ -1,8 +1,8 @@
 import pg from 'pg';
-import { Storage } from '../storage';
+import { AttributeStorage } from '../storage';
 const pgPool = new pg.Pool({ max: 2 });
 
-export class PsqlStorage implements Storage {
+export class PsqlStorage implements AttributeStorage {
 
     async createAttribute(attributeId: string, actorId: string, value: string) : Promise<string> {
         const pgTableName = this.getAttributeTableName(attributeId);

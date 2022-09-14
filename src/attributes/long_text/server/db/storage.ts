@@ -1,4 +1,4 @@
-export interface Storage {
+export interface AttributeStorage {
     createAttribute(attributeId: string, actorId: string, value: string) : Promise<string>;
     getAttributeLatestSnapshot(attributeId: string, criteria: { maxChangeId?: string }) : Promise<{value: string, changeId: string, actorId: string}>;
     getAttributeChanges(attributeId: string, criteria: { minChangeId?: string, maxChangeId?: string }) : Promise<Array<any>>;

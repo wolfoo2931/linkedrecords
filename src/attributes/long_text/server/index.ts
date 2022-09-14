@@ -1,8 +1,6 @@
 import { Changeset } from 'changesets';
 import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
-import { Storage } from './db';
-export { Storage }  from './db/storage';
-export { PsqlStorage }  from './db/psql';
+export { PsqlStorage, AttributeStorage }  from './db';
 
 const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
