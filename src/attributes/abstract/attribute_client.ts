@@ -34,9 +34,15 @@ export default abstract class AbstractAttributeClient <Type, TypeDelta> {
         this.isInitialized = false;
     }
 
-    public abstract getDataTypePrefix(): string;
-    public abstract getDataTypeName(): string;
-    public abstract getDefaultValue(): Type;
+    public static getDataTypePrefix() {
+        throw 'getDataTypePrefix needs to be implemented in child class';
+    }
+
+    public static getDataTypeName() {
+        throw 'getDataTypePrefix needs to be implemented in child class';
+    }
+
+    public abstract getDefaultValue() : Type;
 
     protected abstract rawSet(newValue: Type): void;
     protected abstract rawChange(delta: TypeDelta): void;
@@ -48,7 +54,7 @@ export default abstract class AbstractAttributeClient <Type, TypeDelta> {
             throw `Cannot create attribute because it has an id assigned (${this.id})`
         }
 
-        this.id = `${this.getDataTypePrefix()}-${uuid()}`;
+        this.id = `${AbstractAttributeClient.getDataTypePrefix()}-${uuid()}`;
 
         const response = await fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
             method: 'POST',

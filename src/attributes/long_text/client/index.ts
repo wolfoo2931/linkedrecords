@@ -12,15 +12,23 @@ export class LongTextAttribute extends AbstractAttributeClient<string, any> {
     buffer: Buffer = new Buffer();
     changeInTransmission: any = null;
 
-    getDataTypePrefix() {
+    public static getDataTypePrefix() : string {
         return 'l';
     }
 
-    getDataTypeName() {
+    public static getDataTypeName() : string {
         return 'longText';
     }
 
-    getDefaultValue() {
+    public getDataTypePrefix() : string {
+        return 'l';
+    }
+
+    public getDataTypeName() : string {
+        return 'longText';
+    }
+
+    public getDefaultValue() : string {
         return '';
     }
 

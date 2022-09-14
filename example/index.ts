@@ -30,8 +30,13 @@ document.addEventListener("DOMContentLoaded", async event => {
             try {
                 await attribute.change(modificationLog.toChangeset(Changeset));
             } catch(ex) {
-                attribute.set(editor.getContent());
-                console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
+                try {
+                    attribute.value = attribute.value.replace(/<p><\/p>$/, '');
+                    await attribute.change(modificationLog.toChangeset(Changeset));
+                } catch(ex) {
+                    console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
+                    attribute.set(editor.getContent());
+                }
             }
         }
     });

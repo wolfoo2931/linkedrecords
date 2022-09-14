@@ -11,7 +11,7 @@ class AttributeRepository {
     }
 
     async create(attributeType: string, value: any) {
-        const attributeClass = AttributeRepository.attributeTypes.find(c => c.DATA_TYPE_NAME === attributeType);
+        const attributeClass = AttributeRepository.attributeTypes.find(c => c.getDataTypeName() === attributeType);
 
         if(!attributeClass) {
             throw `Attribute Type ${attributeType} is unknown`;
@@ -25,7 +25,7 @@ class AttributeRepository {
 
     async find(attributeId: string) {
         const [attributeTypePrefix] = attributeId.split('-');
-        const attributeClass = AttributeRepository.attributeTypes.find(c => c.DATA_TYPE_PREFIX === attributeTypePrefix);
+        const attributeClass = AttributeRepository.attributeTypes.find(c => c.getDataTypePrefix() === attributeTypePrefix);
 
         if(!attributeClass) {
             throw `Attribute ID ${attributeId} is unknown`;
