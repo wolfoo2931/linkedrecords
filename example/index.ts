@@ -1,5 +1,4 @@
 import { Changeset } from 'changesets';
-import { LongTextAttribute } from '../src/attributes/long_text/client';
 import { LinkedRecords } from '../src/browser_sdk/index';
 import Editor from 'structured-text-editor/src/editor';
 

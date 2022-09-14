@@ -19,7 +19,7 @@ export class LongTextAttribute {
     clientId: string;
     serverURL: URL;
     bayeuxClient: any;
-    observers: any[];
+    observers: Function[];
     buffer: Buffer;
     changeInTransmission: any;
     subscription: any | null;
@@ -110,13 +110,13 @@ export class LongTextAttribute {
         }
     }
 
-    async subscribe(observer) {
+    async subscribe(observer: Function) {
         await this.load();
 
         this.observers.push(observer);
     }
 
-    private async load(serverState?) {
+    private async load(serverState?: { changeId: string, value: string }) {
         if(this.isInitialized) {
             return;
         }
