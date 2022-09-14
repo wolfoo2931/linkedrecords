@@ -7,7 +7,7 @@ export class PsqlStorage {
         return 'var_' + attributeId.replace(new RegExp('[-:]', 'g'), '_').toLowerCase();
     }
 
-    static async createAttribute(attributeId: string, actorId: string, value: string) {
+    static async createAttribute(attributeId: string, actorId: string, value: string) : Promise<string> {
         const pgTableName = this.getAttributeTableName(attributeId);
         const createQuery = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
 
@@ -122,7 +122,7 @@ export class PsqlStorage {
         });
     }
 
-    static insertAttributeChange(attributeId, actorId, change) {
+    static insertAttributeChange(attributeId, actorId, change) : Promise<string> {
         const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {
@@ -145,7 +145,7 @@ export class PsqlStorage {
         });
     }
 
-    static insertAttributeSnapshot(attributeId, actorId, value) {
+    static insertAttributeSnapshot(attributeId, actorId, value) : Promise<{ id: string }> {
         const pgTableName = this.getAttributeTableName(attributeId);
 
         return new Promise((resolve, reject) => {

@@ -20,7 +20,7 @@ export class LongTextAttribute {
         this.actorId = actorId;
     }
 
-    async create(value: string) {
+    async create(value: string) : Promise<string> {
         return await Storage.createAttribute(this.id, this.actorId, value);
     }
 
@@ -28,7 +28,7 @@ export class LongTextAttribute {
         return await this.getByChangeId('2147483647');
     }
 
-    async set(value: string) {
+    async set(value: string) : Promise<{id: string}> {
         return await new Promise(resolve => {
             queue.push(async cb => {
                 const result = await Storage.insertAttributeSnapshot(this.id, this.actorId, value);
@@ -38,7 +38,7 @@ export class LongTextAttribute {
         });
     }
 
-    async change(changeset: any, parentVersion: string) {
+    async change(changeset: any, parentVersion: string) : Promise<{ id: string }> {
         try {
             Changeset.unpack(changeset);
         } catch(err) {
@@ -58,7 +58,7 @@ export class LongTextAttribute {
         });
     }
 
-    private async getByChangeId(changeId: string) {
+    private async getByChangeId(changeId: string) : Promise<{value: string, changeId: string, actorId: string}> {
         const queryOptions = { maxChangeId: changeId };
         const result = await Storage.getAttributeLatestSnapshot(this.id, queryOptions);
         const changes = await Storage.getAttributeChanges(this.id, queryOptions);
@@ -76,7 +76,7 @@ export class LongTextAttribute {
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    private async changeByChangeset(changeset: any, parentVersion: string) {
+    private async changeByChangeset(changeset: any, parentVersion: string) : Promise<{ id: string, clientId: string, actorId: string, transformedServerChange: any, transformedClientChange: any }> {
         const parentVersionState = await this.getByChangeId(parentVersion);
         const currentVersionState = await this.get();
 
