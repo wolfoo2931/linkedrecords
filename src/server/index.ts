@@ -19,8 +19,7 @@ app.use(express.json());
 app.use(attributeMiddleware);
 
 bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({ id, change, actorId, clientId }) => {
-
-    const attribute = getAttributeByParams({ params: { id, actorId, clientId } });
+    const attribute = getAttributeByParams({ query: { id, actorId, clientId } });
 
     try {
         const commitedChange = await attribute.change(change.changeset, change.parentVersion);
