@@ -3,7 +3,7 @@ import { LongTextAttribute, PsqlStorage } from '../../attributes/long_text/serve
 const storage = new PsqlStorage();
 
 function getAttributeClassByAttributeId(id: string) : any {
-    const attributeTypes = [ LongTextAttribute ]
+    const attributeTypes = [ LongTextAttribute ];
 
     const [attributeTypePrefix] = id.split('-');
     const attributeClass = attributeTypes.find(c => c.DATA_TYPE_PREFIX === attributeTypePrefix);
