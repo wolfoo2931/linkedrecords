@@ -4,7 +4,7 @@ const pgPool = new pg.Pool({ max: 2 });
 
 export class PsqlStorage implements AttributeStorage {
 
-    async createAttribute(attributeId: string, actorId: string, value: string) : Promise<string> {
+    async createAttribute(attributeId: string, actorId: string, value: string) : Promise<{ id: string }> {
         const pgTableName = this.getAttributeTableName(attributeId);
         const createQuery = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
 
@@ -30,7 +30,7 @@ export class PsqlStorage implements AttributeStorage {
 
         await this.insertAttributeSnapshot(attributeId, actorId, value);
 
-        return attributeId;
+        return { id: attributeId };
     }
 
     getAttributeLatestSnapshot(attributeId: string, { maxChangeId = '2147483647' }) : Promise<{value: string, changeId: string, actorId: string}> {
