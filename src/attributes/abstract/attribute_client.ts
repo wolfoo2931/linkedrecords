@@ -117,7 +117,7 @@ export default abstract class AbstractAttributeClient <Type, TypeDelta> {
 
         this.isInitialized = true;
 
-        const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}`).then(result => result.json())
+        const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}?id=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`).then(result => result.json())
 
         this.version = result.changeId;
         this.value = result.value;
