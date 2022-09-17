@@ -5,14 +5,14 @@ const diffEngine = new DiffMatchPatch();
 
 export default class LongTextDelta {
 
-    changeset;
+    public changeset;
 
     constructor(changeset) {
         this.changeset = changeset;
     }
 
     public static fromString(change: string): LongTextDelta {
-        return new LongTextDelta(Changeset.unpack());
+        return new LongTextDelta(Changeset.unpack(change));
     }
 
     public static fromDiff(a: string, b: string): LongTextDelta {
@@ -28,10 +28,10 @@ export default class LongTextDelta {
     }
 
     public transformAgainst(change?, side?) : LongTextDelta {
-        return new LongTextDelta(this.changeset.transformAgainst(change, side));
+        return new LongTextDelta(this.changeset.transformAgainst(change.changeset, side));
     }
 
     public merge(otherChange: LongTextDelta) : LongTextDelta {
-        return this.changeset.merge(otherChange);
+        return this.changeset.merge(otherChange.changeset);
     }
 }
