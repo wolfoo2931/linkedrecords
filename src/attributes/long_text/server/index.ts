@@ -1,14 +1,12 @@
-import { Changeset } from 'changesets';
-import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
 import { AttributeStorage }  from './db';
 import AbstractAttributeServer from '../../abstract/attribute_server';
+import LongTextDelta from '../delta';
 
 export { PsqlStorage, AttributeStorage }  from './db';
 
-const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
-export class LongTextAttribute extends AbstractAttributeServer<string, any, AttributeStorage> {
+export class LongTextAttribute extends AbstractAttributeServer<string, LongTextDelta, AttributeStorage> {
 
     static readonly DATA_TYPE_NAME = 'longText';
     static readonly DATA_TYPE_PREFIX = 'l';
@@ -31,9 +29,9 @@ export class LongTextAttribute extends AbstractAttributeServer<string, any, Attr
         });
     }
 
-    async change(changeset: any, parentVersion: string) : Promise<{ id: string }> {
+    async change(serializedChangeset: string, parentVersion: string) : Promise<{ id: string }> {
         try {
-            Changeset.unpack(changeset);
+            LongTextDelta.fromString(serializedChangeset);
         } catch(err) {
             throw new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)');
         }
@@ -44,7 +42,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, any, Attr
 
         return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await this.changeByChangeset(changeset, parentVersion);
+                const result = await this.changeByChangeset(LongTextDelta.fromString(serializedChangeset), parentVersion);
                 resolve(result);
                 cb();
             });
@@ -57,7 +55,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, any, Attr
         const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
 
         changes.forEach(change => {
-            result.value = Changeset.unpack(change.value).apply(result.value);
+            result.value = LongTextDelta.fromString(change.value).apply(result.value);
             result.changeId = change.changeId;
             result.actorId = change.actorId;
         })
@@ -69,29 +67,29 @@ export class LongTextAttribute extends AbstractAttributeServer<string, any, Attr
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    private async changeByChangeset(changeset: any, parentVersion: string) : Promise<{ id: string, clientId: string, actorId: string, transformedServerChange: any, transformedClientChange: any }> {
+    private async changeByChangeset(changeset: LongTextDelta, parentVersion: string) : Promise<{ id: string, clientId: string, actorId: string, transformedServerChange: string, transformedClientChange: string }> {
         const parentVersionState = await this.getByChangeId(parentVersion);
         const currentVersionState = await this.get();
 
         // the a in the simple one-step diamond problem
         // the changeset comming from the client, probably made on an older version of the attribute (the server version migth be newr)
-        const clientChange = Changeset.unpack(changeset);
+        const clientChange = changeset;
 
         // the b in the simple one-step diamond problem
         //the compound changes on the server side which are missing on the client site (the changeset from the client site does not consider this changes)
-        const serverChange = Changeset.fromDiff(diffEngine.diff_main(parentVersionState.value, currentVersionState.value));
+        const serverChange = LongTextDelta.fromDiff(parentVersionState.value, currentVersionState.value);
 
         // the a' in the simple one-step diamond problem
         // this changeset will be applied to the current server sate and send to all clients
         // This works because of the TP1 property of the transformAgainst function
         // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
-        const transformedClientChange = clientChange.transformAgainst(serverChange, false).pack();
+        const transformedClientChange = clientChange.transformAgainst(serverChange, false).toString();
 
         // the b' in the simple one-step diamond problem
         // this changeset will be applied on the client who made the change that does not respect the serverChange
         // This works because of the TP1 property of the transformAgainst function
         // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
-        const transformedServerChange = serverChange.transformAgainst(clientChange, true).pack();
+        const transformedServerChange = serverChange.transformAgainst(clientChange, true).toString();
 
         const changeID = await this.storage.insertAttributeChange(
             this.id,
