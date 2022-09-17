@@ -1,30 +1,19 @@
 import { Changeset } from 'changesets';
 import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
 import { AttributeStorage }  from './db';
+import AbstractAttributeServer from '../../abstract/attribute_server';
 
 export { PsqlStorage, AttributeStorage }  from './db';
 
 const diffEngine = new DiffMatchPatch();
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
-export class LongTextAttribute {
+export class LongTextAttribute extends AbstractAttributeServer<string, any, AttributeStorage> {
 
     static readonly DATA_TYPE_NAME = 'longText';
     static readonly DATA_TYPE_PREFIX = 'l';
 
-    id: string;
-    actorId: string;
-    clientId: string;
-    storage: AttributeStorage;
-
-    constructor(id: string, clientId: string, actorId: string, storage: AttributeStorage) {
-        this.id = id;
-        this.clientId = clientId;
-        this.actorId = actorId;
-        this.storage = storage;
-    }
-
-    async create(value: string) : Promise<string> {
+    async create(value: string) : Promise<{ id: string }> {
         return await this.storage.createAttribute(this.id, this.actorId, value);
     }
 
