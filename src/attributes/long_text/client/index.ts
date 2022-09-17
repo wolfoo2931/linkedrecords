@@ -1,13 +1,11 @@
 'use strict';
 
-import { Changeset } from 'changesets';
-import { diff_match_patch as DiffMatchPatch} from 'diff_match_patch';
+
 import AbstractAttributeClient from '../../abstract/attribute_client';
+import LongTextDelta from '../delta';
 import Buffer from './buffer';
 
-const diffEngine = new DiffMatchPatch();
-
-export class LongTextAttribute extends AbstractAttributeClient<string, any> {
+export class LongTextAttribute extends AbstractAttributeClient<string, LongTextDelta> {
 
     buffer: Buffer = new Buffer();
     changeInTransmission: any = null;
@@ -33,7 +31,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, any> {
     }
 
     protected async rawSet(newValue: string) {
-        var changeset = Changeset.fromDiff(diffEngine.diff_main(this.value, newValue));
+        var changeset = LongTextDelta.fromDiff(this.value, newValue);
 
         this.change(changeset);
     }
@@ -62,7 +60,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, any> {
 
     private processForeignChange(foreignChange) {
         try {
-            var foreignChangeset  = Changeset.unpack(foreignChange.transformedClientChange);
+            var foreignChangeset = LongTextDelta.fromString(foreignChange.transformedClientChange);
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
             this.value = transformedForeignChange.apply(this.value);
             this.version = foreignChange.id;

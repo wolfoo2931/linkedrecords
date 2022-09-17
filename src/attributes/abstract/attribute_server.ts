@@ -15,5 +15,5 @@ export default abstract class AbstractAttributeServer <Type, TypeDelta, Attribut
     abstract create(value: Type) : Promise<{ id: string }>;
     abstract get() : Promise<{ value: Type, changeId: string, actorId: string }>;
     abstract set(value: Type) : Promise<{id: string}>;
-    abstract change(changeset: TypeDelta, parentVersion: string) : Promise<{ id: string }>;
+    abstract change(serializedChangeset: string, parentVersion: string) : Promise<{ id: string }>;
 }

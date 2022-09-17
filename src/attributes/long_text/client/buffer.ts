@@ -1,13 +1,12 @@
 import { Changeset } from 'changesets';
+import LongTextDelta from '../delta';
 
 export default class Buffer {
 
-    value: any;
-    inFlightOp: any;
+    value?: LongTextDelta;
+    inFlightOp?: LongTextDelta;
 
     constructor() {
-        this.value = null;
-        this.inFlightOp = null;
     }
 
     add(changeset) {
@@ -29,7 +28,7 @@ export default class Buffer {
         this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
 
         c2 = foreignChange.transformAgainst(this.inFlightOp, true);
-        this.inFlightOp = this.inFlightOp.transformAgainst(foreignChange, false);
+        this.inFlightOp = this.inFlightOp?.transformAgainst(foreignChange, false);
 
         if(!this.getValue()) return c2;
 
@@ -39,14 +38,14 @@ export default class Buffer {
 
         // "Once we have this inferred operation, c2, we can use it
         // to transform the buffer (b) "down" one step"
-        this.value = this.value.transformAgainst(c2, false);
+        this.value = this.value?.transformAgainst(c2, false);
 
         return c1;
     }
 
     clear() {
-        this.value = null;
-        this.inFlightOp = null;
+        this.value = undefined;
+        this.inFlightOp = undefined;
     }
 
     getValue() {
