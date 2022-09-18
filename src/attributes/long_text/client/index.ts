@@ -1,11 +1,10 @@
 'use strict';
 
-
 import AbstractAttributeClient from '../../abstract/attribute_client';
-import LongTextDelta from '../delta';
+import LongTextChange from '../long_text_change';
 import Buffer from './buffer';
 
-export class LongTextAttribute extends AbstractAttributeClient<string, LongTextDelta> {
+export class LongTextAttribute extends AbstractAttributeClient<string, LongTextChange> {
 
     buffer: Buffer = new Buffer();
     changeInTransmission: any = null;
@@ -31,7 +30,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextD
     }
 
     protected async rawSet(newValue: string) {
-        var changeset = LongTextDelta.fromDiff(this.value, newValue);
+        var changeset = LongTextChange.fromDiff(this.value, newValue);
 
         this.change(changeset);
     }
@@ -60,7 +59,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextD
 
     private processForeignChange(foreignChange) {
         try {
-            var foreignChangeset = LongTextDelta.fromString(foreignChange.transformedClientChange);
+            var foreignChangeset = LongTextChange.fromString(foreignChange.transformedClientChange);
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
             this.value = transformedForeignChange.apply(this.value);
             this.version = foreignChange.id;
