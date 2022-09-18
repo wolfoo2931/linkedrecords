@@ -1,12 +1,12 @@
 import { AttributeStorage }  from './db';
 import AbstractAttributeServer from '../../abstract/attribute_server';
-import LongTextDelta from '../delta';
+import LongTextChange from '../long_text_change';
 
 export { PsqlStorage, AttributeStorage }  from './db';
 
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
-export class LongTextAttribute extends AbstractAttributeServer<string, LongTextDelta, AttributeStorage> {
+export class LongTextAttribute extends AbstractAttributeServer<string, LongTextChange, AttributeStorage> {
 
     static readonly DATA_TYPE_NAME = 'longText';
     static readonly DATA_TYPE_PREFIX = 'l';
@@ -31,7 +31,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextD
 
     async change(serializedChangeset: string, parentVersion: string) : Promise<{ id: string }> {
         try {
-            LongTextDelta.fromString(serializedChangeset);
+            LongTextChange.fromString(serializedChangeset);
         } catch(err) {
             throw new Error('the specified changeset is invalid (must be a string that has been serialized with changeset.pack(); see: https://github.com/marcelklehr/changesets/blob/master/lib/Changeset.js#L320-L337)');
         }
@@ -42,7 +42,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextD
 
         return await new Promise(resolve => {
             queue.push(async cb => {
-                const result = await this.changeByChangeset(LongTextDelta.fromString(serializedChangeset), parentVersion);
+                const result = await this.changeByChangeset(LongTextChange.fromString(serializedChangeset), parentVersion);
                 resolve(result);
                 cb();
             });
@@ -55,7 +55,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextD
         const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
 
         changes.forEach(change => {
-            result.value = LongTextDelta.fromString(change.value).apply(result.value);
+            result.value = LongTextChange.fromString(change.value).apply(result.value);
             result.changeId = change.changeId;
             result.actorId = change.actorId;
         })
@@ -67,7 +67,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextD
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    private async changeByChangeset(changeset: LongTextDelta, parentVersion: string) : Promise<{ id: string, clientId: string, actorId: string, transformedServerChange: string, transformedClientChange: string }> {
+    private async changeByChangeset(changeset: LongTextChange, parentVersion: string) : Promise<{ id: string, clientId: string, actorId: string, transformedServerChange: string, transformedClientChange: string }> {
         const parentVersionState = await this.getByChangeId(parentVersion);
         const currentVersionState = await this.get();
 
@@ -77,7 +77,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextD
 
         // the b in the simple one-step diamond problem
         //the compound changes on the server side which are missing on the client site (the changeset from the client site does not consider this changes)
-        const serverChange = LongTextDelta.fromDiff(parentVersionState.value, currentVersionState.value);
+        const serverChange = LongTextChange.fromDiff(parentVersionState.value, currentVersionState.value);
 
         // the a' in the simple one-step diamond problem
         // this changeset will be applied to the current server sate and send to all clients

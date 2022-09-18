@@ -1,10 +1,10 @@
 import { Changeset } from 'changesets';
-import LongTextDelta from '../delta';
+import LongTextChange from '../long_text_change';
 
 export default class Buffer {
 
-    value?: LongTextDelta;
-    inFlightOp?: LongTextDelta;
+    value?: LongTextChange;
+    inFlightOp?: LongTextChange;
 
     constructor() {
     }
