@@ -35,7 +35,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextC
         this.change(changeset);
     }
 
-    protected async rawChange(changeset) {
+    protected async rawChange(changeset: LongTextChange) {
         this.value = changeset.apply(this.value);
 
         if(this.changeInTransmission) {
@@ -49,21 +49,21 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextC
         this.buffer.clear();
     }
 
-    protected onServerMessage(change) {
-        if(change.clientId === this.clientId) {
-            this.processApproval(change);
+    protected onServerMessage(changeWithMetadata) {
+        if(changeWithMetadata.clientId === this.clientId) {
+            this.processApproval(changeWithMetadata);
         } else {
-            this.processForeignChange(change);
+            this.processForeignChange(changeWithMetadata);
         }
     }
 
-    private processForeignChange(foreignChange) {
+    private processForeignChange(foreignChangeWithMetadata) {
         try {
-            var foreignChangeset = LongTextChange.fromString(foreignChange.transformedClientChange);
+            var foreignChangeset = LongTextChange.fromString(foreignChangeWithMetadata.transformedClientChange);
             var transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission);
             this.value = transformedForeignChange.apply(this.value);
-            this.version = foreignChange.id;
-            this.notifySubscribers(transformedForeignChange, foreignChange);
+            this.version = foreignChangeWithMetadata.id;
+            this.notifySubscribers(transformedForeignChange, foreignChangeWithMetadata);
         } catch(ex) {
             console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
             this.load();
@@ -81,7 +81,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextC
         }
     }
 
-    protected transmitChange(changeset, version) {
+    protected transmitChange(changeset: LongTextChange, version: string) {
 
         if(!this.id) {
             throw `change can not be transmitted because attribute does not has an id`;
@@ -90,7 +90,7 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextC
         this.changeInTransmission = {
             id: this.id,
             change: {
-                changeset: changeset.pack(),
+                changeset: changeset.toString(),
                 parentVersion: version
             },
             actorId: this.actorId,

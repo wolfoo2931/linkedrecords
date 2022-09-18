@@ -2,7 +2,7 @@ import { LinkedRecords } from '../../browser_sdk/index'
 import Faye from 'faye';
 import { v4 as uuid } from 'uuid';
 
-export default abstract class AbstractAttributeClient <Type, TypeDelta> {
+export default abstract class AbstractAttributeClient <Type, TypedChange> {
 
     linkedRecords: LinkedRecords;
     id?: string;
@@ -45,7 +45,7 @@ export default abstract class AbstractAttributeClient <Type, TypeDelta> {
     public abstract getDefaultValue() : Type;
 
     protected abstract rawSet(newValue: Type): void;
-    protected abstract rawChange(delta: TypeDelta): void;
+    protected abstract rawChange(delta: TypedChange): void;
     protected abstract onServerMessage(payload);
     protected abstract onLoad();
 
@@ -96,7 +96,7 @@ export default abstract class AbstractAttributeClient <Type, TypeDelta> {
         this.rawSet(newValue);
     }
 
-    public async change(delta: TypeDelta) : Promise<void> {
+    public async change(delta: TypedChange) : Promise<void> {
         await this.load();
         this.rawChange(delta);
     }
@@ -133,7 +133,7 @@ export default abstract class AbstractAttributeClient <Type, TypeDelta> {
         this.bayeuxClient.publish('/uncommited/changes/attribute/' + this.id, payload);
     }
 
-    protected notifySubscribers(change?: TypeDelta, fullChangeInfo?: { actorId: string }) {
+    protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {
         this.observers.forEach(callback => {
             callback(change, fullChangeInfo);
         });

@@ -1,4 +1,4 @@
-export default abstract class AbstractAttributeServer <Type, TypeDelta, AttributeStorage> {
+export default abstract class AbstractAttributeServer <Type, TypedChange, AttributeStorage> {
 
     id: string;
     actorId: string;
