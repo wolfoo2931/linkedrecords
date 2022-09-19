@@ -14,6 +14,10 @@ export default abstract class AbstractAttributeServer <Type, TypedChange extends
         this.storage = storage;
     }
 
+    public static getDataTypePrefix(): string {
+        throw 'getDataTypePrefix needs to be implemented in child class';
+    }
+
     abstract create(value: Type) : Promise<{ id: string }>;
     abstract get() : Promise<{ value: Type, changeId: string, actorId: string }>;
     abstract set(value: Type) : Promise<{id: string}>;
