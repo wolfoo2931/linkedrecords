@@ -1,5 +1,6 @@
 import { AttributeStorage }  from './db';
-import AbstractAttributeServer from '../../abstract/attribute_server';
+import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
+import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 
 export { PsqlStorage, AttributeStorage }  from './db';
@@ -29,7 +30,10 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
         });
     }
 
-    async change(serializedChangeset: string, parentVersion: string) : Promise<{ id: string }> {
+    async change(changeWithMetadata: SerializedChangeWithMetadata<LongTextChange>) : Promise<SerializedChangeWithMetadata<LongTextChange>> {
+        const serializedChangeset = changeWithMetadata.change.changeset;
+        const parentVersion = changeWithMetadata.change.changeId;
+
         try {
             LongTextChange.fromString(serializedChangeset);
         } catch(err) {
@@ -40,10 +44,20 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
             throw new Error('the changeset must also contain a parent version');
         }
 
-        return await new Promise(resolve => {
+        return await new Promise((resolve, reject) => {
             queue.push(async cb => {
-                const result = await this.changeByChangeset(LongTextChange.fromString(serializedChangeset), parentVersion);
-                resolve(result);
+                try {
+                    const result = await this.changeByChangeset(LongTextChange.fromString(serializedChangeset), parentVersion);
+                    resolve(new SerializedChangeWithMetadata(
+                        this.id,
+                        result.actorId,
+                        result.clientId,
+                        new LongTextChange(result.transformedClientChange, result.changeId)
+                    ));
+                } catch (ex) {
+                    reject(ex);
+                }
+
                 cb();
             });
         });
@@ -67,7 +81,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
     // This is because the client which constructed the changeset might not have the latest changes from the server
     // This is the "one-step diamond problem" in operational transfomration
     // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-    private async changeByChangeset(changeset: LongTextChange, parentVersion: string) : Promise<{ id: string, clientId: string, actorId: string, transformedServerChange: string, transformedClientChange: string }> {
+    private async changeByChangeset(changeset: LongTextChange, parentVersion: string) : Promise<{ changeId: string, clientId: string, actorId: string, transformedServerChange: string, transformedClientChange: string }> {
         const parentVersionState = await this.getByChangeId(parentVersion);
         const currentVersionState = await this.get();
 
@@ -98,7 +112,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
         );
 
         return {
-            id: changeID,
+            changeId: changeID,
             clientId: this.clientId,
             actorId: this.actorId,
             transformedServerChange,

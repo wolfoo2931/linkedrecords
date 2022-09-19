@@ -1,6 +1,7 @@
 'use strict';
 
 import attributeMiddleware, { getAttributeByParams } from './middleware/attribute';
+import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 import { Server } from 'http';
 import express from 'express';
 import faye from 'faye';
@@ -18,14 +19,22 @@ app.use(express.static('staticfiles'));
 app.use(express.json());
 app.use(attributeMiddleware);
 
-bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async ({ id, change, actorId, clientId }) => {
-    const attribute = getAttributeByParams({ query: { id, actorId, clientId } });
+bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async (changeWithMetadata: SerializedChangeWithMetadata<any>) => {
+
+    const attribute = getAttributeByParams({
+        query:
+        {
+            attributeId: changeWithMetadata.attributeId,
+            actorId: changeWithMetadata.actorId,
+            clientId: changeWithMetadata.clientId
+        }
+    });
 
     try {
-        const commitedChange = await attribute.change(change.changeset, change.parentVersion);
-        bayeux.getClient().publish('/changes/attribute/' + id, commitedChange);
+        const commitedChange = await attribute.change(changeWithMetadata);
+        bayeux.getClient().publish('/changes/attribute/' + changeWithMetadata.attributeId, commitedChange);
     } catch(ex) {
-        console.error(`error in /uncommited/changes/attribute/${id}`, ex);
+        console.error(`error in /uncommited/changes/attribute/${changeWithMetadata.attributeId}`, ex);
     }
 });
 
@@ -40,18 +49,18 @@ app.get('/attributes/:id', async (req, res) => {
     }
 });
 
-app.post('/attributes/:id', async (req, res) => {
+app.post('/attributes/:attributeId', async (req, res) => {
     await req.attribute.create(req.body.value);
     const result = await req.attribute.get();
 
     if(result instanceof Error) {
-        console.error(`error in GET /attributes/${req.params.id}`, result.message);
+        console.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
         res.status(404).send({error: result.message});
     } else {
         res.send(result);
     }
 });
 
-server.listen(process.env.PORT || 3000);
+server.listen(process.env['PORT'] || 3000);
 
 

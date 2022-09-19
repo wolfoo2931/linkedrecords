@@ -1,8 +1,9 @@
-import { LinkedRecords } from '../../browser_sdk/index'
+import { LinkedRecords } from '../../browser_sdk/index';
+import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import Faye from 'faye';
 import { v4 as uuid } from 'uuid';
 
-export default abstract class AbstractAttributeClient <Type, TypedChange> {
+export default abstract class AbstractAttributeClient <Type, TypedChange extends { toJSON } > {
 
     linkedRecords: LinkedRecords;
     id?: string;
@@ -46,7 +47,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange> {
 
     protected abstract rawSet(newValue: Type): void;
     protected abstract rawChange(delta: TypedChange): void;
-    protected abstract onServerMessage(payload);
+    protected abstract onServerMessage(payload: SerializedChangeWithMetadata<TypedChange>);
     protected abstract onLoad();
 
     public async create(value: Type) {
@@ -96,9 +97,9 @@ export default abstract class AbstractAttributeClient <Type, TypedChange> {
         this.rawSet(newValue);
     }
 
-    public async change(delta: TypedChange) : Promise<void> {
+    public async change(change: TypedChange) : Promise<void> {
         await this.load();
-        this.rawChange(delta);
+        await this.rawChange(change);
     }
 
     public async subscribe(observer: Function) {
@@ -117,20 +118,20 @@ export default abstract class AbstractAttributeClient <Type, TypedChange> {
 
         this.isInitialized = true;
 
-        const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}?id=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`).then(result => result.json())
+        const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`).then(result => result.json())
 
         this.version = result.changeId;
         this.value = result.value;
         this.onLoad()
         this.notifySubscribers(undefined, undefined);
 
-        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/attribute/' + this.id, change => {
+        this.subscription = this.subscription || this.bayeuxClient.subscribe('/changes/attribute/' + this.id, (change: SerializedChangeWithMetadata<TypedChange>) => {
             this.onServerMessage(change);
         });
     }
 
-    protected sendToServer(payload) {
-        this.bayeuxClient.publish('/uncommited/changes/attribute/' + this.id, payload);
+    protected sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
+        this.bayeuxClient.publish('/uncommited/changes/attribute/' + this.id, change.toJSON());
     }
 
     protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {

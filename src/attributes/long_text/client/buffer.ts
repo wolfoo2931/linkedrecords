@@ -1,4 +1,3 @@
-import { Changeset } from 'changesets';
 import LongTextChange from '../long_text_change';
 
 export default class Buffer {
@@ -9,8 +8,8 @@ export default class Buffer {
     constructor() {
     }
 
-    add(changeset) {
-        this.value = !this.value ? changeset : this.value.merge(changeset);
+    add(changeset: LongTextChange) {
+        this.value = this.value ? this.value.merge(changeset) : changeset;
     }
 
     // this function returns a transformed version of the foreignChange which
@@ -18,14 +17,14 @@ export default class Buffer {
     // could have some changes which has not been send to the server yet. So, the
     // server don't know about these changes and the changes comming from the server
     // would not fit into the client state.
-    transformAgainst(foreignChange, changeInTransmission) {
+    transformAgainst(foreignChange: LongTextChange, changeInTransmission?: LongTextChange) {
         var c1, c2;
 
         if(!changeInTransmission) {
             return foreignChange;
         }
 
-        this.inFlightOp = this.inFlightOp || Changeset.unpack(changeInTransmission.change.changeset);
+        this.inFlightOp = this.inFlightOp || changeInTransmission;
 
         c2 = foreignChange.transformAgainst(this.inFlightOp, true);
         this.inFlightOp = this.inFlightOp?.transformAgainst(foreignChange, false);

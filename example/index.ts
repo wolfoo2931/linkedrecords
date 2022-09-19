@@ -1,5 +1,6 @@
 import { Changeset } from 'changesets';
 import { LinkedRecords } from '../src/browser_sdk/index';
+import LongTextChange from '../src/attributes/long_text/long_text_change';
 import Editor from 'structured-text-editor/src/editor';
 
 document.addEventListener("DOMContentLoaded", async event => {
@@ -18,7 +19,7 @@ document.addEventListener("DOMContentLoaded", async event => {
         const attrState = await attribute.get();
 
         try {
-            editor.applyChangeset(changeset, attr);
+            editor.applyChangeset(changeset.changeset, attr);
         } catch(ex) {
             console.log('failed to apply changeset to editors content. Falling back to replace the whole editors content', ex)
             editor.setContent(attrState.value, attr);
@@ -28,15 +29,10 @@ document.addEventListener("DOMContentLoaded", async event => {
     editor.subscribe(async modificationLog => {
         if(!modificationLog.actor) {
             try {
-                await attribute.change(modificationLog.toChangeset(Changeset));
+                await attribute.change(new LongTextChange(modificationLog.toChangeset(Changeset)));
             } catch(ex) {
-                try {
-                    attribute.value = attribute.value.replace(/<p><\/p>$/, '');
-                    await attribute.change(modificationLog.toChangeset(Changeset));
-                } catch(ex) {
-                    console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
-                    attribute.set(editor.getContent());
-                }
+                console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
+                await attribute.set(editor.getContent());
             }
         }
     });
