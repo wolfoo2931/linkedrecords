@@ -9,8 +9,9 @@ const queue = require('queue')({ concurrency: 1, autostart: true });
 
 export class LongTextAttribute extends AbstractAttributeServer<string, LongTextChange, AttributeStorage> {
 
-    static readonly DATA_TYPE_NAME = 'longText';
-    static readonly DATA_TYPE_PREFIX = 'l';
+    public static getDataTypePrefix(): string {
+        return 'l';
+    }
 
     async create(value: string) : Promise<{ id: string }> {
         return await this.storage.createAttribute(this.id, this.actorId, value);

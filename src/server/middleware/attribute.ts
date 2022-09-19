@@ -6,7 +6,7 @@ const storage = new PsqlStorage();
 function getAttributeClassByAttributeId(id: string) : any {
     const attributeTypes = [ LongTextAttribute ];
     const [attributeTypePrefix] = id.split('-');
-    const attributeClass = attributeTypes.find(c => c.DATA_TYPE_PREFIX === attributeTypePrefix);
+    const attributeClass = attributeTypes.find(c => c.getDataTypePrefix() === attributeTypePrefix);
 
     return attributeClass;
 }
