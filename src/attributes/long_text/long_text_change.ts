@@ -6,9 +6,11 @@ const diffEngine = new DiffMatchPatch();
 export default class LongTextChange {
 
     public changeset;
+    public changeId: string;
 
-    constructor(changeset) {
+    constructor(changeset, changeId?: string) {
         this.changeset = changeset;
+        this.changeId = changeId ?? 'uncommited';
     }
 
     public static fromString(change: string): LongTextChange {
@@ -27,11 +29,18 @@ export default class LongTextChange {
         return this.changeset.pack();
     }
 
-    public transformAgainst(change?, side?) : LongTextChange {
+    public transformAgainst(change: LongTextChange, side?) : LongTextChange {
         return new LongTextChange(this.changeset.transformAgainst(change.changeset, side));
     }
 
     public merge(otherChange: LongTextChange) : LongTextChange {
-        return this.changeset.merge(otherChange.changeset);
+        return new LongTextChange(this.changeset.merge(otherChange.changeset));
+    }
+
+    public toJSON() {
+        return {
+            changeset: this.toString(),
+            changeId: this.changeId
+        }
     }
 }

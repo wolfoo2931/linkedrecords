@@ -1,4 +1,5 @@
 import { LongTextAttribute, PsqlStorage } from '../../attributes/long_text/server';
+import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 
 const storage = new PsqlStorage();
 
@@ -10,8 +11,8 @@ function getAttributeClassByAttributeId(id: string) : any {
     return attributeClass;
 }
 
-export function getAttributeByParams(req) {
-    const id = req.query?.id || req.params.id;
+export function getAttributeByParams(req): AbstractAttributeServer<any, any, any> {
+    const id = req.query?.attributeId || req.params.attributeId;
     const clientId = req.query?.clientId || req.body?.clientId;
     const actorId = req.query?.actorId || req.body?.actorId;
 

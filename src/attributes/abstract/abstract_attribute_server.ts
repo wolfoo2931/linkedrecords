@@ -1,4 +1,6 @@
-export default abstract class AbstractAttributeServer <Type, TypedChange, AttributeStorage> {
+import SerializedChangeWithMetadata from './serialized_change_with_metadata';
+
+export default abstract class AbstractAttributeServer <Type, TypedChange extends { toJSON }, AttributeStorage> {
 
     id: string;
     actorId: string;
@@ -15,5 +17,5 @@ export default abstract class AbstractAttributeServer <Type, TypedChange, Attrib
     abstract create(value: Type) : Promise<{ id: string }>;
     abstract get() : Promise<{ value: Type, changeId: string, actorId: string }>;
     abstract set(value: Type) : Promise<{id: string}>;
-    abstract change(serializedChangeset: string, parentVersion: string) : Promise<{ id: string }>;
+    abstract change(change: SerializedChangeWithMetadata<TypedChange>) : Promise<SerializedChangeWithMetadata<TypedChange>>;
 }
