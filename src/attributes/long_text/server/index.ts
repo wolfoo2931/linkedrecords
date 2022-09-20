@@ -21,7 +21,7 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
         return await this.getByChangeId('2147483647');
     }
 
-    async set(value: string) : Promise<{id: string}> {
+    async set(value: string) : Promise<{ id: string }> {
         return await new Promise(resolve => {
             queue.push(async cb => {
                 const result = await this.storage.insertAttributeSnapshot(this.id, this.actorId, value);
