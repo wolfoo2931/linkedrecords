@@ -1,4 +1,6 @@
-export default class SerializedChangeWithMetadata<Change extends { toJSON } > {
+import IsSerializable from './is_serializable';
+
+export default class SerializedChangeWithMetadata<Change extends IsSerializable> {
     public attributeId: string;
     public actorId: string;
     public clientId: string;
