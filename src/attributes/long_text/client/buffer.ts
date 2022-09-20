@@ -14,24 +14,24 @@ export default class Buffer {
   // could have some changes which has not been send to the server yet. So, the
   // server don't know about these changes and the changes comming from the server
   // would not fit into the client state.
-  transformAgainst(foreignChange: LongTextChange, changeInTransmission?: LongTextChange): LongTextChange {
-    let c1; let
-      c2;
-
+  transformAgainst(
+    foreignChange: LongTextChange,
+    changeInTransmission?: LongTextChange,
+  ) : LongTextChange {
     if (!changeInTransmission) {
       return foreignChange;
     }
 
     this.inFlightOp = this.inFlightOp || changeInTransmission;
 
-    c2 = foreignChange.transformAgainst(this.inFlightOp, true);
+    const c2 = foreignChange.transformAgainst(this.inFlightOp, true);
     this.inFlightOp = this.inFlightOp?.transformAgainst(foreignChange, false);
 
-    if (!this.getValue()) return c2;
+    if (!this.value) return c2;
 
     // instead of using a bridge we use c2 to transform the
     // foreignChange (change from server) into the client state.
-    c1 = c2.transformAgainst(this.value, true);
+    const c1 = c2.transformAgainst(this.value, true);
 
     // "Once we have this inferred operation, c2, we can use it
     // to transform the buffer (b) "down" one step"

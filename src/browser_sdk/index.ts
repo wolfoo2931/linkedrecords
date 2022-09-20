@@ -1,3 +1,6 @@
+/* eslint-disable max-classes-per-file */
+/* eslint-disable import/no-cycle */
+
 import { v4 as uuid } from 'uuid';
 import { LongTextAttribute } from '../attributes/long_text/client';
 
@@ -11,13 +14,15 @@ class AttributeRepository {
   }
 
   async create(attributeType: string, value: any) {
-    const attributeClass = AttributeRepository.attributeTypes.find((c) => c.getDataTypeName() === attributeType);
+    const AttributeClass = AttributeRepository
+      .attributeTypes
+      .find((c) => c.getDataTypeName() === attributeType);
 
-    if (!attributeClass) {
+    if (!AttributeClass) {
       throw `Attribute Type ${attributeType} is unknown`;
     }
 
-    const attribute = new attributeClass(this.linkedRecords);
+    const attribute = new AttributeClass(this.linkedRecords);
 
     await attribute.create(value);
     return attribute;
@@ -25,13 +30,15 @@ class AttributeRepository {
 
   async find(attributeId: string) {
     const [attributeTypePrefix] = attributeId.split('-');
-    const attributeClass = AttributeRepository.attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
+    const AttributeClass = AttributeRepository
+      .attributeTypes
+      .find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 
-    if (!attributeClass) {
+    if (!AttributeClass) {
       throw `Attribute ID ${attributeId} is unknown`;
     }
 
-    return new attributeClass(this.linkedRecords, attributeId);
+    return new AttributeClass(this.linkedRecords, attributeId);
   }
 }
 

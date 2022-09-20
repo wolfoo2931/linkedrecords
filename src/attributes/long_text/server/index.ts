@@ -7,7 +7,11 @@ export { PsqlStorage, AttributeStorage } from './db';
 
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
-export class LongTextAttribute extends AbstractAttributeServer<string, LongTextChange, AttributeStorage> {
+export class LongTextAttribute extends AbstractAttributeServer<
+string,
+LongTextChange,
+AttributeStorage
+> {
   public static getDataTypePrefix(): string {
     return 'l';
   }
@@ -30,7 +34,9 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
     });
   }
 
-  async change(changeWithMetadata: SerializedChangeWithMetadata<LongTextChange>) : Promise<SerializedChangeWithMetadata<LongTextChange>> {
+  async change(
+    changeWithMetadata: SerializedChangeWithMetadata<LongTextChange>,
+  ) : Promise<SerializedChangeWithMetadata<LongTextChange>> {
     const serializedChangeset = changeWithMetadata.change.changeset;
     const parentVersion = changeWithMetadata.change.changeId;
 
@@ -47,7 +53,11 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
     return new Promise((resolve, reject) => {
       queue.push(async (cb) => {
         try {
-          const result = await this.changeByChangeset(LongTextChange.fromString(serializedChangeset), parentVersion);
+          const result = await this.changeByChangeset(
+            LongTextChange.fromString(serializedChangeset),
+            parentVersion,
+          );
+
           resolve(new SerializedChangeWithMetadata(
             this.id,
             result.actorId,
@@ -63,7 +73,9 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
     });
   }
 
-  private async getByChangeId(changeId: string) : Promise<{ value: string, changeId: string, actorId: string }> {
+  private async getByChangeId(
+    changeId: string,
+  ) : Promise<{ value: string, changeId: string, actorId: string }> {
     const queryOptions = { maxChangeId: changeId };
     const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
     const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
@@ -77,21 +89,38 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
     return result;
   }
 
-  // Applies the changeset which can be based on an older version of the veriable value.
-  // This is because the client which constructed the changeset might not have the latest changes from the server
+  // Applies the changeset which can be based on
+  // an older version of the veriable value.
+  // This is because the client which constructed
+  // the changeset might not have the latest changes from the server
   // This is the "one-step diamond problem" in operational transfomration
   // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
-  private async changeByChangeset(changeset: LongTextChange, parentVersion: string) : Promise<{ changeId: string, clientId: string, actorId: string, transformedServerChange: string, transformedClientChange: string }> {
+  private async changeByChangeset(
+    changeset: LongTextChange,
+    parentVersion: string,
+  ) : Promise<{
+      changeId: string,
+      clientId: string,
+      actorId: string,
+      transformedServerChange: string,
+      transformedClientChange: string
+    }> {
     const parentVersionState = await this.getByChangeId(parentVersion);
     const currentVersionState = await this.get();
 
     // the a in the simple one-step diamond problem
-    // the changeset comming from the client, probably made on an older version of the attribute (the server version migth be newr)
+    // the changeset comming from the client, probably
+    // made on an older version of the attribute (the server version migth be newr)
     const clientChange = changeset;
 
     // the b in the simple one-step diamond problem
-    // the compound changes on the server side which are missing on the client site (the changeset from the client site does not consider this changes)
-    const serverChange = LongTextChange.fromDiff(parentVersionState.value, currentVersionState.value);
+    // the compound changes on the server side which
+    // are missing on the client site (the changeset
+    // from the client site does not consider this changes)
+    const serverChange = LongTextChange.fromDiff(
+      parentVersionState.value,
+      currentVersionState.value,
+    );
 
     // the a' in the simple one-step diamond problem
     // this changeset will be applied to the current server sate and send to all clients
@@ -100,9 +129,10 @@ export class LongTextAttribute extends AbstractAttributeServer<string, LongTextC
     const transformedClientChange = clientChange.transformAgainst(serverChange, false).toString();
 
     // the b' in the simple one-step diamond problem
-    // this changeset will be applied on the client who made the change that does not respect the serverChange
-    // This works because of the TP1 property of the transformAgainst function
-    // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
+    // this changeset will be applied on the client who
+    // made the change that does not respect the serverChange
+    // This works because of the TP1 property of the
+    // transformAgainst function. see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
     const transformedServerChange = serverChange.transformAgainst(clientChange, true).toString();
 
     const changeID = await this.storage.insertAttributeChange(

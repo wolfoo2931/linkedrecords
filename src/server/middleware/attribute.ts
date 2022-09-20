@@ -6,9 +6,7 @@ const storage = new PsqlStorage();
 function getAttributeClassByAttributeId(id: string) : any {
   const attributeTypes = [LongTextAttribute];
   const [attributeTypePrefix] = id.split('-');
-  const attributeClass = attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
-
-  return attributeClass;
+  return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 }
 
 export function getAttributeByParams(req): AbstractAttributeServer<any, any, any> {
@@ -16,13 +14,13 @@ export function getAttributeByParams(req): AbstractAttributeServer<any, any, any
   const clientId = req.query?.clientId || req.body?.clientId;
   const actorId = req.query?.actorId || req.body?.actorId;
 
-  const attributeClass = getAttributeClassByAttributeId(id);
+  const AttributeClass = getAttributeClassByAttributeId(id);
 
-  if (!attributeClass) {
+  if (!AttributeClass) {
     throw `Server is unkown of Attribute Type Prefix for id ${id}`;
   }
 
-  return new attributeClass(id, clientId, actorId, storage);
+  return new AttributeClass(id, clientId, actorId, storage);
 }
 
 export default function AttributeMiddleware(req, res, next) {

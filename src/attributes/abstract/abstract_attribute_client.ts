@@ -1,3 +1,5 @@
+/* eslint-disable import/no-cycle */
+
 import Faye from 'faye';
 import { v4 as uuid } from 'uuid';
 import { LinkedRecords } from '../../browser_sdk/index';
