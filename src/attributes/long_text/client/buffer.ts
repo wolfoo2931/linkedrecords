@@ -5,10 +5,7 @@ export default class Buffer {
     value?: LongTextChange;
     inFlightOp?: LongTextChange;
 
-    constructor() {
-    }
-
-    add(changeset: LongTextChange) {
+    add(changeset: LongTextChange): void {
         this.value = this.value ? this.value.merge(changeset) : changeset;
     }
 
@@ -17,7 +14,7 @@ export default class Buffer {
     // could have some changes which has not been send to the server yet. So, the
     // server don't know about these changes and the changes comming from the server
     // would not fit into the client state.
-    transformAgainst(foreignChange: LongTextChange, changeInTransmission?: LongTextChange) {
+    transformAgainst(foreignChange: LongTextChange, changeInTransmission?: LongTextChange): LongTextChange {
         var c1, c2;
 
         if(!changeInTransmission) {
@@ -47,7 +44,7 @@ export default class Buffer {
         this.inFlightOp = undefined;
     }
 
-    getValue() {
+    getValue(): LongTextChange | undefined {
         return this.value;
     }
 };

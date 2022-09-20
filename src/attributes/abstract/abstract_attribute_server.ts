@@ -1,6 +1,7 @@
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
+import IsSerializable from './is_serializable';
 
-export default abstract class AbstractAttributeServer <Type, TypedChange extends { toJSON }, AttributeStorage> {
+export default abstract class AbstractAttributeServer <Type, TypedChange extends IsSerializable, AttributeStorage> {
 
     id: string;
     actorId: string;

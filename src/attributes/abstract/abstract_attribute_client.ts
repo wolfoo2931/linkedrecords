@@ -1,9 +1,10 @@
 import { LinkedRecords } from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
+import IsSerializable from './is_serializable';
 import Faye from 'faye';
 import { v4 as uuid } from 'uuid';
 
-export default abstract class AbstractAttributeClient <Type, TypedChange extends { toJSON } > {
+export default abstract class AbstractAttributeClient <Type, TypedChange extends IsSerializable > {
 
     linkedRecords: LinkedRecords;
     id?: string;
