@@ -1,3 +1,5 @@
+/* eslint-disable import/no-cycle */
+
 import AbstractAttributeClient from '../../abstract/abstract_attribute_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
