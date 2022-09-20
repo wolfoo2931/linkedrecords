@@ -1,3 +1,3 @@
 export default interface IsSerializable {
-    toJSON() : object;
+  toJSON() : object;
 }
