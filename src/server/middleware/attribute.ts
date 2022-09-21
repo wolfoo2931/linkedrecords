@@ -17,7 +17,7 @@ export function getAttributeByParams(req): AbstractAttributeServer<any, any, any
   const AttributeClass = getAttributeClassByAttributeId(id);
 
   if (!AttributeClass) {
-    throw `Server is unkown of Attribute Type Prefix for id ${id}`;
+    throw new Error(`Server is unkown of Attribute Type Prefix for id ${id}`);
   }
 
   return new AttributeClass(id, clientId, actorId, storage);

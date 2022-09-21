@@ -2,7 +2,7 @@
 
 import Faye from 'faye';
 import { v4 as uuid } from 'uuid';
-import { LinkedRecords } from '../../browser_sdk/index';
+import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
 
@@ -48,11 +48,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   public static getDataTypePrefix() {
-    throw 'getDataTypePrefix needs to be implemented in child class';
+    throw new Error('getDataTypePrefix needs to be implemented in child class');
   }
 
   public static getDataTypeName() {
-    throw 'getDataTypePrefix needs to be implemented in child class';
+    throw new Error('getDataTypePrefix needs to be implemented in child class');
   }
 
   public abstract getDefaultValue() : Type;
@@ -64,7 +64,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   public async create(value: Type) {
     if (this.id) {
-      throw `Cannot create attribute because it has an id assigned (${this.id})`;
+      throw new Error(`Cannot create attribute because it has an id assigned (${this.id})`);
     }
 
     this.id = `${AbstractAttributeClient.getDataTypePrefix()}-${uuid()}`;
@@ -82,7 +82,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     });
 
     if (response.status !== 200) {
-      throw `Error creating attribute: ${await response.text()}`;
+      throw new Error(`Error creating attribute: ${await response.text()}`);
     }
 
     const responseBody = await response.json();
@@ -125,12 +125,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
 
     if (!this.id) {
-      throw 'cannot load an attribute without id';
+      throw new Error('cannot load an attribute without id');
     }
 
     this.isInitialized = true;
 
-    const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`).then((result) => result.json());
+    const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`).then((res) => res.json());
 
     this.version = result.changeId;
     this.value = result.value;

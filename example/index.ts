@@ -1,6 +1,6 @@
 import { Changeset } from 'changesets';
 import Editor from 'structured-text-editor/src/editor';
-import { LinkedRecords } from '../src/browser_sdk/index';
+import LinkedRecords from '../src/browser_sdk/index';
 import LongTextChange from '../src/attributes/long_text/long_text_change';
 
 document.addEventListener('DOMContentLoaded', async (event) => {
