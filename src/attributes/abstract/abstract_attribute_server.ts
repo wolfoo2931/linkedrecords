@@ -21,7 +21,7 @@ export default abstract class AbstractAttributeServer <
   }
 
   public static getDataTypePrefix(): string {
-    throw 'getDataTypePrefix needs to be implemented in child class';
+    throw new Error('getDataTypePrefix needs to be implemented in child class');
   }
 
   abstract create(

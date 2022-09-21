@@ -1,6 +1,6 @@
 import LongTextChange from '../long_text_change';
 
-export default class Buffer {
+export default class ChangeBuffer {
   value?: LongTextChange;
 
   inFlightOp?: LongTextChange;

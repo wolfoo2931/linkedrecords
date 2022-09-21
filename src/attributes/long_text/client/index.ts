@@ -1,12 +1,13 @@
 /* eslint-disable import/no-cycle */
+/* eslint-disable class-methods-use-this */
 
 import AbstractAttributeClient from '../../abstract/abstract_attribute_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
-import Buffer from './buffer';
+import ChangeBuffer from './buffer';
 
-export class LongTextAttribute extends AbstractAttributeClient<string, LongTextChange> {
-  buffer: Buffer = new Buffer();
+export default class LongTextAttribute extends AbstractAttributeClient<string, LongTextChange> {
+  buffer: ChangeBuffer = new ChangeBuffer();
 
   changeInTransmission?: SerializedChangeWithMetadata<LongTextChange> = undefined;
 
@@ -58,10 +59,19 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextC
     }
   }
 
-  private processForeignChange(foreignChangeWithMetadata: SerializedChangeWithMetadata<LongTextChange>) {
+  private processForeignChange(
+    foreignChangeWithMetadata: SerializedChangeWithMetadata<LongTextChange>,
+  ) {
     try {
-      const foreignChangeset = LongTextChange.fromString(foreignChangeWithMetadata.change.changeset);
-      const transformedForeignChange = this.buffer.transformAgainst(foreignChangeset, this.changeInTransmission?.change);
+      const foreignChangeset = LongTextChange.fromString(
+        foreignChangeWithMetadata.change.changeset,
+      );
+
+      const transformedForeignChange = this.buffer.transformAgainst(
+        foreignChangeset,
+        this.changeInTransmission?.change,
+      );
+
       this.value = transformedForeignChange.apply(this.value);
       this.version = foreignChangeWithMetadata.change.changeId;
       this.notifySubscribers(transformedForeignChange, foreignChangeWithMetadata);
@@ -84,10 +94,16 @@ export class LongTextAttribute extends AbstractAttributeClient<string, LongTextC
 
   protected transmitChange(changeset: LongTextChange) {
     if (!this.id) {
-      throw 'change can not be transmitted because attribute does not has an id';
+      throw new Error('change can not be transmitted because attribute does not has an id');
     }
 
-    this.changeInTransmission = new SerializedChangeWithMetadata<LongTextChange>(this.id, this.actorId, this.clientId, changeset);
+    this.changeInTransmission = new SerializedChangeWithMetadata<LongTextChange>(
+      this.id,
+      this.actorId,
+      this.clientId,
+      changeset,
+    );
+
     this.sendToServer(this.changeInTransmission);
   }
 }

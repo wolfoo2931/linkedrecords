@@ -2,7 +2,7 @@
 /* eslint-disable import/no-cycle */
 
 import { v4 as uuid } from 'uuid';
-import { LongTextAttribute } from '../attributes/long_text/client';
+import LongTextAttribute from '../attributes/long_text/client';
 
 class AttributeRepository {
   linkedRecords: LinkedRecords;
@@ -19,7 +19,7 @@ class AttributeRepository {
       .find((c) => c.getDataTypeName() === attributeType);
 
     if (!AttributeClass) {
-      throw `Attribute Type ${attributeType} is unknown`;
+      throw new Error(`Attribute Type ${attributeType} is unknown`);
     }
 
     const attribute = new AttributeClass(this.linkedRecords);
@@ -35,14 +35,14 @@ class AttributeRepository {
       .find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 
     if (!AttributeClass) {
-      throw `Attribute ID ${attributeId} is unknown`;
+      throw new Error(`Attribute ID ${attributeId} is unknown`);
     }
 
     return new AttributeClass(this.linkedRecords, attributeId);
   }
 }
 
-export class LinkedRecords {
+export default class LinkedRecords {
   serverURL: URL;
 
   clientId: string;
