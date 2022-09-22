@@ -9,7 +9,7 @@ function getAttributeClassByAttributeId(id: string) : any {
   return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 }
 
-export function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any, any, any> {
+function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any, any, any> {
   const id = req.query?.attributeId || req.params.attributeId;
   const clientId = req.query?.clientId || req.body?.clientId;
   const actorId = req.query?.actorId || req.body?.actorId;
