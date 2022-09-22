@@ -1,39 +1,18 @@
 import { Server } from 'http';
 import express from 'express';
-import faye from 'faye';
 import cors from 'cors';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
-import attributeMiddleware, { getAttributeByParams } from './middleware/attribute';
+import ServerSideEvents from './server-side-events';
+import attributeMiddleware from './middleware/attribute';
 import 'dotenv/config';
 
 const app = express();
 const server = new Server(app);
-const bayeux = new faye.NodeAdapter({ mount: '/bayeux', timeout: 45 });
-
-bayeux.attach(server);
+const serverSideEvents = new ServerSideEvents();
 
 app.use(cors());
-app.use(express.static('staticfiles'));
 app.use(express.json());
 app.use(attributeMiddleware);
-
-bayeux.getClient().subscribe('/uncommited/changes/attribute/*', async (changeWithMetadata: SerializedChangeWithMetadata<any>) => {
-  const attribute = getAttributeByParams({
-    query:
-        {
-          attributeId: changeWithMetadata.attributeId,
-          actorId: changeWithMetadata.actorId,
-          clientId: changeWithMetadata.clientId,
-        },
-  });
-
-  try {
-    const commitedChange = await attribute.change(changeWithMetadata);
-    bayeux.getClient().publish(`/changes/attribute/${changeWithMetadata.attributeId}`, commitedChange);
-  } catch (ex) {
-    console.error(`error in /uncommited/changes/attribute/${changeWithMetadata.attributeId}`, ex);
-  }
-});
 
 app.get('/attributes/:id', async (req, res) => {
   const result = await req.attribute.get();
@@ -44,6 +23,21 @@ app.get('/attributes/:id', async (req, res) => {
   } else {
     res.send(result);
   }
+});
+
+app.get('/attribute-changes/:attributeId', async (req, res) => {
+  serverSideEvents.subscribe(req.params.attributeId, req, res);
+});
+
+app.patch('/attributes/:attributeId', async (req, res) => {
+  const parsedChange: SerializedChangeWithMetadata<any> = req.body;
+  const commitedChange: SerializedChangeWithMetadata<any> = await req.attribute.change(
+    parsedChange,
+  );
+
+  serverSideEvents.send(req.params.attributeId, commitedChange);
+  res.status(200);
+  res.send();
 });
 
 app.post('/attributes/:attributeId', async (req, res) => {

@@ -26,7 +26,9 @@ export default class LongTextChange {
   }
 
   public toString(): string {
-    return this.changeset.pack();
+    return typeof this.changeset === 'string'
+      ? this.changeset
+      : this.changeset.pack();
   }
 
   public transformAgainst(change: LongTextChange, side?) : LongTextChange {

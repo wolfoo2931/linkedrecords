@@ -1,6 +1,5 @@
 /* eslint-disable import/no-cycle */
 
-import Faye from 'faye';
 import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
@@ -17,8 +16,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   serverURL: URL;
 
-  bayeuxClient: any;
-
   observers: Function[];
 
   subscription: any | null;
@@ -33,7 +30,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.id = id;
     this.linkedRecords = linkedRecords;
     this.serverURL = linkedRecords.serverURL;
-    this.bayeuxClient = new Faye.Client(`${this.serverURL}bayeux`);
     this.observers = [];
 
     // because the same user can be logged on two browsers/laptops, we need
@@ -137,13 +133,25 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
-    this.subscription = this.subscription || this.bayeuxClient.subscribe(`/changes/attribute/${this.id}`, (change: SerializedChangeWithMetadata<TypedChange>) => {
-      this.onServerMessage(change);
-    });
+    if (!this.subscription) {
+      this.subscription = new EventSource(`${this.serverURL}attribute-changes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`);
+
+      this.subscription.onmessage = (event) => {
+        const parsedData = JSON.parse(event.data);
+        this.onServerMessage(parsedData);
+      };
+    }
   }
 
   protected sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    this.bayeuxClient.publish(`/uncommited/changes/attribute/${this.id}`, change.toJSON());
+    fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(change.toJSON()),
+    });
   }
 
   protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {
