@@ -9,12 +9,10 @@ function getAttributeClassByAttributeId(id: string) : any {
   return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 }
 
-export function getAttributeByParams(req): AbstractAttributeServer<any, any, any> {
+export function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any, any, any> {
   const id = req.query?.attributeId || req.params.attributeId;
   const clientId = req.query?.clientId || req.body?.clientId;
   const actorId = req.query?.actorId || req.body?.actorId;
-
-  const AttributeClass = getAttributeClassByAttributeId(id);
 
   if (!AttributeClass) {
     throw new Error(`Server is unkown of Attribute Type Prefix for id ${id}`);
@@ -24,6 +22,10 @@ export function getAttributeByParams(req): AbstractAttributeServer<any, any, any
 }
 
 export default function AttributeMiddleware(req, res, next) {
-  req.attribute = getAttributeByParams(req);
+  const id = req.query?.attributeId || req.params.attributeId;
+
+  req.attributeClass = getAttributeClassByAttributeId(id);
+  req.attribute = getAttributeByParams(req, req.attributeClass);
+
   next();
 }
