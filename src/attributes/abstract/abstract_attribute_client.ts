@@ -179,7 +179,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.notifySubscribers(undefined, undefined);
 
     if (!this.subscription) {
-      const url = `${this.serverURL}attribute-changes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+      const url = `${this.serverURL}attributes/${this.id}/changes?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
       this.subscription = new EventSource(url);
 
       this.subscription.onmessage = (event) => {

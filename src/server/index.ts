@@ -28,7 +28,7 @@ app.get('/attributes/:id', async (req, res) => {
   }
 });
 
-app.get('/attribute-changes/:attributeId', async (req, res) => {
+app.get('/attributes/:attributeId/changes', async (req, res) => {
   serverSideEvents.subscribe(req.params.attributeId, req, res);
 });
 
