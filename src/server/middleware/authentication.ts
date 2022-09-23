@@ -7,14 +7,10 @@ export default function authentication() {
     clientID: process.env['AUTH_CLIENT_ID'],
     secret: process.env['AUTH_COOKIE_SIGNING_SECRET'],
     clientSecret: process.env['AUTH_CLIENT_SECRET'],
+    errorOnRequiredAuth: true,
     authorizationParams: {
       scope: 'openid offline_access',
       response_type: 'code',
-    },
-    afterCallback: (req, res, session) => {
-      // const claims = jose.JWT.decode(session.id_token); // using jose library to decode JWT
-      console.log(session);
-      return session;
     },
   });
 }

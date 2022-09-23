@@ -1,4 +1,5 @@
 /* eslint-disable import/no-cycle */
+/* eslint-disable class-methods-use-this */
 
 import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../browser_sdk/index';
@@ -52,6 +53,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   public abstract getDefaultValue() : Type;
+  public abstract deserializeValue(serializedValue: string) : Type;
 
   protected abstract rawSet(newValue: Type): void;
   protected abstract rawChange(delta: TypedChange): void;
@@ -76,6 +78,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         value,
       }),
     });
+
+    if (response.status === 401) {
+      this.handleExpiredLoginSession();
+      return;
+    }
 
     if (response.status !== 200) {
       throw new Error(`Error creating attribute: ${await response.text()}`);
@@ -115,7 +122,14 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.observers.push(observer);
   }
 
+  public handleExpiredLoginSession() {
+    const win: Window = window;
+    win.location = '/login';
+  }
+
   protected async load(serverState?: { changeId: string, value: string }) {
+    let result = serverState;
+
     if (this.isInitialized) {
       return;
     }
@@ -126,10 +140,24 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     this.isInitialized = true;
 
-    const result = serverState || await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`).then((res) => res.json());
+    if (!result) {
+      const response = await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`);
+
+      if (response.status === 401) {
+        this.handleExpiredLoginSession();
+        return;
+      }
+
+      const jsonBody = await response.json();
+
+      result = {
+        changeId: jsonBody.changeId,
+        value: jsonBody.value,
+      };
+    }
 
     this.version = result.changeId;
-    this.value = result.value;
+    this.value = this.deserializeValue(result.value);
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
@@ -143,8 +171,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
-  protected sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`, {
+  protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
+    const response = await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`, {
       method: 'PATCH',
       headers: {
         Accept: 'application/json',
@@ -152,6 +180,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       },
       body: JSON.stringify(change.toJSON()),
     });
+
+    if (response.status === 401) {
+      this.handleExpiredLoginSession();
+    }
   }
 
   protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {
