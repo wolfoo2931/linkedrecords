@@ -67,7 +67,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     this.id = `${AbstractAttributeClient.getDataTypePrefix()}-${uuid()}`;
 
-    const response = await fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
+    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         actorId: this.actorId,
         value,
       }),
-    });
+    }));
 
     if (response.status === 401) {
       this.handleExpiredLoginSession();
@@ -127,6 +127,22 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     win.location = '/login';
   }
 
+  public handleConnectionError(error) {
+    console.log('Connection Lost', error);
+  }
+
+  public async withConnectionLostHandler(fn: () => Promise<any>) {
+    try {
+      return await fn();
+    } catch (ex: any) {
+      if (ex.message === 'Failed to fetch') {
+        this.handleConnectionError(ex);
+      }
+
+      return false;
+    }
+  }
+
   protected async load(serverState?: { changeId: string, value: string }) {
     let result = serverState;
 
@@ -141,7 +157,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.isInitialized = true;
 
     if (!result) {
-      const response = await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`);
+      const url = `${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+      const response = await this.withConnectionLostHandler(() => fetch(url));
 
       if (response.status === 401) {
         this.handleExpiredLoginSession();
@@ -162,24 +179,30 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.notifySubscribers(undefined, undefined);
 
     if (!this.subscription) {
-      this.subscription = new EventSource(`${this.serverURL}attribute-changes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`);
+      const url = `${this.serverURL}attribute-changes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+      this.subscription = new EventSource(url);
 
       this.subscription.onmessage = (event) => {
         const parsedData = JSON.parse(event.data);
         this.onServerMessage(parsedData);
       };
+
+      this.subscription.onerror = (error) => {
+        this.handleConnectionError(error);
+      };
     }
   }
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    const response = await fetch(`${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`, {
+    const url = `${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+    const response = await this.withConnectionLostHandler(() => fetch(url, {
       method: 'PATCH',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(change.toJSON()),
-    });
+    }));
 
     if (response.status === 401) {
       this.handleExpiredLoginSession();
