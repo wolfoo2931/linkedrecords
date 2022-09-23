@@ -17,6 +17,18 @@ app.use(express.json());
 app.use(authentication());
 app.use(attributeMiddleware({ ignorePattern: /\/example/ }));
 
+app.post('/attributes/:attributeId', async (req, res) => {
+  await req.attribute.create(req.body.value);
+  const result = await req.attribute.get();
+
+  if (result instanceof Error) {
+    console.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
+    res.status(404).send({ error: result.message });
+  } else {
+    res.send(result);
+  }
+});
+
 app.get('/attributes/:id', async (req, res) => {
   const result = await req.attribute.get();
 
@@ -41,18 +53,6 @@ app.patch('/attributes/:attributeId', async (req, res) => {
   serverSideEvents.send(req.params.attributeId, commitedChange);
   res.status(200);
   res.send();
-});
-
-app.post('/attributes/:attributeId', async (req, res) => {
-  await req.attribute.create(req.body.value);
-  const result = await req.attribute.get();
-
-  if (result instanceof Error) {
-    console.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
-    res.status(404).send({ error: result.message });
-  } else {
-    res.send(result);
-  }
 });
 
 server.listen(process.env['PORT'] || 3000);
