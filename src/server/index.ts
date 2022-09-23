@@ -4,7 +4,7 @@ import cors from 'cors';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 import ServerSideEvents from './server-side-events';
 import attributeMiddleware from './middleware/attribute';
-// import authentication from './middleware/authentication';
+import authentication from './middleware/authentication';
 import 'dotenv/config';
 
 const app = express();
@@ -14,7 +14,7 @@ const serverSideEvents = new ServerSideEvents();
 app.use('/example', express.static('example'));
 app.use(cors());
 app.use(express.json());
-// app.use(authentication());
+app.use(authentication());
 app.use(attributeMiddleware({ ignorePattern: /\/example/ }));
 
 app.get('/attributes/:id', async (req, res) => {

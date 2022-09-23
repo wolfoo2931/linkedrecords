@@ -31,6 +31,10 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     return '';
   }
 
+  public deserializeValue(serializedValue: string) : string {
+    return serializedValue;
+  }
+
   protected async rawSet(newValue: string) {
     const changeset = LongTextChange.fromDiff(this.value, newValue);
 
