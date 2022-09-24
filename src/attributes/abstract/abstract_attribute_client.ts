@@ -44,14 +44,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.isInitialized = false;
   }
 
-  public static getDataTypePrefix() {
-    throw new Error('getDataTypePrefix needs to be implemented in child class');
-  }
-
   public static getDataTypeName() {
-    throw new Error('getDataTypePrefix needs to be implemented in child class');
+    throw new Error('getDataTypeName needs to be implemented in child class');
   }
 
+  public abstract getDataTypePrefix();
   public abstract getDefaultValue() : Type;
   public abstract deserializeValue(serializedValue: string) : Type;
 
@@ -65,9 +62,9 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       throw new Error(`Cannot create attribute because it has an id assigned (${this.id})`);
     }
 
-    this.id = `${AbstractAttributeClient.getDataTypePrefix()}-${uuid()}`;
+    this.id = `${this.getDataTypePrefix()}-${uuid()}`;
 
-    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
+    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}?attributeId=${this.id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -78,6 +75,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         value,
       }),
     }));
+
+    if (!response) {
+      throw new Error('Error communicating with the server when creating attribute.');
+    }
 
     if (response.status === 401) {
       this.handleExpiredLoginSession();

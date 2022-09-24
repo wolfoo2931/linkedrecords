@@ -20,7 +20,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
   }
 
   public getDataTypePrefix() : string {
-    return LongTextAttribute.getDataTypePrefix();
+    return 'l';
   }
 
   public getDataTypeName() : string {

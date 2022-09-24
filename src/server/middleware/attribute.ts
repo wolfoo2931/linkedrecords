@@ -21,15 +21,13 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
   return new AttributeClass(id, clientId, actorId, storage);
 }
 
-export default function attributeMiddleware({ ignorePattern }) {
+export default function attributeMiddleware() {
   return (req, res, next) => {
-    if (!ignorePattern || !req.path.match(ignorePattern)) {
-      const id = req.query?.attributeId || req.params.attributeId;
+    const id = req.query?.attributeId || req.params.attributeId;
 
-      if (id) {
-        req.attributeClass = getAttributeClassByAttributeId(id);
-        req.attribute = getAttributeByParams(req, req.attributeClass);
-      }
+    if (id) {
+      req.attributeClass = getAttributeClassByAttributeId(id);
+      req.attribute = getAttributeByParams(req, req.attributeClass);
     }
 
     next();
