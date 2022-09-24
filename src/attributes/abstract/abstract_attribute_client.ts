@@ -103,6 +103,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     };
   }
 
+  public async getValue() : Promise<Type> {
+    await this.load();
+
+    return this.value;
+  }
+
   public async set(newValue: Type) : Promise<void> {
     await this.load();
 
