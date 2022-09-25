@@ -38,10 +38,15 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
   protected async rawSet(newValue: string) {
     const changeset = LongTextChange.fromDiff(this.value, newValue);
 
-    this.change(changeset);
+    await this.change(changeset);
   }
 
   protected async rawChange(changeset: LongTextChange) {
+    // TODO: Check for version is valid
+    // if (this.version === '0') {
+    //   throw Error('Cannot change attribute as attributed state is not loaded from server!');
+    // }
+
     this.value = changeset.apply(this.value);
 
     if (this.changeInTransmission) {

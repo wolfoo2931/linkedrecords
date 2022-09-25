@@ -2,7 +2,7 @@
 
 import { expect } from 'chai';
 import { v4 as uuid } from 'uuid';
-import sleep from 'sleep-promise';
+import { waitFor } from '../helpers';
 import LinkedRecords from '../../src/browser_sdk';
 
 function createClient(): LinkedRecords {
@@ -41,16 +41,25 @@ describe('Long Text Attributes', () => {
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
 
-      attributeClientA.set('<p>texta</p>');
-      attributeClientB.set('<p>textb</p>');
+      await attributeClientA.get(); // To make sure the attribute state is loaded
+      await attributeClientB.get();
 
-      await sleep(1000);
+      await attributeClientA.set('<p>texta</p>');
+      await attributeClientA.set('<p>textab</p>');
+      await attributeClientA.set('<p>textabc</p>');
+
+      await attributeClientB.set('<p>text1</p>');
+      await attributeClientB.set('<p>text12</p>');
+      await attributeClientB.set('<p>text123</p>');
+
+      await waitFor(async () => (await attributeClientA.getValue()).length === 17);
 
       const convergedValueClientA = await attributeClientA.getValue();
       const convergedValueClientB = await attributeClientB.getValue();
 
-      expect(convergedValueClientA).to.be.equal('<p>textab</p>');
-      expect(convergedValueClientB).to.be.equal('<p>textab</p>');
+      expect(convergedValueClientA).to.equal(convergedValueClientB);
+      expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
+      expect(convergedValueClientA.length).to.equal(17);
     });
   });
 });

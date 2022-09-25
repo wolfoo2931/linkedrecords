@@ -66,7 +66,8 @@ export default class PsqlStorage implements AttributeStorage {
           const snapshot = snapshots.rows[0];
 
           if (!snapshot) {
-            reject(new Error('No Snapshot found!'));
+            reject(new Error(`No Snapshot found for attribute ${attributeId} with maxChangeId=${maxChangeId}!`));
+            return;
           }
 
           resolve({
