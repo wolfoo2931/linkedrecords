@@ -15,6 +15,12 @@ module.exports = function (config) {
       'specs/**/*.spec.ts': ['webpack'],
     },
 
+    client: {
+      mocha: {
+        timeout: 8000,
+      }
+    },
+
     browsers: ['ChromeHeadless'],
 
     reporters: ['spec'],

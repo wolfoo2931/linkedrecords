@@ -23,7 +23,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   isInitialized: boolean;
 
-  version: string;
+  version: string; // TODO: should be number
 
   value: Type;
 
@@ -116,7 +116,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       return;
     }
 
-    this.rawSet(newValue);
+    await this.rawSet(newValue);
   }
 
   public async change(change: TypedChange) : Promise<void> {
