@@ -89,6 +89,28 @@ AttributeStorage
     return result;
   }
 
+  private async getChangeSince(changeId: string) : Promise<LongTextChange | null> {
+    const changes = await this.storage.getAttributeChanges(this.id, { minChangeId: changeId });
+
+    if (!changes.length) {
+      return null;
+    }
+
+    let merged: LongTextChange | null = null;
+
+    changes.forEach((change) => {
+      const tmp = LongTextChange.fromString(change.value);
+
+      if (merged) {
+        merged = merged.merge(tmp);
+      } else {
+        merged = tmp;
+      }
+    });
+
+    return merged;
+  }
+
   // Applies the changeset which can be based on
   // an older version of the veriable value.
   // This is because the client which constructed
@@ -102,12 +124,9 @@ AttributeStorage
       changeId: string,
       clientId: string,
       actorId: string,
-      transformedServerChange: string,
+      transformedServerChange?: string,
       transformedClientChange: string
     }> {
-    const parentVersionState = await this.getByChangeId(parentVersion);
-    const currentVersionState = await this.get();
-
     // the a in the simple one-step diamond problem
     // the changeset comming from the client, probably
     // made on an older version of the attribute (the server version migth be newr)
@@ -117,10 +136,7 @@ AttributeStorage
     // the compound changes on the server side which
     // are missing on the client site (the changeset
     // from the client site does not consider this changes)
-    const serverChange = LongTextChange.fromDiff(
-      parentVersionState.value,
-      currentVersionState.value,
-    );
+    const serverChange = await this.getChangeSince(parentVersion);
 
     // the a' in the simple one-step diamond problem
     // this changeset will be applied to the current server sate and send to all clients
@@ -133,7 +149,7 @@ AttributeStorage
     // made the change that does not respect the serverChange
     // This works because of the TP1 property of the
     // transformAgainst function. see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
-    const transformedServerChange = serverChange.transformAgainst(clientChange, true).toString();
+    const transformedServerChange = serverChange?.transformAgainst(clientChange, true).toString();
 
     const changeID = await this.storage.insertAttributeChange(
       this.id,

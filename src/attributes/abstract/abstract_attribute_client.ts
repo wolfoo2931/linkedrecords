@@ -23,6 +23,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   isInitialized: boolean;
 
+  isPaused: boolean = false;
+
+  messagesWhilePaused: any[] = [];
+
   version: string; // TODO: should be number
 
   value: Type;
@@ -150,6 +154,23 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
+  public unload() {
+    this.subscription.close();
+  }
+
+  public pauseReceiving() {
+    this.isPaused = true;
+  }
+
+  public unpauseReceiving() {
+    this.messagesWhilePaused.forEach((message) => {
+      this.onServerMessage(message);
+    });
+
+    this.messagesWhilePaused = [];
+    this.isPaused = false;
+  }
+
   protected async load(serverState?: { changeId: string, value: string }) {
     let result = serverState;
 
@@ -191,7 +212,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
       this.subscription.onmessage = (event) => {
         const parsedData = JSON.parse(event.data);
-        this.onServerMessage(parsedData);
+
+        if (this.isPaused) {
+          this.messagesWhilePaused.push(parsedData);
+        } else {
+          this.onServerMessage(parsedData);
+        }
       };
 
       this.subscription.onerror = (error) => {

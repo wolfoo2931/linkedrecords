@@ -31,7 +31,11 @@ export default class LongTextChange {
       : this.changeset.pack();
   }
 
-  public transformAgainst(change: LongTextChange, side?) : LongTextChange {
+  public transformAgainst(change: LongTextChange | null, side?) : LongTextChange {
+    if (!change) {
+      return this;
+    }
+
     return new LongTextChange(this.changeset.transformAgainst(change.changeset, side));
   }
 
