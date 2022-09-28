@@ -38,7 +38,9 @@ class AttributeRepository {
       throw new Error(`Attribute ID ${attributeId} is unknown`);
     }
 
-    return new AttributeClass(this.linkedRecords, attributeId);
+    const attribute = new AttributeClass(this.linkedRecords, attributeId);
+    await attribute.get();
+    return attribute;
   }
 }
 

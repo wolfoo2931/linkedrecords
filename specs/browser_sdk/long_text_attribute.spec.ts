@@ -53,9 +53,6 @@ describe('Long Text Attributes', () => {
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
 
-      await attributeClientA.get(); // To make sure the attribute state is loaded
-      await attributeClientB.get();
-
       await attributeClientA.set('<p>texta</p>');
       await attributeClientA.set('<p>textab</p>');
       await attributeClientA.set('<p>textabc</p>');
@@ -88,9 +85,6 @@ describe('Long Text Attributes', () => {
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
-
-      await attributeClientA.get(); // To make sure the attribute state is loaded
-      await attributeClientB.get(); // TODO: Make sure this is not required anymore
 
       applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromDiff('<p>text</p>', '<p>texta</p>'),
@@ -128,9 +122,6 @@ describe('Long Text Attributes', () => {
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
 
-      await attributeClientA.get(); // To make sure the attribute state is loaded
-      await attributeClientB.get(); // TODO: Make sure this is not required anymore
-
       applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromString('-e+f|<p>initialo</p>|<p>initial</p>'),
       ]);
@@ -161,9 +152,6 @@ describe('Long Text Attributes', () => {
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
-
-      await attributeClientA.get();
-      await attributeClientB.get();
 
       attributeClientB.pauseReceiving();
 
