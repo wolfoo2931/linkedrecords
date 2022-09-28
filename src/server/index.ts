@@ -1,10 +1,11 @@
 import { Server } from 'http';
 import express from 'express';
 import cors from 'cors';
+import morgan from 'morgan';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 import ServerSideEvents from './server-side-events';
 import attributeMiddleware from './middleware/attribute';
-import authentication from './middleware/authentication';
+// import authentication from './middleware/authentication';
 import 'dotenv/config';
 
 const app = express();
@@ -12,9 +13,10 @@ const server = new Server(app);
 const serverSideEvents = new ServerSideEvents();
 
 app.use('/example', express.static('example'));
+app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
 app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use(authentication());
+// app.use(authentication());
 app.use('/attributes', attributeMiddleware());
 
 app.post('/attributes/:attributeId', async (req, res) => {
