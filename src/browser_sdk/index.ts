@@ -3,17 +3,18 @@
 
 import { v4 as uuid } from 'uuid';
 import LongTextAttribute from '../attributes/long_text/client';
-import ServerSideEvents from '../../lib/server-side-events/client';
+import ServerSideEvents, { IsSubscribable } from '../../lib/server-side-events/client';
 
 class AttributeRepository {
   linkedRecords: LinkedRecords;
 
-  serverSideEvents: ServerSideEvents = new ServerSideEvents();
+  private serverSideEvents: IsSubscribable;
 
   private static attributeTypes = [LongTextAttribute];
 
-  constructor(linkedRecords: LinkedRecords) {
+  constructor(linkedRecords: LinkedRecords, serverSideEvents: IsSubscribable) {
     this.linkedRecords = linkedRecords;
+    this.serverSideEvents = serverSideEvents;
   }
 
   async create(attributeType: string, value: any) {
@@ -48,6 +49,8 @@ class AttributeRepository {
 }
 
 export default class LinkedRecords {
+  serverSideEvents: IsSubscribable;
+
   serverURL: URL;
 
   clientId: string;
@@ -56,10 +59,11 @@ export default class LinkedRecords {
 
   Attribute: AttributeRepository;
 
-  constructor(serverURL: URL) {
+  constructor(serverURL: URL, serverSideEvents?: IsSubscribable) {
     this.serverURL = serverURL;
     this.actorId = uuid();
     this.clientId = uuid();
-    this.Attribute = new AttributeRepository(this);
+    this.serverSideEvents = serverSideEvents || new ServerSideEvents();
+    this.Attribute = new AttributeRepository(this, this.serverSideEvents);
   }
 }

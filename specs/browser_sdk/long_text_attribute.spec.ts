@@ -6,13 +6,15 @@ import { waitFor } from '../helpers';
 import LinkedRecords from '../../src/browser_sdk';
 import LongTextChange from '../../src/attributes/long_text/long_text_change';
 import LongTextAttribute from '../../src/attributes/long_text/client';
+import ServerSideEvents from '../../lib/server-side-events/client';
 
 let clients: LinkedRecords[] = [];
 
-function createClient(): LinkedRecords {
-  const client = new LinkedRecords(new URL('http://0.0.0.0:3000'));
+function createClient(): [ LinkedRecords, ServerSideEvents ] {
+  const serverSideEvents = new ServerSideEvents();
+  const client = new LinkedRecords(new URL('http://0.0.0.0:3000'), serverSideEvents);
   clients.push(client);
-  return client;
+  return [client, serverSideEvents];
 }
 
 async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: LongTextChange[]) {
@@ -24,7 +26,7 @@ async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: Lo
 describe('Long Text Attributes', () => {
   afterEach(() => {
     clients.forEach((client) => {
-      client.Attribute.serverSideEvents.unsubscribeAll();
+      client.serverSideEvents.unsubscribeAll();
     });
 
     clients = [];
@@ -32,8 +34,8 @@ describe('Long Text Attributes', () => {
 
   describe('attribute.create()', () => {
     it('creates an attriubte which can be retrieved by an other client', async () => {
-      const clientA = createClient();
-      const clientB = createClient();
+      const [clientA] = createClient();
+      const [clientB] = createClient();
 
       const content = `<p>${uuid()}</p>`;
       const attribute = await clientA.Attribute.create('longText', content);
@@ -52,8 +54,8 @@ describe('Long Text Attributes', () => {
 
   describe('attribute.set()', () => {
     it('makes sure the value converges on all clients', async () => {
-      const clientA = createClient();
-      const clientB = createClient();
+      const [clientA] = createClient();
+      const [clientB] = createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>');
 
@@ -83,8 +85,8 @@ describe('Long Text Attributes', () => {
 
   describe('attribute.change()', () => {
     it('makes sure the value converges on all clients', async () => {
-      const clientA = createClient();
-      const clientB = createClient();
+      const [clientA] = createClient();
+      const [clientB] = createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>');
 
@@ -116,8 +118,8 @@ describe('Long Text Attributes', () => {
     });
 
     it('makes sure the value converges on all clients when the changeset is not granular (make sure the serverChange is not a diff but a merge of the acutall changes send from the client)', async () => {
-      const clientA = createClient();
-      const clientB = createClient();
+      const [clientA] = createClient();
+      const [clientB] = createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>');
 
@@ -144,8 +146,8 @@ describe('Long Text Attributes', () => {
     });
 
     it('makes sure the value converges on all clients when there are more then one change on the server', async () => {
-      const clientA = createClient();
-      const clientB = createClient();
+      const [clientA] = createClient();
+      const [clientB, clientBEventStream] = createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>');
 
@@ -153,20 +155,20 @@ describe('Long Text Attributes', () => {
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
 
-      attributeClientB.pauseReceiving();
+      clientBEventStream.pauseNotification();
 
       await applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromDiff('<p>initial</p>', '<p>initiala</p>'),
         LongTextChange.fromDiff('<p>initiala</p>', '<p>initialab</p>'),
       ]);
 
-      await waitFor(async () => attributeClientB.messagesWhilePaused.length === 2);
+      await waitFor(async () => clientBEventStream.messagesWhilePaused.length === 2);
 
       await applyChangesOnAttribute(attributeClientB, [
         LongTextChange.fromDiff('<p>initial</p>', '<p>initial1</p>'),
       ]);
 
-      attributeClientB.unpauseReceiving();
+      clientBEventStream.unpauseNotification();
 
       await waitFor(async () => (await attributeClientA.getValue()).length === 17);
       await waitFor(async () => (await attributeClientB.getValue()).length === 17);
