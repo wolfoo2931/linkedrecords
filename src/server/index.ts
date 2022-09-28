@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
-import ServerSideEvents from './server-side-events';
+import ServerSideEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
 // import authentication from './middleware/authentication';
 import 'dotenv/config';
