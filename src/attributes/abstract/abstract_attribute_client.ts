@@ -5,12 +5,12 @@ import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
-import ServerSideEvents from '../../../lib/server-side-events/client';
+import { IsSubscribable } from '../../../lib/server-side-events/client';
 
 export default abstract class AbstractAttributeClient <Type, TypedChange extends IsSerializable > {
   linkedRecords: LinkedRecords;
 
-  serverSideEvents: ServerSideEvents;
+  serverSideEvents: IsSubscribable;
 
   id?: string;
 
@@ -24,15 +24,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   isInitialized: boolean;
 
-  isPaused: boolean = false;
-
-  messagesWhilePaused: any[] = [];
-
   version: string; // TODO: should be number
 
   value: Type;
 
-  constructor(linkedRecords: LinkedRecords, serverSideEvents: ServerSideEvents, id?: string) {
+  constructor(linkedRecords: LinkedRecords, serverSideEvents: IsSubscribable, id?: string) {
     this.id = id;
     this.linkedRecords = linkedRecords;
     this.serverSideEvents = serverSideEvents;
@@ -155,19 +151,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
-  public pauseReceiving() {
-    this.isPaused = true;
-  }
-
-  public unpauseReceiving() {
-    this.messagesWhilePaused.forEach((message) => {
-      this.onServerMessage(message);
-    });
-
-    this.messagesWhilePaused = [];
-    this.isPaused = false;
-  }
-
   protected async load(serverState?: { changeId: string, value: string }) {
     let result = serverState;
 
@@ -209,11 +192,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         return;
       }
 
-      if (this.isPaused) {
-        this.messagesWhilePaused.push(parsedData);
-      } else {
-        this.onServerMessage(parsedData);
-      }
+      this.onServerMessage(parsedData);
     });
   }
 
