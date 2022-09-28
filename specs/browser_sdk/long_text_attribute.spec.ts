@@ -4,9 +4,17 @@ import { expect } from 'chai';
 import { v4 as uuid } from 'uuid';
 import { waitFor } from '../helpers';
 import LinkedRecords from '../../src/browser_sdk';
+import LongTextChange from '../../src/attributes/long_text/long_text_change';
+import LongTextAttribute from '../../src/attributes/long_text/client';
 
 function createClient(): LinkedRecords {
   return new LinkedRecords(new URL('http://0.0.0.0:3000'));
+}
+
+async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: LongTextChange[]) {
+  changes.forEach(async (change: LongTextChange) => {
+    await attribute.change(change);
+  });
 }
 
 describe('Long Text Attributes', () => {
@@ -27,10 +35,14 @@ describe('Long Text Attributes', () => {
 
       const data = await attributeFromDB.get();
       expect(data.value).to.be.equal(content);
+
+      // TODO: this is because of the browsers connection limit per host.
+      // Needs to be fixed as currently only a few attributes can be observed.
+      attribute.unload();
     });
   });
 
-  describe('attribute.change()', () => {
+  describe('attribute.set()', () => {
     it('makes sure the value converges on all clients', async () => {
       const clientA = createClient();
       const clientB = createClient();
@@ -60,6 +72,125 @@ describe('Long Text Attributes', () => {
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
       expect(convergedValueClientA.length).to.equal(17);
+
+      attributeClientA.unload();
+      attributeClientB.unload();
+    });
+  });
+
+  describe('attribute.change()', () => {
+    it('makes sure the value converges on all clients', async () => {
+      const clientA = createClient();
+      const clientB = createClient();
+
+      const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>');
+
+      if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
+
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+
+      await attributeClientA.get(); // To make sure the attribute state is loaded
+      await attributeClientB.get(); // TODO: Make sure this is not required anymore
+
+      applyChangesOnAttribute(attributeClientA, [
+        LongTextChange.fromDiff('<p>text</p>', '<p>texta</p>'),
+        LongTextChange.fromDiff('<p>texta</p>', '<p>textab</p>'),
+        LongTextChange.fromDiff('<p>textab</p>', '<p>textabc</p>'),
+      ]);
+
+      applyChangesOnAttribute(attributeClientB, [
+        LongTextChange.fromDiff('<p>text</p>', '<p>text1</p>'),
+        LongTextChange.fromDiff('<p>text1</p>', '<p>text12</p>'),
+        LongTextChange.fromDiff('<p>text12</p>', '<p>text123</p>'),
+      ]);
+
+      await waitFor(async () => (await attributeClientA.getValue()).length === 17);
+      await waitFor(async () => (await attributeClientB.getValue()).length === 17);
+
+      const convergedValueClientA = await attributeClientA.getValue();
+      const convergedValueClientB = await attributeClientB.getValue();
+
+      expect(convergedValueClientA).to.equal(convergedValueClientB);
+      expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
+      expect(convergedValueClientA.length).to.equal(17);
+
+      attributeClientA.unload();
+      attributeClientB.unload();
+    });
+
+    it('makes sure the value converges on all clients when the changeset is not granular (make sure the serverChange is not a diff but a merge of the acutall changes send from the client)', async () => {
+      const clientA = createClient();
+      const clientB = createClient();
+
+      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>');
+
+      if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
+
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+
+      await attributeClientA.get(); // To make sure the attribute state is loaded
+      await attributeClientB.get(); // TODO: Make sure this is not required anymore
+
+      applyChangesOnAttribute(attributeClientA, [
+        LongTextChange.fromString('-e+f|<p>initialo</p>|<p>initial</p>'),
+      ]);
+
+      applyChangesOnAttribute(attributeClientB, [
+        LongTextChange.fromString('-e+f|<p>initiald</p>|<p>initial</p>'),
+      ]);
+
+      await waitFor(async () => (await attributeClientA.getValue()).length === 30);
+      await waitFor(async () => (await attributeClientB.getValue()).length === 30);
+
+      const convergedValueClientA = await attributeClientA.getValue();
+      const convergedValueClientB = await attributeClientB.getValue();
+
+      expect(convergedValueClientA).to.equal(convergedValueClientB);
+      expect(convergedValueClientA.length).to.equal(30);
+
+      attributeClientA.unload();
+      attributeClientB.unload();
+    });
+
+    it('makes sure the value converges on all clients when there are more then one change on the server', async () => {
+      const clientA = createClient();
+      const clientB = createClient();
+
+      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>');
+
+      if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
+
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+
+      await attributeClientA.get();
+      await attributeClientB.get();
+
+      attributeClientB.pauseReceiving();
+
+      await applyChangesOnAttribute(attributeClientA, [
+        LongTextChange.fromDiff('<p>initial</p>', '<p>initiala</p>'),
+        LongTextChange.fromDiff('<p>initiala</p>', '<p>initialab</p>'),
+      ]);
+
+      await waitFor(async () => attributeClientB.messagesWhilePaused.length === 2);
+
+      await applyChangesOnAttribute(attributeClientB, [
+        LongTextChange.fromDiff('<p>initial</p>', '<p>initial1</p>'),
+      ]);
+
+      attributeClientB.unpauseReceiving();
+
+      await waitFor(async () => (await attributeClientA.getValue()).length === 17);
+      await waitFor(async () => (await attributeClientB.getValue()).length === 17);
+
+      const convergedValueClientA = await attributeClientA.getValue();
+      const convergedValueClientB = await attributeClientB.getValue();
+
+      expect(convergedValueClientA).to.equal(convergedValueClientB);
+      expect(convergedValueClientA.length).to.equal(17);
+
+      attributeClientA.unload();
+      attributeClientB.unload();
     });
   });
 });
