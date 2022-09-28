@@ -5,9 +5,12 @@ import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
+import ServerSideEvents from '../../../lib/server-side-events/client';
 
 export default abstract class AbstractAttributeClient <Type, TypedChange extends IsSerializable > {
   linkedRecords: LinkedRecords;
+
+  serverSideEvents: ServerSideEvents;
 
   id?: string;
 
@@ -19,8 +22,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   observers: Function[];
 
-  subscription: any | null;
-
   isInitialized: boolean;
 
   isPaused: boolean = false;
@@ -31,9 +32,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   value: Type;
 
-  constructor(linkedRecords: LinkedRecords, id?: string) {
+  constructor(linkedRecords: LinkedRecords, serverSideEvents: ServerSideEvents, id?: string) {
     this.id = id;
     this.linkedRecords = linkedRecords;
+    this.serverSideEvents = serverSideEvents;
     this.serverURL = linkedRecords.serverURL;
     this.observers = [];
 
@@ -44,7 +46,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     this.version = '0';
     this.value = this.getDefaultValue();
-    this.subscription = null;
     this.isInitialized = false;
   }
 
@@ -154,10 +155,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
-  public unload() {
-    this.subscription.close();
-  }
-
   public pauseReceiving() {
     this.isPaused = true;
   }
@@ -206,24 +203,18 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
-    if (!this.subscription) {
-      const url = `${this.serverURL}attributes/${this.id}/changes?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
-      this.subscription = new EventSource(url);
+    const url = `${this.serverURL}attributes/${this.id}/changes?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+    this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
+      if (parsedData.attributeId !== this.id) {
+        return;
+      }
 
-      this.subscription.onmessage = (event) => {
-        const parsedData = JSON.parse(event.data);
-
-        if (this.isPaused) {
-          this.messagesWhilePaused.push(parsedData);
-        } else {
-          this.onServerMessage(parsedData);
-        }
-      };
-
-      this.subscription.onerror = (error) => {
-        this.handleConnectionError(error);
-      };
-    }
+      if (this.isPaused) {
+        this.messagesWhilePaused.push(parsedData);
+      } else {
+        this.onServerMessage(parsedData);
+      }
+    });
   }
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {

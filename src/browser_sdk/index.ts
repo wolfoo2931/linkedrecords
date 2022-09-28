@@ -3,9 +3,12 @@
 
 import { v4 as uuid } from 'uuid';
 import LongTextAttribute from '../attributes/long_text/client';
+import ServerSideEvents from '../../lib/server-side-events/client';
 
 class AttributeRepository {
   linkedRecords: LinkedRecords;
+
+  serverSideEvents: ServerSideEvents = new ServerSideEvents();
 
   private static attributeTypes = [LongTextAttribute];
 
@@ -22,7 +25,7 @@ class AttributeRepository {
       throw new Error(`Attribute Type ${attributeType} is unknown`);
     }
 
-    const attribute = new AttributeClass(this.linkedRecords);
+    const attribute = new AttributeClass(this.linkedRecords, this.serverSideEvents);
 
     await attribute.create(value);
     return attribute;
@@ -38,7 +41,7 @@ class AttributeRepository {
       throw new Error(`Attribute ID ${attributeId} is unknown`);
     }
 
-    const attribute = new AttributeClass(this.linkedRecords, attributeId);
+    const attribute = new AttributeClass(this.linkedRecords, this.serverSideEvents, attributeId);
     await attribute.get();
     return attribute;
   }

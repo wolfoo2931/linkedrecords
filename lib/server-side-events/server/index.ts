@@ -35,11 +35,16 @@ export default class ServerSideEvents {
     });
   }
 
-  send(channel: string, body: object) {
+  send(channel: string, body: any) {
     if (this.subscribers[channel]) {
+      const bodyWithCannel = {
+        ...body,
+        sseChannel: channel,
+      };
+
       this.subscribers[channel].forEach((subscriber) => {
         subscriber.response.write(`id: ${subscriber.eventId}\n`);
-        subscriber.response.write(`data: ${JSON.stringify(body)}\n\n`);
+        subscriber.response.write(`data: ${JSON.stringify(bodyWithCannel)}\n\n`);
 
         subscriber.eventId += 1;
       });

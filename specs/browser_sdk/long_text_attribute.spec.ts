@@ -7,8 +7,12 @@ import LinkedRecords from '../../src/browser_sdk';
 import LongTextChange from '../../src/attributes/long_text/long_text_change';
 import LongTextAttribute from '../../src/attributes/long_text/client';
 
+let clients: LinkedRecords[] = [];
+
 function createClient(): LinkedRecords {
-  return new LinkedRecords(new URL('http://0.0.0.0:3000'));
+  const client = new LinkedRecords(new URL('http://0.0.0.0:3000'));
+  clients.push(client);
+  return client;
 }
 
 async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: LongTextChange[]) {
@@ -18,6 +22,14 @@ async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: Lo
 }
 
 describe('Long Text Attributes', () => {
+  afterEach(() => {
+    clients.forEach((client) => {
+      client.Attribute.serverSideEvents.unsubscribeAll();
+    });
+
+    clients = [];
+  });
+
   describe('attribute.create()', () => {
     it('creates an attriubte which can be retrieved by an other client', async () => {
       const clientA = createClient();
@@ -35,10 +47,6 @@ describe('Long Text Attributes', () => {
 
       const data = await attributeFromDB.get();
       expect(data.value).to.be.equal(content);
-
-      // TODO: this is because of the browsers connection limit per host.
-      // Needs to be fixed as currently only a few attributes can be observed.
-      attribute.unload();
     });
   });
 
@@ -62,6 +70,7 @@ describe('Long Text Attributes', () => {
       await attributeClientB.set('<p>text123</p>');
 
       await waitFor(async () => (await attributeClientA.getValue()).length === 17);
+      await waitFor(async () => (await attributeClientB.getValue()).length === 17);
 
       const convergedValueClientA = await attributeClientA.getValue();
       const convergedValueClientB = await attributeClientB.getValue();
@@ -69,9 +78,6 @@ describe('Long Text Attributes', () => {
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
       expect(convergedValueClientA.length).to.equal(17);
-
-      attributeClientA.unload();
-      attributeClientB.unload();
     });
   });
 
@@ -107,9 +113,6 @@ describe('Long Text Attributes', () => {
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
       expect(convergedValueClientA.length).to.equal(17);
-
-      attributeClientA.unload();
-      attributeClientB.unload();
     });
 
     it('makes sure the value converges on all clients when the changeset is not granular (make sure the serverChange is not a diff but a merge of the acutall changes send from the client)', async () => {
@@ -138,9 +141,6 @@ describe('Long Text Attributes', () => {
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientA.length).to.equal(30);
-
-      attributeClientA.unload();
-      attributeClientB.unload();
     });
 
     it('makes sure the value converges on all clients when there are more then one change on the server', async () => {
@@ -176,9 +176,6 @@ describe('Long Text Attributes', () => {
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientA.length).to.equal(17);
-
-      attributeClientA.unload();
-      attributeClientB.unload();
     });
   });
 });
