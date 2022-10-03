@@ -4,16 +4,16 @@ import IsSerializable from './is_serializable';
 export default abstract class AbstractAttributeServer <
   Type,
   TypedChange extends IsSerializable,
-  AttributeStorage> {
+  IsAttributeStorage> {
   id: string;
 
   actorId: string;
 
   clientId: string;
 
-  storage: AttributeStorage;
+  storage: IsAttributeStorage;
 
-  constructor(id: string, clientId: string, actorId: string, storage: AttributeStorage) {
+  constructor(id: string, clientId: string, actorId: string, storage: IsAttributeStorage) {
     this.id = id;
     this.clientId = clientId;
     this.actorId = actorId;

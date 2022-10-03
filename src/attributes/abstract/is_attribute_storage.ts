@@ -1,4 +1,4 @@
-export interface AttributeStorage {
+export default interface IsAttributeStorage {
   createAttribute(
     attributeId: string,
     actorId: string,

@@ -1,11 +1,11 @@
 /* eslint-disable class-methods-use-this */
 
 import pg from 'pg';
-import { AttributeStorage } from '../attribute_storage';
+import IsAttributeStorage from '../../abstract/is_attribute_storage';
 
 const pgPool = new pg.Pool({ max: 2 });
 
-export default class PsqlStorage implements AttributeStorage {
+export default class PsqlStorage implements IsAttributeStorage {
   async createAttribute(
     attributeId: string,
     actorId: string,

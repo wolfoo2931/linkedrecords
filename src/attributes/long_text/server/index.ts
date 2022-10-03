@@ -1,16 +1,14 @@
-import { AttributeStorage } from './db';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
+import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 
-export { PsqlStorage, AttributeStorage } from './db';
-
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
-export class LongTextAttribute extends AbstractAttributeServer<
+export default class LongTextAttribute extends AbstractAttributeServer<
 string,
 LongTextChange,
-AttributeStorage
+IsAttributeStorage
 > {
   public static getDataTypePrefix(): string {
     return 'l';
