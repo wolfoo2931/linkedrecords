@@ -78,6 +78,9 @@ AttributeStorage
   ) : Promise<{ value: string, changeId: string, actorId: string }> {
     const queryOptions = { maxChangeId: changeId };
     const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
+
+    // TODO: query options should be something
+    // like { minChangeId: result.cahngeId, maxChangeId: changeId }
     const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
 
     changes.forEach((change) => {
@@ -151,6 +154,8 @@ AttributeStorage
     // transformAgainst function. see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
     const transformedServerChange = serverChange?.transformAgainst(clientChange, true).toString();
 
+    // TODO: we do not know yet for sure if this changeset will be applyable
+    // to the already inserted changesets.
     const changeID = await this.storage.insertAttributeChange(
       this.id,
       this.actorId,
