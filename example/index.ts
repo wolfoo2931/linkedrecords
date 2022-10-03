@@ -16,12 +16,12 @@ document.addEventListener('DOMContentLoaded', async (event) => {
 
   attribute.subscribe(async (changeset, changeInfo) => {
     const attr = { actor: { id: changeInfo.actorId } };
-    const attrState = await attribute.get();
 
     try {
       editor.applyChangeset(changeset.changeset, attr);
     } catch (ex) {
-      console.log('failed to apply changeset to editors content. Falling back to replace the whole editors content', ex);
+      console.log('failed to apply changeset to EDITOR content. Falling back to replace the whole editors content', ex);
+      const attrState = await attribute.get();
       editor.setContent(attrState.value, attr);
     }
   });
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
       try {
         await attribute.change(new LongTextChange(modificationLog.toChangeset(Changeset)));
       } catch (ex) {
-        console.log('error appling changeseet to remote attribute. Falling back to replace whole attribute content', ex);
+        console.log('failed to apply changeset to ATTRIBUTE. Falling back to replace whole attribute content', ex);
         await attribute.set(editor.getContent());
       }
     }
