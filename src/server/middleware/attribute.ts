@@ -1,4 +1,5 @@
-import { LongTextAttribute, PsqlStorage } from '../../attributes/long_text/server';
+import LongTextAttribute from '../../attributes/long_text/server';
+import { PsqlStorage } from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 
 const storage = new PsqlStorage();
