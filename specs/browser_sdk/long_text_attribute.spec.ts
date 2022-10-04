@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 
 import { expect } from 'chai';
@@ -88,11 +89,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = createClient();
       const [clientB] = createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>');
+      const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>') as LongTextAttribute;
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id) as LongTextAttribute;
 
       applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromDiff('<p>text</p>', '<p>texta</p>'),
@@ -121,11 +122,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = createClient();
       const [clientB] = createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>');
+      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>') as LongTextAttribute;
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id) as LongTextAttribute;
 
       applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromString('-e+f|<p>initialo</p>|<p>initial</p>'),
@@ -149,11 +150,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = createClient();
       const [clientB, clientBEventStream] = createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>');
+      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>') as LongTextAttribute;
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id) as LongTextAttribute;
 
       clientBEventStream.pauseNotification();
 
