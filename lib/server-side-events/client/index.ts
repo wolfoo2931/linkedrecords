@@ -20,20 +20,19 @@ export default class ServerSideEvents implements IsSubscribable {
 
   public subscribe(url: string, channel: string, handler: (data: any) => any) {
     const parsedUrl: URL = new URL(url);
-    const hostWithPath: string = parsedUrl.origin + parsedUrl.pathname;
     let subscription: IsSubscription | undefined;
 
-    if (!this.subscriptions[hostWithPath]) {
-      this.subscriptions[hostWithPath] = {
+    if (!this.subscriptions[parsedUrl.origin]) {
+      this.subscriptions[parsedUrl.origin] = {
         eventSource: new EventSource(url),
         channels: {},
       };
 
-      if (!this.subscriptions[hostWithPath]) {
+      if (!this.subscriptions[parsedUrl.origin]) {
         return;
       }
 
-      subscription = this.subscriptions[hostWithPath];
+      subscription = this.subscriptions[parsedUrl.origin];
 
       if (!subscription) {
         return;
