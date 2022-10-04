@@ -1,11 +1,12 @@
 import LongTextAttribute from '../../attributes/long_text/server';
+import KeyValueAttribute from '../../attributes/key_value/server';
 import { PsqlStorage } from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 
 const storage = new PsqlStorage();
 
 function getAttributeClassByAttributeId(id: string) : any {
-  const attributeTypes = [LongTextAttribute];
+  const attributeTypes = [LongTextAttribute, KeyValueAttribute];
   const [attributeTypePrefix] = id.split('-');
   return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 }

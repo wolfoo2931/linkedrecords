@@ -182,7 +182,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
 
     this.version = result.changeId;
-    this.value = this.deserializeValue(result.value);
+    this.value = this.deserializeValue(typeof result.value === 'string' ? result.value : JSON.stringify(result.value));
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
