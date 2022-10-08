@@ -2,52 +2,69 @@
 
 import { v4 as uuid } from 'uuid';
 
-export default class ServerSideEvents {
-  subscribers: { id: string, eventId: number, response: any }[];
+const headers = {
+  Connection: 'keep-alive',
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+};
 
-  constructor() {
-    this.subscribers = [];
-  }
+const connections = {};
+const subscribers = {};
 
-  subscribe(channel: string, request: any, response: any) {
-    const subscriberId = uuid();
-    const headers = {
-      Connection: 'keep-alive',
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    };
-
-    response.writeHead(200, headers);
-
-    if (!this.subscribers[channel]) {
-      this.subscribers[channel] = [];
+export default function serverSentEvents() {
+  return (request, response, next) => {
+    if (request.path === '/server-sent-events' && request.method === 'GET') {
+      if (!request.signedCookies.sseClientId) {
+        const clientId = uuid(); // TODO: secure rand number
+        response.cookie('sseClientId', clientId, { signed: true, httpOnly: true });
+        response.send({ status: 'retry with id' });
+      } else if (!request.query.tabId || request.query.tabId.length < 2) {
+        response
+          .status(422)
+          .send({ status: 'provide tabId as query parameter to subscribe to server sent events' });
+      } else if (connections[`${request.signedCookies.sseClientId}-${request.query.tabId}`]) {
+        response
+          .status(200)
+          .send({ status: 'already subscribed' });
+      } else {
+        const connectionId = `${request.signedCookies.sseClientId}-${request.query.tabId}`;
+        response.writeHead(200, headers);
+        response.flushHeaders();
+        request.on('close', () => { delete connections[connectionId]; });
+        connections[connectionId] = response;
+      }
     }
 
-    this.subscribers[channel].push({
-      id: subscriberId,
-      eventId: 0,
-      response,
-    });
+    response.subscribeSEE = (channel: string) => {
+      if (!request.query.tabId || request.query.tabId.length < 2) {
+        throw new Error('provide tabId as query parameter to subscribe to server sent events');
+      } else if (!request.signedCookies.sseClientId) {
+        throw new Error('Server Send Events is not initialized');
+      }
 
-    request.on('close', () => {
-      this.subscribers[channel] = this.subscribers[channel]
-        .filter((sub) => sub.id !== subscriberId);
-    });
-  }
+      const connectionId = `${request.signedCookies.sseClientId}-${request.query.tabId}`;
 
-  send(channel: string, body: any) {
-    if (this.subscribers[channel]) {
+      subscribers[channel] = subscribers[channel] || [];
+      subscribers[channel].push({ connectionId, response, eventId: 0 });
+    };
+
+    response.sendSEE = (channel: string, body: any) => {
       const bodyWithCannel = {
         ...body,
         sseChannel: channel,
       };
 
-      this.subscribers[channel].forEach((subscriber) => {
-        subscriber.response.write(`id: ${subscriber.eventId}\n`);
-        subscriber.response.write(`data: ${JSON.stringify(bodyWithCannel)}\n\n`);
+      if (subscribers[channel]) {
+        subscribers[channel].forEach((subscription) => {
+          if (connections[subscription.connectionId]) {
+            connections[subscription.connectionId].write(`id: ${subscription.eventId}\n`);
+            connections[subscription.connectionId].write(`data: ${JSON.stringify(bodyWithCannel)}\n\n`);
+            subscription.eventId += 1;
+          }
+        });
+      }
+    };
 
-        subscriber.eventId += 1;
-      });
-    }
-  }
+    next();
+  };
 }

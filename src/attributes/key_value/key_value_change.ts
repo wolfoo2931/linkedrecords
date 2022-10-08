@@ -8,7 +8,7 @@ export default class KeyValueChange {
 
   public change: AtomicChange[];
 
-  public static fromJSON(input: object, changeId?: string) {
+  public static fromJSON(input: any, changeId?: string) {
     return new KeyValueChange(input as AtomicChange[], changeId);
   }
 
@@ -46,7 +46,12 @@ export default class KeyValueChange {
   public merge(other: KeyValueChange): KeyValueChange {
     let mergedChanges: AtomicChange[] = [];
 
-    [...this.change, ...other.change].forEach((ch) => {
+    this.change.forEach((ch) => {
+      mergedChanges = mergedChanges.filter((x) => x.key !== ch.key);
+      mergedChanges.push(ch);
+    });
+
+    other.change.forEach((ch) => {
       mergedChanges = mergedChanges.filter((x) => x.key !== ch.key);
       mergedChanges.push(ch);
     });
