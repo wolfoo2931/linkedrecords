@@ -31,6 +31,9 @@ export default function serverSentEvents() {
         response.writeHead(200, headers);
         response.flushHeaders();
         request.on('close', () => { delete connections[connectionId]; });
+        request.on('finish', () => { delete connections[connectionId]; });
+        request.on('timeout', () => { delete connections[connectionId]; });
+
         connections[connectionId] = response;
       }
     }
