@@ -59,6 +59,10 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
       changeWithMetadata.change.changeId,
     );
 
+    if (changeWithMetadata.clientId === this.clientId) {
+      return;
+    }
+
     this.value = change.apply(this.value);
     this.version = change.changeId;
 
