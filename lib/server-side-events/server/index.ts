@@ -45,7 +45,10 @@ export default function serverSentEvents() {
       const connectionId = `${request.signedCookies.sseClientId}-${request.query.tabId}`;
 
       subscribers[channel] = subscribers[channel] || [];
-      subscribers[channel].push({ connectionId, response, eventId: 0 });
+
+      if (!subscribers[channel].find((sub) => sub.connectionId === connectionId)) {
+        subscribers[channel].push({ connectionId, response, eventId: 0 });
+      }
     };
 
     response.sendSEE = (channel: string, body: any) => {
