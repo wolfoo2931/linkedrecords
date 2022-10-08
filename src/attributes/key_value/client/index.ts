@@ -54,8 +54,6 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
   }
 
   protected onServerMessage(changeWithMetadata: SerializedChangeWithMetadata<KeyValueChange>) {
-    // TODO: for some reason changeWithMetadata.change is not type of KeyValueChange ???
-    // -> this is because KeyValueChange.toJSON only respects the atomichanges
     const change = new KeyValueChange(
       changeWithMetadata.change as unknown as AtomicChange[],
       changeWithMetadata.change.changeId,

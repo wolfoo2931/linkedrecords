@@ -59,8 +59,8 @@ IsAttributeStorage
     const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
 
     changes.forEach((change) => {
-      const tmpValue = KeyValueChange.fromString(change.value);
-      commulatedResult.value = commulatedResult.value.merge(tmpValue);
+      const tmpChange = KeyValueChange.fromString(change.value);
+      commulatedResult.value = tmpChange.apply(commulatedResult.value);
       commulatedResult.changeId = change.changeId;
       commulatedResult.actorId = change.actorId;
     });

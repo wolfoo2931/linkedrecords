@@ -2,20 +2,23 @@ import { Server } from 'http';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
-import ServerSideEvents from '../../lib/server-side-events/server';
+import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
+
 // import authentication from './middleware/authentication';
 import 'dotenv/config';
 
 const app = express();
 const server = new Server(app);
-const serverSideEvents = new ServerSideEvents();
 
 app.use('/example', express.static('example'));
 app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
 app.use(cors({ origin: '*' }));
+app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
 app.use(express.json());
+app.use(serverSentEvents());
 // app.use(authentication());
 app.use('/attributes', attributeMiddleware());
 
@@ -43,7 +46,8 @@ app.get('/attributes/:id', async (req, res) => {
 });
 
 app.get('/attributes/:attributeId/changes', async (req, res) => {
-  serverSideEvents.subscribe(req.params.attributeId, req, res);
+  res.subscribeSEE(req.params.attributeId);
+  res.send({ status: 'ok' });
 });
 
 app.patch('/attributes/:attributeId', async (req, res) => {
@@ -52,7 +56,7 @@ app.patch('/attributes/:attributeId', async (req, res) => {
     parsedChange,
   );
 
-  serverSideEvents.send(req.params.attributeId, commitedChange);
+  res.sendSEE(req.params.attributeId, commitedChange);
   res.status(200);
   res.send();
 });
