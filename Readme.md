@@ -1,6 +1,5 @@
 # Known Issues & TODOs
 ## MVP
-- Allow to use synced KV Stores for reference management
 - List/Query attributes
 - Authorization
 

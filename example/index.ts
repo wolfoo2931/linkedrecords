@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
   const contentAttribute = await linkedRecords.Attribute.find(attributeId); // await linkedRecords.Attribute.create('longText', '<p>inital</p>');
   const referencesAttribute = await linkedRecords.Attribute.find(stores.reference);
 
+  console.log((await contentAttribute.get()).value)
   editor.setContent((await contentAttribute.get()).value);
   editor.addReferenceData((await referencesAttribute.get()).value);
 
@@ -52,12 +53,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
         await contentAttribute.change(new LongTextChange(modificationLog.toChangeset(Changeset)));
       } catch (ex) {
         console.log('failed to apply changeset to ATTRIBUTE. Falling back to replace whole attribute content', ex);
-
-        const currentValue = (await contentAttribute.get()).value;
-        console.log(currentValue)
-        console.log(modificationLog.toChangeset(Changeset).inspect());
-
-        await contentAttribute.set(editor.getContent());
+        await contentAttribute.set(editor.getOriginalContent());
       }
     }
   });
