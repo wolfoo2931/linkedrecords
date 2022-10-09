@@ -17,7 +17,6 @@ document.addEventListener('DOMContentLoaded', async (event) => {
   const contentAttribute = await linkedRecords.Attribute.find(attributeId); // await linkedRecords.Attribute.create('longText', '<p>inital</p>');
   const referencesAttribute = await linkedRecords.Attribute.find(stores.reference);
 
-  console.log((await contentAttribute.get()).value)
   editor.setContent((await contentAttribute.get()).value);
   editor.addReferenceData((await referencesAttribute.get()).value);
 

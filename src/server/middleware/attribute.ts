@@ -11,8 +11,18 @@ function getAttributeClassByAttributeId(id: string) : any {
   return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
 }
 
+function getAttributeIdByRquest(req) {
+  const urlMatch = req.originalUrl.match(/\/attributes\/(.*?)[?&/]/);
+
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1];
+  }
+
+  return req.query?.attributeId || req.params.attributeId;
+}
+
 function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any, any, any> {
-  const id = req.query?.attributeId || req.params.attributeId;
+  const id = getAttributeIdByRquest(req);
   const clientId = req.query?.clientId || req.body?.clientId;
   const actorId = req.query?.actorId || req.body?.actorId;
 
@@ -25,7 +35,7 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
 
 export default function attributeMiddleware() {
   return (req, res, next) => {
-    const id = req.query?.attributeId || req.params.attributeId;
+    const id = getAttributeIdByRquest(req);
 
     if (id) {
       req.attributeClass = getAttributeClassByAttributeId(id);
