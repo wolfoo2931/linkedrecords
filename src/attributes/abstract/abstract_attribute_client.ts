@@ -65,7 +65,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     this.id = `${this.getDataTypePrefix()}-${uuid()}`;
 
-    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}?attributeId=${this.id}`, {
+    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -165,7 +165,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.isInitialized = true;
 
     if (!result) {
-      const url = `${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+      const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
       const response = await this.withConnectionLostHandler(() => fetch(url));
 
       if (response.status === 401) {
@@ -186,7 +186,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
-    const url = `${this.serverURL}attributes/${this.id}/changes?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}&actorId=${this.actorId}`;
     this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
       if (parsedData.attributeId !== this.id) {
         return;
@@ -197,7 +197,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    const url = `${this.serverURL}attributes/${this.id}?attributeId=${this.id}&clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
     const response = await this.withConnectionLostHandler(() => fetch(url, {
       method: 'PATCH',
       headers: {
