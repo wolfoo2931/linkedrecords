@@ -3,27 +3,6 @@ export interface IsSubscribable {
   unsubscribeAll();
 }
 
-function getTabId() {
-  if (!sessionStorage['tabId']) {
-    sessionStorage['tabId'] = (Math.random() + 1).toString(36).substring(7);
-  }
-
-  return sessionStorage['tabId'];
-}
-
-function getEventSourceAsync(url: URL) {
-  if (!url.searchParams.has('tabId')) {
-    url.searchParams.append('tabId', getTabId());
-  }
-
-  return new Promise((resolve, reject) => {
-    const source = new EventSource(url.toString());
-
-    source.onerror = reject;
-    source.onopen = () => resolve(source);
-  });
-}
-
 export default class ServerSideEvents implements IsSubscribable {
   subscriptions = {};
 
@@ -33,12 +12,31 @@ export default class ServerSideEvents implements IsSubscribable {
 
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
 
+  tabId: string = (Math.random() + 1).toString(36).substring(7);
+
+  public getTabId() {
+    return this.tabId;
+  }
+
+  public getEventSourceAsync(url: URL) {
+    if (!url.searchParams.has('tabId')) {
+      url.searchParams.append('tabId', this.getTabId());
+    }
+
+    return new Promise((resolve, reject) => {
+      const source = new EventSource(url.toString());
+
+      source.onerror = reject;
+      source.onopen = () => resolve(source);
+    });
+  }
+
   public async subscribe(url: string, channel: string, handler: (data: any) => any) {
     const parsedUrl: URL = new URL(url);
     const subId = `${parsedUrl.origin}-${channel}`;
 
     if (!parsedUrl.searchParams.has('tabId')) {
-      parsedUrl.searchParams.append('tabId', getTabId());
+      parsedUrl.searchParams.append('tabId', this.getTabId());
     }
 
     await this.ensureConnection(parsedUrl.origin);
@@ -74,9 +72,9 @@ export default class ServerSideEvents implements IsSubscribable {
 
     if (!this.connetions[url.origin]) {
       try {
-        this.connetions[url.origin] = await getEventSourceAsync(url);
+        this.connetions[url.origin] = await this.getEventSourceAsync(url);
       } catch (ex) {
-        this.connetions[url.origin] = await getEventSourceAsync(url);
+        this.connetions[url.origin] = await this.getEventSourceAsync(url);
       }
 
       this.connetions[url.origin].onmessage = (event) => {
