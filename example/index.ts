@@ -11,14 +11,28 @@ const stores = {
 }
 
 document.addEventListener('DOMContentLoaded', async (event) => {
-  const attributeId = stores.content;
   const editor = new Editor('value');
   const linkedRecords = new LinkedRecords(new URL('http://localhost:3000'));
-  const contentAttribute = await linkedRecords.Attribute.find(attributeId); // await linkedRecords.Attribute.create('longText', '<p>inital</p>');
+  const contentAttribute = await linkedRecords.Attribute.find(stores.content); // await linkedRecords.Attribute.create('longText', '<p>inital</p>');
   const referencesAttribute = await linkedRecords.Attribute.find(stores.reference);
 
-  editor.setContent((await contentAttribute.get()).value);
-  editor.addReferenceData((await referencesAttribute.get()).value);
+  editor.setContent(await contentAttribute.getValue());
+  editor.addReferenceData(await referencesAttribute.getValue());
+
+  // const { content: [ contentAttribute ], refernces: [ referencesAttribute ] } = await linkedRecords.Attribute.findAll({
+  //   content: [
+  //     ['identifiedBy', 'l-03069649-ae59-4633-a199-c85993010158']
+  //   ],
+  //   refernces: [
+  //     ['isA', 'referenceStore'],
+  //     ['belongsTo', 'l-03069649-ae59-4633-a199-c85993010158']
+  //   ],
+  //   referenceSources: [
+  //     ['isA', 'referenceSourceStore'],
+  //     ['belongsTo', 'l-03069649-ae59-4633-a199-c85993010158'],
+  //     ['belongsTo', 'usr-xx']
+  //   ]
+  // });
 
   referencesAttribute.subscribe(async (changeset) => {
     const newData = {};
@@ -41,8 +55,7 @@ document.addEventListener('DOMContentLoaded', async (event) => {
       editor.applyChangeset(changeset.changeset, attr);
     } catch (ex) {
       console.log('failed to apply changeset to EDITOR content. Falling back to replace the whole editors content', ex);
-      const attrState = await contentAttribute.get();
-      editor.setContent(attrState.value, attr);
+      editor.setContent(await contentAttribute.getValue(), attr);
     }
   });
 

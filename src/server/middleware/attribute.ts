@@ -12,7 +12,13 @@ function getAttributeClassByAttributeId(id: string) : any {
 }
 
 function getAttributeIdByRquest(req) {
-  const urlMatch = req.originalUrl.match(/\/attributes\/(.*?)[?&/^]/);
+  let urlMatch = req.originalUrl.match(/\/attributes\/(.*?)[?&/^]/);
+
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1];
+  }
+
+  urlMatch = req.originalUrl.match(/\/attributes\/(.*)/);
 
   if (urlMatch && urlMatch[1]) {
     return urlMatch[1];
