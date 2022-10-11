@@ -13,7 +13,7 @@ let clients: LinkedRecords[] = [];
 
 function createClient(): [ LinkedRecords, ServerSideEvents ] {
   const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(new URL('http://0.0.0.0:3000'), serverSideEvents);
+  const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
   clients.push(client);
   return [client, serverSideEvents];
 }
