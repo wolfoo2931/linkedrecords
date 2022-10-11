@@ -187,7 +187,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.notifySubscribers(undefined, undefined);
 
     const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}&actorId=${this.actorId}`;
-    this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
+    await this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
       if (parsedData.attributeId !== this.id) {
         return;
       }
