@@ -14,13 +14,9 @@ export default class ServerSideEvents implements IsSubscribable {
 
   tabId: string = (Math.random() + 1).toString(36).substring(7);
 
-  public getTabId() {
-    return this.tabId;
-  }
-
   public getEventSourceAsync(url: URL) {
     if (!url.searchParams.has('tabId')) {
-      url.searchParams.append('tabId', this.getTabId());
+      url.searchParams.append('tabId', this.tabId);
     }
 
     return new Promise((resolve, reject) => {
@@ -36,7 +32,7 @@ export default class ServerSideEvents implements IsSubscribable {
     const subId = `${parsedUrl.origin}-${channel}`;
 
     if (!parsedUrl.searchParams.has('tabId')) {
-      parsedUrl.searchParams.append('tabId', this.getTabId());
+      parsedUrl.searchParams.append('tabId', this.tabId);
     }
 
     await this.ensureConnection(parsedUrl.origin);
