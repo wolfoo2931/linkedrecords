@@ -21,7 +21,16 @@ module.exports = function (config) {
       }
     },
 
-    browsers: ['ChromeHeadless'],
+    logLevel: config.DEBUG,
+
+    browsers: ['Chrome_with_third_party_cookies'],
+
+    customLaunchers: {
+      Chrome_with_third_party_cookies: {
+        base: 'ChromeHeadless',
+        flags: ['--disable-web-security']
+      }
+    },
 
     reporters: ['spec'],
 
