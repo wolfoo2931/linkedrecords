@@ -1,6 +1,5 @@
 # Known Issues & TODOs
 ## MVP
-- List/Query attributes
 - Authorization
 
 ## Next Improvement
