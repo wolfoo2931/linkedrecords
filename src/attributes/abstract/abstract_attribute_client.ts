@@ -49,6 +49,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     throw new Error('getDataTypeName needs to be implemented in child class');
   }
 
+  public static isAttributeId(id: string) {
+    return id.split('-')[0] === this.prototype.getDataTypePrefix();
+  }
+
   public abstract getDataTypePrefix();
   public abstract getDefaultValue() : Type;
   public abstract deserializeValue(serializedValue: string) : Type;

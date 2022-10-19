@@ -6,12 +6,14 @@ import cookieParser from 'cookie-parser';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
+import Fact from '../facts/server';
 
 // import authentication from './middleware/authentication';
 import 'dotenv/config';
 
 const app = express();
 const server = new Server(app);
+Fact.initDB();
 
 app.use('/example', express.static('example'));
 app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
@@ -57,6 +59,37 @@ app.patch('/attributes/:attributeId', async (req, res) => {
   );
 
   res.sendSEE(req.params.attributeId, commitedChange);
+  res.status(200);
+  res.send();
+});
+
+app.get('/facts', async (req, res) => {
+  const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
+  const predicate = req.query.predicate ? JSON.parse(req.query.predicate) : undefined;
+  const object = req.query.object ? JSON.parse(req.query.object) : undefined;
+
+  const facts = await Fact.findAll({
+    subject,
+    predicate,
+    object,
+  });
+
+  res.status(200);
+  res.send(facts);
+});
+
+app.post('/facts', async (req, res) => {
+  const { subject, predicate, object } = req.body;
+  const fact = new Fact(subject, predicate, object);
+  await fact.save();
+
+  res.status(200);
+  res.send();
+});
+
+app.delete('/facts', async (req, res) => {
+  await Fact.deleteAll();
+
   res.status(200);
   res.send();
 });
