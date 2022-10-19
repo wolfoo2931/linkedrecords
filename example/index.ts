@@ -8,7 +8,7 @@ import KeyValueAttribute from '../src/attributes/key_value/client';
 
 document.addEventListener('DOMContentLoaded', async (event) => {
   const editor = new Editor('value');
-  const linkedRecords = new LinkedRecords(new URL('http://localhost:3000'));
+  const linkedRecords = new LinkedRecords(new URL('http://10.60.3.218:3000'));
 
   // const content = await linkedRecords.Attribute.create('longText', 'inital');
   // console.log('New ContentId', content.id);
