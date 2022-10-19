@@ -118,6 +118,19 @@ class FactsRepository {
     this.linkedRecords = linkedRecords;
   }
 
+  async createAll(facts: [ string?, string?, string? ][]):
+  Promise<Fact[]> {
+    const createdFacts = await Promise.all(
+      facts.map((attr) => this.create(
+        attr[0],
+        attr[1],
+        attr[2],
+      )),
+    );
+
+    return createdFacts;
+  }
+
   async create(subjectId?: string, predicateId?: string, objectId?: string): Promise<Fact> {
     if (!subjectId) {
       throw Error('subjectId can not be null');

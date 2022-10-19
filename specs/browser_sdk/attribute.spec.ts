@@ -45,20 +45,19 @@ describe('Fact', () => {
       const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
-      await client.Fact.create(references.id, 'belongsTo', content.id);
-      await client.Fact.create(references.id, 'isA', 'referenceStore');
-
-      await client.Fact.create(referenceSources1.id, 'isA', 'referenceSourceStore');
-      await client.Fact.create(referenceSources2.id, 'isA', 'referenceSourceStore');
-      await client.Fact.create(referenceSources3.id, 'isA', 'referenceSourceStore');
-
-      await client.Fact.create(referenceSources1.id, 'belongsTo', content.id);
-      await client.Fact.create(referenceSources2.id, 'belongsTo', content.id);
-      await client.Fact.create(referenceSources3.id, 'belongsTo', content.id);
-
-      await client.Fact.create(referenceSources1.id, 'belongsTo', 'usr-ab');
-      await client.Fact.create(referenceSources2.id, 'belongsTo', 'usr-xx');
-      await client.Fact.create(referenceSources3.id, 'belongsTo', 'usr-cd');
+      await client.Fact.createAll([
+        [references.id, 'belongsTo', content.id],
+        [references.id, 'isA', 'referenceStore'],
+        [referenceSources1.id, 'isA', 'referenceSourceStore'],
+        [referenceSources2.id, 'isA', 'referenceSourceStore'],
+        [referenceSources3.id, 'isA', 'referenceSourceStore'],
+        [referenceSources1.id, 'belongsTo', content.id],
+        [referenceSources2.id, 'belongsTo', content.id],
+        [referenceSources3.id, 'belongsTo', content.id],
+        [referenceSources1.id, 'belongsTo', 'usr-ab'],
+        [referenceSources2.id, 'belongsTo', 'usr-xx'],
+        [referenceSources3.id, 'belongsTo', 'usr-cd'],
+      ]);
 
       if (content.id == null) {
         throw Error('id is null');
