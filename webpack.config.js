@@ -4,14 +4,14 @@ const nodeExternals = require('webpack-node-externals');
 const NODE_ENV = 'development';
 
 const exampleFrontned = {
-    entry: path.join(__dirname, 'example', 'index.ts'),
+    entry: path.join(__dirname, 'example', 'client', 'index.ts'),
     target: 'web',
     mode: NODE_ENV,
     devtool: 'inline-source-map',
     watch: NODE_ENV === 'development',
     output: {
         filename: 'index.packaged.js',
-        path: path.join(__dirname, 'example')
+        path: path.join(__dirname,'example', 'client')
     },
     module: {
         rules: [
@@ -32,8 +32,8 @@ const exampleFrontned = {
     }
 };
 
-const main = {
-    entry: './src/server/index.ts',
+const exampleBackend = {
+    entry: path.join(__dirname, 'example', 'server', 'index.ts'),
     mode: NODE_ENV,
     target: 'node',
     externals: [ nodeExternals() ],
@@ -64,4 +64,4 @@ const main = {
     ]
 };
 
-module.exports = [ main, exampleFrontned ]
+module.exports = [ exampleBackend, exampleFrontned ]
