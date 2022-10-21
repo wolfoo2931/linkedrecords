@@ -1,10 +1,10 @@
 import { Changeset } from 'changesets';
 import Editor from 'structured-text-editor/src/editor';
-import LinkedRecords from '../src/browser_sdk/index';
-import LongTextChange from '../src/attributes/long_text/long_text_change';
-import KeyValueChange from '../src/attributes/key_value/key_value_change';
-import LongTextAttribute from '../src/attributes/long_text/client';
-import KeyValueAttribute from '../src/attributes/key_value/client';
+import LinkedRecords from '../../src/browser_sdk/index';
+import LongTextChange from '../../src/attributes/long_text/long_text_change';
+import KeyValueChange from '../../src/attributes/key_value/key_value_change';
+import LongTextAttribute from '../../src/attributes/long_text/client';
+import KeyValueAttribute from '../../src/attributes/key_value/client';
 
 document.addEventListener('DOMContentLoaded', async (event) => {
   const editor = new Editor('value');

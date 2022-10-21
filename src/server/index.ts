@@ -1,17 +1,57 @@
-import { Server } from 'http';
 import express from 'express';
-import createApp from './linkedrecords';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import morgan from 'morgan';
+import serverSentEvents from '../../lib/server-side-events/server';
+import attributeMiddleware from './middleware/attribute';
+import Fact from '../facts/server';
+import factsController from './controllers/facts_controller';
+import attributesController from './controllers/attributes_controller';
+import authentication from './middleware/authentication';
+import 'dotenv/config';
 
-createApp({
-  isAuthorizedToCreateAttribute: () => true,
-  isAuthorizedToReadAttribute: () => true,
-  isAuthorizedToUpdateAttribute: () => true,
-  isAuthorizedToCreateFacts: () => true,
-  isAuthorizedToReadFacts: () => true,
-  isAuthorizedToUpdateFacts: () => true,
-}).then((app) => {
-  app.use('/example', express.static('example'));
+function withAuth(req, res, controllerAction, isAuthorized) {
+  if (!req?.oidc?.user?.sub || !isAuthorized(req.oidc.user.sub, req)) {
+    res.status(401).write('Not Authorized');
+  } else {
+    controllerAction(req, res);
+  }
+}
 
-  const server = new Server(app);
-  server.listen(process.env['PORT'] || 3000);
-});
+export default async function createApp({
+  isAuthorizedToCreateAttribute = () => false,
+  isAuthorizedToReadAttribute = () => false,
+  isAuthorizedToUpdateAttribute = () => false,
+  isAuthorizedToCreateFacts = () => false,
+  isAuthorizedToReadFacts = () => false,
+  isAuthorizedToUpdateFacts = () => false,
+}: {
+  isAuthorizedToCreateAttribute?: (userid: string, request: any) => boolean,
+  isAuthorizedToReadAttribute?: (userid: string, request: any) => boolean,
+  isAuthorizedToUpdateAttribute?: (userid: string, request: any) => boolean,
+  isAuthorizedToCreateFacts?: (userid: string, request: any) => boolean,
+  isAuthorizedToReadFacts?: (userid: string, request: any) => boolean,
+  isAuthorizedToUpdateFacts?: (userid: string, request: any) => boolean,
+} = {}) {
+  const initPromise = Fact.initDB();
+  const app = express();
+
+  app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
+  app.use(express.json());
+  app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
+  app.use(cors({ origin: '*' }));
+  app.use(serverSentEvents());
+  app.use(authentication());
+  app.use('/attributes', attributeMiddleware());
+
+  app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, isAuthorizedToCreateAttribute));
+  app.get('/attributes/:id', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
+  app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
+  app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, isAuthorizedToUpdateAttribute));
+  app.get('/facts', (req, res) => withAuth(req, res, factsController.index, isAuthorizedToReadFacts));
+  app.post('/facts', (req, res) => withAuth(req, res, factsController.create, isAuthorizedToCreateFacts));
+  app.delete('/facts', (req, res) => withAuth(req, res, factsController.deleteAll, isAuthorizedToUpdateFacts));
+
+  await initPromise;
+  return app;
+}
