@@ -7,5 +7,7 @@ manifest.yml
 npm-debug.log
 staticfiles/sdk.min.js
 example/index.packaged.js
+example/client/index.packaged.js
+example/server/index.packaged.js
 .env
 .DS_Store
