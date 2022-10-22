@@ -14,6 +14,10 @@ function withAuth(req, res, controllerAction, isAuthorized) {
   if (!req?.oidc?.user?.sub || !isAuthorized(req.oidc.user.sub, req)) {
     res.status(401).write('Not Authorized');
   } else {
+    if (!req.signedCookies.userId) {
+      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false });
+    }
+
     controllerAction(req, res);
   }
 }
