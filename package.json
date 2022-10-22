@@ -35,6 +35,7 @@
     "express": "~4.18.1",
     "express-openid-connect": "^2.8.0",
     "intersect": "^1.0.1",
+    "js-cookie": "^3.0.1",
     "morgan": "^1.10.0",
     "pg": "~8.8.0",
     "queue": "4.2.1",
