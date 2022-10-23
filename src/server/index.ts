@@ -29,6 +29,7 @@ export default async function createApp({
   isAuthorizedToCreateFacts = () => false,
   isAuthorizedToReadFacts = () => false,
   isAuthorizedToUpdateFacts = () => false,
+  staticMounts = [],
 }: {
   isAuthorizedToCreateAttribute?: (userid: string, request: any) => boolean,
   isAuthorizedToReadAttribute?: (userid: string, request: any) => boolean,
@@ -36,9 +37,19 @@ export default async function createApp({
   isAuthorizedToCreateFacts?: (userid: string, request: any) => boolean,
   isAuthorizedToReadFacts?: (userid: string, request: any) => boolean,
   isAuthorizedToUpdateFacts?: (userid: string, request: any) => boolean,
+  staticMounts?: [string, string][]
 } = {}) {
   const initPromise = Fact.initDB();
   const app = express();
+
+  app.use((req, res, next) => {
+    console.log('Starting to process:', req.path);
+    next();
+  });
+
+  staticMounts.forEach(([UrlPath, filePath]) => {
+    app.use(UrlPath, express.static(filePath));
+  });
 
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());

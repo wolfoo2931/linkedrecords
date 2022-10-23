@@ -2,12 +2,14 @@
   "name": "linkedrecords",
   "version": "0.1.0",
   "description": "A backend as a service for declarative and functional API development",
-  "main": "src/server/index.js",
+  "exports": {
+    "./server": "./dist/server.js",
+    "./client": "./dist/client.js"
+  },
   "scripts": {
     "test": "karma start",
     "lint": "eslint .",
-    "run:dev": "nodemon build/index.js",
-    "start": "webpack --config ./webpack.config.js"
+    "build": "webpack --config ./webpack.config.js"
   },
   "repository": {
     "type": "git",
@@ -62,7 +64,6 @@
     "typescript": "^4.8.3",
     "webpack": "^5.73.0",
     "webpack-cli": "^4.10.0",
-    "webpack-node-externals": "^3.0.0",
-    "webpack-shell-plugin-next": "^2.2.2"
+    "webpack-node-externals": "^3.0.0"
   }
 }

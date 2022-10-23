@@ -1,67 +1,63 @@
-const path = require('path');
-const WebpackShellPlugin = require('webpack-shell-plugin-next');
-const nodeExternals = require('webpack-node-externals');
-const NODE_ENV = 'development';
+const path = require("path");
+const nodeExternals = require("webpack-node-externals");
+const NODE_ENV = "development";
 
-const exampleFrontned = {
-    entry: path.join(__dirname, 'example', 'client', 'index.ts'),
-    target: 'web',
-    mode: NODE_ENV,
-    devtool: 'inline-source-map',
-    watch: NODE_ENV === 'development',
-    output: {
-        filename: 'index.packaged.js',
-        path: path.join(__dirname,'example', 'client')
+const client = {
+  entry: path.join(__dirname, "src", "browser_sdk", "index.ts"),
+  target: "web",
+  mode: NODE_ENV,
+  devtool: "source-map",
+  watch: false,
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "client.js",
+    library: {
+      type: "umd",
     },
-    module: {
-        rules: [
-            {
-                test: /\.tsx?$/,
-                use: 'ts-loader',
-                exclude: /node_modules/,
-            },
-        ]
-    },
-    resolve: {
-        extensions: ['.tsx', '.ts', '.js'],
-    },
-    externals: {
-    },
-    optimization: {
-        minimize: false
-    }
+  },
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        use: "ts-loader",
+        exclude: /node_modules/,
+      },
+    ],
+  },
+  resolve: {
+    extensions: [".tsx", ".ts", ".js"],
+  },
+  externals: {},
+  optimization: {
+    minimize: false,
+  },
 };
 
-const exampleBackend = {
-    entry: path.join(__dirname, 'example', 'server', 'index.ts'),
-    mode: NODE_ENV,
-    target: 'node',
-    externals: [ nodeExternals() ],
-    watch: NODE_ENV === 'development',
-    output: {
-        path: path.resolve(__dirname, 'build'),
-        filename: 'index.js'
+const server = {
+  entry: path.join(__dirname, "src", "server", "index.ts"),
+  mode: NODE_ENV,
+  target: "node",
+  externals: [nodeExternals()],
+  watch: false,
+  devtool: "source-map",
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "server.js",
+    library: {
+      type: "umd",
     },
-    resolve: {
-        extensions: ['.ts', '.js'],
-    },
-    module: {
-        rules: [
-            {
-                test: /\.ts$/,
-                use: 'ts-loader',
-            },
-        ]
-    },
-    plugins: [
-        new WebpackShellPlugin({
-            onBuildEnd: {
-                scripts: ['npm run run:dev'],
-                blocking: false,
-                parallel: true
-            }
-        })
-    ]
+  },
+  resolve: {
+    extensions: [".ts", ".js"],
+  },
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        use: "ts-loader",
+      },
+    ],
+  },
 };
 
-module.exports = [ exampleBackend, exampleFrontned ]
+module.exports = [server, client];

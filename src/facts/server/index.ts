@@ -25,7 +25,7 @@ export default class Fact {
       return [query];
     }
 
-    if (!query.length || query.length !== 2) {
+    if (!query || !query.length || query.length !== 2) {
       throw new Error('resolveToAttributeIds must be string or array with two elements');
     }
 

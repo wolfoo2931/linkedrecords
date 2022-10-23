@@ -4,10 +4,19 @@
 import { v4 as uuid } from 'uuid';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
+import KeyValueChange from '../attributes/key_value/key_value_change';
+import LongTextChange from '../attributes/long_text/long_text_change';
 import ServerSideEvents, { IsSubscribable } from '../../lib/server-side-events/client';
 import AbstractAttributeClient from '../attributes/abstract/abstract_attribute_client';
 import IsSerializable from '../attributes/abstract/is_serializable';
 import Fact from '../facts/client';
+
+export {
+  LongTextAttribute,
+  KeyValueAttribute,
+  KeyValueChange,
+  LongTextChange,
+};
 
 class AttributesRepository {
   linkedRecords: LinkedRecords;
@@ -59,6 +68,7 @@ class AttributesRepository {
     return attribute;
   }
 
+  // TODO: check for null values in the query
   async findAll(query: { [key: string]: string | string[][] })
     :Promise<{
       [key: string]: AbstractAttributeClient<any, any>[] | AbstractAttributeClient<any, any>
