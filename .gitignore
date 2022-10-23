@@ -1,5 +1,6 @@
 node_modules
 build
+dist
 out
 scripts/run.sh
 race_condition_test_results.txt
