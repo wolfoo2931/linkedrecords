@@ -1,6 +1,10 @@
 const { auth } = require('express-openid-connect');
 
 export default function authentication() {
+  if (process.env['DISABLE_AUTH'] === 'true') {
+    return (req, res, next) => next();
+  }
+
   return auth({
     baseURL: process.env['APP_BASE_URL'],
     issuerBaseURL: process.env['AUTH_ISSUER_BASE_URL'],
