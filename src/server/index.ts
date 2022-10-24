@@ -10,7 +10,14 @@ import attributesController from './controllers/attributes_controller';
 import authentication from './middleware/authentication';
 import 'dotenv/config';
 
+Fact.initDB();
+
 function withAuth(req, res, controllerAction, isAuthorized) {
+  if (process.env['DISABLE_AUTH'] === 'true') {
+    controllerAction(req, res);
+    return;
+  }
+
   if (!req?.oidc?.user?.sub || !isAuthorized(req.oidc.user.sub, req)) {
     res.status(401).write('Not Authorized');
   } else {
@@ -22,7 +29,7 @@ function withAuth(req, res, controllerAction, isAuthorized) {
   }
 }
 
-export default async function createApp({
+export default function createApp({
   isAuthorizedToCreateAttribute = () => false,
   isAuthorizedToReadAttribute = () => false,
   isAuthorizedToUpdateAttribute = () => false,
@@ -39,13 +46,7 @@ export default async function createApp({
   isAuthorizedToUpdateFacts?: (userid: string, request: any) => boolean,
   staticMounts?: [string, string][]
 } = {}) {
-  const initPromise = Fact.initDB();
   const app = express();
-
-  app.use((req, res, next) => {
-    console.log('Starting to process:', req.path);
-    next();
-  });
 
   staticMounts.forEach(([UrlPath, filePath]) => {
     app.use(UrlPath, express.static(filePath));
@@ -67,6 +68,5 @@ export default async function createApp({
   app.post('/facts', (req, res) => withAuth(req, res, factsController.create, isAuthorizedToCreateFacts));
   app.delete('/facts', (req, res) => withAuth(req, res, factsController.deleteAll, isAuthorizedToUpdateFacts));
 
-  await initPromise;
   return app;
 }

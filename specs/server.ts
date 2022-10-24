@@ -1,17 +1,17 @@
 import { Server } from 'http';
-import express from 'express';
-import createApp from '../../src/server';
+import createApp from '../src/server';
 
-createApp({
+const port = process.env['PORT'] || 3000;
+
+const app = createApp({
   isAuthorizedToCreateAttribute: () => true,
   isAuthorizedToReadAttribute: () => true,
   isAuthorizedToUpdateAttribute: () => true,
   isAuthorizedToCreateFacts: () => true,
   isAuthorizedToReadFacts: () => true,
   isAuthorizedToUpdateFacts: () => true,
-}).then((app) => {
-  app.use('/example', express.static('example/client'));
-
-  const server = new Server(app);
-  server.listen(process.env['PORT'] || 3000);
 });
+
+const server = new Server(app);
+console.log('start server on', port);
+server.listen(port);

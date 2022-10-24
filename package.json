@@ -7,7 +7,7 @@
     "./client": "./dist/client.js"
   },
   "scripts": {
-    "test": "karma start",
+    "test": "./runTests.sh",
     "lint": "eslint .",
     "build": "webpack --config ./webpack.config.js"
   },
