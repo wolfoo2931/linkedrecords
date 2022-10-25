@@ -136,7 +136,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   public handleExpiredLoginSession() {
     const win: Window = window;
-    win.location = '/login';
+    win.location = `${this.linkedRecords.serverURL}login`;
   }
 
   public handleConnectionError(error) {
