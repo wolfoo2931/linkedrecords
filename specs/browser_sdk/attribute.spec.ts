@@ -93,6 +93,89 @@ describe('Fact', () => {
       expect(await referenceSourcesAttribute.getValue()).to.deep.equal({ user: 'usr-xx' });
     });
 
+    it('can be executed in parallel', async () => {
+      const [client] = createClient();
+      const [otherClient] = createClient();
+
+      const content = await client.Attribute.create('longText', 'the init value');
+      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+      const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
+      const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
+      const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
+
+      await client.Fact.createAll([
+        [references.id, 'belongsTo', content.id],
+        [references.id, 'isA', 'referenceStore'],
+        [referenceSources1.id, 'isA', 'referenceSourceStore'],
+        [referenceSources2.id, 'isA', 'referenceSourceStore'],
+        [referenceSources3.id, 'isA', 'referenceSourceStore'],
+        [referenceSources1.id, 'belongsTo', content.id],
+        [referenceSources2.id, 'belongsTo', content.id],
+        [referenceSources3.id, 'belongsTo', content.id],
+        [referenceSources1.id, 'belongsTo', 'usr-ab'],
+        [referenceSources2.id, 'belongsTo', 'usr-xx'],
+        [referenceSources3.id, 'belongsTo', 'usr-cd'],
+      ]);
+
+      if (content.id == null) {
+        throw Error('id is null');
+      }
+
+      const exec1 = otherClient.Attribute.findAll({
+        content: content.id,
+        refernces: [
+          ['belongsTo', content.id],
+          ['isA', 'referenceStore'],
+        ],
+        referenceSources: [
+          ['belongsTo', content.id],
+          ['isA', 'referenceSourceStore'],
+          ['belongsTo', 'usr-xx'],
+        ],
+      });
+
+      const exec2 = otherClient.Attribute.findAll({
+        content: content.id,
+        refernces: [
+          ['belongsTo', content.id],
+          ['isA', 'referenceStore'],
+        ],
+        referenceSources: [
+          ['belongsTo', content.id],
+          ['isA', 'referenceSourceStore'],
+          ['belongsTo', 'usr-xx'],
+        ],
+      });
+
+      const { content: contentAttribute1, refernces: [referencesAttribute1], referenceSources: [referenceSourcesAttribute1] } = <{
+        content: LongTextAttribute,
+        refernces: KeyValueAttribute[],
+        referenceSources: KeyValueAttribute[]
+      }> <unknown> await exec1;
+
+      const { content: contentAttribute2, refernces: [referencesAttribute2], referenceSources: [referenceSourcesAttribute2] } = <{
+        content: LongTextAttribute,
+        refernces: KeyValueAttribute[],
+        referenceSources: KeyValueAttribute[]
+      }> <unknown> await exec2;
+
+      if (!referencesAttribute1 || !referencesAttribute2) {
+        throw Error('referencesAttribute is null');
+      }
+
+      if (!referenceSourcesAttribute1 || !referenceSourcesAttribute2) {
+        throw Error('referenceSourcesAttribute is null');
+      }
+
+      expect(await contentAttribute1.getValue()).to.equal('the init value');
+      expect(await referencesAttribute1.getValue()).to.deep.equal({ foo: 'bar' });
+      expect(await referenceSourcesAttribute1.getValue()).to.deep.equal({ user: 'usr-xx' });
+
+      expect(await contentAttribute2.getValue()).to.equal('the init value');
+      expect(await referencesAttribute2.getValue()).to.deep.equal({ foo: 'bar' });
+      expect(await referenceSourcesAttribute2.getValue()).to.deep.equal({ user: 'usr-xx' });
+    });
+
     it('returns an empty array when the attribute does not exists', async () => {
       const [client] = createClient();
 
