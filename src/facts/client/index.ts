@@ -24,6 +24,7 @@ export default class Fact {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({
         subject: this.subject,
         predicate: this.predicate,

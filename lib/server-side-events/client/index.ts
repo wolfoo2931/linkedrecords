@@ -20,10 +20,14 @@ export default class ServerSideEvents implements IsSubscribable {
     }
 
     return new Promise((resolve, reject) => {
-      const source = new EventSource(url.toString());
+      const source = new EventSource(url.toString(), {
+        withCredentials: true,
+      });
 
       source.onerror = reject;
-      source.onopen = () => resolve(source);
+      source.onopen = () => {
+        resolve(source);
+      };
     });
   }
 
@@ -36,7 +40,9 @@ export default class ServerSideEvents implements IsSubscribable {
     }
 
     await this.ensureConnection(parsedUrl.origin);
-    await fetch(parsedUrl.toString());
+    await fetch(parsedUrl.toString(), {
+      credentials: 'include',
+    });
 
     this.subscriptions[subId] = this.subscriptions[subId] || [];
     this.subscriptions[subId].push(handler);

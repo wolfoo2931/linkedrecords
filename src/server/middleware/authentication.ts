@@ -16,5 +16,12 @@ export default function authentication() {
       scope: 'openid offline_access',
       response_type: 'code',
     },
+    session: {
+      cookie: {
+        domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname,
+        sameSite: 'None',
+        secure: true,
+      },
+    },
   });
 }
