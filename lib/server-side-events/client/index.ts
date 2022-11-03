@@ -76,7 +76,17 @@ export default class ServerSideEvents implements IsSubscribable {
       try {
         this.connetions[url.origin] = await this.getEventSourceAsync(url);
       } catch (ex) {
-        this.connetions[url.origin] = await this.getEventSourceAsync(url);
+        try {
+          this.connetions[url.origin] = await this.getEventSourceAsync(url);
+        } catch (ex2) {
+          console.log('Another EventSource is probably connected already', ex2);
+
+          if (this.connetions[url.origin]) {
+            return this.connetions[url.origin];
+          }
+
+          throw ex2;
+        }
       }
 
       this.connetions[url.origin].onmessage = (event) => {
