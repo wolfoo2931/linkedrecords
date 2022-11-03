@@ -55,9 +55,17 @@ export default function createApp({
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
   app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
-  app.use(cors({ origin: '*' }));
-  app.use(serverSentEvents());
+
+  if (process.env['CORS_ORIGIN']) {
+    app.use(cors({
+      origin: process.env['CORS_ORIGIN'],
+      credentials: true,
+    }));
+  }
+
   app.use(authentication());
+
+  app.use(serverSentEvents());
   app.use('/attributes', attributeMiddleware());
 
   app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, isAuthorizedToCreateAttribute));

@@ -20,6 +20,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   serverURL: URL;
 
+  loginURL?: URL;
+
   observers: Function[];
 
   isInitialized: boolean;
@@ -33,6 +35,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.linkedRecords = linkedRecords;
     this.serverSideEvents = serverSideEvents;
     this.serverURL = linkedRecords.serverURL;
+    this.loginURL = linkedRecords.loginURL;
     this.observers = [];
 
     // because the same user can be logged on two browsers/laptops, we need
@@ -74,6 +77,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({
         clientId: this.clientId,
         actorId: this.actorId,
@@ -135,8 +139,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   public handleExpiredLoginSession() {
-    const win: Window = window;
-    win.location = `${this.linkedRecords.serverURL}login`;
+    if (this.linkedRecords.loginURL) {
+      const win: Window = window;
+      win.location = this.linkedRecords.loginURL.toString();
+    }
   }
 
   public handleConnectionError(error) {
@@ -170,7 +176,9 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     if (!result) {
       const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
-      const response = await this.withConnectionLostHandler(() => fetch(url));
+      const response = await this.withConnectionLostHandler(() => fetch(url, {
+        credentials: 'include',
+      }));
 
       if (response.status === 401) {
         this.handleExpiredLoginSession();
@@ -209,6 +217,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(change.toJSON()),
+      credentials: 'include',
     }));
 
     if (response.status === 401) {

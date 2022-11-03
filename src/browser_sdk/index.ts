@@ -166,6 +166,7 @@ class FactsRepository {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
     });
   }
 
@@ -192,6 +193,7 @@ class FactsRepository {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
     });
 
     const responseJson = await response.json();
@@ -210,6 +212,8 @@ export default class LinkedRecords {
 
   serverURL: URL;
 
+  loginURL?: URL;
+
   clientId: string;
 
   actorId: string;
@@ -218,8 +222,9 @@ export default class LinkedRecords {
 
   Fact: FactsRepository;
 
-  constructor(serverURL: URL, serverSideEvents?: IsSubscribable) {
+  constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
     this.serverURL = serverURL;
+    this.loginURL = loginURL;
     this.actorId = uuid();
     this.clientId = uuid();
     this.serverSideEvents = serverSideEvents || new ServerSideEvents();
