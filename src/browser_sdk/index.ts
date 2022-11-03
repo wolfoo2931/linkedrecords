@@ -33,7 +33,7 @@ class AttributesRepository {
     this.serverSideEvents = serverSideEvents;
   }
 
-  async create(attributeType: string, value: any)
+  async create(attributeType: string, value: any, facts?: [ string?, string? ][])
     :Promise<AbstractAttributeClient<any, IsSerializable>> {
     const AttributeClass = AttributesRepository
       .attributeTypes
@@ -49,6 +49,11 @@ class AttributesRepository {
     );
 
     await attribute.create(value);
+
+    if (facts) {
+      await this.linkedRecords.Fact.createAll(facts.map(([p, o]) => [attribute.id, p, o]));
+    }
+
     return attribute;
   }
 
