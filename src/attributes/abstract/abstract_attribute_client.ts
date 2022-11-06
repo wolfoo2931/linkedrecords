@@ -30,6 +30,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   value: Type;
 
+  attrSubscription?: [string, (data: any) => any] = undefined;
+
   constructor(linkedRecords: LinkedRecords, serverSideEvents: IsSubscribable, id?: string) {
     this.id = id;
     this.linkedRecords = linkedRecords;
@@ -161,6 +163,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
+  public unload() {
+    if (this.attrSubscription) {
+      this.serverSideEvents.unsubscribe(this.attrSubscription);
+    }
+  }
+
   protected async load(serverState?: { changeId: string, value: string }) {
     let result = serverState;
 
@@ -199,7 +207,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.notifySubscribers(undefined, undefined);
 
     const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}&actorId=${this.actorId}`;
-    await this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
+    this.attrSubscription = await this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
       if (parsedData.attributeId !== this.id) {
         return;
       }

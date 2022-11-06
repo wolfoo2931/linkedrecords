@@ -1,5 +1,6 @@
 export interface IsSubscribable {
   subscribe(url: string, channel: string, handler: (data: any) => any);
+  unsubscribe([subId, handler]: [string, (data: any) => any]);
   unsubscribeAll();
 }
 
@@ -31,7 +32,8 @@ export default class ServerSideEvents implements IsSubscribable {
     });
   }
 
-  public async subscribe(url: string, channel: string, handler: (data: any) => any) {
+  public async subscribe(url: string, channel: string, handler: (data: any) => any)
+    : Promise<[string, (data: any) => any]> {
     const parsedUrl: URL = new URL(url);
     const subId = `${parsedUrl.origin}-${channel}`;
 
@@ -46,6 +48,14 @@ export default class ServerSideEvents implements IsSubscribable {
 
     this.subscriptions[subId] = this.subscriptions[subId] || [];
     this.subscriptions[subId].push(handler);
+
+    return [subId, handler];
+  }
+
+  public async unsubscribe([subId, handler]: [string, (data: any) => any]) {
+    if (this.subscriptions[subId]) {
+      this.subscriptions[subId] = this.subscriptions[subId].filter((h) => h !== handler);
+    }
   }
 
   public unsubscribeAll() {
