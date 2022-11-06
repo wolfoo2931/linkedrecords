@@ -71,12 +71,14 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
   private processForeignChange(
     foreignChangeWithMetadata: SerializedChangeWithMetadata<LongTextChange>,
   ) {
+    let transformedForeignChange;
+
     try {
       const foreignChangeset = LongTextChange.fromString(
         foreignChangeWithMetadata.change.changeset,
       );
 
-      const transformedForeignChange = this.buffer.transformAgainst(
+      transformedForeignChange = this.buffer.transformAgainst(
         foreignChangeset,
         this.changeInTransmission?.change,
       );
@@ -85,6 +87,9 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       this.version = foreignChangeWithMetadata.change.changeId;
       this.notifySubscribers(transformedForeignChange, foreignChangeWithMetadata);
     } catch (ex) {
+      console.log(this.value);
+      console.log(transformedForeignChange.changeset.inspect());
+
       console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
       this.load();
     }
