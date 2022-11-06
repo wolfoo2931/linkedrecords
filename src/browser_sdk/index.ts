@@ -2,6 +2,7 @@
 /* eslint-disable import/no-cycle */
 
 import { v4 as uuid } from 'uuid';
+import intersect from 'intersect';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import KeyValueChange from '../attributes/key_value/key_value_change';
@@ -114,9 +115,20 @@ class AttributesRepository {
     };
 
     const factsWhereItIsTheSubject = await this.linkedRecords.Fact.findAll(subjectFactsQuery);
-    const matchedIds = factsWhereItIsTheSubject.map((fact) => fact.subject);
 
-    return this.idArrayToAttributes(matchedIds);
+    const factsWhereItIsTheObject = await Promise.all(query
+      .filter((q) => q.length === 3 && q[2] === '$it')
+      .map(([subject, predicate]) => ({
+        subject: [subject as string],
+        predicate: [predicate as string],
+      }))
+      .map((q) => this.linkedRecords.Fact.findAll(q)));
+
+    const matchedIds = factsWhereItIsTheSubject.map((fact) => fact.subject);
+    const matchedObjectIds = factsWhereItIsTheObject
+      .map((facts) => facts.map((fact) => fact.object));
+
+    return this.idArrayToAttributes(intersect([matchedIds, ...matchedObjectIds]));
   }
 
   private idArrayToAttributes(ids: string[]) {

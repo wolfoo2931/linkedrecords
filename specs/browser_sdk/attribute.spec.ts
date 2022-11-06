@@ -93,6 +93,51 @@ describe('Fact', () => {
       expect(await referenceSourcesAttribute.getValue()).to.deep.equal({ user: 'usr-xx' });
     });
 
+    it('allows to find attributes by object relations', async () => {
+      const [client] = createClient();
+      const [otherClient] = createClient();
+
+      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
+      const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
+      const clubA = await client.Attribute.create('keyValue', { name: 'Club' });
+
+      await client.Fact.createAll([
+        [teamA.id, 'isA', 'team'],
+        [teamB.id, 'isA', 'team'],
+        [clubA.id, 'isA', 'club'],
+        ['user-a', 'isMemberOf', clubA.id],
+        ['user-a', 'isMemberOf', teamA.id],
+        ['user-b', 'isMemberOf', teamB.id],
+        ['user-ab', 'isMemberOf', teamA.id],
+        ['user-ab', 'isMemberOf', teamB.id],
+      ]);
+
+      const teams = await otherClient.Attribute.findAll({
+        allTeamsOfUserA: [
+          ['$it', 'isA', 'team'],
+          ['user-a', 'isMemberOf', '$it'],
+        ],
+        allTeamsOfUserB: [
+          ['$it', 'isA', 'team'],
+          ['user-b', 'isMemberOf', '$it'],
+        ],
+        allTeamsOfUserAB: [
+          ['$it', 'isA', 'team'],
+          ['user-ab', 'isMemberOf', '$it'],
+        ],
+      });
+
+      const { allTeamsOfUserA, allTeamsOfUserB, allTeamsOfUserAB } = <{
+        allTeamsOfUserA: KeyValueAttribute[],
+        allTeamsOfUserB: KeyValueAttribute[],
+        allTeamsOfUserAB: KeyValueAttribute[],
+      }> <unknown> teams;
+
+      expect(allTeamsOfUserA.length).to.equal(1);
+      expect(allTeamsOfUserB.length).to.equal(1);
+      expect(allTeamsOfUserAB.length).to.equal(2);
+    });
+
     it('can be executed in parallel', async () => {
       const [client] = createClient();
       const [otherClient] = createClient();
