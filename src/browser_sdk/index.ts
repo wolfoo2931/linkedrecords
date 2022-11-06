@@ -74,13 +74,13 @@ class AttributesRepository {
   }
 
   // TODO: check for null values in the query
+  // TODO: rename to findComposition
   async findAll(query: { [key: string]: string | string[][] })
     :Promise<{
       [key: string]: AbstractAttributeClient<any, any>[] | AbstractAttributeClient<any, any>
     }> {
     const result = {};
     const qEntries = Object.entries(query);
-    const promises: Promise<any>[] = [];
 
     for (let j = 0; j < qEntries.length; j += 1) {
       const qEntry = qEntries[j];
@@ -89,40 +89,55 @@ class AttributesRepository {
         const n = qEntry[0];
         const q = qEntry[1];
 
-        if (typeof q === 'string') {
-          promises.push(this.find(q).then((attribute) => {
-            result[n] = attribute;
-          }).catch(() => {
-            result[n] = null;
-          }));
-        } else {
-          result[n] = [];
-          promises.push(this.linkedRecords.Fact.findAll({ subject: q }).then((facts) => {
-            for (let i = 0; i < facts.length; i += 1) {
-              const subjectId = facts[i]?.subject;
-              if (subjectId && !result[n].find((attr) => attr.id === subjectId)) {
-                const AttributeClass = AttributesRepository.attributeTypes
-                  .find((at) => at.isAttributeId(subjectId));
-
-                if (AttributeClass) {
-                  const attribute = new AttributeClass(
-                    this.linkedRecords,
-                    this.serverSideEvents,
-                    subjectId,
-                  );
-
-                  result[n].push(attribute);
-                }
-              }
-            }
-          }));
-        }
+        // todo: fix await in loop
+        // eslint-disable-next-line no-await-in-loop
+        result[n] = await this.findAllFromSameGroup(q);
       }
     }
 
-    await Promise.all(promises);
-
     return result;
+  }
+
+  private async findAllFromSameGroup(query: string | string[][]) {
+    if (typeof query === 'string') {
+      try {
+        return await this.find(query);
+      } catch (ex) {
+        return null;
+      }
+    }
+
+    const subjectFactsQuery = {
+      subject: query
+        .map((x) => ((x.length === 3 && x[0] === '$it') ? [x[1] as string, x[2] as string] : x))
+        .filter((x) => x.length === 2),
+    };
+
+    const factsWhereItIsTheSubject = await this.linkedRecords.Fact.findAll(subjectFactsQuery);
+    const matchedIds = factsWhereItIsTheSubject.map((fact) => fact.subject);
+
+    return this.idArrayToAttributes(matchedIds);
+  }
+
+  private idArrayToAttributes(ids: string[]) {
+    return ids.filter((value, index, self) => self.indexOf(value) === index)
+      .map((id) => {
+        const AttributeClass = AttributesRepository.attributeTypes
+          .find((at) => at.isAttributeId(id));
+
+        if (AttributeClass) {
+          const attribute = new AttributeClass(
+            this.linkedRecords,
+            this.serverSideEvents,
+            id,
+          );
+
+          return attribute;
+        }
+
+        return undefined;
+      })
+      .filter((attr) => attr);
   }
 }
 
