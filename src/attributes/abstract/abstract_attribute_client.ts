@@ -201,8 +201,14 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       };
     }
 
+    const serializedValue = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
+
+    if (!serializedValue) {
+      throw new Error('invalid server state');
+    }
+
     this.version = result.changeId;
-    this.value = this.deserializeValue(typeof result.value === 'string' ? result.value : JSON.stringify(result.value));
+    this.value = this.deserializeValue(serializedValue);
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 

@@ -115,20 +115,26 @@ class AttributesRepository {
     };
 
     const factsWhereItIsTheSubject = await this.linkedRecords.Fact.findAll(subjectFactsQuery);
+    let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
 
-    const factsWhereItIsTheObject = await Promise.all(query
+    const objectFactsQuery = query
       .filter((q) => q.length === 3 && q[2] === '$it')
       .map(([subject, predicate]) => ({
         subject: [subject as string],
         predicate: [predicate as string],
-      }))
-      .map((q) => this.linkedRecords.Fact.findAll(q)));
+      }));
 
-    const matchedIds = factsWhereItIsTheSubject.map((fact) => fact.subject);
-    const matchedObjectIds = factsWhereItIsTheObject
-      .map((facts) => facts.map((fact) => fact.object));
+    if (objectFactsQuery.length !== 0) {
+      const factsWhereItIsTheObject = await Promise.all(
+        objectFactsQuery.map((q) => this.linkedRecords.Fact.findAll(q)),
+      );
 
-    return this.idArrayToAttributes(intersect([matchedIds, ...matchedObjectIds]));
+      const matchedObjectIds = factsWhereItIsTheObject.flat().map((f) => f.object);
+
+      matchedIds = intersect(matchedIds, matchedObjectIds);
+    }
+
+    return this.idArrayToAttributes(matchedIds);
   }
 
   private idArrayToAttributes(ids: string[]) {

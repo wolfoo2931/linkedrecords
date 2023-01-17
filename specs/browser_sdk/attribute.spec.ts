@@ -138,6 +138,27 @@ describe('Fact', () => {
       expect(allTeamsOfUserAB.length).to.equal(2);
     });
 
+    it('returns empty records when the object relations do not exists', async () => {
+      const [client] = createClient();
+
+      const teams = await client.Attribute.findAll({
+        allTeamsOfUserA: [
+          ['$it', 'isA', 'team'],
+        ],
+        allTeamsOfUserB: [
+          ['$it', 'isA', 'team'],
+        ],
+      });
+
+      const { allTeamsOfUserA, allTeamsOfUserB } = <{
+        allTeamsOfUserA: KeyValueAttribute[],
+        allTeamsOfUserB: KeyValueAttribute[],
+      }> <unknown> teams;
+
+      expect(allTeamsOfUserA.length).to.equal(0);
+      expect(allTeamsOfUserB.length).to.equal(0);
+    });
+
     it('can be executed in parallel', async () => {
       const [client] = createClient();
       const [otherClient] = createClient();
