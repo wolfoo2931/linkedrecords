@@ -108,6 +108,10 @@ class AttributesRepository {
       }
     }
 
+    if (query.find((q) => (!q[0] && !q[1] && !q[2]))) {
+      return [];
+    }
+
     const subjectFactsQuery = {
       subject: query
         .map((x) => ((x.length === 3 && x[0] === '$it') ? [x[1] as string, x[2] as string] : x))
