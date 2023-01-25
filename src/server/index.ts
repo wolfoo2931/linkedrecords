@@ -22,7 +22,7 @@ function withAuth(req, res, controllerAction, isAuthorized) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false });
+      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
     }
 
     controllerAction(req, res);
