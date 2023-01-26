@@ -8,7 +8,13 @@ export default interface IsAttributeStorage {
   getAttributeLatestSnapshot(
     attributeId: string,
     criteria: { maxChangeId?: string }
-  ) : Promise<{ value: string, changeId: string, actorId: string }>;
+  ) : Promise<{
+    value: string,
+    changeId: string,
+    actorId: string,
+    createdAt: number,
+    updatedAt: number
+  }>;
 
   getAttributeChanges(
     attributeId: string,
@@ -19,7 +25,7 @@ export default interface IsAttributeStorage {
     attributeId: string,
     actorId: string,
     change: string
-  ) : Promise<string>;
+  ) : Promise<{ id: string, updatedAt: Date }>;
 
   insertAttributeSnapshot(
     attributeId: string,

@@ -19,7 +19,13 @@ IsAttributeStorage
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
   }
 
-  async get() : Promise<{ value: object, changeId: string, actorId: string }> {
+  async get() : Promise<{
+    value: object,
+    changeId: string,
+    actorId: string,
+    createdAt: number,
+    updatedAt: number
+  }> {
     return this.getByChangeId('2147483647');
   }
 
@@ -30,7 +36,7 @@ IsAttributeStorage
   async change(
     changeWithMetadata: SerializedChangeWithMetadata<KeyValueChange>,
   ) : Promise<SerializedChangeWithMetadata<KeyValueChange>> {
-    const changeId = await this.storage.insertAttributeChange(
+    const insertResult = await this.storage.insertAttributeChange(
       this.id,
       this.actorId,
       JSON.stringify(changeWithMetadata.change),
@@ -40,13 +46,20 @@ IsAttributeStorage
       changeWithMetadata.attributeId,
       changeWithMetadata.actorId,
       changeWithMetadata.clientId,
-      KeyValueChange.fromJSON(changeWithMetadata.change, changeId),
+      KeyValueChange.fromJSON(changeWithMetadata.change, insertResult.id),
+      insertResult.updatedAt,
     );
   }
 
   private async getByChangeId(
     changeId: string,
-  ) : Promise<{ value: object, changeId: string, actorId: string }> {
+  ) : Promise<{
+      value: object,
+      changeId: string,
+      actorId: string,
+      createdAt: number,
+      updatedAt: number
+    }> {
     const queryOptions = { maxChangeId: changeId };
     const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
 
@@ -54,6 +67,8 @@ IsAttributeStorage
       value: JSON.parse(result.value),
       changeId: result.changeId,
       actorId: result.actorId,
+      createdAt: result.createdAt,
+      updatedAt: result.updatedAt,
     };
 
     const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
@@ -63,6 +78,7 @@ IsAttributeStorage
       commulatedResult.value = tmpChange.apply(commulatedResult.value);
       commulatedResult.changeId = change.changeId;
       commulatedResult.actorId = change.actorId;
+      commulatedResult.updatedAt = change.time;
     });
 
     return commulatedResult;

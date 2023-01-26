@@ -38,7 +38,7 @@ export default class PsqlStorage implements IsAttributeStorage {
     return { id: attributeId };
   }
 
-  getAttributeLatestSnapshot(attributeId: string, { maxChangeId = '2147483647' }) : Promise<{ value: string, changeId: string, actorId: string }> {
+  getAttributeLatestSnapshot(attributeId: string, { maxChangeId = '2147483647' }) : Promise<{ value: string, changeId: string, actorId: string, createdAt: number, updatedAt: number }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
 
     return new Promise((resolve, reject) => {
@@ -52,7 +52,9 @@ export default class PsqlStorage implements IsAttributeStorage {
                     SELECT
                         value,
                         change_id,
-                        actor_id
+                        actor_id,
+                        time as updated_at,
+                        (SELECT MIN(time) FROM ${pgTableName} LIMIT 1) as created_at
                     FROM ${pgTableName}
                     WHERE delta=false
                     AND change_id <= $1
@@ -74,6 +76,8 @@ export default class PsqlStorage implements IsAttributeStorage {
             value: snapshot.value,
             changeId: snapshot.change_id,
             actorId: snapshot.actor_id,
+            createdAt: Date.parse(snapshot.created_at),
+            updatedAt: Date.parse(snapshot.updated_at),
           });
 
           releaseDBConnection();
@@ -96,11 +100,12 @@ export default class PsqlStorage implements IsAttributeStorage {
                     SELECT
                         value,
                         change_id,
-                        actor_id
+                        actor_id,
+                        time
                     FROM ${pgTableName}
                     WHERE change_id > $1
                     AND change_id <= $2
-                    AND delta=true
+                    AND delta = true
                     ORDER BY change_id ASC`, [minChangeId, maxChangeId], (selectErr, changes) => {
           if (selectErr) {
             reject(selectErr);
@@ -112,6 +117,7 @@ export default class PsqlStorage implements IsAttributeStorage {
               value: row.value,
               changeId: row.change_id,
               actorId: row.actor_id,
+              time: row.time,
             })),
           );
 
@@ -121,7 +127,11 @@ export default class PsqlStorage implements IsAttributeStorage {
     });
   }
 
-  insertAttributeChange(attributeId: string, actorId: string, change: string) : Promise<string> {
+  insertAttributeChange(
+    attributeId: string,
+    actorId: string,
+    change: string,
+  ) : Promise<{ id: string, updatedAt: Date }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
 
     return new Promise((resolve, reject) => {
@@ -131,14 +141,14 @@ export default class PsqlStorage implements IsAttributeStorage {
           return;
         }
 
-        pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, true) RETURNING change_id`, [actorId, change], (insertErr, result) => {
+        pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, true) RETURNING change_id, time`, [actorId, new Date(), change], (insertErr, result) => {
           if (insertErr) {
             reject(insertErr);
             return;
           }
 
           releaseDBConnection();
-          resolve(result.rows[0].change_id);
+          resolve({ id: result.rows[0].change_id, updatedAt: new Date(result.rows[0].time) });
         });
       });
     });
@@ -158,7 +168,7 @@ export default class PsqlStorage implements IsAttributeStorage {
           return;
         }
 
-        pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, NOW(), $2, false) RETURNING change_id`, [actorId, value], (insertErr, result) => {
+        pgclient.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id`, [actorId, new Date(), value], (insertErr, result) => {
           if (insertErr) {
             reject(insertErr);
             return;

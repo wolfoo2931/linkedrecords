@@ -18,7 +18,13 @@ IsAttributeStorage
     return this.storage.createAttribute(this.id, this.actorId, value);
   }
 
-  async get() : Promise<{ value: string, changeId: string, actorId: string }> {
+  async get() : Promise<{
+    value: string,
+    changeId: string,
+    actorId: string,
+    createdAt: number,
+    updatedAt: number
+  }> {
     return this.getByChangeId('2147483647');
   }
 
@@ -61,6 +67,7 @@ IsAttributeStorage
             result.actorId,
             result.clientId,
             new LongTextChange(result.transformedClientChange, result.changeId),
+            result.updatedAt,
           ));
         } catch (ex) {
           reject(ex);
@@ -73,7 +80,13 @@ IsAttributeStorage
 
   private async getByChangeId(
     changeId: string,
-  ) : Promise<{ value: string, changeId: string, actorId: string }> {
+  ) : Promise<{
+      value: string,
+      changeId: string,
+      actorId: string,
+      createdAt: number,
+      updatedAt: number
+    }> {
     const queryOptions = { maxChangeId: changeId };
     const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
 
@@ -85,6 +98,7 @@ IsAttributeStorage
       result.value = LongTextChange.fromString(change.value).apply(result.value);
       result.changeId = change.changeId;
       result.actorId = change.actorId;
+      result.updatedAt = change.updatedAt;
     });
 
     return result;
@@ -125,6 +139,7 @@ IsAttributeStorage
       changeId: string,
       clientId: string,
       actorId: string,
+      updatedAt: Date,
       transformedServerChange?: string,
       transformedClientChange: string
     }> {
@@ -154,14 +169,15 @@ IsAttributeStorage
 
     // TODO: we do not know yet for sure if this changeset will be applyable
     // to the already inserted changesets.
-    const changeID = await this.storage.insertAttributeChange(
+    const insertResult = await this.storage.insertAttributeChange(
       this.id,
       this.actorId,
       transformedClientChange,
     );
 
     return {
-      changeId: changeID,
+      changeId: insertResult.id,
+      updatedAt: insertResult.updatedAt,
       clientId: this.clientId,
       actorId: this.actorId,
       transformedServerChange,

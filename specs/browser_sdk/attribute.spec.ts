@@ -6,6 +6,8 @@ import ServerSideEvents from '../../lib/server-side-events/client';
 import LongTextAttribute from '../../src/attributes/long_text/client/index';
 import KeyValueAttribute from '../../src/attributes/key_value/client/index';
 
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
+
 let clients: LinkedRecords[] = [];
 
 function createClient(): [LinkedRecords, ServerSideEvents] {
@@ -91,6 +93,65 @@ describe('Fact', () => {
       expect(await contentAttribute.getValue()).to.equal('the init value');
       expect(await referencesAttribute.getValue()).to.deep.equal({ foo: 'bar' });
       expect(await referenceSourcesAttribute.getValue()).to.deep.equal({ user: 'usr-xx' });
+    });
+
+    it('returns information about creation and update time', async () => {
+      const [client] = createClient();
+      const [otherClient] = createClient();
+
+      const beforeCreationTime = new Date();
+
+      await sleep(1000);
+
+      const content = await client.Attribute.create('longText', 'the init value');
+      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+      const afterCreationTime = new Date();
+
+      if (!content.createdAt || !references.createdAt || !references.updatedAt || !content.updatedAt) {
+        throw new Error('createdAt or updatedAt is undefined');
+      }
+
+      expect(content.createdAt).to.be.greaterThan(beforeCreationTime);
+      expect(afterCreationTime).to.be.greaterThan(content.createdAt);
+      expect(references.createdAt).to.be.greaterThan(beforeCreationTime);
+      expect(afterCreationTime).to.be.greaterThan(references.createdAt);
+
+      expect(afterCreationTime).to.be.greaterThan(references.updatedAt);
+      expect(afterCreationTime).to.be.greaterThan(content.updatedAt);
+
+      if (!content.id || !references.id) {
+        throw new Error('id of attribute is not initilized');
+      }
+
+      const sameContent = await otherClient.Attribute.find(content.id);
+      const sameReferences = await otherClient.Attribute.find(references.id);
+
+      expect(sameContent.createdAt?.toString()).to.equals(content.createdAt.toString());
+      expect(sameReferences.createdAt?.toString()).to.equals(references.createdAt.toString());
+
+      expect(sameContent.createdAt?.toString()).to.equals(sameContent.updatedAt?.toString());
+      expect(sameContent.createdAt?.toString()).to.equals(content.updatedAt?.toString());
+
+      if (!sameContent.updatedAt) {
+        throw new Error('updatedAt is not initilized');
+      }
+
+      const beforeUpdatedTime = new Date();
+      await sleep(1000);
+
+      expect(beforeUpdatedTime).to.be.greaterThan(content.updatedAt);
+      expect(beforeUpdatedTime).to.be.greaterThan(sameContent.updatedAt);
+
+      await content.set('some change');
+      await references.set({ foo: 'bar2' });
+
+      await sleep(1000);
+
+      expect(content.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+      expect(sameContent.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+
+      expect(references.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+      expect(sameReferences.updatedAt).to.be.greaterThan(beforeUpdatedTime);
     });
 
     it('allows to find attributes by object relations', async () => {

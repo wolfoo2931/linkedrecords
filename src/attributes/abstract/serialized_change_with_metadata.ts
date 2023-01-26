@@ -9,11 +9,20 @@ export default class SerializedChangeWithMetadata<Change extends IsSerializable>
 
   public change: Change;
 
-  constructor(attributeId: string, actorId: string, clientId: string, change: Change) {
+  public updatedAt: Date | undefined;
+
+  constructor(
+    attributeId: string,
+    actorId: string,
+    clientId: string,
+    change: Change,
+    updatedAt: Date | undefined = undefined,
+  ) {
     this.attributeId = attributeId;
     this.actorId = actorId;
     this.clientId = clientId;
     this.change = change;
+    this.updatedAt = updatedAt;
   }
 
   toJSON(): any {
@@ -22,6 +31,7 @@ export default class SerializedChangeWithMetadata<Change extends IsSerializable>
       change: this.change.toJSON(),
       actorId: this.actorId,
       clientId: this.clientId,
+      updatedAt: this.updatedAt,
     };
   }
 }
