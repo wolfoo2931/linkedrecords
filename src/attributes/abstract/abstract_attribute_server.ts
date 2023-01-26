@@ -28,7 +28,13 @@ export default abstract class AbstractAttributeServer <
     value: Type
   ) : Promise<{ id: string }>;
 
-  abstract get() : Promise<{ value: Type, changeId: string, actorId: string }>;
+  abstract get() : Promise<{
+    value: Type,
+    changeId: string,
+    actorId: string,
+    createdAt: number,
+    updatedAt: number
+  }>;
 
   abstract set(value: Type) : Promise<{ id: string }>;
 

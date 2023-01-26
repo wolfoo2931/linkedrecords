@@ -18,6 +18,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   clientId: string;
 
+  createdAt: Date | undefined;
+
+  updatedAt: Date | undefined;
+
   serverURL: URL;
 
   loginURL?: URL;
@@ -38,6 +42,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.serverSideEvents = serverSideEvents;
     this.serverURL = linkedRecords.serverURL;
     this.loginURL = linkedRecords.loginURL;
+    this.createdAt = undefined;
+    this.updatedAt = undefined;
     this.observers = [];
 
     // because the same user can be logged on two browsers/laptops, we need
@@ -169,7 +175,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
-  protected async load(serverState?: { changeId: string, value: string }) {
+  protected async load(serverState?: {
+    changeId: string,
+    value: string,
+    createdAt: Date,
+    updatedAt: Date,
+  }) {
     let result = serverState;
 
     if (this.isInitialized) {
@@ -198,6 +209,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       result = {
         changeId: jsonBody.changeId,
         value: jsonBody.value,
+        createdAt: new Date(jsonBody.createdAt),
+        updatedAt: new Date(jsonBody.updatedAt),
       };
     }
 
@@ -209,6 +222,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     this.version = result.changeId;
     this.value = this.deserializeValue(serializedValue);
+    this.createdAt = new Date(result.createdAt);
+    this.updatedAt = new Date(result.updatedAt);
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
@@ -217,6 +232,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       if (parsedData.attributeId !== this.id) {
         return;
       }
+
+      this.updatedAt = new Date(parsedData.updatedAt);
 
       this.onServerMessage(parsedData);
     });
