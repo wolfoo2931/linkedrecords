@@ -98,7 +98,7 @@ IsAttributeStorage
       result.value = LongTextChange.fromString(change.value).apply(result.value);
       result.changeId = change.changeId;
       result.actorId = change.actorId;
-      result.updatedAt = change.updatedAt;
+      result.updatedAt = change.time;
     });
 
     return result;
