@@ -36,6 +36,14 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
     throw new Error(`Server is unkown of Attribute Type Prefix for id ${id}`);
   }
 
+  if (!actorId) {
+    throw new Error(`The request does not contain a actorid for attribute id: ${id}`);
+  }
+
+  if (!clientId) {
+    throw new Error(`The request does not contain a clientId for attribute id: ${id}`);
+  }
+
   return new AttributeClass(id, clientId, actorId, storage);
 }
 

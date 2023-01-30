@@ -58,10 +58,11 @@ export default class Fact {
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
 
+    // FIXME: use splace operator to make the intersect work
     const query: { [key: string]: string[] } = {
-      subject: intersect(await Promise.all(subjectIdsPromise)), //FIXME: use splace operator to make the intersect work
+      subject: intersect(await Promise.all(subjectIdsPromise)),
       predicate: predicateIds,
-      object: intersect(await Promise.all(objectIdsPromise)), //FIXME: use splace operator to make the intersect work
+      object: intersect(await Promise.all(objectIdsPromise)),
     };
 
     if (!query['subject'] || !query['object']) {

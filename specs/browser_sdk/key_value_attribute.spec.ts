@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
+import { v4 as uuid } from 'uuid';
 import { waitFor } from '../helpers';
 import LinkedRecords from '../../src/browser_sdk';
 import ServerSideEvents from '../../lib/server-side-events/client';
@@ -10,6 +11,7 @@ let clients: LinkedRecords[] = [];
 function createClient(): [ LinkedRecords, ServerSideEvents ] {
   const serverSideEvents = new ServerSideEvents();
   const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
+  client.actorId = uuid();
   clients.push(client);
   return [client, serverSideEvents];
 }

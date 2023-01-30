@@ -268,14 +268,14 @@ export default class LinkedRecords {
   constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
     this.serverURL = serverURL;
     this.loginURL = loginURL;
-    this.actorId = LinkedRecords.userId;
+    this.actorId = LinkedRecords.readUserIdFromCookies();
     this.clientId = uuid();
     this.serverSideEvents = serverSideEvents || new ServerSideEvents();
     this.Attribute = new AttributesRepository(this, this.serverSideEvents);
     this.Fact = new FactsRepository(this);
   }
 
-  static get userId() {
+  static readUserIdFromCookies() {
     const cookieValue = Cookies.get('userId');
 
     if (!cookieValue) {
