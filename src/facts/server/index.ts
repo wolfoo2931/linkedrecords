@@ -149,7 +149,7 @@ export default class Fact {
 
     if (!concreateObjectSpecMatch) {
       objectMatch = !factQuery.object ? [] : Fact.findAll({
-        object: [this.subject, ...factQuery.object],
+        subject: [this.object, ...factQuery.object],
       });
     }
 
