@@ -45,7 +45,7 @@ export default class Fact {
     return Array.from(resultSet);
   }
 
-  static async findAll({ subject, predicate, object }:FactQuery): Promise<Fact[]> {
+  static async findAll({ subject, predicate, object }: FactQuery): Promise<Fact[]> {
     const subjectIdsPromise = subject ? subject.map(Fact.resolveToAttributeIds) : [];
     const objectIdsPromise = object ? object.map(Fact.resolveToAttributeIds) : [];
     const queryAsSQL: string[] = [];
@@ -104,16 +104,62 @@ export default class Fact {
     this.object = object;
   }
 
-  async match(factQuery:FactQuery): Promise<boolean> {
-    const subjectConditions = factQuery.subject;
-    const predicateConditions = factQuery.predicate;
-    const objectConditions = factQuery.object;
+  async match(factQuery: FactQuery): Promise<boolean> {
+    let concreateObjectSpecMatch;
+    let concreateSubjectSpecMatch;
+    let subjectMatch;
+    let objectMatch;
 
-    if (predicateConditions && !predicateConditions.includes(this.predicate)) {
+    if (factQuery.predicate && !factQuery.predicate.includes(this.predicate)) {
       return false;
     }
 
-    return false;
+    const concreateSubjectSpec = factQuery.subject?.filter((x) => typeof x === 'string');
+    const concreateObjectSpec = factQuery.object?.filter((x) => typeof x === 'string');
+
+    if (concreateSubjectSpec && concreateSubjectSpec.length) {
+      if (concreateSubjectSpec.length > 1) {
+        return false;
+      }
+
+      if (this.subject !== concreateSubjectSpec[0]) {
+        return false;
+      }
+
+      concreateSubjectSpecMatch = true;
+    }
+
+    if (concreateObjectSpec && concreateObjectSpec.length) {
+      if (concreateObjectSpec.length > 1) {
+        return false;
+      }
+
+      if (this.object !== concreateObjectSpec[0]) {
+        return false;
+      }
+
+      concreateObjectSpecMatch = true;
+    }
+
+    if (!concreateSubjectSpecMatch) {
+      subjectMatch = !factQuery.subject ? [] : Fact.findAll({
+        subject: [this.subject, ...factQuery.subject],
+      });
+    }
+
+    if (!concreateObjectSpecMatch) {
+      objectMatch = !factQuery.object ? [] : Fact.findAll({
+        object: [this.subject, ...factQuery.object],
+      });
+    }
+
+    return (concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
+      && (concreateObjectSpecMatch || (await objectMatch).length !== 0);
+  }
+
+  async matchAny(factQueries: FactQuery[]): Promise<boolean> {
+    const allResults = await Promise.all(factQueries.map((fq) => this.match(fq)));
+    return !!allResults.find((x) => x);
   }
 
   async save() {
