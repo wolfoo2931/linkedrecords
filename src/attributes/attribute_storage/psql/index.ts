@@ -12,7 +12,7 @@ export default class PsqlStorage implements IsAttributeStorage {
     value: string,
   ) : Promise<{ id: string }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-    const createQuery = `CREATE TABLE ${pgTableName} (actor_id uuid, time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
+    const createQuery = `CREATE TABLE ${pgTableName} (actor_id varchar(36), time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
 
     await new Promise((resolve, reject) => {
       pgPool.connect((err, pgclient, releaseDBConnection) => {

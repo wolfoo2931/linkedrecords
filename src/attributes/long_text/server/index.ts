@@ -2,6 +2,7 @@ import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
+import Fact from '../../../facts/server';
 
 const queue = require('queue')({ concurrency: 1, autostart: true });
 
@@ -15,6 +16,8 @@ IsAttributeStorage
   }
 
   async create(value: string) : Promise<{ id: string }> {
+    const createdByFact = new Fact(this.id, 'wasCreatedBy', this.actorId);
+    await createdByFact.save();
     return this.storage.createAttribute(this.id, this.actorId, value);
   }
 
@@ -98,7 +101,7 @@ IsAttributeStorage
       result.value = LongTextChange.fromString(change.value).apply(result.value);
       result.changeId = change.changeId;
       result.actorId = change.actorId;
-      result.updatedAt = change.updatedAt;
+      result.updatedAt = change.time;
     });
 
     return result;

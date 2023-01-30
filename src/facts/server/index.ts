@@ -1,8 +1,8 @@
 import pg from 'pg';
 import intersect from 'intersect';
+import { FactQuery } from '../fact_query';
 
 const pgPool = new pg.Pool({ max: 2 });
-
 export default class Fact {
   subject: string;
 
@@ -45,27 +45,31 @@ export default class Fact {
     return Array.from(resultSet);
   }
 
-  static async findAll({ subject, predicate, object }:
-  { subject?: (string | string[])[],
-    predicate?: string[],
-    object?: (string | string[])[] }): Promise<Fact[]> {
+  static async findAll({ subject, predicate, object }: FactQuery): Promise<Fact[]> {
     const subjectIdsPromise = subject ? subject.map(Fact.resolveToAttributeIds) : [];
-    const predicateIds = predicate || [];
     const objectIdsPromise = object ? object.map(Fact.resolveToAttributeIds) : [];
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
 
-    const query: { [key: string]: string[] } = {
-      subject: intersect(await Promise.all(subjectIdsPromise)),
-      predicate: predicateIds,
-      object: intersect(await Promise.all(objectIdsPromise)),
-    };
+    const query: { [key: string]: string[] } = {};
 
-    if (!query['subject'] || !query['object']) {
-      throw new Error('empty subjects or objects set in Fact.findAll');
+    if (subject) {
+      query['subject'] = intersect(await Promise.all(subjectIdsPromise));
     }
 
-    if (query['subject'].length === 0 && query['object'].length === 0) {
+    if (predicate) {
+      query['predicate'] = predicate;
+    }
+
+    if (object) {
+      query['object'] = intersect(await Promise.all(objectIdsPromise));
+    }
+
+    if (query['subject'] && query['subject'].length === 0) {
+      return [];
+    }
+
+    if (query['object'] && query['object'].length === 0) {
       return [];
     }
 
@@ -98,6 +102,64 @@ export default class Fact {
     this.subject = subject;
     this.predicate = predicate;
     this.object = object;
+  }
+
+  async match(factQuery: FactQuery): Promise<boolean> {
+    let concreateObjectSpecMatch;
+    let concreateSubjectSpecMatch;
+    let subjectMatch;
+    let objectMatch;
+
+    if (factQuery.predicate && !factQuery.predicate.includes(this.predicate)) {
+      return false;
+    }
+
+    const concreateSubjectSpec = factQuery.subject?.filter((x) => typeof x === 'string');
+    const concreateObjectSpec = factQuery.object?.filter((x) => typeof x === 'string');
+
+    if (concreateSubjectSpec && concreateSubjectSpec.length) {
+      if (concreateSubjectSpec.length > 1) {
+        return false;
+      }
+
+      if (this.subject !== concreateSubjectSpec[0]) {
+        return false;
+      }
+
+      concreateSubjectSpecMatch = true;
+    }
+
+    if (concreateObjectSpec && concreateObjectSpec.length) {
+      if (concreateObjectSpec.length > 1) {
+        return false;
+      }
+
+      if (this.object !== concreateObjectSpec[0]) {
+        return false;
+      }
+
+      concreateObjectSpecMatch = true;
+    }
+
+    if (!concreateSubjectSpecMatch) {
+      subjectMatch = !factQuery.subject ? [] : Fact.findAll({
+        subject: [this.subject, ...factQuery.subject],
+      });
+    }
+
+    if (!concreateObjectSpecMatch) {
+      objectMatch = !factQuery.object ? [] : Fact.findAll({
+        subject: [this.object, ...factQuery.object],
+      });
+    }
+
+    return (concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
+      && (concreateObjectSpecMatch || (await objectMatch).length !== 0);
+  }
+
+  async matchAny(factQueries: FactQuery[]): Promise<boolean> {
+    const allResults = await Promise.all(factQueries.map((fq) => this.match(fq)));
+    return !!allResults.find((x) => x);
   }
 
   async save() {
