@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
+import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../src/browser_sdk';
 import ServerSideEvents from '../../lib/server-side-events/client';
 
@@ -9,8 +10,13 @@ let clients: LinkedRecords[] = [];
 function createClient(): [ LinkedRecords, ServerSideEvents ] {
   const serverSideEvents = new ServerSideEvents();
   const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
+  client.actorId = uuid();
   clients.push(client);
   return [client, serverSideEvents];
+}
+
+function filterAutoCreatedFacts(facts) {
+  return facts.filter((fact) => !['wasCreatedBy'].includes(fact.predicate));
 }
 
 describe('Fact', () => {
@@ -53,13 +59,13 @@ describe('Fact', () => {
         throw Error('id is null');
       }
 
-      const hermanMelvilleFacts = await otherClient.Fact.findAll({
+      const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [hermanMelville.id],
-      });
+      }));
 
-      const mobyDickFacts = await otherClient.Fact.findAll({
+      const mobyDickFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [mobyDick.id],
-      });
+      }));
 
       expect(hermanMelvilleFacts.length).to.be.equal(2);
       expect(mobyDickFacts.length).to.be.equal(1);
@@ -85,9 +91,9 @@ describe('Fact', () => {
       await client.Fact.create(openTodo.id, 'isA', todo.id);
       await client.Fact.create(importantOpenTodo.id, 'isA', openTodo.id);
 
-      const todos = await otherClient.Fact.findAll({
+      const todos = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [['isA', 'ContentType']],
-      });
+      }));
 
       expect(todos.length).to.be.equal(3);
     });
@@ -115,13 +121,13 @@ describe('Fact', () => {
         throw Error('id is null');
       }
 
-      const hermanMelvilleFacts = await otherClient.Fact.findAll({
+      const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [hermanMelville.id],
-      });
+      }));
 
-      const mobyDickFacts = await otherClient.Fact.findAll({
+      const mobyDickFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [mobyDick.id],
-      });
+      }));
 
       expect(hermanMelvilleFacts.length).to.be.equal(2);
       expect(mobyDickFacts.length).to.be.equal(1);
@@ -132,7 +138,7 @@ describe('Fact', () => {
       expect(mobyDickFacts[0].predicate).to.be.equal('isA');
       expect(mobyDickFacts[0].object).to.be.equal('Book');
 
-      const facts = await client.Fact.findAll({
+      const facts = filterAutoCreatedFacts(await client.Fact.findAll({
         subject: [
           ['isA', 'ContentType'],
         ],
@@ -143,7 +149,7 @@ describe('Fact', () => {
         object: [
           ['isA', 'ContentType'],
         ],
-      });
+      }));
 
       expect(facts.length).to.be.equal(0);
     });
@@ -161,6 +167,7 @@ describe('Fact', () => {
       await client.Fact.create('Book', 'isNarrowConceptOf', 'ContentType');
       await client.Fact.create('Author', 'isNarrowConceptOf', 'ContentType');
       await client.Fact.create('Author', 'relatesTo', 'Book');
+      await client.Fact.create('Author', 'hasPartnershipWith', 'ThePublisherClub');
 
       await client.Fact.create(mobyDick.id, 'isA', 'Book');
       await client.Fact.create(hermanMelville.id, 'isA', 'Author');
@@ -176,13 +183,13 @@ describe('Fact', () => {
         throw Error('id is null');
       }
 
-      const hermanMelvilleFacts = await otherClient.Fact.findAll({
+      const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [hermanMelville.id],
-      });
+      }));
 
-      const mobyDickFacts = await otherClient.Fact.findAll({
+      const mobyDickFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [mobyDick.id],
-      });
+      }));
 
       expect(hermanMelvilleFacts.length).to.be.equal(2);
       expect(mobyDickFacts.length).to.be.equal(1);
@@ -193,19 +200,22 @@ describe('Fact', () => {
       expect(mobyDickFacts[0].predicate).to.be.equal('isA');
       expect(mobyDickFacts[0].object).to.be.equal('Book');
 
-      const facts = await otherClient.Fact.findAll({
-        subject: [
-          ['isNarrowConceptOf', 'ContentType'],
-        ],
-        object: [
-          ['isNarrowConceptOf', 'ContentType'], 'ContentType',
-        ],
-      });
+      const facts = filterAutoCreatedFacts(await otherClient.Fact.findAll([
+        {
+          subject: [['isNarrowConceptOf', 'ContentType']],
+          object: [['isNarrowConceptOf', 'ContentType']],
+        },
+        {
+          subject: [['isNarrowConceptOf', 'ContentType']],
+          object: ['ContentType'],
+        },
+      ]));
 
       expect(facts.length).to.be.equal(3);
       expect(facts.filter((fact) => fact.subject === 'Book' && fact.object === 'ContentType')).to.have.lengthOf(1);
       expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'ContentType')).to.have.lengthOf(1);
       expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'Book')).to.have.lengthOf(1);
+      expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'ThePublisherClub')).to.have.lengthOf(0);
     });
   });
 });

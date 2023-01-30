@@ -7,9 +7,9 @@ const app = createApp({
   isAuthorizedToCreateAttribute: () => true,
   isAuthorizedToReadAttribute: () => true,
   isAuthorizedToUpdateAttribute: () => true,
-  isAuthorizedToCreateFacts: () => true,
-  isAuthorizedToReadFacts: () => true,
-  isAuthorizedToUpdateFacts: () => true,
+  isAuthorizedToCreateFact: () => true,
+  isAuthorizedToReadFact: () => true,
+  isAuthorizedToUpdateFact: () => true,
 });
 
 const server = new Server(app);

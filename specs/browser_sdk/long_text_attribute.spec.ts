@@ -14,6 +14,7 @@ let clients: LinkedRecords[] = [];
 function createClient(): [ LinkedRecords, ServerSideEvents ] {
   const serverSideEvents = new ServerSideEvents();
   const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
+  client.actorId = uuid();
   clients.push(client);
   return [client, serverSideEvents];
 }

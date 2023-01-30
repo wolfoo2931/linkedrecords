@@ -3,6 +3,7 @@
 
 import { v4 as uuid } from 'uuid';
 import intersect from 'intersect';
+import Cookies from 'js-cookie';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import KeyValueChange from '../attributes/key_value/key_value_change';
@@ -11,6 +12,7 @@ import ServerSideEvents, { IsSubscribable } from '../../lib/server-side-events/c
 import AbstractAttributeClient from '../attributes/abstract/abstract_attribute_client';
 import IsSerializable from '../attributes/abstract/is_serializable';
 import Fact from '../facts/client';
+import { FactQuery } from '../facts/fact_query';
 
 export {
   LongTextAttribute,
@@ -212,10 +214,14 @@ class FactsRepository {
     });
   }
 
-  async findAll({ subject, predicate, object }:
-  { subject?: (string | string[])[],
-    predicate?: string[],
-    object?: (string | string[])[] }): Promise<Fact[]> {
+  async findAll(query: FactQuery | FactQuery[]): Promise<Fact[]> {
+    if (Array.isArray(query)) {
+      const result = await Promise.all(query.map((fq) => this.findAll(fq)));
+      return result.flat();
+    }
+
+    const { subject, predicate, object } = query;
+
     const queryURL = new URL(`${this.linkedRecords.serverURL}facts`);
 
     if (subject) {
@@ -267,10 +273,24 @@ export default class LinkedRecords {
   constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
     this.serverURL = serverURL;
     this.loginURL = loginURL;
-    this.actorId = uuid();
+    this.actorId = LinkedRecords.readUserIdFromCookies();
     this.clientId = uuid();
     this.serverSideEvents = serverSideEvents || new ServerSideEvents();
     this.Attribute = new AttributesRepository(this, this.serverSideEvents);
     this.Fact = new FactsRepository(this);
+  }
+
+  static readUserIdFromCookies() {
+    const cookieValue = Cookies.get('userId');
+
+    if (!cookieValue) {
+      return undefined;
+    }
+
+    const withoutSignature = cookieValue.slice(0, cookieValue.lastIndexOf('.'));
+    const split = withoutSignature.split(':');
+    const userId = split.length === 1 ? split[0] : split[1];
+
+    return userId;
   }
 }
