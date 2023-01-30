@@ -12,6 +12,7 @@ import ServerSideEvents, { IsSubscribable } from '../../lib/server-side-events/c
 import AbstractAttributeClient from '../attributes/abstract/abstract_attribute_client';
 import IsSerializable from '../attributes/abstract/is_serializable';
 import Fact from '../facts/client';
+import { FactQuery } from '../facts/fact_query';
 
 export {
   LongTextAttribute,
@@ -213,10 +214,14 @@ class FactsRepository {
     });
   }
 
-  async findAll({ subject, predicate, object }:
-  { subject?: (string | string[])[],
-    predicate?: string[],
-    object?: (string | string[])[] }): Promise<Fact[]> {
+  async findAll(query: FactQuery | FactQuery[]): Promise<Fact[]> {
+    if (Array.isArray(query)) {
+      const result = await Promise.all(query.map((fq) => this.findAll(fq)));
+      return result.flat();
+    }
+
+    const { subject, predicate, object } = query;
+
     const queryURL = new URL(`${this.linkedRecords.serverURL}facts`);
 
     if (subject) {

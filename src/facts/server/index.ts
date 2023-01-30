@@ -1,14 +1,8 @@
 import pg from 'pg';
 import intersect from 'intersect';
+import { FactQuery } from '../fact_query';
 
 const pgPool = new pg.Pool({ max: 2 });
-
-type FactQuery = {
-  subject?: (string | string[])[],
-  predicate?: string[],
-  object?: (string | string[])[]
-};
-
 export default class Fact {
   subject: string;
 
@@ -53,23 +47,29 @@ export default class Fact {
 
   static async findAll({ subject, predicate, object }:FactQuery): Promise<Fact[]> {
     const subjectIdsPromise = subject ? subject.map(Fact.resolveToAttributeIds) : [];
-    const predicateIds = predicate || [];
     const objectIdsPromise = object ? object.map(Fact.resolveToAttributeIds) : [];
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
 
-    // FIXME: use splace operator to make the intersect work
-    const query: { [key: string]: string[] } = {
-      subject: intersect(await Promise.all(subjectIdsPromise)),
-      predicate: predicateIds,
-      object: intersect(await Promise.all(objectIdsPromise)),
-    };
+    const query: { [key: string]: string[] } = {};
 
-    if (!query['subject'] || !query['object']) {
-      throw new Error('empty subjects or objects set in Fact.findAll');
+    if (subject) {
+      query['subject'] = intersect(await Promise.all(subjectIdsPromise));
     }
 
-    if (query['subject'].length === 0 && query['object'].length === 0) {
+    if (predicate) {
+      query['predicate'] = predicate;
+    }
+
+    if (object) {
+      query['object'] = intersect(await Promise.all(objectIdsPromise));
+    }
+
+    if (query['subject'] && query['subject'].length === 0) {
+      return [];
+    }
+
+    if (query['object'] && query['object'].length === 0) {
       return [];
     }
 
@@ -112,8 +112,6 @@ export default class Fact {
     if (predicateConditions && !predicateConditions.includes(this.predicate)) {
       return false;
     }
-
-
 
     return false;
   }
