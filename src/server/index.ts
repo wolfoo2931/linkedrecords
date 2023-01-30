@@ -13,6 +13,25 @@ import 'dotenv/config';
 
 Fact.initDB();
 
+async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
+  if (process.env['DISABLE_AUTH'] === 'true') {
+    controllerAction(req, res);
+    return;
+  }
+
+  const isAuthorizedToReadFact = (fact) => isAuthorized(req.oidc.user.sub, req, fact);
+
+  if (!req?.oidc?.user?.sub) {
+    res.status(401).write('Not Authorized');
+  } else {
+    if (!req.signedCookies.userId) {
+      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
+    }
+
+    controllerAction(req, res, isAuthorizedToReadFact);
+  }
+}
+
 async function withAuth(req, res, controllerAction, isAuthorized) {
   if (process.env['DISABLE_AUTH'] === 'true') {
     controllerAction(req, res);
@@ -43,7 +62,7 @@ export default function createApp({
   isAuthorizedToReadAttribute?: (userid: string, request: any) => boolean,
   isAuthorizedToUpdateAttribute?: (userid: string, request: any) => boolean,
   isAuthorizedToCreateFact?: (userid: string, request: any) => boolean,
-  isAuthorizedToReadFact?: (userid: string, request: any) => boolean,
+  isAuthorizedToReadFact?: (userid: string, request: any, fact: any) => boolean,
   isAuthorizedToUpdateFact?: (userid: string, request: any) => boolean,
   staticMounts?: [string, string][]
 } = {}) {
@@ -74,7 +93,7 @@ export default function createApp({
   app.get('/attributes/:id', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
   app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
   app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, isAuthorizedToUpdateAttribute));
-  app.get('/facts', (req, res) => withAuth(req, res, factsController.index, isAuthorizedToReadFact));
+  app.get('/facts', (req, res) => withAuthForEachFact(req, res, factsController.index, isAuthorizedToReadFact));
   app.post('/facts', (req, res) => withAuth(req, res, factsController.create, isAuthorizedToCreateFact));
   app.delete('/facts', (req, res) => withAuth(req, res, factsController.deleteAll, isAuthorizedToUpdateFact));
 

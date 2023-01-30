@@ -1,7 +1,7 @@
 import Fact from '../../facts/server';
 
 export default {
-  async index(req, res) {
+  async index(req, res, isAuthorizedToReadFact) {
     const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
     const predicate = req.query.predicate ? JSON.parse(req.query.predicate) : undefined;
     const object = req.query.object ? JSON.parse(req.query.object) : undefined;
@@ -13,7 +13,7 @@ export default {
     });
 
     res.status(200);
-    res.send(facts);
+    res.send(facts.filter(isAuthorizedToReadFact));
   },
 
   async create(req, res) {
