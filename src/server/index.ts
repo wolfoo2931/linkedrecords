@@ -34,17 +34,17 @@ export default function createApp({
   isAuthorizedToCreateAttribute = () => false,
   isAuthorizedToReadAttribute = () => false,
   isAuthorizedToUpdateAttribute = () => false,
-  isAuthorizedToCreateFacts = () => false,
-  isAuthorizedToReadFacts = () => false,
-  isAuthorizedToUpdateFacts = () => false,
+  isAuthorizedToCreateFact = () => false,
+  isAuthorizedToReadFact = () => false,
+  isAuthorizedToUpdateFact = () => false,
   staticMounts = [],
 }: {
   isAuthorizedToCreateAttribute?: (userid: string, request: any) => boolean,
   isAuthorizedToReadAttribute?: (userid: string, request: any) => boolean,
   isAuthorizedToUpdateAttribute?: (userid: string, request: any) => boolean,
-  isAuthorizedToCreateFacts?: (userid: string, request: any) => boolean,
-  isAuthorizedToReadFacts?: (userid: string, request: any) => boolean,
-  isAuthorizedToUpdateFacts?: (userid: string, request: any) => boolean,
+  isAuthorizedToCreateFact?: (userid: string, request: any) => boolean,
+  isAuthorizedToReadFact?: (userid: string, request: any) => boolean,
+  isAuthorizedToUpdateFact?: (userid: string, request: any) => boolean,
   staticMounts?: [string, string][]
 } = {}) {
   const app = express();
@@ -74,9 +74,9 @@ export default function createApp({
   app.get('/attributes/:id', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
   app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
   app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, isAuthorizedToUpdateAttribute));
-  app.get('/facts', (req, res) => withAuth(req, res, factsController.index, isAuthorizedToReadFacts));
-  app.post('/facts', (req, res) => withAuth(req, res, factsController.create, isAuthorizedToCreateFacts));
-  app.delete('/facts', (req, res) => withAuth(req, res, factsController.deleteAll, isAuthorizedToUpdateFacts));
+  app.get('/facts', (req, res) => withAuth(req, res, factsController.index, isAuthorizedToReadFact));
+  app.post('/facts', (req, res) => withAuth(req, res, factsController.create, isAuthorizedToCreateFact));
+  app.delete('/facts', (req, res) => withAuth(req, res, factsController.deleteAll, isAuthorizedToUpdateFact));
 
   return app;
 }
