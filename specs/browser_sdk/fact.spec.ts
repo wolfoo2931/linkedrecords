@@ -167,6 +167,7 @@ describe('Fact', () => {
       await client.Fact.create('Book', 'isNarrowConceptOf', 'ContentType');
       await client.Fact.create('Author', 'isNarrowConceptOf', 'ContentType');
       await client.Fact.create('Author', 'relatesTo', 'Book');
+      await client.Fact.create('Author', 'hasPartnershipWith', 'ThePublisherClub');
 
       await client.Fact.create(mobyDick.id, 'isA', 'Book');
       await client.Fact.create(hermanMelville.id, 'isA', 'Author');
@@ -199,19 +200,22 @@ describe('Fact', () => {
       expect(mobyDickFacts[0].predicate).to.be.equal('isA');
       expect(mobyDickFacts[0].object).to.be.equal('Book');
 
-      const facts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [
-          ['isNarrowConceptOf', 'ContentType'],
-        ],
-        object: [
-          ['isNarrowConceptOf', 'ContentType'], 'ContentType',
-        ],
-      }));
+      const facts = filterAutoCreatedFacts(await otherClient.Fact.findAll([
+        {
+          subject: [['isNarrowConceptOf', 'ContentType']],
+          object: [['isNarrowConceptOf', 'ContentType']],
+        },
+        {
+          subject: [['isNarrowConceptOf', 'ContentType']],
+          object: ['ContentType'],
+        },
+      ]));
 
       expect(facts.length).to.be.equal(3);
       expect(facts.filter((fact) => fact.subject === 'Book' && fact.object === 'ContentType')).to.have.lengthOf(1);
       expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'ContentType')).to.have.lengthOf(1);
       expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'Book')).to.have.lengthOf(1);
+      expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'ThePublisherClub')).to.have.lengthOf(0);
     });
   });
 });
