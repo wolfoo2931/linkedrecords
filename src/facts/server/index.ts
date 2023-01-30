@@ -3,6 +3,12 @@ import intersect from 'intersect';
 
 const pgPool = new pg.Pool({ max: 2 });
 
+type FactQuery = {
+  subject?: (string | string[])[],
+  predicate?: string[],
+  object?: (string | string[])[]
+};
+
 export default class Fact {
   subject: string;
 
@@ -45,10 +51,7 @@ export default class Fact {
     return Array.from(resultSet);
   }
 
-  static async findAll({ subject, predicate, object }:
-  { subject?: (string | string[])[],
-    predicate?: string[],
-    object?: (string | string[])[] }): Promise<Fact[]> {
+  static async findAll({ subject, predicate, object }:FactQuery): Promise<Fact[]> {
     const subjectIdsPromise = subject ? subject.map(Fact.resolveToAttributeIds) : [];
     const predicateIds = predicate || [];
     const objectIdsPromise = object ? object.map(Fact.resolveToAttributeIds) : [];
@@ -56,9 +59,9 @@ export default class Fact {
     const queryParams: string[] = [];
 
     const query: { [key: string]: string[] } = {
-      subject: intersect(await Promise.all(subjectIdsPromise)),
+      subject: intersect(await Promise.all(subjectIdsPromise)), //FIXME: use splace operator to make the intersect work
       predicate: predicateIds,
-      object: intersect(await Promise.all(objectIdsPromise)),
+      object: intersect(await Promise.all(objectIdsPromise)), //FIXME: use splace operator to make the intersect work
     };
 
     if (!query['subject'] || !query['object']) {
@@ -98,6 +101,20 @@ export default class Fact {
     this.subject = subject;
     this.predicate = predicate;
     this.object = object;
+  }
+
+  async match(factQuery:FactQuery): Promise<boolean> {
+    const subjectConditions = factQuery.subject;
+    const predicateConditions = factQuery.predicate;
+    const objectConditions = factQuery.object;
+
+    if (predicateConditions && !predicateConditions.includes(this.predicate)) {
+      return false;
+    }
+
+
+
+    return false;
   }
 
   async save() {

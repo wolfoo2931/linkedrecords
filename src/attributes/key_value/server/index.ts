@@ -5,6 +5,7 @@ import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import KeyValueChange from '../key_value_change';
+import Fact from '../../../facts/server';
 
 export default class KeyValueAttribute extends AbstractAttributeServer<
 object,
@@ -16,6 +17,8 @@ IsAttributeStorage
   }
 
   async create(value: object) : Promise<{ id: string }> {
+    const createdByFact = new Fact(this.id, 'wasCreatedBy', this.actorId);
+    await createdByFact.save();
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
   }
 
