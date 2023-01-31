@@ -256,6 +256,8 @@ class FactsRepository {
 }
 
 export default class LinkedRecords {
+  static ensureUserIdIsKnownPromise;
+
   serverSideEvents: IsSubscribable;
 
   serverURL: URL;
@@ -270,16 +272,6 @@ export default class LinkedRecords {
 
   Fact: FactsRepository;
 
-  constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
-    this.serverURL = serverURL;
-    this.loginURL = loginURL;
-    this.actorId = LinkedRecords.readUserIdFromCookies();
-    this.clientId = uuid();
-    this.serverSideEvents = serverSideEvents || new ServerSideEvents();
-    this.Attribute = new AttributesRepository(this, this.serverSideEvents);
-    this.Fact = new FactsRepository(this);
-  }
-
   static readUserIdFromCookies() {
     const cookieValue = Cookies.get('userId');
 
@@ -292,5 +284,29 @@ export default class LinkedRecords {
     const userId = split.length === 1 ? split[0] : split[1];
 
     return userId;
+  }
+
+  constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
+    this.serverURL = serverURL;
+    this.loginURL = loginURL;
+    this.actorId = LinkedRecords.readUserIdFromCookies();
+    this.clientId = uuid();
+    this.serverSideEvents = serverSideEvents || new ServerSideEvents();
+    this.Attribute = new AttributesRepository(this, this.serverSideEvents);
+    this.Fact = new FactsRepository(this);
+  }
+
+  async ensureUserIdIsKnown() {
+    if (LinkedRecords.ensureUserIdIsKnownPromise) {
+      await LinkedRecords.ensureUserIdIsKnownPromise;
+    } else {
+      LinkedRecords.ensureUserIdIsKnownPromise = await fetch(`${this.serverURL}userinfo`, {
+        credentials: 'include',
+      });
+
+      this.actorId = LinkedRecords.readUserIdFromCookies();
+
+      LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+    }
   }
 }
