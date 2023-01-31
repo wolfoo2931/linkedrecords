@@ -1,5 +1,10 @@
 import Fact from '../../facts/server';
 
+const asyncFilter = async (arr, fn) => {
+  const results = await Promise.all(arr.map(fn));
+  return arr.filter((_v, index) => results[index]);
+};
+
 export default {
   async index(req, res, isAuthorizedToReadFact) {
     const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
@@ -13,7 +18,7 @@ export default {
     });
 
     res.status(200);
-    res.send(facts.filter(isAuthorizedToReadFact));
+    res.send(await asyncFilter(facts, isAuthorizedToReadFact));
   },
 
   async create(req, res) {
