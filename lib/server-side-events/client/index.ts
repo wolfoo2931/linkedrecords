@@ -1,5 +1,6 @@
+/* eslint-disable max-len */
 export interface IsSubscribable {
-  subscribe(url: string, channel: string, handler: (data: any) => any);
+  subscribe(url: string, channel: string, handler: (data: any) => any): Promise<[string, (data: any) => any]>;
   unsubscribe([subId, handler]: [string, (data: any) => any]);
   unsubscribeAll();
 }
