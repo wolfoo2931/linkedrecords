@@ -30,6 +30,9 @@ export default function serverSentEvents() {
         const connectionId = `${request.signedCookies.sseClientId}-${request.query.tabId}`;
         response.writeHead(200, headers);
         response.flushHeaders();
+        response.write('id: 1\n');
+        response.write('data: {}\n\n');
+
         request.on('close', () => { delete connections[connectionId]; });
         request.on('finish', () => { delete connections[connectionId]; });
         request.on('timeout', () => { delete connections[connectionId]; });
@@ -50,7 +53,7 @@ export default function serverSentEvents() {
       subscribers[channel] = subscribers[channel] || [];
 
       if (!subscribers[channel].find((sub) => sub.connectionId === connectionId)) {
-        subscribers[channel].push({ connectionId, response, eventId: 0 });
+        subscribers[channel].push({ connectionId, response, eventId: 2 });
       }
     };
 

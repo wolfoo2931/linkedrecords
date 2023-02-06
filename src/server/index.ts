@@ -1,3 +1,4 @@
+import https from 'https';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -49,7 +50,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
   }
 }
 
-export default function createApp({
+function createApp({
   isAuthorizedToCreateAttribute = () => false,
   isAuthorizedToReadAttribute = () => false,
   isAuthorizedToUpdateAttribute = () => false,
@@ -107,4 +108,9 @@ export default function createApp({
   });
 
   return app;
+}
+
+export default function createServer(auth, options = {}) {
+  const server = https.createServer(options, createApp(auth));
+  return server;
 }
