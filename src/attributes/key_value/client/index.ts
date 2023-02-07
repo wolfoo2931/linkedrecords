@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
+import flatten, { unflatten } from 'flat';
 import AbstractAttributeClient from '../../abstract/abstract_attribute_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import KeyValueChange, { AtomicChange } from '../key_value_change';
@@ -27,17 +28,18 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
   }
 
   public deserializeValue(serializedValue: string) : object {
-    return JSON.parse(serializedValue);
+    return unflatten(JSON.parse(serializedValue));
   }
 
   protected async rawSet(newValue: object) {
     let changes: AtomicChange[] = [];
+    const flatValue = flatten(newValue) as object;
 
     Object.entries(this.value).forEach(([key]) => {
       changes.push({ key, value: null });
     });
 
-    Object.entries(newValue).forEach(([key, value]) => {
+    Object.entries(flatValue).forEach(([key, value]) => {
       changes = changes.filter((ch) => ch.key !== key);
       changes.push({ key, value });
     });
