@@ -6,7 +6,7 @@ export default {
     const result = await req.attribute.get();
 
     if (result instanceof Error) {
-      console.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
+      console.error(`error in POST /attributes/${req.params.attributeId}`, result.message);
       res.status(404).send({ error: result.message });
     } else {
       res.send(result);

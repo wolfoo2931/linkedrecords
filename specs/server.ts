@@ -1,3 +1,4 @@
+import http from 'http';
 import createServer from '../src/server';
 
 const port = process.env['PORT'] || 3000;
@@ -10,4 +11,4 @@ const auth = {
   isAuthorizedToUpdateFact: () => true,
 };
 
-createServer(auth).listen(port);
+createServer(auth, {}, http).listen(port);

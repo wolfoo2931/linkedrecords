@@ -16,7 +16,8 @@ Fact.initDB();
 
 async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
   if (process.env['DISABLE_AUTH'] === 'true') {
-    controllerAction(req, res);
+    console.error('AUTHENTICATION IS DISABLED!!!!');
+    controllerAction(req, res, () => true);
     return;
   }
 
@@ -110,7 +111,6 @@ function createApp({
   return app;
 }
 
-export default function createServer(auth, options = {}) {
-  const server = https.createServer(options, createApp(auth));
-  return server;
+export default function createServer(auth, options?, transportDriver:any = https) {
+  return transportDriver.createServer(options, createApp(auth));
 }
