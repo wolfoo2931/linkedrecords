@@ -46,7 +46,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
 
       if (request?.file?.fieldname === 'change' && request.body) {
         if (request.method === 'POST') {
-          request.body.value = `data:${request.file.mimetype};base64,${request.file.buffer.toString('base64')}`;
+          request.body.value = new Blob([request.file.buffer], { type: request.file.mimetype });
         } else {
           request.body.change = {
             value: new Blob([request.file.buffer], { type: request.file.mimetype }),

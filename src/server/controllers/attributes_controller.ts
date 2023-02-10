@@ -14,26 +14,27 @@ export default {
   },
 
   async get(req, res) {
-    const result = await req.attribute.get();
+    let result = await req.attribute.get();
 
     if (result instanceof Error) {
       console.error(`error in GET /attributes/${req.params.id}`, result.message);
       res.status(404).send({ error: result.message });
-    } else if (req.query.valueOnly === 'true') {
-      const match = result.value.match(/^data:(.*?);base64,/);
-
-      if (match) {
-        const mimetype = match[1];
-        const data = Buffer.from(result.value.replace(/^data:(.*?);base64,/, ''), 'base64');
-
-        res.setHeader('Content-Type', mimetype);
-        res.send(data.toString());
-      } else {
-        res.send(result.value);
-      }
-    } else {
-      res.send(result);
+      return;
     }
+
+    if (result?.value?.type) {
+      res.setHeader('Content-Type', result.value.type);
+    }
+
+    if (typeof result?.value?.text === 'function') {
+      result.value = await result.value.text();
+    }
+
+    if (req.query.valueOnly === 'true') {
+      result = result.value;
+    }
+
+    res.send(result);
   },
 
   async subsribe(req, res) {

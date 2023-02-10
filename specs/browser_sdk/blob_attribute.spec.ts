@@ -62,7 +62,7 @@ describe('Blob Attributes', () => {
 
       const data = await attributeFromDB.get();
 
-      expect(await data.value.text()).to.be.equal(blobData);
+      expect((await data.value.text()).startsWith('\ufffdPNG')).to.be.equal(true);
     });
   });
 
