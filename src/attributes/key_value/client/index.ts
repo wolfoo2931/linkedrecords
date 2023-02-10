@@ -27,8 +27,8 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     return {};
   }
 
-  public deserializeValue(serializedValue: string) : object {
-    return unflatten(JSON.parse(serializedValue));
+  public deserializeValue(serializedValue: string) : Promise<object> {
+    return Promise.resolve(unflatten(JSON.parse(serializedValue)));
   }
 
   protected async rawSet(newValue: object) {

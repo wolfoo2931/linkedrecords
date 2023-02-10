@@ -1,9 +1,12 @@
+/* eslint-disable import/no-cycle */
+
 import intersect from 'intersect';
 import LinkedRecords from '.';
 import AbstractAttributeClient from '../attributes/abstract/abstract_attribute_client';
 import IsSerializable from '../attributes/abstract/is_serializable';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
+import BlobAttribute from '../attributes/blob/client';
 import { IsSubscribable } from '../../lib/server-side-events/client';
 
 export default class AttributesRepository {
@@ -14,6 +17,7 @@ export default class AttributesRepository {
   private static attributeTypes = [
     LongTextAttribute,
     KeyValueAttribute,
+    BlobAttribute,
   ];
 
   constructor(linkedRecords: LinkedRecords, serverSideEvents: IsSubscribable) {

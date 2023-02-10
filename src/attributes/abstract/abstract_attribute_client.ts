@@ -66,7 +66,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   public abstract getDataTypePrefix();
   public abstract getDefaultValue() : Type;
-  public abstract deserializeValue(serializedValue: string) : Type;
+  public abstract deserializeValue(serializedValue: string) : Promise<Type>;
 
   protected abstract rawSet(newValue: Type): void;
   protected abstract rawChange(delta: TypedChange): void;
@@ -78,20 +78,25 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       throw new Error(`Cannot create attribute because it has an id assigned (${this.id})`);
     }
 
+    let queryParamString = '';
+
     this.id = `${this.getDataTypePrefix()}-${uuid()}`;
 
-    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}`, {
+    const requestConfig: any = {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       credentials: 'include',
-      body: JSON.stringify({
-        clientId: this.clientId,
-        actorId: this.actorId,
-        value,
-      }),
-    }));
+      body: this.getCreatePayload(value),
+    };
+
+    if (typeof requestConfig.body === 'string') {
+      requestConfig.headers = {
+        'Content-Type': 'application/json',
+      };
+    } else {
+      queryParamString = `?clientId=${this.clientId}&actorId=${this.actorId}`;
+    }
+
+    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}${queryParamString}`, requestConfig));
 
     if (!response) {
       throw new Error('Error communicating with the server when creating attribute.');
@@ -108,6 +113,18 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     const responseBody = await response.json();
     await this.load(responseBody);
+  }
+
+  public getDataURL() {
+    return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}&valueOnly=true`;
+  }
+
+  protected getCreatePayload(value: Type): string | FormData {
+    return JSON.stringify({
+      clientId: this.clientId,
+      actorId: this.actorId,
+      value,
+    });
   }
 
   public async get() : Promise<{ value: Type, changeId: string, actorId: string }> {
@@ -221,7 +238,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
 
     this.version = result.changeId;
-    this.value = this.deserializeValue(serializedValue);
+    this.value = await this.deserializeValue(serializedValue);
     this.createdAt = new Date(result.createdAt);
     this.updatedAt = new Date(result.updatedAt);
     this.onLoad();
