@@ -8,7 +8,7 @@ import BlobChange from '../blob_change';
 import Fact from '../../../facts/server';
 
 export default class BlobAttribute extends AbstractAttributeServer<
-string,
+Blob,
 BlobChange,
 IsAttributeStorage
 > {
@@ -16,24 +16,40 @@ IsAttributeStorage
     return 'bl';
   }
 
-  async create(value: string) : Promise<{ id: string }> {
+  async create(value: Blob) : Promise<{ id: string }> {
     const createdByFact = new Fact(this.id, 'wasCreatedBy', this.actorId);
     await createdByFact.save();
-    return this.storage.createAttribute(this.id, this.actorId, value);
+
+    const content = `data:${value.type};base64,${Buffer.from(await value.text()).toString('base64')}`;
+    return this.storage.createAttribute(this.id, this.actorId, content);
   }
 
   async get() : Promise<{
-    value: string,
+    value: Blob,
     changeId: string,
     actorId: string,
     createdAt: number,
     updatedAt: number
   }> {
-    return this.storage.getAttributeLatestSnapshot(this.id, { maxChangeId: '2147483647' });
+    const content = await this.storage.getAttributeLatestSnapshot(this.id, { maxChangeId: '2147483647' });
+    const match = content.value.match(/^data:(.*?);base64,/);
+
+    if (!match) {
+      throw new Error('Attribute content seems not to be a blob type');
+    }
+
+    const mimetype = match[1];
+    const data = Buffer.from(content.value.replace(/^data:(.*?);base64,/, ''), 'base64');
+
+    return {
+      ...content,
+      value: new Blob([data], { type: mimetype }),
+    };
   }
 
-  async set(value: string) : Promise<{ id: string }> {
-    return this.storage.insertAttributeSnapshot(this.id, this.actorId, value);
+  async set(value: Blob) : Promise<{ id: string }> {
+    const content = `data:${value.type};base64,${Buffer.from(await value.text()).toString('base64')}`;
+    return this.storage.insertAttributeSnapshot(this.id, this.actorId, content);
   }
 
   async change(
