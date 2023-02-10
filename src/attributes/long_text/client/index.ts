@@ -31,8 +31,8 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     return '';
   }
 
-  public deserializeValue(serializedValue: string) : string {
-    return serializedValue;
+  public deserializeValue(serializedValue: string) : Promise<string> {
+    return Promise.resolve(serializedValue);
   }
 
   protected async rawSet(newValue: string) {

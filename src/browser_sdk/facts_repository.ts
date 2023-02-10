@@ -1,3 +1,5 @@
+/* eslint-disable import/no-cycle */
+
 import LinkedRecords from '.';
 import Fact from '../facts/client';
 import { FactQuery } from '../facts/fact_query';

@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import https from 'https';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import morgan from 'morgan';
+import multer from 'multer';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
@@ -10,7 +12,8 @@ import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
 import authentication from './middleware/authentication';
-import 'dotenv/config';
+
+const blobUpload = multer().single('change');
 
 Fact.initDB();
 
@@ -35,8 +38,29 @@ async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
 }
 
 async function withAuth(req, res, controllerAction, isAuthorized) {
+  const uploadWrappedControllerAction = (request, response) => {
+    blobUpload(request, response, (err) => {
+      if (err) {
+        console.error(`error uploading file for ${req.method} ${req.path}`, err);
+      }
+
+      if (request?.file?.fieldname === 'change' && request.body) {
+        if (request.method === 'POST') {
+          request.body.value = `data:${request.file.mimetype};base64,${request.file.buffer.toString('base64')}`;
+        } else {
+          request.body.change = {
+            value: new Blob([request.file.buffer], { type: request.file.mimetype }),
+          };
+        }
+      }
+
+      controllerAction(request, response);
+    });
+  };
+
   if (process.env['DISABLE_AUTH'] === 'true') {
-    controllerAction(req, res);
+    console.error('AUTHENTICATION IS DISABLED!!!!');
+    uploadWrappedControllerAction(req, res);
     return;
   }
 
@@ -47,7 +71,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
       res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
     }
 
-    controllerAction(req, res);
+    uploadWrappedControllerAction(req, res);
   }
 }
 
