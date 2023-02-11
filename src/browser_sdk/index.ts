@@ -29,6 +29,8 @@ export default class LinkedRecords {
 
   loginHandler?: (URL) => void;
 
+  connectionLostHandler?: () => void;
+
   clientId: string;
 
   actorId: string;
@@ -59,6 +61,18 @@ export default class LinkedRecords {
     this.serverSideEvents = serverSideEvents || new ServerSideEvents();
     this.Attribute = new AttributesRepository(this, this.serverSideEvents);
     this.Fact = new FactsRepository(this);
+  }
+
+  public setConnectionLostHandler(handler: () => void) {
+    this.connectionLostHandler = handler;
+  }
+
+  public handleConnectionError(error) {
+    if (this.connectionLostHandler) {
+      this.connectionLostHandler();
+    } else {
+      console.log('Connection Lost', error);
+    }
   }
 
   public setLoginHandler(handler: (URL) => void) {
