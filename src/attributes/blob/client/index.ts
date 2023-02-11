@@ -74,7 +74,7 @@ export default class KeyValueAttribute extends AbstractAttributeClient<Blob, Blo
     }));
 
     if (response.status === 401) {
-      this.handleExpiredLoginSession();
+      this.linkedRecords.handleExpiredLoginSession();
     }
   }
 

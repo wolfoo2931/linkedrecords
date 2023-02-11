@@ -125,10 +125,10 @@ function createApp({
 
   app.get('/userinfo', (req, res) => {
     if (!req?.oidc?.user?.sub) {
-      res.status(401).write('Not Authorized');
+      res.status(401).send('Not Authorized');
     } else {
       res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
-      res.status(200).write('');
+      res.status(200).send('Empty Response');
     }
   });
 
