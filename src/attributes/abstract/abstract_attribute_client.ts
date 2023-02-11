@@ -163,16 +163,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.observers.push(observer);
   }
 
-  public handleConnectionError(error) {
-    console.log('Connection Lost', error);
-  }
-
   public async withConnectionLostHandler(fn: () => Promise<any>) {
     try {
       return await fn();
     } catch (ex: any) {
       if (ex.message === 'Failed to fetch') {
-        this.handleConnectionError(ex);
+        this.linkedRecords.handleConnectionError(ex);
       }
 
       return false;
