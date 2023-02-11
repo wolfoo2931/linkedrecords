@@ -27,6 +27,8 @@ export default class LinkedRecords {
 
   loginURL?: URL;
 
+  loginHandler?: (URL) => void;
+
   clientId: string;
 
   actorId: string;
@@ -59,17 +61,37 @@ export default class LinkedRecords {
     this.Fact = new FactsRepository(this);
   }
 
-  async ensureUserIdIsKnown() {
+  public setLoginHandler(handler: (URL) => void) {
+    this.loginHandler = handler;
+  }
+
+  public handleExpiredLoginSession() {
+    if (this.loginURL && this.loginHandler) {
+      this.loginHandler(this.loginURL);
+    }
+  }
+
+  async ensureUserIdIsKnown(): Promise<string | undefined> {
     if (LinkedRecords.ensureUserIdIsKnownPromise) {
       await LinkedRecords.ensureUserIdIsKnownPromise;
-    } else {
-      LinkedRecords.ensureUserIdIsKnownPromise = await fetch(`${this.serverURL}userinfo`, {
-        credentials: 'include',
-      });
-
-      this.actorId = LinkedRecords.readUserIdFromCookies();
-
-      LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+      return this.actorId;
     }
+
+    LinkedRecords.ensureUserIdIsKnownPromise = fetch(`${this.serverURL}userinfo`, {
+      credentials: 'include',
+    });
+
+    const userInfoResponse = await LinkedRecords.ensureUserIdIsKnownPromise;
+
+    this.actorId = LinkedRecords.readUserIdFromCookies();
+
+    if (userInfoResponse.status === 401) {
+      this.handleExpiredLoginSession();
+      return undefined;
+    }
+
+    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+
+    return this.actorId;
   }
 }

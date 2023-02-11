@@ -103,7 +103,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
 
     if (response.status === 401) {
-      this.handleExpiredLoginSession();
+      this.linkedRecords.handleExpiredLoginSession();
       return;
     }
 
@@ -163,13 +163,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.observers.push(observer);
   }
 
-  public handleExpiredLoginSession() {
-    if (this.linkedRecords.loginURL) {
-      const win: Window = window;
-      win.location = this.linkedRecords.loginURL.toString();
-    }
-  }
-
   public handleConnectionError(error) {
     console.log('Connection Lost', error);
   }
@@ -216,8 +209,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         credentials: 'include',
       }));
 
-      if (response.status === 401) {
-        this.handleExpiredLoginSession();
+      if (response.status === 401 && this.linkedRecords) {
+        this.linkedRecords.handleExpiredLoginSession();
         return;
       }
 
@@ -269,7 +262,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }));
 
     if (response.status === 401) {
-      this.handleExpiredLoginSession();
+      this.linkedRecords.handleExpiredLoginSession();
     }
   }
 
