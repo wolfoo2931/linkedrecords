@@ -67,7 +67,7 @@ export default class KeyValueAttribute extends AbstractAttributeClient<Blob, Blo
     formData.append('actorId', this.actorId);
     formData.append('clientId', this.clientId);
 
-    const response = await this.withConnectionLostHandler(() => fetch(url, {
+    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(url, {
       method: 'PATCH',
       body: formData,
       credentials: 'include',
