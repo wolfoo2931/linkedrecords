@@ -20,7 +20,7 @@ IsAttributeStorage
     const createdByFact = new Fact(this.id, 'wasCreatedBy', this.actorId);
     await createdByFact.save();
 
-    const content = `data:${value.type};base64,${Buffer.from(await value.text()).toString('base64')}`;
+    const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
     return this.storage.createAttribute(this.id, this.actorId, content);
   }
 
@@ -48,7 +48,7 @@ IsAttributeStorage
   }
 
   async set(value: Blob) : Promise<{ id: string }> {
-    const content = `data:${value.type};base64,${Buffer.from(await value.text()).toString('base64')}`;
+    const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
     return this.storage.insertAttributeSnapshot(this.id, this.actorId, content);
   }
 
@@ -58,7 +58,7 @@ IsAttributeStorage
     const insertResult = await this.storage.insertAttributeSnapshot(
       this.id,
       this.actorId,
-      `data:${changeWithMetadata.change.value.type};base64,${Buffer.from(await changeWithMetadata.change.value.text()).toString('base64')}`,
+      `data:${changeWithMetadata.change.value.type};base64,${Buffer.from(await changeWithMetadata.change.value.arrayBuffer()).toString('base64')}`,
     );
 
     return new SerializedChangeWithMetadata(

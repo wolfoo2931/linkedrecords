@@ -15,6 +15,8 @@ export default {
 
   async get(req, res) {
     let result = await req.attribute.get();
+    const mimetype = result?.value?.type;
+    const isBlob = result.value instanceof Blob;
 
     if (result instanceof Error) {
       console.error(`error in GET /attributes/${req.params.id}`, result.message);
@@ -22,16 +24,20 @@ export default {
       return;
     }
 
-    if (result?.value?.type) {
-      res.setHeader('Content-Type', result.value.type);
-    }
-
-    if (typeof result?.value?.text === 'function') {
-      result.value = await result.value.text();
+    if (typeof result?.value?.arrayBuffer === 'function') {
+      result.value = Buffer.from(await result.value.arrayBuffer());
     }
 
     if (req.query.valueOnly === 'true') {
+      if (mimetype) {
+        res.set('Content-Type', mimetype);
+      }
+
       result = result.value;
+    }
+
+    if (isBlob) {
+      result.value = `data:${mimetype};base64,${(result.value || result).toString('base64')}`;
     }
 
     res.send(result);
