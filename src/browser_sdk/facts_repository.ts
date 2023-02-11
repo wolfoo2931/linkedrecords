@@ -43,14 +43,14 @@ export default class FactsRepository {
   }
 
   async deleteAll() {
-    await fetch(`${this.linkedRecords.serverURL}facts`, {
+    await this.linkedRecords.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}facts`, {
       method: 'DELETE',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-    });
+    }));
   }
 
   async findAll(query: FactQuery | FactQuery[]): Promise<Fact[]> {
@@ -75,13 +75,13 @@ export default class FactsRepository {
       queryURL.searchParams.append('object', JSON.stringify(object));
     }
 
-    const response = await fetch(queryURL, {
+    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(queryURL, {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       credentials: 'include',
-    });
+    }));
 
     const responseJson = await response.json();
 

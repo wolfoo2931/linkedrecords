@@ -63,6 +63,18 @@ export default class LinkedRecords {
     this.Fact = new FactsRepository(this);
   }
 
+  public async withConnectionLostHandler(fn: () => Promise<any>) {
+    try {
+      return await fn();
+    } catch (ex: any) {
+      if (ex.message === 'Failed to fetch') {
+        this.handleConnectionError(ex);
+      }
+
+      return false;
+    }
+  }
+
   public setConnectionLostHandler(handler: () => void) {
     this.connectionLostHandler = handler;
   }

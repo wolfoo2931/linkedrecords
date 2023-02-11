@@ -96,7 +96,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       queryParamString = `?clientId=${this.clientId}&actorId=${this.actorId}`;
     }
 
-    const response = await this.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}${queryParamString}`, requestConfig));
+    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}${queryParamString}`, requestConfig));
 
     if (!response) {
       throw new Error('Error communicating with the server when creating attribute.');
@@ -163,18 +163,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.observers.push(observer);
   }
 
-  public async withConnectionLostHandler(fn: () => Promise<any>) {
-    try {
-      return await fn();
-    } catch (ex: any) {
-      if (ex.message === 'Failed to fetch') {
-        this.linkedRecords.handleConnectionError(ex);
-      }
-
-      return false;
-    }
-  }
-
   public unload() {
     if (this.attrSubscription) {
       this.serverSideEvents.unsubscribe(this.attrSubscription);
@@ -201,7 +189,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     if (!result) {
       const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
-      const response = await this.withConnectionLostHandler(() => fetch(url, {
+      const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(url, {
         credentials: 'include',
       }));
 
@@ -247,7 +235,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
     const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
-    const response = await this.withConnectionLostHandler(() => fetch(url, {
+    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(url, {
       method: 'PATCH',
       headers: {
         Accept: 'application/json',
