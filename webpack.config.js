@@ -20,7 +20,7 @@ const client = {
       {
         test: /\.tsx?$/,
         use: "ts-loader",
-        exclude: /node_modules/,
+        exclude: /node_modules.*\.js$/,
       },
     ],
   },
@@ -39,7 +39,7 @@ const server = {
   entry: path.join(__dirname, "src", "server", "index.ts"),
   mode: NODE_ENV,
   target: "node",
-  externals: [nodeExternals()],
+  externals: [nodeExternals(), 'pg-native'],
   watch: false,
   devtool: "source-map",
   output: {
@@ -57,6 +57,7 @@ const server = {
       {
         test: /\.ts$/,
         use: "ts-loader",
+        exclude: /node_modules.*\.js$/,
       },
     ],
   },
