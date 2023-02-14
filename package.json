@@ -9,7 +9,8 @@
   "scripts": {
     "test": "./runTests.sh",
     "lint": "eslint .",
-    "build": "webpack --config ./webpack.config.js"
+    "build": "webpack --config ./webpack.config.js",
+    "install": "webpack --config ./webpack.config.js"
   },
   "repository": {
     "type": "git",
