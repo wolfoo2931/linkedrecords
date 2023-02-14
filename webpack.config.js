@@ -27,7 +27,9 @@ const client = {
   resolve: {
     extensions: [".tsx", ".ts", ".js"],
   },
-  externals: {},
+  externals: {
+    "pg-native": "require('pg-native')"
+  },
   optimization: {
     minimize: false,
   },
