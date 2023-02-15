@@ -4,6 +4,7 @@ const NODE_ENV = "development";
 
 const client = {
   entry: path.join(__dirname, "src", "browser_sdk", "index.ts"),
+  context: path.resolve(__dirname, "src", "browser_sdk"),
   target: "web",
   mode: NODE_ENV,
   devtool: "source-map",
@@ -19,16 +20,22 @@ const client = {
     rules: [
       {
         test: /\.tsx?$/,
-        use: "ts-loader",
-        exclude: /node_modules.*\.js$/,
+        use: {
+          loader: "ts-loader",
+          options: {
+            transpileOnly: true
+          },
+        },
+        exclude: (e) => {
+          let file = e.replace(__dirname, '.');
+
+          return file.match(/node_modules/)
+        }
       },
     ],
   },
   resolve: {
     extensions: [".tsx", ".ts", ".js"],
-  },
-  externals: {
-    "pg-native": "require('pg-native')"
   },
   optimization: {
     minimize: false,
@@ -37,6 +44,7 @@ const client = {
 
 const server = {
   entry: path.join(__dirname, "src", "server", "index.ts"),
+  context: path.resolve(__dirname, "src", "server"),
   mode: NODE_ENV,
   target: "node",
   externals: [nodeExternals(), 'pg-native'],
@@ -55,9 +63,18 @@ const server = {
   module: {
     rules: [
       {
-        test: /\.ts$/,
-        use: "ts-loader",
-        exclude: /node_modules.*\.js$/,
+        test: /\.tsx?$/,
+        use: {
+          loader: "ts-loader",
+          options: {
+            transpileOnly: true
+          },
+        },
+        exclude: (e) => {
+          let file = e.replace(__dirname, '.');
+
+          return file.match(/node_modules/)
+        }
       },
     ],
   },
