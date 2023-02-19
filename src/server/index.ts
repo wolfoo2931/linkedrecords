@@ -24,14 +24,14 @@ async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
     return;
   }
 
-  const isAuthorizedToReadFact = (fact) => isAuthorized(req.oidc.user.sub, req, fact);
-
   if (!req?.oidc?.user?.sub) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
       res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
     }
+
+    const isAuthorizedToReadFact = (fact) => isAuthorized(req.oidc.user.sub.replaceAll('|', '-'), req, fact);
 
     controllerAction(req, res, isAuthorizedToReadFact);
   }
@@ -64,7 +64,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
     return;
   }
 
-  if (!req?.oidc?.user?.sub || !(await isAuthorized(req.oidc.user.sub, req))) {
+  if (!req?.oidc?.user?.sub || !(await isAuthorized(req.oidc.user.sub.replaceAll('|', '-'), req))) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
