@@ -50,7 +50,7 @@ export default class LinkedRecords {
     const split = withoutSignature.split(':');
     const userId = split.length === 1 ? split[0] : split[1];
 
-    return userId;
+    return userId.replaceAll('|', '-');
   }
 
   constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
