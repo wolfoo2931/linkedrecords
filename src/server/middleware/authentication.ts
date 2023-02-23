@@ -18,7 +18,7 @@ export default function authentication() {
     },
     session: {
       cookie: {
-        domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname,
+        domain: process.env['COOKIE_DOMAIN'],
         sameSite: 'None',
         secure: true,
       },

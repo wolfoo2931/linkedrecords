@@ -28,7 +28,7 @@ async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
+      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
     const isAuthorizedToReadFact = (fact) => isAuthorized(req.oidc.user.sub.replaceAll('|', '-'), req, fact);
@@ -68,7 +68,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
+      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
     uploadWrappedControllerAction(req, res);
@@ -127,7 +127,7 @@ function createApp({
     if (!req?.oidc?.user?.sub) {
       res.status(401).send('Not Authorized');
     } else {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: (new URL(process.env['APP_BASE_URL'] || '')).hostname });
+      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
       res.status(200).send('Empty Response');
     }
   });
