@@ -1,6 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 /* eslint-disable class-methods-use-this */
 /* eslint-disable @typescript-eslint/no-unused-vars */
+import FileType from 'file-type';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
@@ -38,8 +39,19 @@ IsAttributeStorage
       throw new Error('Attribute content seems not to be a blob type');
     }
 
-    const mimetype = match[1];
+    let mimetype = match[1];
     const data = Buffer.from(content.value.replace(/^data:(.*?);base64,/, ''), 'base64');
+
+    if (mimetype === 'application/octet-stream') {
+      try {
+        const typeFromBinary = await FileType.fromBuffer(data);
+        if (typeFromBinary && typeFromBinary.mime) {
+          mimetype = typeFromBinary.mime;
+        }
+      } catch (ex) {
+        console.log(`failed to determine mimetype for blob attribute with id: ${this.id}`);
+      }
+    }
 
     return {
       ...content,
