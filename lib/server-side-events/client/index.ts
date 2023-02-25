@@ -85,8 +85,6 @@ export default class ServerSideEvents implements IsSubscribable {
     const url = new URL(origin);
     url.pathname = '/server-sent-events';
 
-    console.log('THIS IS THE DAMMM LOG');
-
     if (this.connetionsInEstablishment[url.origin]) {
       const connection = await this.connetionsInEstablishment[url.origin];
       return connection;
