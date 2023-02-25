@@ -19,7 +19,7 @@ export default {
     const isBlob = result.value instanceof Blob;
 
     if (result instanceof Error) {
-      console.error(`error in GET /attributes/${req.params.id}`, result.message);
+      console.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
       res.status(404).send({ error: result.message });
       return;
     }
