@@ -10,6 +10,8 @@ export default class ServerSideEvents implements IsSubscribable {
 
   connetions = {};
 
+  connetionsInEstablishment = {};
+
   isPaused: boolean = false;
 
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
@@ -83,12 +85,21 @@ export default class ServerSideEvents implements IsSubscribable {
     const url = new URL(origin);
     url.pathname = '/server-sent-events';
 
+    console.log('THIS IS THE DAMMM LOG');
+
+    if (this.connetionsInEstablishment[url.origin]) {
+      const connection = await this.connetionsInEstablishment[url.origin];
+      return connection;
+    }
+
     if (!this.connetions[url.origin]) {
       try {
-        this.connetions[url.origin] = await this.getEventSourceAsync(url);
+        this.connetionsInEstablishment[url.origin] = this.getEventSourceAsync(url);
+        this.connetions[url.origin] = await this.connetionsInEstablishment[url.origin];
       } catch (ex) {
         try {
-          this.connetions[url.origin] = await this.getEventSourceAsync(url);
+          this.connetionsInEstablishment[url.origin] = this.getEventSourceAsync(url);
+          this.connetions[url.origin] = await this.connetionsInEstablishment[url.origin];
         } catch (ex2) {
           console.log('Another EventSource is probably connected already', ex2);
 
