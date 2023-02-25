@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import morgan from 'morgan';
 import multer from 'multer';
+import md5 from 'md5';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
@@ -14,6 +15,7 @@ import attributesController from './controllers/attributes_controller';
 import authentication from './middleware/authentication';
 
 const blobUpload = multer().single('change');
+const uid = (req) => req?.oidc?.user?.sub && md5(req.oidc.user.sub);
 
 Fact.initDB();
 
@@ -28,10 +30,10 @@ async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
+      res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
-    const isAuthorizedToReadFact = (fact) => isAuthorized(req.oidc.user.sub.replaceAll('|', '-'), req, fact);
+    const isAuthorizedToReadFact = (fact) => isAuthorized(uid(req), req, fact);
 
     controllerAction(req, res, isAuthorizedToReadFact);
   }
@@ -64,11 +66,11 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
     return;
   }
 
-  if (!req?.oidc?.user?.sub || !(await isAuthorized(req.oidc.user.sub.replaceAll('|', '-'), req))) {
+  if (!req?.oidc?.user?.sub || !(await isAuthorized(uid(req), req))) {
     res.status(401).write('Not Authorized');
   } else {
     if (!req.signedCookies.userId) {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
+      res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
     uploadWrappedControllerAction(req, res);
@@ -127,7 +129,7 @@ function createApp({
     if (!req?.oidc?.user?.sub) {
       res.status(401).send('Not Authorized');
     } else {
-      res.cookie('userId', req.oidc.user.sub, { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
+      res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
       res.status(200).send('Empty Response');
     }
   });
