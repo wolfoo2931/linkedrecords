@@ -118,7 +118,7 @@ function createApp({
   app.use('/', factMiddleware());
 
   app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, isAuthorizedToCreateAttribute));
-  app.get('/attributes/:id', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
+  app.get('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
   app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
   app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, isAuthorizedToUpdateAttribute));
   app.get('/facts', (req, res) => withAuthForEachFact(req, res, factsController.index, isAuthorizedToReadFact));
