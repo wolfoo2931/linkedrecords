@@ -199,9 +199,16 @@ describe('Fact', () => {
       }> <unknown> teams;
 
       expect(allTeamsOfUserA.length).to.equal(1);
+      expect(allTeamsOfUserA[0]!.id).to.equal(teamA.id);
+
       expect(allTeamsOfUserB.length).to.equal(1);
+      expect(allTeamsOfUserB[0]!.id).to.equal(teamB.id);
+
       expect(allTeamsOfUserAB.length).to.equal(2);
     });
+
+    it('allows to find attributes by object relations when there is more then one object pattern per group to match');
+    it('allows to find attributes by subject relations when there is more then one subject pattern per group to match');
 
     it('returns empty records when the object relations do not exists', async () => {
       const [client] = createClient();

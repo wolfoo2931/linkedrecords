@@ -1,6 +1,20 @@
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
+import queryExector, { AttributeQuery } from '../../attributes/attribute_query';
 
 export default {
+  async index(req, res) {
+    const { clientId, actorId, attributeStorage } = req;
+    const query: AttributeQuery = JSON.parse(req.query.query);
+    const result = await queryExector.resolveToAttributes(
+      query,
+      clientId,
+      actorId,
+      attributeStorage,
+    );
+
+    res.send(result);
+  },
+
   async create(req, res) {
     await req.attribute.create(req.body.value);
     const result = await req.attribute.get();
