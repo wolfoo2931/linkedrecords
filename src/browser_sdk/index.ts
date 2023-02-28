@@ -50,7 +50,7 @@ export default class LinkedRecords {
     const split = withoutSignature.split(':');
     const userId = split.length === 1 ? split[0] : split[1];
 
-    return userId.replaceAll('|', '-');
+    return userId;
   }
 
   constructor(serverURL: URL, serverSideEvents?: IsSubscribable, loginURL?: URL) {
@@ -61,6 +61,19 @@ export default class LinkedRecords {
     this.serverSideEvents = serverSideEvents || new ServerSideEvents();
     this.Attribute = new AttributesRepository(this, this.serverSideEvents);
     this.Fact = new FactsRepository(this);
+  }
+
+  public async fetch(url: string, { headers } = { headers: {} }) {
+    const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+
+    return this.withConnectionLostHandler(() => fetch(absoluteUrl, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+      credentials: 'include',
+    }));
   }
 
   public async withConnectionLostHandler(fn: () => Promise<any>) {

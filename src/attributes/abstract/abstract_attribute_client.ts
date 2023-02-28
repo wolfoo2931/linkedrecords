@@ -169,7 +169,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
   }
 
-  protected async load(serverState?: {
+  public async load(serverState?: {
     changeId: string,
     value: string,
     createdAt: Date,

@@ -3,6 +3,7 @@ import intersect from 'intersect';
 import { FactQuery } from '../fact_query';
 
 const pgPool = new pg.Pool({ max: 2 });
+const ensureArray = (a) => (Array.isArray(a) ? a : [a]);
 export default class Fact {
   subject: string;
 
@@ -46,8 +47,8 @@ export default class Fact {
   }
 
   static async findAll({ subject, predicate, object }: FactQuery): Promise<Fact[]> {
-    const subjectIdsPromise = subject ? subject.map(Fact.resolveToAttributeIds) : [];
-    const objectIdsPromise = object ? object.map(Fact.resolveToAttributeIds) : [];
+    const subjectIdsPromise = subject ? ensureArray(subject).map(Fact.resolveToAttributeIds) : [];
+    const objectIdsPromise = object ? ensureArray(object).map(Fact.resolveToAttributeIds) : [];
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
 

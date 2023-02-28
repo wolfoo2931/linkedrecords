@@ -12,6 +12,7 @@ import factMiddleware from './middleware/fact';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
+import exception from './middleware/exception';
 import authentication from './middleware/authentication';
 
 const blobUpload = multer().single('change');
@@ -100,6 +101,7 @@ function createApp({
     app.use(UrlPath, express.static(filePath));
   });
 
+  app.use(exception());
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
   app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
@@ -117,6 +119,7 @@ function createApp({
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
+  app.get('/attributes', attributesController.index);
   app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, isAuthorizedToCreateAttribute));
   app.get('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
   app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
