@@ -207,8 +207,106 @@ describe('Fact', () => {
       expect(allTeamsOfUserAB.length).to.equal(2);
     });
 
-    it('allows to find attributes by object relations when there is more then one object pattern per group to match');
-    it('allows to find attributes by subject relations when there is more then one subject pattern per group to match');
+    it('allows to find attributes by object relations when there is more then one object "$it" pattern per group to match', async () => {
+      const [client] = createClient();
+      const [otherClient] = createClient();
+
+      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
+      const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
+      const teamC = await client.Attribute.create('keyValue', { name: 'C Team' });
+
+      await client.Fact.createAll([
+        [teamA.id, 'isA', 'team'],
+        [teamB.id, 'isA', 'team'],
+        [teamC.id, 'isA', 'team'],
+        ['user-a', 'isMemberOf', teamA.id],
+        ['user-a', 'isMemberOf', teamC.id],
+        ['user-b', 'isMemberOf', teamB.id],
+        ['user-b', 'isMemberOf', teamC.id],
+      ]);
+
+      const teams = await otherClient.Attribute.findAll({
+        allTeamsOfUserA: [
+          ['$it', 'isA', 'team'],
+          ['user-a', 'isMemberOf', '$it'],
+        ],
+        allTeamsOfUserB: [
+          ['$it', 'isA', 'team'],
+          ['user-b', 'isMemberOf', '$it'],
+        ],
+        commonTeams: [
+          ['$it', 'isA', 'team'],
+          ['user-a', 'isMemberOf', '$it'],
+          ['user-b', 'isMemberOf', '$it'],
+        ],
+      });
+
+      const { allTeamsOfUserA, allTeamsOfUserB, commonTeams } = <{
+        allTeamsOfUserA: KeyValueAttribute[],
+        allTeamsOfUserB: KeyValueAttribute[],
+        commonTeams: KeyValueAttribute[],
+      }> <unknown> teams;
+
+      expect(allTeamsOfUserA.length).to.equal(2);
+      expect(allTeamsOfUserB.length).to.equal(2);
+      expect(commonTeams.length).to.equal(1);
+
+      expect(allTeamsOfUserA.find((attr) => attr.id === teamA.id));
+      expect(allTeamsOfUserA.find((attr) => attr.id === teamC.id));
+
+      expect(allTeamsOfUserB.find((attr) => attr.id === teamB.id));
+      expect(allTeamsOfUserB.find((attr) => attr.id === teamC.id));
+      expect(commonTeams[0]!.id).to.equal(teamC.id);
+    });
+
+    it('allows to find attributes by subject relations when there is more then one subject "$it" pattern per group to match', async () => {
+      const [client] = createClient();
+      const [otherClient] = createClient();
+
+      const memberA = await client.Attribute.create('keyValue', { name: 'Paul' });
+      const memberB = await client.Attribute.create('keyValue', { name: 'Peter' });
+      const memberC = await client.Attribute.create('keyValue', { name: 'Petera' });
+
+      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
+      const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
+
+      await client.Fact.createAll([
+        [memberA.id, 'isMemberOf', teamA.id],
+        [memberB.id, 'isMemberOf', teamB.id],
+
+        [memberC.id, 'isMemberOf', teamA.id],
+        [memberC.id, 'isMemberOf', teamB.id],
+      ]);
+
+      const users = await otherClient.Attribute.findAll({
+        allMembersOfTeamA: [
+          ['$it', 'isMemberOf', teamA.id as string],
+        ],
+        allMembersOfTeamB: [
+          ['$it', 'isMemberOf', teamB.id as string],
+        ],
+        commonMembers: [
+          ['$it', 'isMemberOf', teamA.id as string],
+          ['$it', 'isMemberOf', teamB.id as string],
+        ],
+      });
+
+      const { allMembersOfTeamA, allMembersOfTeamB, commonMembers } = <{
+        allMembersOfTeamA: KeyValueAttribute[],
+        allMembersOfTeamB: KeyValueAttribute[],
+        commonMembers: KeyValueAttribute[],
+      }> <unknown> users;
+
+      expect(allMembersOfTeamA.length).to.equal(2);
+      expect(allMembersOfTeamB.length).to.equal(2);
+      expect(commonMembers.length).to.equal(1);
+
+      expect(allMembersOfTeamA.find((attr) => attr.id === memberA.id));
+      expect(allMembersOfTeamA.find((attr) => attr.id === memberC.id));
+      expect(allMembersOfTeamB.find((attr) => attr.id === memberB.id));
+      expect(allMembersOfTeamB.find((attr) => attr.id === memberC.id));
+      expect(commonMembers[0]!.id).to.equal(memberC.id);
+    });
 
     it('returns empty records when the object relations do not exists', async () => {
       const [client] = createClient();
