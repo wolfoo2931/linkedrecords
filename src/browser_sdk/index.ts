@@ -63,10 +63,11 @@ export default class LinkedRecords {
     this.Fact = new FactsRepository(this);
   }
 
-  public async fetch(url: string, { headers } = { headers: {} }) {
+  public async fetch(url: string, { headers, method } = { headers: {}, method: 'GET' }) {
     const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
 
     const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, {
+      method,
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
