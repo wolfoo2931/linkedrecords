@@ -66,7 +66,7 @@ export default class LinkedRecords {
   public async fetch(url: string, { headers } = { headers: {} }) {
     const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
 
-    return this.withConnectionLostHandler(() => fetch(absoluteUrl, {
+    const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
@@ -74,6 +74,12 @@ export default class LinkedRecords {
       },
       credentials: 'include',
     }));
+
+    if (response.status === 401) {
+      return this.handleExpiredLoginSession();
+    }
+
+    return response;
   }
 
   public async withConnectionLostHandler(fn: () => Promise<any>) {
