@@ -141,6 +141,7 @@ export default {
     [key: string]: string | string[]
   })> {
     const result = {};
+    const promises: Promise<any>[] = [];
     const qEntries = Object.entries(query);
 
     for (let j = 0; j < qEntries.length; j += 1) {
@@ -150,11 +151,16 @@ export default {
         const n = qEntry[0];
         const q = qEntry[1];
 
-        // TODO: fix await in loop
-        // eslint-disable-next-line no-await-in-loop
-        result[n] = await this.resolveToIds(q);
+        result[n] = this.resolveToIds(q);
+        promises.push(result[n]);
       }
     }
+
+    await Promise.all(promises);
+
+    Object.keys(result).forEach(async (key) => {
+      result[key] = await result[key];
+    });
 
     return result;
   },
