@@ -11,6 +11,13 @@ import ServerSideEvents, { IsSubscribable } from '../../lib/server-side-events/c
 import FactsRepository from './facts_repository';
 import AttributesRepository from './attributes_repository';
 
+type FetchOptions = {
+  headers?: object | undefined,
+  method?: string,
+  body?: any,
+  isJSON?: boolean,
+};
+
 export {
   LongTextAttribute,
   KeyValueAttribute,
@@ -63,21 +70,42 @@ export default class LinkedRecords {
     this.Fact = new FactsRepository(this);
   }
 
-  public async fetch(url: string, { headers, method } = { headers: {}, method: 'GET' }) {
-    const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+  public async fetch(url: string, fetchOpt?: FetchOptions) {
+    const {
+      headers = undefined,
+      method = 'GET',
+      body = undefined,
+      isJSON = true,
+    } = fetchOpt || {};
 
-    const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, {
+    const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+    const options: any = {
       method,
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...headers,
-      },
       credentials: 'include',
-    }));
+    };
+
+    if (body) {
+      options.body = body;
+    }
+
+    if (headers) {
+      options.headers = headers;
+    }
+
+    if (isJSON) {
+      if (!options.headers) {
+        options.headers = {};
+      }
+
+      options.headers.Accept = 'application/json';
+      options.headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, options));
 
     if (response.status === 401) {
-      return this.handleExpiredLoginSession();
+      this.handleExpiredLoginSession();
+      return false;
     }
 
     return response;

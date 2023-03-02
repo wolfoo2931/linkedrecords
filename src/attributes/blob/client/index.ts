@@ -60,22 +60,18 @@ export default class KeyValueAttribute extends AbstractAttributeClient<Blob, Blo
     }
 
     const formData = new FormData();
-    const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
 
     formData.append('change', value, 'blob');
     formData.append('attributeId', this.id);
     formData.append('actorId', this.actorId);
     formData.append('clientId', this.clientId);
 
-    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(url, {
+    await this.linkedRecords.fetch(url, {
       method: 'PATCH',
       body: formData,
-      credentials: 'include',
-    }));
-
-    if (response.status === 401) {
-      this.linkedRecords.handleExpiredLoginSession();
-    }
+      isJSON: false,
+    });
   }
 
   protected onLoad() {}
