@@ -10,6 +10,11 @@ export type CompoundAttributeQuery = {
   [key: string]: AttributeQuery
 };
 
+const asyncFilter = async (arr, fn) => {
+  const results = await Promise.all(arr.map(fn));
+  return arr.filter((_v, index) => results[index]);
+};
+
 export default {
 
   getAttributeClassByAttributeId(id: string) : any {
@@ -23,6 +28,7 @@ export default {
     clientId,
     actorId,
     storage,
+    isAuthorizedToReadAttribute,
   ) {
     const resultWithIds = await this.resolveToIds(query);
 
@@ -41,8 +47,7 @@ export default {
     }
 
     flatIds = flatIds.filter((value, index, array) => array.indexOf(value) === index);
-
-    // TODO: filter the auth stuff here
+    flatIds = await asyncFilter(flatIds, isAuthorizedToReadAttribute);
 
     const attributes = {};
 
