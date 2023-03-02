@@ -43,18 +43,7 @@ export default class FactsRepository {
   }
 
   async deleteAll() {
-    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}facts`, {
-      method: 'DELETE',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    }));
-
-    if (response.status === 401 && this.linkedRecords.loginHandler) {
-      this.linkedRecords.loginHandler(this.linkedRecords.loginURL);
-    }
+    await this.linkedRecords.fetch('/facts', { method: 'DELETE', headers: {} });
   }
 
   async findAll(query: FactQuery | FactQuery[]): Promise<Fact[]> {
@@ -65,31 +54,21 @@ export default class FactsRepository {
 
     const { subject, predicate, object } = query;
 
-    const queryURL = new URL(`${this.linkedRecords.serverURL}facts`);
+    const params = new URLSearchParams();
 
     if (subject) {
-      queryURL.searchParams.append('subject', JSON.stringify(subject));
+      params.append('subject', JSON.stringify(subject));
     }
 
     if (predicate) {
-      queryURL.searchParams.append('predicate', JSON.stringify(predicate));
+      params.append('predicate', JSON.stringify(predicate));
     }
 
     if (object) {
-      queryURL.searchParams.append('object', JSON.stringify(object));
+      params.append('object', JSON.stringify(object));
     }
 
-    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(queryURL, {
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-    }));
-
-    if (response.status === 401 && this.linkedRecords.loginHandler) {
-      this.linkedRecords.loginHandler(this.linkedRecords.loginURL);
-    }
+    const response = await this.linkedRecords.fetch(`/facts?${params.toString()}`);
 
     const responseJson = await response.json();
 
