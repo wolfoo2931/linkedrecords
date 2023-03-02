@@ -2,7 +2,7 @@
 import LinkedRecords from '../../browser_sdk';
 
 export default class Fact {
-  serverURL: URL;
+  linkedRecords: LinkedRecords;
 
   subject: string;
 
@@ -11,20 +11,15 @@ export default class Fact {
   object: string;
 
   constructor(linkedRecords: LinkedRecords, subject: string, predicate: string, object: string) {
-    this.serverURL = linkedRecords.serverURL;
+    this.linkedRecords = linkedRecords;
     this.subject = subject;
     this.predicate = predicate;
     this.object = object;
   }
 
   async save() {
-    await fetch(`${this.serverURL}facts`, {
+    await this.linkedRecords.fetch('/facts', {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
       body: JSON.stringify({
         subject: this.subject,
         predicate: this.predicate,

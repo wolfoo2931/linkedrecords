@@ -78,34 +78,19 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       throw new Error(`Cannot create attribute because it has an id assigned (${this.id})`);
     }
 
-    let queryParamString = '';
-
     this.id = `${this.getDataTypePrefix()}-${uuid()}`;
 
     const requestConfig: any = {
       method: 'POST',
-      credentials: 'include',
       body: this.getCreatePayload(value),
     };
 
-    if (typeof requestConfig.body === 'string') {
-      requestConfig.headers = {
-        'Content-Type': 'application/json',
-      };
-    } else {
-      queryParamString = `?clientId=${this.clientId}&actorId=${this.actorId}`;
+    if (typeof requestConfig.body !== 'string') {
+      requestConfig.isJSON = false;
     }
 
-    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(`${this.linkedRecords.serverURL}attributes/${this.id}${queryParamString}`, requestConfig));
-
-    if (!response) {
-      throw new Error('Error communicating with the server when creating attribute.');
-    }
-
-    if (response.status === 401) {
-      this.linkedRecords.handleExpiredLoginSession();
-      return;
-    }
+    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+    const response = await this.linkedRecords.fetch(url, requestConfig);
 
     if (response.status !== 200) {
       throw new Error(`Error creating attribute: ${await response.text()}`);
@@ -188,13 +173,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.isInitialized = true;
 
     if (!result) {
-      const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
-      const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(url, {
-        credentials: 'include',
-      }));
+      const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+      const response = await this.linkedRecords.fetch(url);
 
-      if (response.status === 401 && this.linkedRecords) {
-        this.linkedRecords.handleExpiredLoginSession();
+      if (!response) {
         return;
       }
 
@@ -234,20 +216,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    const url = `${this.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
-    const response = await this.linkedRecords.withConnectionLostHandler(() => fetch(url, {
-      method: 'PATCH',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(change.toJSON()),
-      credentials: 'include',
-    }));
+    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
 
-    if (response.status === 401) {
-      this.linkedRecords.handleExpiredLoginSession();
-    }
+    await this.linkedRecords.fetch(url, {
+      method: 'PATCH',
+      body: JSON.stringify(change.toJSON()),
+    });
   }
 
   protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {
