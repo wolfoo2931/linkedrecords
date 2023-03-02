@@ -119,7 +119,7 @@ function createApp({
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
-  app.get('/attributes', attributesController.index);
+  app.get('/attributes', (req, res) => withAuthForEachFact(req, res, attributesController.index, isAuthorizedToReadAttribute));
   app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, isAuthorizedToCreateAttribute));
   app.get('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
   app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
