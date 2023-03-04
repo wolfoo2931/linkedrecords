@@ -20,23 +20,19 @@ const uid = (req) => req?.oidc?.user?.sub && md5(req.oidc.user.sub);
 
 Fact.initDB();
 
-async function withAuthForEachFact(req, res, controllerAction, isAuthorized) {
-  if (process.env['DISABLE_AUTH'] === 'true') {
-    console.error('AUTHENTICATION IS DISABLED!!!!');
-    controllerAction(req, res, () => true);
-    return;
-  }
-
+async function withAuthForEach(req, res, controllerAction, isAuthorized) {
   if (!req?.oidc?.user?.sub) {
-    res.status(401).write('Not Authorized');
+    res.sendStatus(401);
   } else {
     if (!req.signedCookies.userId) {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
-    const isAuthorizedToReadFact = (fact) => isAuthorized(uid(req), req, fact);
+    const isAuthorizedToRead = (record) => {
+      return isAuthorized(uid(req), req, record);
+    }
 
-    controllerAction(req, res, isAuthorizedToReadFact);
+    controllerAction(req, res, isAuthorizedToRead);
   }
 }
 
@@ -61,14 +57,8 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
     });
   };
 
-  if (process.env['DISABLE_AUTH'] === 'true') {
-    console.error('AUTHENTICATION IS DISABLED!!!!');
-    uploadWrappedControllerAction(req, res);
-    return;
-  }
-
   if (!req?.oidc?.user?.sub || !(await isAuthorized(uid(req), req))) {
-    res.status(401).write('Not Authorized');
+    res.sendStatus(401);
   } else {
     if (!req.signedCookies.userId) {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
@@ -78,28 +68,64 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
   }
 }
 
-function createApp({
-  isAuthorizedToCreateAttribute = () => false,
-  isAuthorizedToReadAttribute = () => false,
-  isAuthorizedToUpdateAttribute = () => false,
-  isAuthorizedToCreateFact = () => false,
-  isAuthorizedToReadFact = () => false,
-  isAuthorizedToUpdateFact = () => false,
-  staticMounts = [],
-}: {
-  isAuthorizedToCreateAttribute?: (userid: string, request: any) => boolean,
-  isAuthorizedToReadAttribute?: (userid: string, request: any) => boolean,
-  isAuthorizedToUpdateAttribute?: (userid: string, request: any) => boolean,
-  isAuthorizedToCreateFact?: (userid: string, request: any) => boolean,
-  isAuthorizedToReadFact?: (userid: string, request: any, fact: any) => boolean,
-  isAuthorizedToUpdateFact?: (userid: string, request: any) => boolean,
-  staticMounts?: [string, string][]
-} = {}) {
-  const app = express();
+async function isAuthorizedToReadFact(userid, request, factRecord?) {
+  const fact = factRecord || new request.Fact(
+    request.body.subject,
+    request.body.predicate,
+    request.body.object,
+  );
 
-  staticMounts.forEach(([UrlPath, filePath]) => {
-    app.use(UrlPath, express.static(filePath));
-  });
+  if (fact.predicate === '$isATermFor') {
+    return true;
+  }
+
+  return await fact.matchAny([
+    { subject: [['$wasCreatedBy', userid]], object: [['$wasCreatedBy', userid]] },
+  ]);
+}
+
+async function isAuthorizedToCreateFact(userid, request, factRecord?) {
+  const fact = factRecord || new request.Fact(
+    request.body.subject,
+    request.body.predicate,
+    request.body.object,
+  );
+
+  if (fact.predicate === '$isATermFor') {
+    // TODO: Check if it exists already
+    return true;
+  }
+
+  let resutl = await fact.matchAny([
+    { subject: [['$wasCreatedBy', userid]], object: [['$wasCreatedBy', userid]] },
+    { subject: [['$wasCreatedBy', userid]], object: [['$isATermFor', '$anything']] },
+  ]);
+
+  return resutl;
+}
+
+async function isAuthorizedToAccessAttribute(userid, request, attrRecord?) {
+  const attribute = attrRecord || request.attribute;
+  const attributeId = typeof attribute === 'string' ? attribute : attribute.id;
+
+  const permits = await request.Fact.findAll(
+    { subject: [attributeId], predicate: ['$wasCreatedBy'], object: [userid] },
+  );
+
+  return permits.length !== 0;
+}
+
+const authorizer = {
+  isAuthorizedToCreateAttribute: () => true,
+  isAuthorizedToReadAttribute: (userid, request, record) => isAuthorizedToAccessAttribute(userid, request, record),
+  isAuthorizedToUpdateAttribute: (userid, request) => isAuthorizedToAccessAttribute(userid, request),
+  isAuthorizedToCreateFact: (userid, request) => isAuthorizedToCreateFact(userid, request),
+  isAuthorizedToReadFact: (userid, request, fact) => isAuthorizedToReadFact(userid, request, fact),
+  isAuthorizedToUpdateFact: () => false,
+};
+
+function createApp() {
+  const app = express();
 
   app.use(exception());
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
@@ -114,32 +140,31 @@ function createApp({
   }
 
   app.use(authentication());
-
   app.use(serverSentEvents());
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
-  app.get('/attributes', (req, res) => withAuthForEachFact(req, res, attributesController.index, isAuthorizedToReadAttribute));
-  app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, isAuthorizedToCreateAttribute));
-  app.get('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.get, isAuthorizedToReadAttribute));
-  app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, isAuthorizedToReadAttribute));
-  app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, isAuthorizedToUpdateAttribute));
-  app.get('/facts', (req, res) => withAuthForEachFact(req, res, factsController.index, isAuthorizedToReadFact));
-  app.post('/facts', (req, res) => withAuth(req, res, factsController.create, isAuthorizedToCreateFact));
-  app.delete('/facts', (req, res) => withAuth(req, res, factsController.deleteAll, isAuthorizedToUpdateFact));
+  app.get(    '/attributes',                      (req, res) => withAuthForEach(req, res, attributesController.index,    authorizer.isAuthorizedToReadAttribute));
+  app.post(   '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.create,   authorizer.isAuthorizedToCreateAttribute));
+  app.get(    '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.get,      authorizer.isAuthorizedToReadAttribute));
+  app.get(    '/attributes/:attributeId/changes', (req, res) => withAuth(req, res,        attributesController.subsribe, authorizer.isAuthorizedToReadAttribute));
+  app.patch(  '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.update,   authorizer.isAuthorizedToUpdateAttribute));
+  app.get(    '/facts',                           (req, res) => withAuthForEach(req, res, factsController.index,         authorizer.isAuthorizedToReadFact));
+  app.post(   '/facts',                           (req, res) => withAuth(req, res,        factsController.create,        authorizer.isAuthorizedToCreateFact));
+  app.delete( '/facts',                           (req, res) => withAuth(req, res,        factsController.deleteAll,     authorizer.isAuthorizedToUpdateFact));
 
   app.get('/userinfo', (req, res) => {
     if (!req?.oidc?.user?.sub) {
-      res.status(401).send('Not Authorized');
+      res.sendStatus(401);
     } else {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
-      res.status(200).send('Empty Response');
+      res.status(200).send('empty response');
     }
   });
 
   return app;
 }
 
-export default function createServer(auth, options?, transportDriver:any = https) {
-  return transportDriver.createServer(options, createApp(auth));
+export default function createServer(options?, transportDriver:any = https) {
+  return transportDriver.createServer(options, createApp());
 }

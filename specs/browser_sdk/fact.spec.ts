@@ -16,7 +16,7 @@ function createClient(): [ LinkedRecords, ServerSideEvents ] {
 }
 
 function filterAutoCreatedFacts(facts) {
-  return facts.filter((fact) => !['wasCreatedBy'].includes(fact.predicate));
+  return facts.filter((fact) => !['$wasCreatedBy'].includes(fact.predicate));
 }
 
 describe('Fact', () => {
