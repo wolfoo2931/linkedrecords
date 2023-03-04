@@ -1,57 +1,33 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import { v4 as uuid } from 'uuid';
-import LinkedRecords from '../../src/browser_sdk';
-import ServerSideEvents from '../../lib/server-side-events/client';
 import LongTextAttribute from '../../src/attributes/long_text/client/index';
 import KeyValueAttribute from '../../src/attributes/key_value/client/index';
-
-const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
-
-let clients: LinkedRecords[] = [];
-
-function createClient(): [LinkedRecords, ServerSideEvents] {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(
-    new URL('http://localhost:3000'),
-    serverSideEvents,
-  );
-
-  client.actorId = uuid();
-
-  clients.push(client);
-  return [client, serverSideEvents];
-}
+import { createClient, cleanupClients, truncateDB , sleep } from '../helpers';
 
 describe('Fact', () => {
-  beforeEach(async () => {
-    const [client] = createClient();
-    await client.Fact.deleteAll();
-
-    clients.push(client);
-  });
-
-  afterEach(() => {
-    clients.forEach((client) => {
-      client.serverSideEvents.unsubscribeAll();
-    });
-
-    clients = [];
-  });
+  beforeEach(truncateDB);
+  afterEach(cleanupClients);
 
   describe('Attribute.findAll()', () => {
-    it('find attributes by facts', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+    it.only('find attributes by facts', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const content = await client.Attribute.create('longText', 'the init value');
       const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+
+      const userAB = await client.Attribute.create('keyValue', {});
+      const userXX = await client.Attribute.create('keyValue', {});
+      const userCB = await client.Attribute.create('keyValue', {});
+
       const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
       const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
+        ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
+        ['referenceSourceStore' , '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -60,29 +36,25 @@ describe('Fact', () => {
         [referenceSources1.id, 'belongsTo', content.id],
         [referenceSources2.id, 'belongsTo', content.id],
         [referenceSources3.id, 'belongsTo', content.id],
-        [referenceSources1.id, 'belongsTo', 'usr-ab'],
-        [referenceSources2.id, 'belongsTo', 'usr-xx'],
-        [referenceSources3.id, 'belongsTo', 'usr-cd'],
+        [referenceSources1.id, 'belongsTo', userAB.id],
+        [referenceSources2.id, 'belongsTo', userXX.id],
+        [referenceSources3.id, 'belongsTo', userCB.id],
       ]);
-
-      if (content.id == null) {
-        throw Error('id is null');
-      }
 
       const { content: contentAttribute, refernces: [referencesAttribute], referenceSources: [referenceSourcesAttribute] } = <{
         content: LongTextAttribute,
         refernces: KeyValueAttribute[],
         referenceSources: KeyValueAttribute[]
       }> <unknown> await otherClient.Attribute.findAll({
-        content: content.id,
+        content: content.id!,
         refernces: [
-          ['belongsTo', content.id],
+          ['belongsTo', content.id!],
           ['isA', 'referenceStore'],
         ],
         referenceSources: [
-          ['belongsTo', content.id],
+          ['belongsTo', content.id!],
           ['isA', 'referenceSourceStore'],
-          ['belongsTo', 'usr-xx'],
+          ['belongsTo', userXX.id!],
         ],
       });
 
@@ -100,8 +72,8 @@ describe('Fact', () => {
     });
 
     it('returns information about creation and update time', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const beforeCreationTime = new Date();
 
@@ -159,8 +131,8 @@ describe('Fact', () => {
     });
 
     it('allows to find attributes by object relations', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
       const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
@@ -208,8 +180,8 @@ describe('Fact', () => {
     });
 
     it('allows to find attributes by object relations when there is more then one object "$it" pattern per group to match', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
       const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
@@ -260,8 +232,8 @@ describe('Fact', () => {
     });
 
     it('allows to find attributes by subject relations when there is more then one subject "$it" pattern per group to match', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const memberA = await client.Attribute.create('keyValue', { name: 'Paul' });
       const memberB = await client.Attribute.create('keyValue', { name: 'Peter' });
@@ -309,7 +281,7 @@ describe('Fact', () => {
     });
 
     it('returns empty records when the object relations do not exists', async () => {
-      const [client] = createClient();
+      const [client] = await createClient();
 
       const teams = await client.Attribute.findAll({
         allTeamsOfUserA: [
@@ -330,8 +302,8 @@ describe('Fact', () => {
     });
 
     it('can be executed in parallel', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const content = await client.Attribute.create('longText', 'the init value');
       const references = await client.Attribute.create('keyValue', { foo: 'bar' });
@@ -413,7 +385,7 @@ describe('Fact', () => {
     });
 
     it('returns an empty array when the attribute does not exists', async () => {
-      const [client] = createClient();
+      const [client] = await createClient();
 
       const { content: contentAttribute, refernces } = <{
         content: LongTextAttribute,

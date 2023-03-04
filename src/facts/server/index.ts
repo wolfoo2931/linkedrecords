@@ -12,16 +12,17 @@ export default class Fact {
   object: string;
 
   static async initDB() {
-    const createQuery = 'CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object CHAR(40));';
+    const createQuery = 'CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);';
     await pgPool.query(createQuery);
   }
 
   static async deleteAll() {
-    const createQuery = 'TRUNCATE facts;';
-    await pgPool.query(createQuery);
+    await pgPool.query('TRUNCATE facts;');
   }
 
   static async resolveToAttributeIds(query: string | string[]): Promise<string[]> {
+    const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
+
     if (typeof query === 'string') {
       return [query];
     }
@@ -33,14 +34,24 @@ export default class Fact {
     const resultSet = new Set<string>();
     let previousLength;
 
-    let dbRows = await pgPool.query('SELECT subject FROM facts WHERE predicate=$1 AND object=$2', [query[0], query[1]]);
-    dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
-
-    while (resultSet.size !== previousLength && resultSet.size !== 0) {
-      previousLength = resultSet.size;
-      // eslint-disable-next-line no-await-in-loop
-      dbRows = await pgPool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${Array.from(resultSet).map((sub) => `'${sub}'`).join(',')})`, [query[0]]);
+    if(query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
+      const dbRows = await pgPool.query('SELECT subject FROM facts WHERE predicate=$1', [query[0]]);
       dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
+    } else if (query[1] === '$anything') {
+      throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
+    } else {
+      let dbRows = await pgPool.query('SELECT subject FROM facts WHERE predicate=$1 AND object=$2', [query[0], query[1]]);
+      dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
+
+      // For now all facts are transitive.
+      while (resultSet.size !== previousLength && resultSet.size !== 0) {
+        previousLength = resultSet.size;
+        // TODO: run in parallel - or better - compose a single query
+        // TODO: Make sure sql injections do not work here
+        // eslint-disable-next-line no-await-in-loop
+        dbRows = await pgPool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${Array.from(resultSet).map((sub) => `'${sub}'`).join(',')})`, [query[0]]);
+        dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
+      }
     }
 
     return Array.from(resultSet);
@@ -106,8 +117,8 @@ export default class Fact {
   }
 
   async match(factQuery: FactQuery): Promise<boolean> {
-    let concreateObjectSpecMatch;
-    let concreateSubjectSpecMatch;
+    let concreateObjectSpecMatch = false;
+    let concreateSubjectSpecMatch = false;
     let subjectMatch;
     let objectMatch;
 

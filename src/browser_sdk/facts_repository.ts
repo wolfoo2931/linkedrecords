@@ -13,15 +13,16 @@ export default class FactsRepository {
 
   async createAll(facts: [ string?, string?, string? ][]):
   Promise<Fact[]> {
-    const createdFacts = await Promise.all(
-      facts.map((attr) => this.create(
-        attr[0],
-        attr[1],
-        attr[2],
-      )),
-    );
 
-    return createdFacts;
+    // TODO: implement a batch creation end point as the order of the fact creation is important
+    // we have to await every request to prevent race condions
+    const createdFacts = facts.map(async (attr) => await this.create(
+      attr[0],
+      attr[1],
+      attr[2],
+    ));
+
+    return Promise.all(createdFacts);
   }
 
   async create(subjectId?: string, predicateId?: string, objectId?: string): Promise<Fact> {

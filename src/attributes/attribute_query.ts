@@ -47,6 +47,7 @@ export default {
     }
 
     flatIds = flatIds.filter((value, index, array) => array.indexOf(value) === index);
+
     flatIds = await asyncFilter(flatIds, isAuthorizedToReadAttribute);
 
     const attributes = {};
