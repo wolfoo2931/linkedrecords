@@ -175,6 +175,15 @@ export default class Fact {
   }
 
   async save() {
+
+    if (this.predicate === '$isATermFor') {
+      const dbRows = await pgPool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
+
+      if (dbRows.rows.length) {
+        return;
+      }
+    }
+
     await pgPool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3)', [
       this.subject,
       this.predicate,

@@ -92,7 +92,6 @@ async function isAuthorizedToCreateFact(userid, request, factRecord?) {
   );
 
   if (fact.predicate === '$isATermFor') {
-    // TODO: Check if it exists already
     return true;
   }
 
