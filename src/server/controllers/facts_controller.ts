@@ -21,19 +21,21 @@ export default {
     res.send(await asyncFilter(facts, isAuthorizedToReadFact));
   },
 
-  async create(req, res) {
-    const { subject, predicate, object } = req.body;
-    const fact = new Fact(subject, predicate, object);
-    await fact.save();
+  async create(req, res, isAuthorizedToCreateFact) {
+    const rawFacts = req.body;
+    const savedRawFacts: object[] = [];
+
+    for (let i=0; i < rawFacts.length; i++) {
+      const fact = new Fact(rawFacts[i][0], rawFacts[i][1], rawFacts[i][2]);
+
+      if(await isAuthorizedToCreateFact(fact)) {
+        await fact.save(req.hasedUserID);
+
+        savedRawFacts.push(fact.toJSON());
+      }
+    }
 
     res.status(200);
-    res.send();
-  },
-
-  async deleteAll(req, res) {
-    await Fact.deleteAll();
-
-    res.status(200);
-    res.send();
-  },
+    res.send(savedRawFacts);
+  }
 };

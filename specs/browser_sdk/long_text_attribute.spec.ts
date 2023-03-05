@@ -3,21 +3,9 @@
 
 import { expect } from 'chai';
 import { v4 as uuid } from 'uuid';
-import { waitFor } from '../helpers';
-import LinkedRecords from '../../src/browser_sdk';
+import { createClient, cleanupClients, truncateDB, waitFor  } from '../helpers';
 import LongTextChange from '../../src/attributes/long_text/long_text_change';
 import LongTextAttribute from '../../src/attributes/long_text/client';
-import ServerSideEvents from '../../lib/server-side-events/client';
-
-let clients: LinkedRecords[] = [];
-
-function createClient(): [ LinkedRecords, ServerSideEvents ] {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
-  client.actorId = uuid();
-  clients.push(client);
-  return [client, serverSideEvents];
-}
 
 async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: LongTextChange[]) {
   changes.forEach(async (change: LongTextChange) => {
@@ -26,18 +14,13 @@ async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: Lo
 }
 
 describe('Long Text Attributes', () => {
-  afterEach(() => {
-    clients.forEach((client) => {
-      client.serverSideEvents.unsubscribeAll();
-    });
-
-    clients = [];
-  });
+  beforeEach(truncateDB);
+  afterEach(cleanupClients);
 
   describe('attribute.create()', () => {
     it('creates an attriubte which can be retrieved by an other client', async () => {
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const content = `<p>${uuid()}</p>`;
       const attribute = await clientA.Attribute.create('longText', content);
@@ -56,8 +39,8 @@ describe('Long Text Attributes', () => {
 
   describe('attribute.set()', () => {
     it('makes sure the value converges on all clients', async () => {
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>');
 
@@ -87,8 +70,8 @@ describe('Long Text Attributes', () => {
 
   describe('attribute.change()', () => {
     it('makes sure the value converges on all clients', async () => {
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>') as LongTextAttribute;
 
@@ -120,8 +103,8 @@ describe('Long Text Attributes', () => {
     });
 
     it('makes sure the value converges on all clients when the changeset is not granular (make sure the serverChange is not a diff but a merge of the acutall changes send from the client)', async () => {
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>') as LongTextAttribute;
 
@@ -148,8 +131,8 @@ describe('Long Text Attributes', () => {
     });
 
     it('makes sure the value converges on all clients when there are more then one change on the server', async () => {
-      const [clientA] = createClient();
-      const [clientB, clientBEventStream] = createClient();
+      const [clientA] = await createClient();
+      const [clientB, clientBEventStream] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>') as LongTextAttribute;
 

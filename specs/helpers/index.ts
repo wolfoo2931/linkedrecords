@@ -29,7 +29,7 @@ export async function createClient(pretendToBe: string = 'testuser-1-id'): Promi
   const proxiedCliend = new Proxy(client, {
     get(target, prop, receiver) {
       Cookies.set('pretendToBeUser', pretendToBe);
-      return Reflect.get(...arguments);
+      return Reflect.get(target, prop, receiver);
     },
   });
 
@@ -46,8 +46,5 @@ export function cleanupClients() {
 }
 
 export async function truncateDB() {
-  const [client] = await createClient();
-  await client.Fact.deleteAll();
-
-  clients.push(client);
+  await fetch('http://localhost:3001/deleteFacts')
 }
