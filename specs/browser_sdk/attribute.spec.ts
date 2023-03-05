@@ -5,12 +5,12 @@ import LongTextAttribute from '../../src/attributes/long_text/client/index';
 import KeyValueAttribute from '../../src/attributes/key_value/client/index';
 import { createClient, cleanupClients, truncateDB , sleep } from '../helpers';
 
-describe('Fact', () => {
+describe('Attribute', () => {
   beforeEach(truncateDB);
   afterEach(cleanupClients);
 
   describe('Attribute.findAll()', () => {
-    it.only('find attributes by facts', async () => {
+    it('find attributes by facts', async () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
@@ -134,33 +134,38 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
+      const userA = await client.Attribute.create('keyValue', {});
+      const userB = await client.Attribute.create('keyValue', {});
+      const userAB = await client.Attribute.create('keyValue', {});
       const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
       const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
       const clubA = await client.Attribute.create('keyValue', { name: 'Club' });
 
       await client.Fact.createAll([
+        ['team', '$isATermFor', 'a group of people'],
+        ['club', '$isATermFor', 'a group of people'],
         [teamA.id, 'isA', 'team'],
         [teamB.id, 'isA', 'team'],
         [clubA.id, 'isA', 'club'],
-        ['user-a', 'isMemberOf', clubA.id],
-        ['user-a', 'isMemberOf', teamA.id],
-        ['user-b', 'isMemberOf', teamB.id],
-        ['user-ab', 'isMemberOf', teamA.id],
-        ['user-ab', 'isMemberOf', teamB.id],
+        [userA.id, 'isMemberOf', clubA.id],
+        [userA.id, 'isMemberOf', teamA.id],
+        [userB.id, 'isMemberOf', teamB.id],
+        [userAB.id, 'isMemberOf', teamA.id],
+        [userAB.id, 'isMemberOf', teamB.id],
       ]);
 
       const teams = await otherClient.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
-          ['user-a', 'isMemberOf', '$it'],
+          [userA.id!, 'isMemberOf', '$it'],
         ],
         allTeamsOfUserB: [
           ['$it', 'isA', 'team'],
-          ['user-b', 'isMemberOf', '$it'],
+          [userB.id!, 'isMemberOf', '$it'],
         ],
         allTeamsOfUserAB: [
           ['$it', 'isA', 'team'],
-          ['user-ab', 'isMemberOf', '$it'],
+          [userAB.id!, 'isMemberOf', '$it'],
         ],
       });
 
@@ -183,33 +188,36 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
+      const userA = await client.Attribute.create('keyValue', {});
+      const userB = await client.Attribute.create('keyValue', {});
       const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
       const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
       const teamC = await client.Attribute.create('keyValue', { name: 'C Team' });
 
       await client.Fact.createAll([
+        ['team', '$isATermFor', 'a group of people'],
         [teamA.id, 'isA', 'team'],
         [teamB.id, 'isA', 'team'],
         [teamC.id, 'isA', 'team'],
-        ['user-a', 'isMemberOf', teamA.id],
-        ['user-a', 'isMemberOf', teamC.id],
-        ['user-b', 'isMemberOf', teamB.id],
-        ['user-b', 'isMemberOf', teamC.id],
+        [userA.id, 'isMemberOf', teamA.id],
+        [userA.id, 'isMemberOf', teamC.id],
+        [userB.id, 'isMemberOf', teamB.id],
+        [userB.id, 'isMemberOf', teamC.id],
       ]);
 
       const teams = await otherClient.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
-          ['user-a', 'isMemberOf', '$it'],
+          [userA.id!, 'isMemberOf', '$it'],
         ],
         allTeamsOfUserB: [
           ['$it', 'isA', 'team'],
-          ['user-b', 'isMemberOf', '$it'],
+          [userB.id!, 'isMemberOf', '$it'],
         ],
         commonTeams: [
           ['$it', 'isA', 'team'],
-          ['user-a', 'isMemberOf', '$it'],
-          ['user-b', 'isMemberOf', '$it'],
+          [userA.id!, 'isMemberOf', '$it'],
+          [userB.id!, 'isMemberOf', '$it'],
         ],
       });
 
@@ -252,14 +260,14 @@ describe('Fact', () => {
 
       const users = await otherClient.Attribute.findAll({
         allMembersOfTeamA: [
-          ['$it', 'isMemberOf', teamA.id as string],
+          ['$it', 'isMemberOf', teamA.id!],
         ],
         allMembersOfTeamB: [
-          ['$it', 'isMemberOf', teamB.id as string],
+          ['$it', 'isMemberOf', teamB.id!],
         ],
         commonMembers: [
-          ['$it', 'isMemberOf', teamA.id as string],
-          ['$it', 'isMemberOf', teamB.id as string],
+          ['$it', 'isMemberOf', teamA.id!],
+          ['$it', 'isMemberOf', teamB.id!],
         ],
       });
 
@@ -283,6 +291,10 @@ describe('Fact', () => {
     it('returns empty records when the object relations do not exists', async () => {
       const [client] = await createClient();
 
+      await client.Fact.createAll([
+        ['team', '$isATermFor', 'a group of people'],
+      ]);
+
       const teams = await client.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
@@ -305,6 +317,10 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
+      const userAB = await client.Attribute.create('keyValue', {});
+      const userXX = await client.Attribute.create('keyValue', {});
+      const userCB = await client.Attribute.create('keyValue', {});
+
       const content = await client.Attribute.create('longText', 'the init value');
       const references = await client.Attribute.create('keyValue', { foo: 'bar' });
       const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
@@ -312,6 +328,8 @@ describe('Fact', () => {
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
+        ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
+        ['referenceSourceStore' , '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -320,9 +338,9 @@ describe('Fact', () => {
         [referenceSources1.id, 'belongsTo', content.id],
         [referenceSources2.id, 'belongsTo', content.id],
         [referenceSources3.id, 'belongsTo', content.id],
-        [referenceSources1.id, 'belongsTo', 'usr-ab'],
-        [referenceSources2.id, 'belongsTo', 'usr-xx'],
-        [referenceSources3.id, 'belongsTo', 'usr-cd'],
+        [referenceSources1.id, 'belongsTo', userAB.id],
+        [referenceSources2.id, 'belongsTo', userXX.id],
+        [referenceSources3.id, 'belongsTo', userCB.id],
       ]);
 
       if (content.id == null) {
@@ -338,7 +356,7 @@ describe('Fact', () => {
         referenceSources: [
           ['belongsTo', content.id],
           ['isA', 'referenceSourceStore'],
-          ['belongsTo', 'usr-xx'],
+          ['belongsTo', userXX.id!],
         ],
       });
 
@@ -351,7 +369,7 @@ describe('Fact', () => {
         referenceSources: [
           ['belongsTo', content.id],
           ['isA', 'referenceSourceStore'],
-          ['belongsTo', 'usr-xx'],
+          ['belongsTo', userXX.id!],
         ],
       });
 
@@ -367,25 +385,21 @@ describe('Fact', () => {
         referenceSources: KeyValueAttribute[]
       }> <unknown> await exec2;
 
-      if (!referencesAttribute1 || !referencesAttribute2) {
-        throw Error('referencesAttribute is null');
-      }
-
-      if (!referenceSourcesAttribute1 || !referenceSourcesAttribute2) {
-        throw Error('referenceSourcesAttribute is null');
-      }
-
       expect(await contentAttribute1.getValue()).to.equal('the init value');
-      expect(await referencesAttribute1.getValue()).to.deep.equal({ foo: 'bar' });
-      expect(await referenceSourcesAttribute1.getValue()).to.deep.equal({ user: 'usr-xx' });
+      expect(await referencesAttribute1!.getValue()).to.deep.equal({ foo: 'bar' });
+      expect(await referenceSourcesAttribute1!.getValue()).to.deep.equal({ user: 'usr-xx' });
 
       expect(await contentAttribute2.getValue()).to.equal('the init value');
-      expect(await referencesAttribute2.getValue()).to.deep.equal({ foo: 'bar' });
-      expect(await referenceSourcesAttribute2.getValue()).to.deep.equal({ user: 'usr-xx' });
+      expect(await referencesAttribute2!.getValue()).to.deep.equal({ foo: 'bar' });
+      expect(await referenceSourcesAttribute2!.getValue()).to.deep.equal({ user: 'usr-xx' });
     });
 
     it('returns an empty array when the attribute does not exists', async () => {
       const [client] = await createClient();
+
+      await client.Fact.createAll([
+        ['notExsting', '$isATermFor', 'a dummy contecpt for testing'],
+      ]);
 
       const { content: contentAttribute, refernces } = <{
         content: LongTextAttribute,
@@ -397,7 +411,7 @@ describe('Fact', () => {
         ],
       });
 
-      expect(contentAttribute).to.equal(null);
+      expect(contentAttribute).to.equal(undefined);
       expect(refernces.length).to.equal(0);
     });
   });

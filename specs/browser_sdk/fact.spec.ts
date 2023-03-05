@@ -1,70 +1,42 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import { v4 as uuid } from 'uuid';
-import LinkedRecords from '../../src/browser_sdk';
-import ServerSideEvents from '../../lib/server-side-events/client';
-
-let clients: LinkedRecords[] = [];
-
-function createClient(): [ LinkedRecords, ServerSideEvents ] {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
-  client.actorId = uuid();
-  clients.push(client);
-  return [client, serverSideEvents];
-}
+import { createClient, cleanupClients, truncateDB } from '../helpers';
 
 function filterAutoCreatedFacts(facts) {
   return facts.filter((fact) => !['$wasCreatedBy'].includes(fact.predicate));
 }
 
 describe('Fact', () => {
-  beforeEach(async () => {
-    const [client] = createClient();
-    await client.Fact.deleteAll();
-
-    clients.push(client);
-  });
-
-  afterEach(() => {
-    clients.forEach((client) => {
-      client.serverSideEvents.unsubscribeAll();
-    });
-
-    clients = [];
-  });
+  beforeEach(truncateDB);
+  afterEach(cleanupClients);
 
   describe('Facts.create()', () => {
     it('creates facts', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
       const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
       const mobyDickSummary = await client.Attribute.create('longText', 'it is about a whale');
       const mobyDickContent = await client.Attribute.create('longText', 'the moby dick story');
 
-      await client.Fact.create(hermanMelville.id, 'isA', 'Author');
-      await client.Fact.create(mobyDick.id, 'isA', 'Book');
-      await client.Fact.create(hermanMelville.id, 'relatesTo', mobyDick.id);
-      await client.Fact.create(mobyDickContent.id, 'relatesTo', mobyDick.id);
-      await client.Fact.create(mobyDickSummary.id, 'relatesTo', mobyDick.id);
-
-      if (hermanMelville.id == null) {
-        throw Error('id is null');
-      }
-
-      if (mobyDick.id == null) {
-        throw Error('id is null');
-      }
+      await client.Fact.createAll([
+        ['Author', '$isATermFor', 'somebody who writes a book'],
+        ['Book', '$isATermFor', 'a book'],
+        [hermanMelville.id, 'isA', 'Author'],
+        [mobyDick.id, 'isA', 'Book'],
+        [hermanMelville.id, 'relatesTo', mobyDick.id],
+        [mobyDickContent.id, 'relatesTo', mobyDick.id],
+        [mobyDickSummary.id, 'relatesTo', mobyDick.id],
+      ]);
 
       const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [hermanMelville.id],
+        subject: [hermanMelville.id!],
       }));
 
       const mobyDickFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [mobyDick.id],
+        subject: [mobyDick.id!],
       }));
 
       expect(hermanMelvilleFacts.length).to.be.equal(2);
@@ -76,20 +48,32 @@ describe('Fact', () => {
       expect(mobyDickFacts[0].predicate).to.be.equal('isA');
       expect(mobyDickFacts[0].object).to.be.equal('Book');
     });
+
+    it('does not allow to crate facts with special chars (only $ at the beginning and * at the end of the property name are allowed)')
+    it('reports an error if the fact data does not fit into the database because of the text length');
+
+    // describe('"*" predicate suffix');
+    // describe('$isATermFor predicate');
+    // describe('$wasCreatedBy predicate');
   });
 
   describe('Facts.findAll()', () => {
+    // TODO: test path: throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
+
     it('finds facts by a object transitive isA relationship', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const todo = await client.Attribute.create('keyValue', { name: 'To-do', color: '#fff' });
       const openTodo = await client.Attribute.create('keyValue', { name: 'open To-do', color: '#ffa' });
       const importantOpenTodo = await client.Attribute.create('keyValue', { name: 'important open To-do', color: '#ff0' });
 
-      await client.Fact.create(todo.id, 'isA', 'ContentType');
-      await client.Fact.create(openTodo.id, 'isA', todo.id);
-      await client.Fact.create(importantOpenTodo.id, 'isA', openTodo.id);
+      await client.Fact.createAll([
+        ['ContentType', '$isATermFor', 'some concept'],
+        [todo.id, 'isA', 'ContentType'],
+        [openTodo.id, 'isA', todo.id],
+        [importantOpenTodo.id, 'isA', openTodo.id],
+      ]);
 
       const todos = filterAutoCreatedFacts(await otherClient.Fact.findAll({
         subject: [['isA', 'ContentType']],
@@ -99,34 +83,30 @@ describe('Fact', () => {
     });
 
     it('finds no facts if object and subject set is empty', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
       const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
       const mobyDickSummary = await client.Attribute.create('longText', 'it is about a whale');
       const mobyDickContent = await client.Attribute.create('longText', 'the moby dick story');
 
-      await client.Fact.create(hermanMelville.id, 'isA', 'Author');
-      await client.Fact.create(mobyDick.id, 'isA', 'Book');
-      await client.Fact.create(hermanMelville.id, 'relatesTo', mobyDick.id);
-      await client.Fact.create(mobyDickContent.id, 'relatesTo', mobyDick.id);
-      await client.Fact.create(mobyDickSummary.id, 'relatesTo', mobyDick.id);
-
-      if (hermanMelville.id == null) {
-        throw Error('id is null');
-      }
-
-      if (mobyDick.id == null) {
-        throw Error('id is null');
-      }
+      await client.Fact.createAll([
+        ['Author', '$isATermFor', 'some concept'],
+        ['Book', '$isATermFor', 'some concept'],
+        [hermanMelville.id, 'isA', 'Author'],
+        [mobyDick.id, 'isA', 'Book'],
+        [hermanMelville.id, 'relatesTo', mobyDick.id],
+        [mobyDickContent.id, 'relatesTo', mobyDick.id],
+        [mobyDickSummary.id, 'relatesTo', mobyDick.id],
+      ]);
 
       const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [hermanMelville.id],
+        subject: [hermanMelville.id!],
       }));
 
       const mobyDickFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [mobyDick.id],
+        subject: [mobyDick.id!],
       }));
 
       expect(hermanMelvilleFacts.length).to.be.equal(2);
@@ -155,40 +135,40 @@ describe('Fact', () => {
     });
 
     it('finds facts', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
       const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
       const mobyDickSummary = await client.Attribute.create('longText', 'it is about a whale');
       const mobyDickContent = await client.Attribute.create('longText', 'the moby dick story');
 
-      await client.Fact.create('AuthorizedUser', 'isNarrowConceptOf', 'User');
-      await client.Fact.create('Book', 'isNarrowConceptOf', 'ContentType');
-      await client.Fact.create('Author', 'isNarrowConceptOf', 'ContentType');
-      await client.Fact.create('Author', 'relatesTo', 'Book');
-      await client.Fact.create('Author', 'hasPartnershipWith', 'ThePublisherClub');
+      await client.Fact.createAll([
+        ['AuthorizedUser', '$isATermFor', 'some concept'],
+        ['Book', '$isATermFor', 'some concept'],
+        ['Author', '$isATermFor', 'some concept'],
+        ['ContentType', '$isATermFor', 'some concept'],
+        ['User', '$isATermFor', 'some concept'],
 
-      await client.Fact.create(mobyDick.id, 'isA', 'Book');
-      await client.Fact.create(hermanMelville.id, 'isA', 'Author');
-      await client.Fact.create(hermanMelville.id, 'relatesTo', mobyDick.id);
-      await client.Fact.create(mobyDickContent.id, 'relatesTo', mobyDick.id);
-      await client.Fact.create(mobyDickSummary.id, 'relatesTo', mobyDick.id);
+        ['AuthorizedUser', 'isNarrowConceptOf', 'User'],
+        ['Book', 'isNarrowConceptOf', 'ContentType'],
+        ['Author', 'isNarrowConceptOf', 'ContentType'],
+        ['Author', 'relatesTo', 'Book'],
+        ['Author', 'hasPartnershipWith', 'ThePublisherClub'],
 
-      if (hermanMelville.id == null) {
-        throw Error('id is null');
-      }
-
-      if (mobyDick.id == null) {
-        throw Error('id is null');
-      }
+        [mobyDick.id, 'isA', 'Book'],
+        [hermanMelville.id, 'isA', 'Author'],
+        [hermanMelville.id, 'relatesTo', mobyDick.id],
+        [mobyDickContent.id, 'relatesTo', mobyDick.id],
+        [mobyDickSummary.id, 'relatesTo', mobyDick.id],
+      ]);
 
       const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [hermanMelville.id],
+        subject: [hermanMelville.id!],
       }));
 
       const mobyDickFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [mobyDick.id],
+        subject: [mobyDick.id!],
       }));
 
       expect(hermanMelvilleFacts.length).to.be.equal(2);

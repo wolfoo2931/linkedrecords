@@ -16,10 +16,6 @@ export default class Fact {
     await pgPool.query(createQuery);
   }
 
-  static async deleteAll() {
-    await pgPool.query('TRUNCATE facts;');
-  }
-
   static async resolveToAttributeIds(query: string | string[]): Promise<string[]> {
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
@@ -174,20 +170,38 @@ export default class Fact {
     return !!allResults.find((x) => x);
   }
 
-  async save() {
+  toJSON() {
+    return {
+      subject: this.subject,
+      predicate: this.predicate,
+      object: this.object,
+    }
+  }
 
+  async save(userid?) {
     if (this.predicate === '$isATermFor') {
       const dbRows = await pgPool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
 
-      if (dbRows.rows.length) {
-        return;
-      }
-    }
+      if (!dbRows.rows.length) {
 
-    await pgPool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3)', [
-      this.subject,
-      this.predicate,
-      this.object,
-    ]);
+        if (!userid) {
+          throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
+        }
+
+        await pgPool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3), ($1, $4, $5)', [
+          this.subject,
+          this.predicate,
+          this.object,
+          '$wasCreatedBy',
+          userid
+        ]);
+      }
+    } else {
+      await pgPool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3)', [
+        this.subject,
+        this.predicate,
+        this.object,
+      ]);
+    }
   }
 }

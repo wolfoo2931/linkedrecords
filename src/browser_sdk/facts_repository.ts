@@ -13,38 +13,19 @@ export default class FactsRepository {
 
   async createAll(facts: [ string?, string?, string? ][]):
   Promise<Fact[]> {
+    const response = await this.linkedRecords.fetch('/facts', {
+      method: 'POST',
+      body: JSON.stringify(facts),
+    });
 
-    // TODO: implement a batch creation end point as the order of the fact creation is important
-    // we have to await every request to prevent race condions
-    const createdFacts = facts.map(async (attr) => await this.create(
-      attr[0],
-      attr[1],
-      attr[2],
+    const createdRawFacts = await response.json();
+
+    return createdRawFacts.map((rawFact) => new Fact(
+      this.linkedRecords,
+      rawFact.subject,
+      rawFact.predicate,
+      rawFact.object,
     ));
-
-    return Promise.all(createdFacts);
-  }
-
-  async create(subjectId?: string, predicateId?: string, objectId?: string): Promise<Fact> {
-    if (!subjectId) {
-      throw Error('subjectId can not be null');
-    }
-
-    if (!objectId) {
-      throw Error('objectId can not be null');
-    }
-
-    if (!predicateId) {
-      throw Error('predicateId can not be null');
-    }
-
-    const fact = new Fact(this.linkedRecords, subjectId, predicateId, objectId);
-    await fact.save();
-    return fact;
-  }
-
-  async deleteAll() {
-    await this.linkedRecords.fetch('/facts', { method: 'DELETE', headers: {} });
   }
 
   async findAll(query: FactQuery | FactQuery[]): Promise<Fact[]> {
@@ -70,7 +51,6 @@ export default class FactsRepository {
     }
 
     const response = await this.linkedRecords.fetch(`/facts?${params.toString()}`);
-
     const responseJson = await response.json();
 
     return responseJson.map((record) => new Fact(

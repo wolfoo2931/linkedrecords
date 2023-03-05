@@ -1,34 +1,16 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import { v4 as uuid } from 'uuid';
-import { waitFor } from '../helpers';
-import LinkedRecords from '../../src/browser_sdk';
-import ServerSideEvents from '../../lib/server-side-events/client';
-
-let clients: LinkedRecords[] = [];
-
-function createClient(): [ LinkedRecords, ServerSideEvents ] {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
-  client.actorId = uuid();
-  clients.push(client);
-  return [client, serverSideEvents];
-}
+import { createClient, cleanupClients, truncateDB, waitFor } from '../helpers';
 
 describe('Key Value Attributes', () => {
-  afterEach(() => {
-    clients.forEach((client) => {
-      client.serverSideEvents.unsubscribeAll();
-    });
-
-    clients = [];
-  });
+  beforeEach(truncateDB);
+  afterEach(cleanupClients);
 
   describe('attribute.create()', () => {
     it('creates an attriubte which can be retrieved by an other client', async () => {
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attribute = await clientA.Attribute.create('keyValue', { foo: 'bar' });
 
@@ -47,8 +29,8 @@ describe('Key Value Attributes', () => {
 
   describe('attribute.set()', () => {
     it('makes sure the value converges on all clients', async () => {
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
 

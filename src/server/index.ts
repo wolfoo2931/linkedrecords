@@ -12,7 +12,6 @@ import factMiddleware from './middleware/fact';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
-import exception from './middleware/exception';
 import authentication from './middleware/authentication';
 
 const blobUpload = multer().single('change');
@@ -28,11 +27,13 @@ async function withAuthForEach(req, res, controllerAction, isAuthorized) {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
-    const isAuthorizedToRead = (record) => {
+    const isAuthorizedAsLoggedInUser = (record) => {
       return isAuthorized(uid(req), req, record);
     }
 
-    controllerAction(req, res, isAuthorizedToRead);
+    req.hasedUserID = uid(req);
+
+    controllerAction(req, res, isAuthorizedAsLoggedInUser);
   }
 }
 
@@ -64,11 +65,13 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
+    req.hasedUserID = uid(req);
+
     uploadWrappedControllerAction(req, res);
   }
 }
 
-async function isAuthorizedToReadFact(userid, request, factRecord?) {
+async function isAuthorizedToAccessFact(userid, request, factRecord?) {
   const fact = factRecord || new request.Fact(
     request.body.subject,
     request.body.predicate,
@@ -81,26 +84,8 @@ async function isAuthorizedToReadFact(userid, request, factRecord?) {
 
   return await fact.matchAny([
     { subject: [['$wasCreatedBy', userid]], object: [['$wasCreatedBy', userid]] },
-  ]);
-}
-
-async function isAuthorizedToCreateFact(userid, request, factRecord?) {
-  const fact = factRecord || new request.Fact(
-    request.body.subject,
-    request.body.predicate,
-    request.body.object,
-  );
-
-  if (fact.predicate === '$isATermFor') {
-    return true;
-  }
-
-  let resutl = await fact.matchAny([
-    { subject: [['$wasCreatedBy', userid]], object: [['$wasCreatedBy', userid]] },
     { subject: [['$wasCreatedBy', userid]], object: [['$isATermFor', '$anything']] },
   ]);
-
-  return resutl;
 }
 
 async function isAuthorizedToAccessAttribute(userid, request, attrRecord?) {
@@ -118,15 +103,14 @@ const authorizer = {
   isAuthorizedToCreateAttribute: () => true,
   isAuthorizedToReadAttribute: (userid, request, record) => isAuthorizedToAccessAttribute(userid, request, record),
   isAuthorizedToUpdateAttribute: (userid, request) => isAuthorizedToAccessAttribute(userid, request),
-  isAuthorizedToCreateFact: (userid, request) => isAuthorizedToCreateFact(userid, request),
-  isAuthorizedToReadFact: (userid, request, fact) => isAuthorizedToReadFact(userid, request, fact),
+  isAuthorizedToCreateFact: (userid, request, record) => isAuthorizedToAccessFact(userid, request, record),
+  isAuthorizedToReadFact: (userid, request, fact) => isAuthorizedToAccessFact(userid, request, fact),
   isAuthorizedToUpdateFact: () => false,
 };
 
 function createApp() {
   const app = express();
 
-  app.use(exception());
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
   app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
@@ -149,8 +133,7 @@ function createApp() {
   app.get(    '/attributes/:attributeId/changes', (req, res) => withAuth(req, res,        attributesController.subsribe, authorizer.isAuthorizedToReadAttribute));
   app.patch(  '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.update,   authorizer.isAuthorizedToUpdateAttribute));
   app.get(    '/facts',                           (req, res) => withAuthForEach(req, res, factsController.index,         authorizer.isAuthorizedToReadFact));
-  app.post(   '/facts',                           (req, res) => withAuth(req, res,        factsController.create,        authorizer.isAuthorizedToCreateFact));
-  app.delete( '/facts',                           (req, res) => withAuth(req, res,        factsController.deleteAll,     authorizer.isAuthorizedToUpdateFact));
+  app.post(   '/facts',                           (req, res) => withAuthForEach(req, res, factsController.create,        authorizer.isAuthorizedToCreateFact));
 
   app.get('/userinfo', (req, res) => {
     if (!req?.oidc?.user?.sub) {
@@ -167,3 +150,7 @@ function createApp() {
 export default function createServer(options?, transportDriver:any = https) {
   return transportDriver.createServer(options, createApp());
 }
+
+process.on('uncaughtException', (err, origin) => {
+  console.log(err);
+});
