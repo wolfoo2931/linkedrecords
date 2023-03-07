@@ -50,7 +50,7 @@ export default function attributeMiddleware() {
     if (!req.actorId || !req.actorId.trim()) {
       res.sendStatus(401);
     } else {
-      req.actorId = md5(req.actorId);
+      req.actorId = `us-${md5(req.actorId)}`;
       if (id) {
         req.attributeClass = attributeQuery.getAttributeClassByAttributeId(id);
         req.attribute = getAttributeByParams(req, req.attributeClass);
