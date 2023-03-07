@@ -16,7 +16,7 @@ import attributesController from './controllers/attributes_controller';
 import authentication from './middleware/authentication';
 
 const blobUpload = multer().single('change');
-const uid = (req) => req?.oidc?.user?.sub && md5(req.oidc.user.sub);
+const uid = (req) => req?.oidc?.user?.sub && `us-${md5(req.oidc.user.sub)}`;
 
 Fact.initDB();
 
