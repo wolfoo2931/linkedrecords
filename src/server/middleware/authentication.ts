@@ -5,14 +5,14 @@ export default function authentication() {
     return (req, res, next) => {
       const toBeUser = req?.cookies?.pretendToBeUser;
 
-      if (!['testuser-1-id', 'testuser-2-id'].includes(toBeUser)) {
-        throw new Error(`${toBeUser} is not in the allowed test user whitlist. This is probably a configuration issue. ${req.method} ${req.path}`)
+      if (!['testuser-1-id', 'testuser-2-id', 'testuser-unauthorized-id'].includes(toBeUser)) {
+        throw new Error(`${toBeUser} is not in the allowed test user whitlist. This is probably a configuration issue. ${req.method} ${req.path}`);
       }
 
       req.oidc = { user: { sub: toBeUser } };
 
       next();
-    }
+    };
   }
 
   return auth({

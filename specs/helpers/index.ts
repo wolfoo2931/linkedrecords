@@ -20,21 +20,18 @@ export function waitFor(fn) {
   });
 }
 
-export async function createClient(pretendToBe: string = 'testuser-1-id'): Promise<[ LinkedRecords, ServerSideEvents ]> {
+export async function changeUserContext(pretendToBe: string) {
+  Cookies.remove('pretendToBeUser', { path: '', doamin: 'localhost' });
+  Cookies.set('pretendToBeUser', pretendToBe, { path: '', doamin: 'localhost' });
+}
+
+export async function createClient(): Promise<[ LinkedRecords, ServerSideEvents ]> {
   const serverSideEvents = new ServerSideEvents();
-  Cookies.set('pretendToBeUser', pretendToBe);
   const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
+  await await changeUserContext('testuser-1-id');
   await client.ensureUserIdIsKnown();
-
-  const proxiedCliend = new Proxy(client, {
-    get(target, prop, receiver) {
-      Cookies.set('pretendToBeUser', pretendToBe);
-      return Reflect.get(target, prop, receiver);
-    },
-  });
-
-  clients.push(proxiedCliend);
-  return [proxiedCliend, serverSideEvents];
+  clients.push(client);
+  return [client, serverSideEvents];
 }
 
 export function cleanupClients() {
@@ -46,5 +43,5 @@ export function cleanupClients() {
 }
 
 export async function truncateDB() {
-  await fetch('http://localhost:3001/deleteFacts')
+  await fetch('http://localhost:3001/deleteFacts');
 }

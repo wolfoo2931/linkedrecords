@@ -3,7 +3,9 @@
 
 import { expect } from 'chai';
 import { v4 as uuid } from 'uuid';
-import { createClient, cleanupClients, truncateDB, waitFor  } from '../helpers';
+import {
+  createClient, cleanupClients, truncateDB, waitFor,
+} from '../helpers';
 import LongTextChange from '../../src/attributes/long_text/long_text_change';
 import LongTextAttribute from '../../src/attributes/long_text/client';
 
@@ -30,10 +32,10 @@ describe('Long Text Attributes', () => {
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeFromDB = await clientB.Attribute.find(attribute.id);
-      expect(attributeFromDB.id).to.be.equal(attribute.id);
+      expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
-      const data = await attributeFromDB.get();
-      expect(data.value).to.be.equal(content);
+      const data = await attributeFromDB!.get();
+      expect(data!.value).to.be.equal(content);
     });
   });
 
@@ -52,15 +54,15 @@ describe('Long Text Attributes', () => {
       await attributeClientA.set('<p>textab</p>');
       await attributeClientA.set('<p>textabc</p>');
 
-      await attributeClientB.set('<p>text1</p>');
-      await attributeClientB.set('<p>text12</p>');
-      await attributeClientB.set('<p>text123</p>');
+      await attributeClientB!.set('<p>text1</p>');
+      await attributeClientB!.set('<p>text12</p>');
+      await attributeClientB!.set('<p>text123</p>');
 
       await waitFor(async () => (await attributeClientA.getValue()).length === 17);
-      await waitFor(async () => (await attributeClientB.getValue()).length === 17);
+      await waitFor(async () => (await attributeClientB!.getValue()).length === 17);
 
       const convergedValueClientA = await attributeClientA.getValue();
-      const convergedValueClientB = await attributeClientB.getValue();
+      const convergedValueClientB = await attributeClientB!.getValue();
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
@@ -91,15 +93,15 @@ describe('Long Text Attributes', () => {
         LongTextChange.fromDiff('<p>text12</p>', '<p>text123</p>'),
       ]);
 
-      await waitFor(async () => (await attributeClientA.getValue()).length === 17);
-      await waitFor(async () => (await attributeClientB.getValue()).length === 17);
+      await waitFor(async () => (await attributeClientA!.getValue())!.length === 17);
+      await waitFor(async () => (await attributeClientB!.getValue())!.length === 17);
 
       const convergedValueClientA = await attributeClientA.getValue();
       const convergedValueClientB = await attributeClientB.getValue();
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientB).to.match(/<p>text[abc123]{6}<\/p>/);
-      expect(convergedValueClientA.length).to.equal(17);
+      expect(convergedValueClientA!.length).to.equal(17);
     });
 
     it('makes sure the value converges on all clients when the changeset is not granular (make sure the serverChange is not a diff but a merge of the acutall changes send from the client)', async () => {
@@ -120,14 +122,14 @@ describe('Long Text Attributes', () => {
         LongTextChange.fromString('-e+f|<p>initiald</p>|<p>initial</p>'),
       ]);
 
-      await waitFor(async () => (await attributeClientA.getValue()).length === 30);
-      await waitFor(async () => (await attributeClientB.getValue()).length === 30);
+      await waitFor(async () => (await attributeClientA.getValue())!.length === 30);
+      await waitFor(async () => (await attributeClientB.getValue())!.length === 30);
 
       const convergedValueClientA = await attributeClientA.getValue();
       const convergedValueClientB = await attributeClientB.getValue();
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
-      expect(convergedValueClientA.length).to.equal(30);
+      expect(convergedValueClientA!.length).to.equal(30);
     });
 
     it('makes sure the value converges on all clients when there are more then one change on the server', async () => {
@@ -155,14 +157,14 @@ describe('Long Text Attributes', () => {
 
       clientBEventStream.unpauseNotification();
 
-      await waitFor(async () => (await attributeClientA.getValue()).length === 17);
-      await waitFor(async () => (await attributeClientB.getValue()).length === 17);
+      await waitFor(async () => (await attributeClientA.getValue())!.length === 17);
+      await waitFor(async () => (await attributeClientB.getValue())!.length === 17);
 
       const convergedValueClientA = await attributeClientA.getValue();
       const convergedValueClientB = await attributeClientB.getValue();
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
-      expect(convergedValueClientA.length).to.equal(17);
+      expect(convergedValueClientA!.length).to.equal(17);
     });
   });
 });

@@ -42,11 +42,11 @@ describe('Blob Attributes', () => {
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeFromDB = await clientB.Attribute.find(attribute.id);
-      expect(attributeFromDB.id).to.be.equal(attribute.id);
+      expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
-      const data = await attributeFromDB.get();
+      const data = await attributeFromDB!.get();
 
-      expect((await data.value.text()).startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAA')).to.be.equal(true);
+      expect((await data!.value.text()).startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAA')).to.be.equal(true);
     });
   });
 
@@ -69,11 +69,11 @@ describe('Blob Attributes', () => {
       attributeClientA.set(content2);
 
       await new Promise((resolve) => {
-        attributeClientB.subscribe(resolve);
+        attributeClientB!.subscribe(resolve);
       });
 
       const downloaded1 = await fetch(attributeClientA.getDataURL()).then((x) => x.blob()).then((x) => x.text());
-      const downloaded2 = await fetch(attributeClientB.getDataURL()).then((x) => x.blob()).then((x) => x.text());
+      const downloaded2 = await fetch(attributeClientB!.getDataURL()).then((x) => x.blob()).then((x) => x.text());
 
       expect(downloaded1).to.eq(downloaded2);
       expect(downloaded1).to.not.eq(originalData);

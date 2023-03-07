@@ -1,7 +1,9 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import { createClient, cleanupClients, truncateDB, waitFor } from '../helpers';
+import {
+  createClient, cleanupClients, truncateDB, waitFor,
+} from '../helpers';
 
 describe('Key Value Attributes', () => {
   beforeEach(truncateDB);
@@ -19,11 +21,11 @@ describe('Key Value Attributes', () => {
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeFromDB = await clientB.Attribute.find(attribute.id);
-      expect(attributeFromDB.id).to.be.equal(attribute.id);
+      expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
-      const data = await attributeFromDB.get();
+      const data = await attributeFromDB!.get();
 
-      expect(data.value.foo).to.be.equal('bar');
+      expect(data!.value.foo).to.be.equal('bar');
     });
   });
 
@@ -39,13 +41,13 @@ describe('Key Value Attributes', () => {
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
 
       attributeClientA.set({ clientA: 'adda', foo: 'bar' });
-      attributeClientB.set({ clientB: 'addb', foo: 'bar', new: 'value' });
+      attributeClientB!.set({ clientB: 'addb', foo: 'bar', new: 'value' });
 
       await waitFor(async () => Object.keys((await attributeClientA.getValue())).length === 4);
-      await waitFor(async () => Object.keys((await attributeClientB.getValue())).length === 4);
+      await waitFor(async () => Object.keys((await attributeClientB!.getValue())).length === 4);
 
       let convergedValueClientA = await attributeClientA.getValue();
-      let convergedValueClientB = await attributeClientB.getValue();
+      let convergedValueClientB = await attributeClientB!.getValue();
 
       expect(convergedValueClientA.clientA).to.equal('adda');
       expect(convergedValueClientB.clientA).to.equal('adda');
@@ -56,13 +58,13 @@ describe('Key Value Attributes', () => {
       expect(convergedValueClientA.new).to.equal('value');
       expect(convergedValueClientB.new).to.equal('value');
 
-      attributeClientB.set({ foo: 'bar', new: 'value' });
+      attributeClientB!.set({ foo: 'bar', new: 'value' });
 
       await waitFor(async () => Object.keys((await attributeClientA.getValue())).length === 2);
-      await waitFor(async () => Object.keys((await attributeClientB.getValue())).length === 2);
+      await waitFor(async () => Object.keys((await attributeClientB!.getValue())).length === 2);
 
       convergedValueClientA = await attributeClientA.getValue();
-      convergedValueClientB = await attributeClientB.getValue();
+      convergedValueClientB = await attributeClientB!.getValue();
 
       expect(convergedValueClientA.clientA).to.equal(undefined);
       expect(convergedValueClientB.clientA).to.equal(undefined);

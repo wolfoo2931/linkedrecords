@@ -67,9 +67,9 @@ export default class AttributesRepository {
     return attribute;
   }
 
-  // FIXME: use idToAttribute
+  // TODO: FIXME: use idToAttribute
   async find(attributeId: string)
-    :Promise<AbstractAttributeClient<any, IsSerializable>> {
+    :Promise<AbstractAttributeClient<any, IsSerializable> | undefined> {
     const [attributeTypePrefix] = attributeId.split('-');
     const AttributeClass = AttributesRepository
       .attributeTypes
@@ -80,7 +80,12 @@ export default class AttributesRepository {
     }
 
     const attribute = new AttributeClass(this.linkedRecords, this.serverSideEvents, attributeId);
-    await attribute.get();
+    const isOk = await attribute.get();
+
+    if (!isOk) {
+      return undefined;
+    }
+
     return attribute;
   }
 
