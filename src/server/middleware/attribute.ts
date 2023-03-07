@@ -1,3 +1,4 @@
+import md5 from 'md5';
 import attributeQuery from '../../attributes/attribute_query';
 import { PsqlStorage } from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
@@ -44,13 +45,18 @@ export default function attributeMiddleware() {
 
     req.attributeStorage = storage;
     req.clientId = req.query?.clientId || req.body?.clientId;
-    req.actorId = req.query?.actorId || req.body?.actorId;
+    req.actorId = req?.oidc?.user?.sub;
 
-    if (id) {
-      req.attributeClass = attributeQuery.getAttributeClassByAttributeId(id);
-      req.attribute = getAttributeByParams(req, req.attributeClass);
+    if (!req.actorId || !req.actorId.trim()) {
+      res.sendStatus(401);
+    } else {
+      req.actorId = md5(req.actorId);
+      if (id) {
+        req.attributeClass = attributeQuery.getAttributeClassByAttributeId(id);
+        req.attribute = getAttributeByParams(req, req.attributeClass);
+      }
+
+      next();
     }
-
-    next();
   };
 }

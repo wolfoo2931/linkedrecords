@@ -3,7 +3,9 @@
 import { expect } from 'chai';
 import LongTextAttribute from '../../src/attributes/long_text/client/index';
 import KeyValueAttribute from '../../src/attributes/key_value/client/index';
-import { createClient, cleanupClients, truncateDB , sleep } from '../helpers';
+import {
+  createClient, cleanupClients, truncateDB, sleep,
+} from '../helpers';
 
 describe('Attribute', () => {
   beforeEach(truncateDB);
@@ -27,7 +29,7 @@ describe('Attribute', () => {
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
-        ['referenceSourceStore' , '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -102,13 +104,13 @@ describe('Attribute', () => {
       const sameContent = await otherClient.Attribute.find(content.id);
       const sameReferences = await otherClient.Attribute.find(references.id);
 
-      expect(sameContent.createdAt?.toString()).to.equals(content.createdAt.toString());
-      expect(sameReferences.createdAt?.toString()).to.equals(references.createdAt.toString());
+      expect(sameContent!.createdAt?.toString()).to.equals(content.createdAt.toString());
+      expect(sameReferences!.createdAt?.toString()).to.equals(references.createdAt.toString());
 
-      expect(sameContent.createdAt?.toString()).to.equals(sameContent.updatedAt?.toString());
-      expect(sameContent.createdAt?.toString()).to.equals(content.updatedAt?.toString());
+      expect(sameContent!.createdAt?.toString()).to.equals(sameContent!.updatedAt?.toString());
+      expect(sameContent!.createdAt?.toString()).to.equals(content.updatedAt?.toString());
 
-      if (!sameContent.updatedAt) {
+      if (!sameContent!.updatedAt) {
         throw new Error('updatedAt is not initilized');
       }
 
@@ -116,7 +118,7 @@ describe('Attribute', () => {
       await sleep(1000);
 
       expect(beforeUpdatedTime).to.be.greaterThan(content.updatedAt);
-      expect(beforeUpdatedTime).to.be.greaterThan(sameContent.updatedAt);
+      expect(beforeUpdatedTime).to.be.greaterThan(sameContent!.updatedAt);
 
       await content.set('some change');
       await references.set({ foo: 'bar2' });
@@ -124,10 +126,10 @@ describe('Attribute', () => {
       await sleep(1000);
 
       expect(content.updatedAt).to.be.greaterThan(beforeUpdatedTime);
-      expect(sameContent.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+      expect(sameContent!.updatedAt).to.be.greaterThan(beforeUpdatedTime);
 
       expect(references.updatedAt).to.be.greaterThan(beforeUpdatedTime);
-      expect(sameReferences.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+      expect(sameReferences!.updatedAt).to.be.greaterThan(beforeUpdatedTime);
     });
 
     it('allows to find attributes by object relations', async () => {
@@ -329,7 +331,7 @@ describe('Attribute', () => {
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
-        ['referenceSourceStore' , '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],

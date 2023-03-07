@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import 'dotenv/config';
 import https from 'https';
 import express from 'express';
@@ -27,9 +28,7 @@ async function withAuthForEach(req, res, controllerAction, isAuthorized) {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
-    const isAuthorizedAsLoggedInUser = (record) => {
-      return isAuthorized(uid(req), req, record);
-    }
+    const isAuthorizedAsLoggedInUser = (record) => isAuthorized(uid(req), req, record);
 
     req.hasedUserID = uid(req);
 
@@ -82,7 +81,7 @@ async function isAuthorizedToAccessFact(userid, request, factRecord?) {
     return true;
   }
 
-  return await fact.matchAny([
+  return fact.matchAny([
     { subject: [['$wasCreatedBy', userid]], object: [['$wasCreatedBy', userid]] },
     { subject: [['$wasCreatedBy', userid]], object: [['$isATermFor', '$anything']] },
   ]);
@@ -127,13 +126,13 @@ function createApp() {
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
-  app.get(    '/attributes',                      (req, res) => withAuthForEach(req, res, attributesController.index,    authorizer.isAuthorizedToReadAttribute));
-  app.post(   '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.create,   authorizer.isAuthorizedToCreateAttribute));
-  app.get(    '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.get,      authorizer.isAuthorizedToReadAttribute));
-  app.get(    '/attributes/:attributeId/changes', (req, res) => withAuth(req, res,        attributesController.subsribe, authorizer.isAuthorizedToReadAttribute));
-  app.patch(  '/attributes/:attributeId',         (req, res) => withAuth(req, res,        attributesController.update,   authorizer.isAuthorizedToUpdateAttribute));
-  app.get(    '/facts',                           (req, res) => withAuthForEach(req, res, factsController.index,         authorizer.isAuthorizedToReadFact));
-  app.post(   '/facts',                           (req, res) => withAuthForEach(req, res, factsController.create,        authorizer.isAuthorizedToCreateFact));
+  app.get('/attributes', (req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute));
+  app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute));
+  app.get('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute));
+  app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, authorizer.isAuthorizedToReadAttribute));
+  app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute));
+  app.get('/facts', (req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact));
+  app.post('/facts', (req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact));
 
   app.get('/userinfo', (req, res) => {
     if (!req?.oidc?.user?.sub) {
@@ -151,6 +150,6 @@ export default function createServer(options?, transportDriver:any = https) {
   return transportDriver.createServer(options, createApp());
 }
 
-process.on('uncaughtException', (err, origin) => {
+process.on('uncaughtException', (err) => {
   console.log(err);
 });
