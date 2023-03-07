@@ -30,7 +30,7 @@ export default {
     storage,
     isAuthorizedToReadAttribute,
   ) {
-    const resultWithIds = await this.resolveToIds(query);
+    let resultWithIds = await this.resolveToIds(query);
 
     if (!resultWithIds) {
       return [];
@@ -48,6 +48,22 @@ export default {
 
     flatIds = flatIds.filter((value, index, array) => array.indexOf(value) === index);
     flatIds = await asyncFilter(flatIds, isAuthorizedToReadAttribute);
+
+    if (Array.isArray(resultWithIds)) {
+      resultWithIds = resultWithIds.filter((id) => flatIds.includes(id));
+    } else if (typeof resultWithIds === 'string' && flatIds.includes(resultWithIds)) {
+      return undefined;
+    } else {
+      Object.keys(resultWithIds).forEach((group) => {
+        if (typeof resultWithIds[group] === 'string') {
+          if (!flatIds.includes(resultWithIds[group])) {
+            resultWithIds[group] = undefined;
+          }
+        } else {
+          resultWithIds[group] = resultWithIds[group].filter((id) => flatIds.includes(id));
+        }
+      });
+    }
 
     const attributes = {};
 

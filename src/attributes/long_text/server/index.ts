@@ -16,7 +16,7 @@ IsAttributeStorage
   }
 
   async create(value: string) : Promise<{ id: string }> {
-    const createdByFact = new Fact(this.id, 'wasCreatedBy', this.actorId);
+    const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId);
     await createdByFact.save();
     return this.storage.createAttribute(this.id, this.actorId, value);
   }

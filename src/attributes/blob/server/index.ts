@@ -18,7 +18,7 @@ IsAttributeStorage
   }
 
   async create(value: Blob) : Promise<{ id: string }> {
-    const createdByFact = new Fact(this.id, 'wasCreatedBy', this.actorId);
+    const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId);
     await createdByFact.save();
 
     const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;

@@ -89,7 +89,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       requestConfig.isJSON = false;
     }
 
-    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `/attributes/${this.id}?clientId=${this.clientId}`;
     const response = await this.linkedRecords.fetch(url, requestConfig);
 
     if (response.status !== 200) {
@@ -101,7 +101,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   public getDataURL() {
-    return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}&valueOnly=true`;
+    return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
   }
 
   protected getCreatePayload(value: Type): string | FormData {
@@ -112,8 +112,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     });
   }
 
-  public async get() : Promise<{ value: Type, changeId: string, actorId: string }> {
-    await this.load();
+  public async get() : Promise<{ value: Type, changeId: string, actorId: string } | undefined> {
+    const isOk = await this.load();
+
+    if (!isOk) {
+      return undefined;
+    }
 
     return {
       value: this.value,
@@ -122,8 +126,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     };
   }
 
-  public async getValue() : Promise<Type> {
-    await this.load();
+  public async getValue() : Promise<Type | undefined> {
+    const isOk = await this.load();
+
+    if (!isOk) {
+      return undefined;
+    }
 
     return this.value;
   }
@@ -159,11 +167,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     value: string,
     createdAt: Date,
     updatedAt: Date,
-  }) {
+  }): Promise<boolean> {
     let result = serverState;
 
     if (this.isInitialized) {
-      return;
+      return true;
     }
 
     if (!this.id) {
@@ -173,11 +181,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.isInitialized = true;
 
     if (!result) {
-      const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+      const url = `/attributes/${this.id}?clientId=${this.clientId}`;
       const response = await this.linkedRecords.fetch(url);
 
       if (!response) {
-        return;
+        return false;
       }
 
       const jsonBody = await response.json();
@@ -203,7 +211,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
-    const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
     this.attrSubscription = await this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
       if (parsedData.attributeId !== this.id) {
         return;
@@ -213,10 +221,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
       this.onServerMessage(parsedData);
     });
+
+    return true;
   }
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `/attributes/${this.id}?clientId=${this.clientId}`;
 
     await this.linkedRecords.fetch(url, {
       method: 'PATCH',
