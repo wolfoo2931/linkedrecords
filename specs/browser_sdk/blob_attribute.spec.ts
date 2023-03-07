@@ -1,11 +1,8 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import { v4 as uuid } from 'uuid';
-import LinkedRecords from '../../src/browser_sdk';
-import ServerSideEvents from '../../lib/server-side-events/client';
+import { createClient, cleanupClients, truncateDB } from '../helpers';
 
-let clients: LinkedRecords[] = [];
 const blobData = 'data:image/png;base64,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b20vZXhpZi8xLjAvIgogICAgICAgICAgICB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+CiAgICAgICAgIDxleGlmOlBpeGVsWERpbWVuc2lvbj4xMjwvZXhpZjpQaXhlbFhEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlVzZXJDb21tZW50PlNjcmVlbnNob3Q8L2V4aWY6VXNlckNvbW1lbnQ+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj4xMDwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDx0aWZmOllSZXNvbHV0aW9uPjE0NDwvdGlmZjpZUmVzb2x1dGlvbj4KICAgICAgICAgPHRpZmY6WFJlc29sdXRpb24+MTQ0PC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPgogICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4Khi2fOAAAAA1JREFUCB1juHXryn8ACKIDiP/Fcz0AAAAASUVORK5CYII=';
 const blobData2 = 'data:image/png;base64,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b20vZXhpZi8xLjAvIgogICAgICAgICAgICB4bWxuczp0aWZmPSJodHRwOi8vbnMuYWRvYmUuY29tL3RpZmYvMS4wLyI+CiAgICAgICAgIDxleGlmOlBpeGVsWERpbWVuc2lvbj4zMjwvZXhpZjpQaXhlbFhEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlVzZXJDb21tZW50PlNjcmVlbnNob3Q8L2V4aWY6VXNlckNvbW1lbnQ+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj42PC9leGlmOlBpeGVsWURpbWVuc2lvbj4KICAgICAgICAgPHRpZmY6UmVzb2x1dGlvblVuaXQ+MjwvdGlmZjpSZXNvbHV0aW9uVW5pdD4KICAgICAgICAgPHRpZmY6WVJlc29sdXRpb24+MTQ0PC90aWZmOllSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpYUmVzb2x1dGlvbj4xNDQ8L3RpZmY6WFJlc29sdXRpb24+CiAgICAgICAgIDx0aWZmOk9yaWVudGF0aW9uPjE8L3RpZmY6T3JpZW50YXRpb24+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgp2gljeAAAADUlEQVQIHWMQFpX+DwABxQFDwGBgzgAAAABJRU5ErkJggg==';
 
@@ -14,27 +11,14 @@ async function dataToBlob(data) {
   return response.blob();
 }
 
-function createClient(): [ LinkedRecords, ServerSideEvents ] {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
-  client.actorId = uuid();
-  clients.push(client);
-  return [client, serverSideEvents];
-}
-
 describe('Blob Attributes', () => {
-  afterEach(() => {
-    clients.forEach((client) => {
-      client.serverSideEvents.unsubscribeAll();
-    });
-
-    clients = [];
-  });
+  beforeEach(truncateDB);
+  afterEach(cleanupClients);
 
   it('is possible to download the blob data', async () => {
     const content = await dataToBlob(blobData);
 
-    const [clientA] = createClient();
+    const [clientA] = await createClient();
 
     const attribute = await clientA.Attribute.create('blob', content);
 
@@ -48,8 +32,8 @@ describe('Blob Attributes', () => {
     it('creates an attriubte which can be retrieved by an other client', async () => {
       const content = await dataToBlob(blobData);
 
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attribute = await clientA.Attribute.create('blob', content);
 
@@ -58,11 +42,11 @@ describe('Blob Attributes', () => {
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeFromDB = await clientB.Attribute.find(attribute.id);
-      expect(attributeFromDB.id).to.be.equal(attribute.id);
+      expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
-      const data = await attributeFromDB.get();
+      const data = await attributeFromDB!.get();
 
-      expect((await data.value.text()).startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAA')).to.be.equal(true);
+      expect((await data!.value.text()).startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAA')).to.be.equal(true);
     });
   });
 
@@ -71,8 +55,8 @@ describe('Blob Attributes', () => {
       const content = await dataToBlob(blobData);
       const content2 = await dataToBlob(blobData2);
 
-      const [clientA] = createClient();
-      const [clientB] = createClient();
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('blob', content);
 
@@ -85,11 +69,11 @@ describe('Blob Attributes', () => {
       attributeClientA.set(content2);
 
       await new Promise((resolve) => {
-        attributeClientB.subscribe(resolve);
+        attributeClientB!.subscribe(resolve);
       });
 
       const downloaded1 = await fetch(attributeClientA.getDataURL()).then((x) => x.blob()).then((x) => x.text());
-      const downloaded2 = await fetch(attributeClientB.getDataURL()).then((x) => x.blob()).then((x) => x.text());
+      const downloaded2 = await fetch(attributeClientB!.getDataURL()).then((x) => x.blob()).then((x) => x.text());
 
       expect(downloaded1).to.eq(downloaded2);
       expect(downloaded1).to.not.eq(originalData);

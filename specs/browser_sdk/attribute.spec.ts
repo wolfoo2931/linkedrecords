@@ -1,57 +1,35 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import { v4 as uuid } from 'uuid';
-import LinkedRecords from '../../src/browser_sdk';
-import ServerSideEvents from '../../lib/server-side-events/client';
 import LongTextAttribute from '../../src/attributes/long_text/client/index';
 import KeyValueAttribute from '../../src/attributes/key_value/client/index';
+import {
+  createClient, cleanupClients, truncateDB, sleep,
+} from '../helpers';
 
-const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
-
-let clients: LinkedRecords[] = [];
-
-function createClient(): [LinkedRecords, ServerSideEvents] {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(
-    new URL('http://localhost:3000'),
-    serverSideEvents,
-  );
-
-  client.actorId = uuid();
-
-  clients.push(client);
-  return [client, serverSideEvents];
-}
-
-describe('Fact', () => {
-  beforeEach(async () => {
-    const [client] = createClient();
-    await client.Fact.deleteAll();
-
-    clients.push(client);
-  });
-
-  afterEach(() => {
-    clients.forEach((client) => {
-      client.serverSideEvents.unsubscribeAll();
-    });
-
-    clients = [];
-  });
+describe('Attribute', () => {
+  beforeEach(truncateDB);
+  afterEach(cleanupClients);
 
   describe('Attribute.findAll()', () => {
     it('find attributes by facts', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const content = await client.Attribute.create('longText', 'the init value');
       const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+
+      const userAB = await client.Attribute.create('keyValue', {});
+      const userXX = await client.Attribute.create('keyValue', {});
+      const userCB = await client.Attribute.create('keyValue', {});
+
       const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
       const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
+        ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -60,29 +38,25 @@ describe('Fact', () => {
         [referenceSources1.id, 'belongsTo', content.id],
         [referenceSources2.id, 'belongsTo', content.id],
         [referenceSources3.id, 'belongsTo', content.id],
-        [referenceSources1.id, 'belongsTo', 'usr-ab'],
-        [referenceSources2.id, 'belongsTo', 'usr-xx'],
-        [referenceSources3.id, 'belongsTo', 'usr-cd'],
+        [referenceSources1.id, 'belongsTo', userAB.id],
+        [referenceSources2.id, 'belongsTo', userXX.id],
+        [referenceSources3.id, 'belongsTo', userCB.id],
       ]);
-
-      if (content.id == null) {
-        throw Error('id is null');
-      }
 
       const { content: contentAttribute, refernces: [referencesAttribute], referenceSources: [referenceSourcesAttribute] } = <{
         content: LongTextAttribute,
         refernces: KeyValueAttribute[],
         referenceSources: KeyValueAttribute[]
       }> <unknown> await otherClient.Attribute.findAll({
-        content: content.id,
+        content: content.id!,
         refernces: [
-          ['belongsTo', content.id],
+          ['belongsTo', content.id!],
           ['isA', 'referenceStore'],
         ],
         referenceSources: [
-          ['belongsTo', content.id],
+          ['belongsTo', content.id!],
           ['isA', 'referenceSourceStore'],
-          ['belongsTo', 'usr-xx'],
+          ['belongsTo', userXX.id!],
         ],
       });
 
@@ -100,8 +74,8 @@ describe('Fact', () => {
     });
 
     it('returns information about creation and update time', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const beforeCreationTime = new Date();
 
@@ -130,13 +104,13 @@ describe('Fact', () => {
       const sameContent = await otherClient.Attribute.find(content.id);
       const sameReferences = await otherClient.Attribute.find(references.id);
 
-      expect(sameContent.createdAt?.toString()).to.equals(content.createdAt.toString());
-      expect(sameReferences.createdAt?.toString()).to.equals(references.createdAt.toString());
+      expect(sameContent!.createdAt?.toString()).to.equals(content.createdAt.toString());
+      expect(sameReferences!.createdAt?.toString()).to.equals(references.createdAt.toString());
 
-      expect(sameContent.createdAt?.toString()).to.equals(sameContent.updatedAt?.toString());
-      expect(sameContent.createdAt?.toString()).to.equals(content.updatedAt?.toString());
+      expect(sameContent!.createdAt?.toString()).to.equals(sameContent!.updatedAt?.toString());
+      expect(sameContent!.createdAt?.toString()).to.equals(content.updatedAt?.toString());
 
-      if (!sameContent.updatedAt) {
+      if (!sameContent!.updatedAt) {
         throw new Error('updatedAt is not initilized');
       }
 
@@ -144,7 +118,7 @@ describe('Fact', () => {
       await sleep(1000);
 
       expect(beforeUpdatedTime).to.be.greaterThan(content.updatedAt);
-      expect(beforeUpdatedTime).to.be.greaterThan(sameContent.updatedAt);
+      expect(beforeUpdatedTime).to.be.greaterThan(sameContent!.updatedAt);
 
       await content.set('some change');
       await references.set({ foo: 'bar2' });
@@ -152,43 +126,48 @@ describe('Fact', () => {
       await sleep(1000);
 
       expect(content.updatedAt).to.be.greaterThan(beforeUpdatedTime);
-      expect(sameContent.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+      expect(sameContent!.updatedAt).to.be.greaterThan(beforeUpdatedTime);
 
       expect(references.updatedAt).to.be.greaterThan(beforeUpdatedTime);
-      expect(sameReferences.updatedAt).to.be.greaterThan(beforeUpdatedTime);
+      expect(sameReferences!.updatedAt).to.be.greaterThan(beforeUpdatedTime);
     });
 
     it('allows to find attributes by object relations', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
+      const userA = await client.Attribute.create('keyValue', {});
+      const userB = await client.Attribute.create('keyValue', {});
+      const userAB = await client.Attribute.create('keyValue', {});
       const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
       const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
       const clubA = await client.Attribute.create('keyValue', { name: 'Club' });
 
       await client.Fact.createAll([
+        ['team', '$isATermFor', 'a group of people'],
+        ['club', '$isATermFor', 'a group of people'],
         [teamA.id, 'isA', 'team'],
         [teamB.id, 'isA', 'team'],
         [clubA.id, 'isA', 'club'],
-        ['user-a', 'isMemberOf', clubA.id],
-        ['user-a', 'isMemberOf', teamA.id],
-        ['user-b', 'isMemberOf', teamB.id],
-        ['user-ab', 'isMemberOf', teamA.id],
-        ['user-ab', 'isMemberOf', teamB.id],
+        [userA.id, 'isMemberOf', clubA.id],
+        [userA.id, 'isMemberOf', teamA.id],
+        [userB.id, 'isMemberOf', teamB.id],
+        [userAB.id, 'isMemberOf', teamA.id],
+        [userAB.id, 'isMemberOf', teamB.id],
       ]);
 
       const teams = await otherClient.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
-          ['user-a', 'isMemberOf', '$it'],
+          [userA.id!, 'isMemberOf', '$it'],
         ],
         allTeamsOfUserB: [
           ['$it', 'isA', 'team'],
-          ['user-b', 'isMemberOf', '$it'],
+          [userB.id!, 'isMemberOf', '$it'],
         ],
         allTeamsOfUserAB: [
           ['$it', 'isA', 'team'],
-          ['user-ab', 'isMemberOf', '$it'],
+          [userAB.id!, 'isMemberOf', '$it'],
         ],
       });
 
@@ -208,36 +187,39 @@ describe('Fact', () => {
     });
 
     it('allows to find attributes by object relations when there is more then one object "$it" pattern per group to match', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
+      const userA = await client.Attribute.create('keyValue', {});
+      const userB = await client.Attribute.create('keyValue', {});
       const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
       const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
       const teamC = await client.Attribute.create('keyValue', { name: 'C Team' });
 
       await client.Fact.createAll([
+        ['team', '$isATermFor', 'a group of people'],
         [teamA.id, 'isA', 'team'],
         [teamB.id, 'isA', 'team'],
         [teamC.id, 'isA', 'team'],
-        ['user-a', 'isMemberOf', teamA.id],
-        ['user-a', 'isMemberOf', teamC.id],
-        ['user-b', 'isMemberOf', teamB.id],
-        ['user-b', 'isMemberOf', teamC.id],
+        [userA.id, 'isMemberOf', teamA.id],
+        [userA.id, 'isMemberOf', teamC.id],
+        [userB.id, 'isMemberOf', teamB.id],
+        [userB.id, 'isMemberOf', teamC.id],
       ]);
 
       const teams = await otherClient.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
-          ['user-a', 'isMemberOf', '$it'],
+          [userA.id!, 'isMemberOf', '$it'],
         ],
         allTeamsOfUserB: [
           ['$it', 'isA', 'team'],
-          ['user-b', 'isMemberOf', '$it'],
+          [userB.id!, 'isMemberOf', '$it'],
         ],
         commonTeams: [
           ['$it', 'isA', 'team'],
-          ['user-a', 'isMemberOf', '$it'],
-          ['user-b', 'isMemberOf', '$it'],
+          [userA.id!, 'isMemberOf', '$it'],
+          [userB.id!, 'isMemberOf', '$it'],
         ],
       });
 
@@ -260,8 +242,8 @@ describe('Fact', () => {
     });
 
     it('allows to find attributes by subject relations when there is more then one subject "$it" pattern per group to match', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
 
       const memberA = await client.Attribute.create('keyValue', { name: 'Paul' });
       const memberB = await client.Attribute.create('keyValue', { name: 'Peter' });
@@ -280,14 +262,14 @@ describe('Fact', () => {
 
       const users = await otherClient.Attribute.findAll({
         allMembersOfTeamA: [
-          ['$it', 'isMemberOf', teamA.id as string],
+          ['$it', 'isMemberOf', teamA.id!],
         ],
         allMembersOfTeamB: [
-          ['$it', 'isMemberOf', teamB.id as string],
+          ['$it', 'isMemberOf', teamB.id!],
         ],
         commonMembers: [
-          ['$it', 'isMemberOf', teamA.id as string],
-          ['$it', 'isMemberOf', teamB.id as string],
+          ['$it', 'isMemberOf', teamA.id!],
+          ['$it', 'isMemberOf', teamB.id!],
         ],
       });
 
@@ -309,7 +291,11 @@ describe('Fact', () => {
     });
 
     it('returns empty records when the object relations do not exists', async () => {
-      const [client] = createClient();
+      const [client] = await createClient();
+
+      await client.Fact.createAll([
+        ['team', '$isATermFor', 'a group of people'],
+      ]);
 
       const teams = await client.Attribute.findAll({
         allTeamsOfUserA: [
@@ -330,8 +316,12 @@ describe('Fact', () => {
     });
 
     it('can be executed in parallel', async () => {
-      const [client] = createClient();
-      const [otherClient] = createClient();
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const userAB = await client.Attribute.create('keyValue', {});
+      const userXX = await client.Attribute.create('keyValue', {});
+      const userCB = await client.Attribute.create('keyValue', {});
 
       const content = await client.Attribute.create('longText', 'the init value');
       const references = await client.Attribute.create('keyValue', { foo: 'bar' });
@@ -340,6 +330,8 @@ describe('Fact', () => {
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
+        ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -348,9 +340,9 @@ describe('Fact', () => {
         [referenceSources1.id, 'belongsTo', content.id],
         [referenceSources2.id, 'belongsTo', content.id],
         [referenceSources3.id, 'belongsTo', content.id],
-        [referenceSources1.id, 'belongsTo', 'usr-ab'],
-        [referenceSources2.id, 'belongsTo', 'usr-xx'],
-        [referenceSources3.id, 'belongsTo', 'usr-cd'],
+        [referenceSources1.id, 'belongsTo', userAB.id],
+        [referenceSources2.id, 'belongsTo', userXX.id],
+        [referenceSources3.id, 'belongsTo', userCB.id],
       ]);
 
       if (content.id == null) {
@@ -366,7 +358,7 @@ describe('Fact', () => {
         referenceSources: [
           ['belongsTo', content.id],
           ['isA', 'referenceSourceStore'],
-          ['belongsTo', 'usr-xx'],
+          ['belongsTo', userXX.id!],
         ],
       });
 
@@ -379,7 +371,7 @@ describe('Fact', () => {
         referenceSources: [
           ['belongsTo', content.id],
           ['isA', 'referenceSourceStore'],
-          ['belongsTo', 'usr-xx'],
+          ['belongsTo', userXX.id!],
         ],
       });
 
@@ -395,25 +387,21 @@ describe('Fact', () => {
         referenceSources: KeyValueAttribute[]
       }> <unknown> await exec2;
 
-      if (!referencesAttribute1 || !referencesAttribute2) {
-        throw Error('referencesAttribute is null');
-      }
-
-      if (!referenceSourcesAttribute1 || !referenceSourcesAttribute2) {
-        throw Error('referenceSourcesAttribute is null');
-      }
-
       expect(await contentAttribute1.getValue()).to.equal('the init value');
-      expect(await referencesAttribute1.getValue()).to.deep.equal({ foo: 'bar' });
-      expect(await referenceSourcesAttribute1.getValue()).to.deep.equal({ user: 'usr-xx' });
+      expect(await referencesAttribute1!.getValue()).to.deep.equal({ foo: 'bar' });
+      expect(await referenceSourcesAttribute1!.getValue()).to.deep.equal({ user: 'usr-xx' });
 
       expect(await contentAttribute2.getValue()).to.equal('the init value');
-      expect(await referencesAttribute2.getValue()).to.deep.equal({ foo: 'bar' });
-      expect(await referenceSourcesAttribute2.getValue()).to.deep.equal({ user: 'usr-xx' });
+      expect(await referencesAttribute2!.getValue()).to.deep.equal({ foo: 'bar' });
+      expect(await referenceSourcesAttribute2!.getValue()).to.deep.equal({ user: 'usr-xx' });
     });
 
     it('returns an empty array when the attribute does not exists', async () => {
-      const [client] = createClient();
+      const [client] = await createClient();
+
+      await client.Fact.createAll([
+        ['notExsting', '$isATermFor', 'a dummy contecpt for testing'],
+      ]);
 
       const { content: contentAttribute, refernces } = <{
         content: LongTextAttribute,
@@ -425,7 +413,7 @@ describe('Fact', () => {
         ],
       });
 
-      expect(contentAttribute).to.equal(null);
+      expect(contentAttribute).to.equal(undefined);
       expect(refernces.length).to.equal(0);
     });
   });

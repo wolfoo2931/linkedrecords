@@ -13,37 +13,19 @@ export default class FactsRepository {
 
   async createAll(facts: [ string?, string?, string? ][]):
   Promise<Fact[]> {
-    const createdFacts = await Promise.all(
-      facts.map((attr) => this.create(
-        attr[0],
-        attr[1],
-        attr[2],
-      )),
-    );
+    const response = await this.linkedRecords.fetch('/facts', {
+      method: 'POST',
+      body: JSON.stringify(facts),
+    });
 
-    return createdFacts;
-  }
+    const createdRawFacts = await response.json();
 
-  async create(subjectId?: string, predicateId?: string, objectId?: string): Promise<Fact> {
-    if (!subjectId) {
-      throw Error('subjectId can not be null');
-    }
-
-    if (!objectId) {
-      throw Error('objectId can not be null');
-    }
-
-    if (!predicateId) {
-      throw Error('predicateId can not be null');
-    }
-
-    const fact = new Fact(this.linkedRecords, subjectId, predicateId, objectId);
-    await fact.save();
-    return fact;
-  }
-
-  async deleteAll() {
-    await this.linkedRecords.fetch('/facts', { method: 'DELETE', headers: {} });
+    return createdRawFacts.map((rawFact) => new Fact(
+      this.linkedRecords,
+      rawFact.subject,
+      rawFact.predicate,
+      rawFact.object,
+    ));
   }
 
   async findAll(query: FactQuery | FactQuery[]): Promise<Fact[]> {
@@ -69,7 +51,6 @@ export default class FactsRepository {
     }
 
     const response = await this.linkedRecords.fetch(`/facts?${params.toString()}`);
-
     const responseJson = await response.json();
 
     return responseJson.map((record) => new Fact(
