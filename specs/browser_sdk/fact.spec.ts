@@ -49,7 +49,7 @@ describe('Fact', () => {
       expect(mobyDickFacts[0].object).to.be.equal('Book');
     });
 
-    it('does not allow to crate facts with special chars (only $ at the beginning and * at the end of the property name are allowed)')
+    it('does not allow to crate facts with special chars (only $ at the beginning and * at the end of the property name are allowed)');
     it('reports an error if the fact data does not fit into the database because of the text length');
 
     // describe('"*" predicate suffix');

@@ -13,5 +13,5 @@ http.createServer(async (req, res) => {
   }
 
   res.writeHead(200);
-  res.end("ok");
+  res.end('ok');
 }).listen(3001);

@@ -30,7 +30,7 @@ export default class Fact {
     const resultSet = new Set<string>();
     let previousLength;
 
-    if(query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
+    if (query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
       const dbRows = await pgPool.query('SELECT subject FROM facts WHERE predicate=$1', [query[0]]);
       dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
     } else if (query[1] === '$anything') {
@@ -175,7 +175,7 @@ export default class Fact {
       subject: this.subject,
       predicate: this.predicate,
       object: this.object,
-    }
+    };
   }
 
   async save(userid?) {
@@ -183,7 +183,6 @@ export default class Fact {
       const dbRows = await pgPool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
 
       if (!dbRows.rows.length) {
-
         if (!userid) {
           throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
         }
@@ -193,7 +192,7 @@ export default class Fact {
           this.predicate,
           this.object,
           '$wasCreatedBy',
-          userid
+          userid,
         ]);
       }
     } else {
