@@ -9,6 +9,7 @@
   "scripts": {
     "test": "./runTests.sh",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "build": "webpack --config ./webpack.config.js",
     "postinstall": "webpack --config ./webpack.config.js"
   },

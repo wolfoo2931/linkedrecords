@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop */
 import Fact from '../../facts/server';
 
 const asyncFilter = async (arr, fn) => {
@@ -25,10 +26,10 @@ export default {
     const rawFacts = req.body;
     const savedRawFacts: object[] = [];
 
-    for (let i=0; i < rawFacts.length; i++) {
+    for (let i = 0; i < rawFacts.length; i += 1) {
       const fact = new Fact(rawFacts[i][0], rawFacts[i][1], rawFacts[i][2]);
 
-      if(await isAuthorizedToCreateFact(fact)) {
+      if (await isAuthorizedToCreateFact(fact)) {
         await fact.save(req.hasedUserID);
 
         savedRawFacts.push(fact.toJSON());
@@ -37,5 +38,5 @@ export default {
 
     res.status(200);
     res.send(savedRawFacts);
-  }
+  },
 };
