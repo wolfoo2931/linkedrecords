@@ -16,7 +16,7 @@ export default class Fact {
     await pgPool.query(createQuery);
   }
 
-  static async resolveToAttributeIds(query: string | string[]): Promise<string[]> {
+  private static async resolveToAttributeIds(query: string | string[]): Promise<string[]> {
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
     if (typeof query === 'string') {

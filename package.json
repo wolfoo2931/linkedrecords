@@ -7,7 +7,9 @@
     "./client": "./dist/client.js"
   },
   "scripts": {
-    "test": "./runTests.sh",
+    "start": "npm run build && node dist/server.js",
+    "test": "bin/test.sh",
+    "publish": "bin/publish.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "webpack --config ./webpack.config.js",

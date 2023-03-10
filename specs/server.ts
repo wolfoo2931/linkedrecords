@@ -1,10 +1,10 @@
 import pg from 'pg';
 import http from 'http';
-import createServer from '../src/server';
+import createServer from '../src/server/routes';
 
 const pgPool = new pg.Pool({ max: 2 });
 
-createServer({}, http).listen(process.env['PORT'] || 3000);
+createServer({ transportDriver: http }).listen(process.env['PORT'] || 3000);
 
 http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
