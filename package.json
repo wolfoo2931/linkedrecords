@@ -7,7 +7,7 @@
     "./client": "./dist/client.js"
   },
   "scripts": {
-    "start": "npm run build && node dist/server.js",
+    "start": "npm run build && node dist/server.js --enable-source-maps",
     "test": "bin/test.sh",
     "publish": "bin/publish.sh",
     "lint": "eslint .",
