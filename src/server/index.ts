@@ -11,8 +11,8 @@ if (process.env['HTTPS'] === 'true') {
 
   createServer({
     transportDriver: https,
-    key: process.env['SSL_KEY'].replace(/\\n/g, '\n'),
-    cert: process.env['SSL_CRT'].replace(/\\n/g, '\n'),
+    key: process.env['SSL_KEY'].replace(/\\n/g, '\n').replace(/^\$/, ''),
+    cert: process.env['SSL_CRT'].replace(/\\n/g, '\n').replace(/^\$/, ''),
   }).listen(port);
 } else {
   createServer({
