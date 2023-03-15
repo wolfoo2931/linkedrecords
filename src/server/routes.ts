@@ -108,19 +108,16 @@ const authorizer = {
 };
 
 function createApp() {
+  if (!process.env['APP_BASE_URL']) {
+    throw new Error('You nee to set the APP_BASE_URL configuration as environment variable.');
+  }
+
   const app = express();
 
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
   app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
-
-  if (process.env['CORS_ORIGIN']) {
-    app.use(cors({
-      origin: process.env['CORS_ORIGIN'],
-      credentials: true,
-    }));
-  }
-
+  app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true }));
   app.use(authentication());
   app.use(serverSentEvents());
   app.use('/attributes', attributeMiddleware());
