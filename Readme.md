@@ -11,14 +11,28 @@ LinkedRecords is configured via environment variables. See table below.
 | PGPASSWORD | xxxx | The PostgreSQL password. |
 | PGDATABASE | xxxx | The PostgreSQL database name. |
 | HTTPS | true | Whether the server should be started with TLS certificates for HTTPS encryption. If this is true, you have to provide SSL_KEY and SSL_CRT. HTTPS is required for local development because of the way how cookies are used. Setting this to false only makes sense if you run LinkedRecords behind a reverse proxy that terminates the TLS certificates for you. |
-| SSL_KEY | xxxx | The private key used for https termination. |
-| SSL_CRT | xxxx | The public key used for https termination. |
+| SSL_KEY | xxxx | The private key used for https termination. For development purposes you can use the openssl command shown in the below section "Generate local certificate". |
+| SSL_CRT | xxxx | The public key used for https termination. For development purposes you can use the openssl command shown in the below section "Generate local certificate". |
 | COOKIE_DOMAIN | localhost.com | The domain for which the cookies should be set. If your single-page application is available via "app.localhost.com" and the LinkedRecords endpoint is available via "api.localhost.com", you have to set this value to "localhost.com".|
 | AUTH_COOKIE_SIGNING_SECRET | xxxx | The secret used to sign cookies. |
 | APP_BASE_URL | https://app.localhost.com:3001 | The base URL of the frontend. It will be used for the Access-Control-Allow-Origin HTTP header and is also required for the OpenID connect redirections. |
 | AUTH_ISSUER_BASE_URL | https://dev-onljhxvyw71o4mbs.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
 | AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
 | AUTH_CLIENT_SECRET |  | The client secret. Can be obtained from the identity provider. |
+
+
+## Generate local certificate
+
+In order to create the values for `SSL_KEY` and `SSL_CRT`
+
+```
+openssl genrsa -out api.localhost.com.key
+
+openssl req -x509 -out localhost.com.crt -keyout localhost.com.key \
+  -newkey rsa:2048 -nodes -sha256 \
+  -subj '/CN=api.localhost.com' -extensions EXT -config <( \
+   printf "[dn]\nCN=api.localhost.com\n[req]\ndistinguished_name = dn\n[EXT]\nsubjectAltName=DNS:api.localhost.com,DNS:localhost.com\nkeyUsage=digitalSignature\nextendedKeyUsage=serverAuth")
+```
 
 
 ## Next Improvement
