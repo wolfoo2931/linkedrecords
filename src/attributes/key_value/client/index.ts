@@ -33,15 +33,25 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
 
   protected async rawSet(newValue: object) {
     let changes: AtomicChange[] = [];
+    const flatOldValue = flatten(this.value) as object;
     const flatValue = flatten(newValue) as object;
 
     Object.entries(this.value).forEach(([key]) => {
+      // in case keys are not present in newValue anymore,
+      // we want to remove them from the key value store.
       changes.push({ key, value: null });
     });
 
     Object.entries(flatValue).forEach(([key, value]) => {
+      // Remove the null value for this key: because the key is present
+      // in the newValue we do not wont it to be set to null which would mean
+      // deleting the key.
       changes = changes.filter((ch) => ch.key !== key);
-      changes.push({ key, value });
+
+      // We tranmit the key value pair only if it actually changed
+      if (flatOldValue[key] !== value) {
+        changes.push({ key, value });
+      }
     });
 
     this.change(new KeyValueChange(changes));
