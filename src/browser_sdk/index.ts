@@ -38,6 +38,8 @@ export default class LinkedRecords {
 
   connectionLostHandler?: () => void;
 
+  unkownServerErrorHandler?: (response) => void;
+
   clientId: string;
 
   actorId: string;
@@ -108,6 +110,11 @@ export default class LinkedRecords {
       return false;
     }
 
+    if (!response.ok) {
+      this.handleUnkownServerError(response);
+      return false;
+    }
+
     return response;
   }
 
@@ -142,6 +149,18 @@ export default class LinkedRecords {
   public handleExpiredLoginSession() {
     if (this.loginURL && this.loginHandler) {
       this.loginHandler(this.loginURL);
+    }
+  }
+
+  public setUnkownServerErrorHandler(handler: (response) => void) {
+    this.unkownServerErrorHandler = handler;
+  }
+
+  public handleUnkownServerError(response) {
+    if (this.unkownServerErrorHandler) {
+      this.unkownServerErrorHandler(response);
+    } else {
+      console.log('UnkownServerError', response);
     }
   }
 
