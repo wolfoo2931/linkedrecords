@@ -7,6 +7,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import multer from 'multer';
 import md5 from 'md5';
+import errorHandler from 'express-exception-handler';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
@@ -32,13 +33,13 @@ async function withAuthForEach(req, res, controllerAction, isAuthorized) {
 
     req.hasedUserID = uid(req);
 
-    controllerAction(req, res, isAuthorizedAsLoggedInUser);
+    await controllerAction(req, res, isAuthorizedAsLoggedInUser);
   }
 }
 
 async function withAuth(req, res, controllerAction, isAuthorized) {
   const uploadWrappedControllerAction = (request, response) => {
-    blobUpload(request, response, (err) => {
+    blobUpload(request, response, async (err) => {
       if (err) {
         console.error(`error uploading file for ${req.method} ${req.path}`, err);
       }
@@ -53,7 +54,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
         }
       }
 
-      controllerAction(request, response);
+      await controllerAction(request, response);
     });
   };
 
@@ -123,22 +124,22 @@ function createApp() {
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
-  app.get('/attributes', (req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute));
-  app.post('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute));
-  app.get('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute));
-  app.get('/attributes/:attributeId/changes', (req, res) => withAuth(req, res, attributesController.subsribe, authorizer.isAuthorizedToReadAttribute));
-  app.patch('/attributes/:attributeId', (req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute));
-  app.get('/facts', (req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact));
-  app.post('/facts', (req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact));
+  app.get('/attributes', errorHandler.wrap((req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute)));
+  app.post('/attributes/:attributeId', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
+  app.get('/attributes/:attributeId', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
+  app.get('/attributes/:attributeId/changes', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.subsribe, authorizer.isAuthorizedToReadAttribute)));
+  app.patch('/attributes/:attributeId', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
+  app.get('/facts', errorHandler.wrap((req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact)));
+  app.post('/facts', errorHandler.wrap((req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact)));
 
-  app.get('/userinfo', (req, res) => {
+  app.get('/userinfo', errorHandler.wrap((req, res) => {
     if (!req?.oidc?.user?.sub) {
       res.sendStatus(401);
     } else {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
       res.status(200).send('empty response');
     }
-  });
+  }));
 
   return app;
 }
@@ -149,5 +150,5 @@ export default function createServer(options?) {
 }
 
 process.on('uncaughtException', (err) => {
-  console.log(err);
+  console.log('uncaughtException', err);
 });
