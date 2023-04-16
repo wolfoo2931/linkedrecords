@@ -4,13 +4,13 @@ import https from 'https';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import morgan from 'morgan';
 import multer from 'multer';
 import md5 from 'md5';
 import errorHandler from 'express-exception-handler';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
+import loggingMiddleware from './middleware/logging';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
@@ -117,7 +117,7 @@ function createApp() {
 
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
-  app.use(morgan('tiny', { skip: (req) => req.method === 'OPTIONS' }));
+  app.use(loggingMiddleware());
   app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true }));
   app.use(authentication());
   app.use(serverSentEvents());
