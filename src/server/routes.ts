@@ -6,11 +6,11 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
 import md5 from 'md5';
-import errorHandler from 'express-exception-handler';
 import pino from 'pino-http';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
+import errorHandler from './middleware/error_handler';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
@@ -124,15 +124,15 @@ function createApp() {
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
-  app.get('/attributes', errorHandler.wrap((req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute)));
-  app.post('/attributes/:attributeId', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
-  app.get('/attributes/:attributeId', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
-  app.get('/attributes/:attributeId/changes', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.subsribe, authorizer.isAuthorizedToReadAttribute)));
-  app.patch('/attributes/:attributeId', errorHandler.wrap((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
-  app.get('/facts', errorHandler.wrap((req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact)));
-  app.post('/facts', errorHandler.wrap((req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact)));
+  app.get('/attributes', errorHandler((req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute)));
+  app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
+  app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
+  app.get('/attributes/:attributeId/changes', errorHandler((req, res) => withAuth(req, res, attributesController.subsribe, authorizer.isAuthorizedToReadAttribute)));
+  app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
+  app.get('/facts', errorHandler((req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact)));
+  app.post('/facts', errorHandler((req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact)));
 
-  app.get('/userinfo', errorHandler.wrap((req, res) => {
+  app.get('/userinfo', errorHandler((req, res) => {
     if (!req?.oidc?.user?.sub) {
       res.sendStatus(401);
     } else {
