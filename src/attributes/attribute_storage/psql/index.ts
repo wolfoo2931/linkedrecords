@@ -5,7 +5,7 @@ import IsAttributeStorage from '../../abstract/is_attribute_storage';
 
 const pgPool = new pg.Pool({
   max: 2,
-  connectionTimeoutMillis : 2000,
+  connectionTimeoutMillis: 2000,
 });
 
 export default class PsqlStorage implements IsAttributeStorage {

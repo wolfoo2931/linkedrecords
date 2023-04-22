@@ -4,7 +4,7 @@ import { FactQuery } from '../fact_query';
 
 const pgPool = new pg.Pool({
   max: 2,
-  connectionTimeoutMillis : 2000,
+  connectionTimeoutMillis: 2000,
 });
 
 const ensureArray = (a) => (Array.isArray(a) ? a : [a]);
