@@ -11,6 +11,10 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
 
   changeInTransmission?: SerializedChangeWithMetadata<LongTextChange> = undefined;
 
+  changeInTransmissionSendAt?: Date = undefined;
+
+  public static serverApprovalTimeoutInMS: number = 2500;
+
   public static getDataTypePrefix() : string {
     return 'l';
   }
@@ -50,10 +54,25 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     this.value = changeset.apply(this.value);
 
     if (this.changeInTransmission) {
+      if (
+        this.getLastChangeTransmitedMillisecondsAgo() > LongTextAttribute.serverApprovalTimeoutInMS
+      ) {
+        console.log(`No approval received from server after ${LongTextAttribute.serverApprovalTimeoutInMS} ms`);
+        this.linkedRecords.handleConnectionError(new Error(`No approval received from server after ${LongTextAttribute.serverApprovalTimeoutInMS} ms`));
+      }
+
       this.buffer.add(changeset);
     } else {
       this.transmitChange(new LongTextChange(changeset.changeset, this.version));
     }
+  }
+
+  protected getLastChangeTransmitedMillisecondsAgo(): number {
+    if (!this.changeInTransmissionSendAt) {
+      return -1;
+    }
+
+    return (new Date()).getTime() - this.changeInTransmissionSendAt.getTime();
   }
 
   protected onLoad() {
@@ -98,6 +117,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
   private processApproval(approval: SerializedChangeWithMetadata<LongTextChange>) {
     const bufferedChanges = this.buffer.getValue();
     this.changeInTransmission = undefined;
+    this.changeInTransmissionSendAt = undefined;
     this.version = approval.change.changeId;
     this.buffer.clear();
 
@@ -111,6 +131,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
 
+    this.changeInTransmissionSendAt = new Date();
     this.changeInTransmission = new SerializedChangeWithMetadata<LongTextChange>(
       this.id,
       this.actorId,
