@@ -36,7 +36,7 @@ export default class LinkedRecords {
 
   loginHandler?: (URL) => void;
 
-  connectionLostHandler?: () => void;
+  connectionLostHandler?: (err?) => void;
 
   unkownServerErrorHandler?: (response) => void;
 
@@ -130,13 +130,13 @@ export default class LinkedRecords {
     }
   }
 
-  public setConnectionLostHandler(handler: () => void) {
+  public setConnectionLostHandler(handler: (err?) => void) {
     this.connectionLostHandler = handler;
   }
 
   public handleConnectionError(error) {
     if (this.connectionLostHandler) {
-      this.connectionLostHandler();
+      this.connectionLostHandler(error);
     } else {
       console.log('Connection Lost', error);
     }
