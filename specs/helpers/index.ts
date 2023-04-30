@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 import LinkedRecords from '../../src/browser_sdk';
-import ServerSideEvents from '../../lib/server-side-events/client';
+import ClientServerBus from '../../lib/client-server-bus/client';
 
 let clients: LinkedRecords[] = [];
 
@@ -25,18 +25,18 @@ export async function changeUserContext(pretendToBe: string) {
   Cookies.set('pretendToBeUser', pretendToBe, { path: '', doamin: 'localhost' });
 }
 
-export async function createClient(): Promise<[ LinkedRecords, ServerSideEvents ]> {
-  const serverSideEvents = new ServerSideEvents();
-  const client = new LinkedRecords(new URL('http://localhost:3000'), serverSideEvents);
+export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]> {
+  const clientServerBus = new ClientServerBus();
+  const client = new LinkedRecords(new URL('http://localhost:3000'), clientServerBus);
   await await changeUserContext('testuser-1-id');
   await client.ensureUserIdIsKnown();
   clients.push(client);
-  return [client, serverSideEvents];
+  return [client, clientServerBus];
 }
 
 export function cleanupClients() {
   clients.forEach((client) => {
-    client.serverSideEvents.unsubscribeAll();
+    client.clientServerBus.unsubscribeAll();
   });
 
   clients = [];

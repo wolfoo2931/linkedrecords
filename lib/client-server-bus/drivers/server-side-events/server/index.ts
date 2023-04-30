@@ -11,7 +11,7 @@ const headers = {
 const connections = {};
 const subscribers = {};
 
-export default function serverSentEvents() {
+export default function clientServerBus() {
   return (request, response, next) => {
     if (request.path === '/server-sent-events' && request.method === 'GET') {
       if (!request.signedCookies.sseClientId) {
@@ -41,7 +41,7 @@ export default function serverSentEvents() {
       }
     }
 
-    response.subscribeSEE = (channel: string) => {
+    response.subscribeClientServerbus = (channel: string) => {
       if (!request.query.tabId || request.query.tabId.length < 2) {
         throw new Error('provide tabId as query parameter to subscribe to server sent events');
       } else if (!request.signedCookies.sseClientId) {
@@ -57,7 +57,7 @@ export default function serverSentEvents() {
       }
     };
 
-    response.sendSEE = (channel: string, body: any) => {
+    response.sendClientServerMessage = (channel: string, body: any) => {
       const bodyWithCannel = {
         ...body,
         sseChannel: channel,

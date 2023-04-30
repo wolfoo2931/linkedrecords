@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
 import pino from 'pino-http';
-import serverSentEvents from '../../lib/server-side-events/server';
+import clientServerBus from '../../lib/client-server-bus/server';
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
 import errorHandler from './middleware/error_handler';
@@ -119,7 +119,7 @@ function createApp() {
   app.use(express.json());
   app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true }));
   app.use(authentication());
-  app.use(serverSentEvents());
+  app.use(clientServerBus());
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
