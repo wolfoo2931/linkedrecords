@@ -5,7 +5,6 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
-import md5 from 'md5';
 import pino from 'pino-http';
 import serverSentEvents from '../../lib/server-side-events/server';
 import attributeMiddleware from './middleware/attribute';
@@ -14,10 +13,10 @@ import errorHandler from './middleware/error_handler';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
+import userinfoController, { uid } from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
 
 const blobUpload = multer().single('change');
-const uid = (req) => req?.oidc?.user?.sub && `us-${md5(req.oidc.user.sub)}`;
 
 Fact.initDB();
 
@@ -124,6 +123,7 @@ function createApp() {
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
+  app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
   app.get('/attributes', errorHandler((req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute)));
   app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
@@ -131,15 +131,6 @@ function createApp() {
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
   app.get('/facts', errorHandler((req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact)));
   app.post('/facts', errorHandler((req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact)));
-
-  app.get('/userinfo', errorHandler((req, res) => {
-    if (!req?.oidc?.user?.sub) {
-      res.sendStatus(401);
-    } else {
-      res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
-      res.status(200).send('empty response');
-    }
-  }));
 
   return app;
 }
