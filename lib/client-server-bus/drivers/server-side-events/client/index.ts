@@ -1,11 +1,7 @@
-/* eslint-disable max-len */
-export interface IsSubscribable {
-  subscribe(url: string, channel: string, handler: (data: any) => any): Promise<[string, (data: any) => any]>;
-  unsubscribe([subId, handler]: [string, (data: any) => any]);
-  unsubscribeAll();
-}
+// eslint-disable-next-line import/no-cycle
+import { IsSubscribable } from '../../../client';
 
-export default class ServerSideEvents implements IsSubscribable {
+export default class ClientServerBus implements IsSubscribable {
   subscriptions = {};
 
   connetions = {};

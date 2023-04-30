@@ -5,12 +5,12 @@ import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
-import { IsSubscribable } from '../../../lib/server-side-events/client';
+import { IsSubscribable } from '../../../lib/client-server-bus/client';
 
 export default abstract class AbstractAttributeClient <Type, TypedChange extends IsSerializable > {
   linkedRecords: LinkedRecords;
 
-  serverSideEvents: IsSubscribable;
+  clientServerBus: IsSubscribable;
 
   id?: string;
 
@@ -36,10 +36,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   attrSubscription?: [string, (data: any) => any] = undefined;
 
-  constructor(linkedRecords: LinkedRecords, serverSideEvents: IsSubscribable, id?: string) {
+  constructor(linkedRecords: LinkedRecords, clientServerBus: IsSubscribable, id?: string) {
     this.id = id;
     this.linkedRecords = linkedRecords;
-    this.serverSideEvents = serverSideEvents;
+    this.clientServerBus = clientServerBus;
     this.serverURL = linkedRecords.serverURL;
     this.loginURL = linkedRecords.loginURL;
     this.createdAt = undefined;
@@ -158,7 +158,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   public unload() {
     if (this.attrSubscription) {
-      this.serverSideEvents.unsubscribe(this.attrSubscription);
+      this.clientServerBus.unsubscribe(this.attrSubscription);
     }
   }
 
@@ -212,7 +212,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.notifySubscribers(undefined, undefined);
 
     const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
-    this.attrSubscription = await this.serverSideEvents.subscribe(url, this.id, (parsedData) => {
+    this.attrSubscription = await this.clientServerBus.subscribe(url, this.id, (parsedData) => {
       if (parsedData.attributeId !== this.id) {
         return;
       }

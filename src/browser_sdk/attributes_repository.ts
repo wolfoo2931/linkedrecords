@@ -6,12 +6,12 @@ import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import BlobAttribute from '../attributes/blob/client';
 import { CompoundAttributeQuery } from '../attributes/attribute_query';
-import { IsSubscribable } from '../../lib/server-side-events/client';
+import { IsSubscribable } from '../../lib/client-server-bus/client';
 
 export default class AttributesRepository {
   linkedRecords: LinkedRecords;
 
-  private serverSideEvents: IsSubscribable;
+  private clientServerBus: IsSubscribable;
 
   static attributeTypes = [
     LongTextAttribute,
@@ -19,9 +19,9 @@ export default class AttributesRepository {
     BlobAttribute,
   ];
 
-  constructor(linkedRecords: LinkedRecords, serverSideEvents: IsSubscribable) {
+  constructor(linkedRecords: LinkedRecords, clientServerBus: IsSubscribable) {
     this.linkedRecords = linkedRecords;
-    this.serverSideEvents = serverSideEvents;
+    this.clientServerBus = clientServerBus;
   }
 
   idToAttribute(id, serverState?) {
@@ -34,7 +34,7 @@ export default class AttributesRepository {
       return undefined;
     }
 
-    const attr = new AttributeClass(this.linkedRecords, this.serverSideEvents, id);
+    const attr = new AttributeClass(this.linkedRecords, this.clientServerBus, id);
 
     if (serverState) {
       attr.load(serverState);
@@ -55,7 +55,7 @@ export default class AttributesRepository {
 
     const attribute: AbstractAttributeClient<any, IsSerializable> = new AttributeClass(
       this.linkedRecords,
-      this.serverSideEvents,
+      this.clientServerBus,
     );
 
     await attribute.create(value);
@@ -79,7 +79,7 @@ export default class AttributesRepository {
       throw new Error(`Attribute ID ${attributeId} is unknown`);
     }
 
-    const attribute = new AttributeClass(this.linkedRecords, this.serverSideEvents, attributeId);
+    const attribute = new AttributeClass(this.linkedRecords, this.clientServerBus, attributeId);
     const isOk = await attribute.get();
 
     if (!isOk) {

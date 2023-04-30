@@ -59,7 +59,7 @@ export default {
   },
 
   async subsribe(req, res) {
-    res.subscribeSEE(req.params.attributeId);
+    res.subscribeClientServerbus(req.params.attributeId);
     res.send({ status: 'ok' });
   },
 
@@ -69,7 +69,7 @@ export default {
       parsedChange,
     );
 
-    res.sendSEE(req.params.attributeId, commitedChange);
+    res.sendClientServerMessage(req.params.attributeId, commitedChange);
     res.status(200);
     res.send();
   },
