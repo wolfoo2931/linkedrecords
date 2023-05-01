@@ -2,15 +2,3 @@
 import ClientServerBus from '../drivers/ws/client';
 
 export default ClientServerBus;
-
-export interface IsSubscribable {
-  subscribe(
-    url: string,
-    channel: string,
-    handler: (data: any) => any
-  ): Promise<[string, (data: any) => any]>;
-
-  unsubscribe([subId, handler]: [string, (data: any) => any]);
-
-  unsubscribeAll();
-}
