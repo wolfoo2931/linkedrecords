@@ -1,8 +1,7 @@
 /* eslint-disable import/no-cycle */
 import { io } from 'socket.io-client';
-import { IsSubscribable } from '../../../client';
 
-export default class ClientServerBus implements IsSubscribable {
+export default class ClientServerBus {
   subscriptions = {};
 
   connetions = {};
