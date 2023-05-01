@@ -2,6 +2,8 @@
 import https from 'https';
 import http from 'http';
 import { Server } from 'socket.io';
+import { createClient } from 'redis';
+import { createAdapter } from '@socket.io/redis-streams-adapter';
 
 const connections = {};
 
@@ -21,16 +23,24 @@ export interface AccessControl {
   ): Promise<boolean>;
 }
 
-export default function clientServerBus(
+export default async function clientServerBus(
   httpServer: https.Server,
   app: any,
   accessControl: AccessControl,
   onMessage: (channel: string, message: any, send) => void,
 ) {
-  const io = new Server(httpServer, {
+  const wsOptions: any = {
     path: '/ws',
     cookie: true,
-  });
+  };
+
+  if (process.env['REDIS_HOST']) {
+    const redisClient = createClient({ socket: { host: process.env['REDIS_HOST'], port: 6379 } });
+    await redisClient.connect();
+    wsOptions.adapter = createAdapter(redisClient);
+  }
+
+  const io = new Server(httpServer, wsOptions);
 
   const sendClientServerMessage = (channel: string, body: any) => {
     io.to(channel).emit('data', {
