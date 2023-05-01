@@ -1,11 +1,6 @@
-import pg from 'pg';
 import intersect from 'intersect';
 import { FactQuery } from '../fact_query';
-
-const pgPool = new pg.Pool({
-  max: 2,
-  connectionTimeoutMillis: 2000,
-});
+import pgPool from '../../../lib/pg-log';
 
 const ensureArray = (a) => (Array.isArray(a) ? a : [a]);
 export default class Fact {
