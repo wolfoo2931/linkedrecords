@@ -5,12 +5,12 @@ import { v4 as uuid } from 'uuid';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
-import { IsSubscribable } from '../../../lib/client-server-bus/client';
+import ClientServerBus from '../../../lib/client-server-bus/client';
 
 export default abstract class AbstractAttributeClient <Type, TypedChange extends IsSerializable > {
   linkedRecords: LinkedRecords;
 
-  clientServerBus: IsSubscribable;
+  clientServerBus: ClientServerBus;
 
   id?: string;
 
@@ -36,7 +36,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   attrSubscription?: [string, (data: any) => any] = undefined;
 
-  constructor(linkedRecords: LinkedRecords, clientServerBus: IsSubscribable, id?: string) {
+  constructor(linkedRecords: LinkedRecords, clientServerBus: ClientServerBus, id?: string) {
     this.id = id;
     this.linkedRecords = linkedRecords;
     this.clientServerBus = clientServerBus;
@@ -226,12 +226,19 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
-    const url = `/attributes/${this.id}?clientId=${this.clientId}`;
+    if (!this.id) {
+      throw Error('cannot send message to server as attribute does not has an id');
+    }
 
-    await this.linkedRecords.fetch(url, {
-      method: 'PATCH',
-      body: JSON.stringify(change.toJSON()),
-    });
+    try {
+      this.clientServerBus.send(this.serverURL.toString(), this.id, change);
+    } catch (ex: any) {
+      if (ex.message && ex.message.match && ex.message.match(/unauthorized/)) {
+        this.linkedRecords.handleExpiredLoginSession();
+      } else {
+        this.linkedRecords.handleConnectionError(ex);
+      }
+    }
   }
 
   protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {

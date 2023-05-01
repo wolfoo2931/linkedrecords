@@ -39,6 +39,24 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
   return new AttributeClass(id, req.clientId, req.actorId, req.attributeStorage);
 }
 
+export function getAttributeByMessage(attributeId, message) {
+  const AttributeClass = attributeQuery.getAttributeClassByAttributeId(attributeId);
+
+  if (!AttributeClass) {
+    throw new Error(`Server is unkown of Attribute Type Prefix for id ${attributeId}`);
+  }
+
+  if (!message.actorId || message.actorId === 'undefined') {
+    throw new Error(`The request does not contain a actorid for attribute id: ${attributeId}`);
+  }
+
+  if (!message.clientId || message.clientId === 'undefined') {
+    throw new Error(`The request does not contain a clientId for attribute id: ${attributeId}`);
+  }
+
+  return new AttributeClass(attributeId, message.clientId, message.actorId, storage);
+}
+
 export default function attributeMiddleware() {
   return (req, res, next) => {
     const id = getAttributeIdByRquest(req);
