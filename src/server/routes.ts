@@ -158,14 +158,14 @@ class WSAccessControl {
   }
 }
 
-function createApp(httpServer: https.Server) {
+async function createApp(httpServer: https.Server) {
   if (!process.env['APP_BASE_URL']) {
     throw new Error('You nee to set the APP_BASE_URL configuration as environment variable.');
   }
 
   const app = express();
 
-  const sendMessage = clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change) => {
+  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change) => {
     const attribute = getAttributeByMessage(attributeId, change);
 
     const commitedChange: SerializedChangeWithMetadata<any> = await attribute.change(
@@ -195,10 +195,10 @@ function createApp(httpServer: https.Server) {
   return app;
 }
 
-export default function createServer(options?) {
+export default async function createServer(options?) {
   const transportDriver = options?.transportDriver || https;
   const server = transportDriver.createServer(options);
-  server.on('request', createApp(server));
+  server.on('request', await createApp(server));
   return server;
 }
 
