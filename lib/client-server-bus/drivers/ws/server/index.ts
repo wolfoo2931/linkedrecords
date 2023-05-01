@@ -35,7 +35,14 @@ export default async function clientServerBus(
   };
 
   if (process.env['REDIS_HOST']) {
-    const redisClient = createClient({ socket: { host: process.env['REDIS_HOST'], port: 6379 } });
+    const redisClient = createClient({
+      username: process.env['REDIS_USERNAME'],
+      password: process.env['REDIS_PASSWORD'],
+      socket: {
+        host: process.env['REDIS_HOST'],
+        port: 6379,
+      },
+    });
     await redisClient.connect();
     wsOptions.adapter = createAdapter(redisClient);
   }
