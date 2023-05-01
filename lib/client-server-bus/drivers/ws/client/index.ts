@@ -13,21 +13,24 @@ export default class ClientServerBus implements IsSubscribable {
 
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
 
-  tabId: string = (Math.random() + 1).toString(36).substring(7);
-
   public async subscribe(url: string, channel: string, handler: (data: any) => any)
     : Promise<[string, (data: any) => any]> {
     const parsedUrl: URL = new URL(url);
     const subId = `${parsedUrl.origin}-${channel}`;
 
-    if (!parsedUrl.searchParams.has('tabId')) {
-      parsedUrl.searchParams.append('tabId', this.tabId);
+    await this.ensureConnection(parsedUrl.origin);
+
+    const subResult = await new Promise((resolve) => {
+      this.connetions[parsedUrl.origin].emit('subscribe', { channel }, resolve);
+    }) as any;
+
+    if (subResult.status === 'unauthorized') {
+      throw new Error('unauthorized');
     }
 
-    await this.ensureConnection(parsedUrl.origin);
-    await fetch(parsedUrl.toString(), {
-      credentials: 'include',
-    });
+    if (subResult.status !== 'subscribed') {
+      throw new Error(`unkown error when subscribing to ${channel}`);
+    }
 
     this.subscriptions[subId] = this.subscriptions[subId] || [];
     this.subscriptions[subId].push(handler);
@@ -61,14 +64,12 @@ export default class ClientServerBus implements IsSubscribable {
     this.messagesWhilePaused = [];
   }
 
-  private getWSAsync(url: URL) {
-    if (!url.searchParams.has('tabId')) {
-      url.searchParams.append('tabId', this.tabId);
-    }
-
+  private static getWSAsync(url: URL) {
     return new Promise((resolve, reject) => {
-      const socket = io(url.toString(), {
+      const socket = io(url.origin, {
         withCredentials: true,
+        path: url.pathname,
+        transports: ['websocket'],
       });
 
       socket.on('connect', () => {
@@ -89,21 +90,17 @@ export default class ClientServerBus implements IsSubscribable {
     }
 
     if (!this.connetions[url.origin]) {
-      this.connetionsInEstablishment[url.origin] = this.getWSAsync(url);
+      this.connetionsInEstablishment[url.origin] = ClientServerBus.getWSAsync(url);
       this.connetions[url.origin] = await this.connetionsInEstablishment[url.origin];
 
-      this.connetions[url.origin].on('data', () => {
-
-      });
-
-      this.connetions[url.origin].onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      this.connetions[url.origin].on('data', (data) => {
         const { sseChannel } = data;
 
         if (!sseChannel) {
           return;
         }
 
+        // eslint-disable-next-line no-param-reassign
         delete data.sseChannel;
 
         const subscriptions = this.subscriptions[`${url.origin}-${sseChannel}`];
@@ -117,7 +114,7 @@ export default class ClientServerBus implements IsSubscribable {
             }
           });
         }
-      };
+      });
     }
 
     return this.connetions[origin];

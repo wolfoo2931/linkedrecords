@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 import 'dotenv/config';
 import https from 'https';
+import http from 'http';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -91,7 +92,7 @@ async function isAuthorizedToAccessAttribute(userid, request, attrRecord?) {
   const attribute = attrRecord || request.attribute;
   const attributeId = typeof attribute === 'string' ? attribute : attribute.id;
 
-  const permits = await request.Fact.findAll(
+  const permits = await Fact.findAll(
     { subject: [attributeId], predicate: ['$wasCreatedBy'], object: [userid] },
   );
 
@@ -107,19 +108,57 @@ const authorizer = {
   isAuthorizedToUpdateFact: () => false,
 };
 
-function createApp() {
+class WSAccessControl {
+  app: any;
+
+  constructor(app) {
+    this.app = app;
+  }
+
+  public verifyAuthenitcated(
+    request: http.IncomingMessage,
+  ): Promise<string> {
+    const response = new http.ServerResponse(request);
+
+    return new Promise((resolve, reject) => {
+      this.app.handle(request, response, () => {
+        const { oidc } = request as any;
+
+        if (!oidc || !oidc.isAuthenticated() || !oidc?.user?.sub) {
+          reject();
+        } else {
+          resolve(uid(request));
+        }
+      });
+    });
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  public async verifyAuthorizedChannelJoin(
+    userId: string,
+    channel: string,
+  ): Promise<boolean> {
+    if (!userId) {
+      return Promise.resolve(false);
+    }
+
+    return authorizer.isAuthorizedToReadAttribute(userId, undefined, channel);
+  }
+}
+
+function createApp(httpServer: https.Server) {
   if (!process.env['APP_BASE_URL']) {
     throw new Error('You nee to set the APP_BASE_URL configuration as environment variable.');
   }
 
   const app = express();
+  clientServerBus(httpServer, app, new WSAccessControl(app));
 
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
   app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true }));
   app.use(authentication());
-  app.use(clientServerBus());
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
 
@@ -137,7 +176,9 @@ function createApp() {
 
 export default function createServer(options?) {
   const transportDriver = options?.transportDriver || https;
-  return transportDriver.createServer(options, createApp());
+  const server = transportDriver.createServer(options);
+  server.on('request', createApp(server));
+  return server;
 }
 
 process.on('uncaughtException', (err) => {

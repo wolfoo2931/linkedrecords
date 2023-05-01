@@ -9,7 +9,10 @@ export default function authentication() {
         throw new Error(`${toBeUser} is not in the allowed test user whitlist. This is probably a configuration issue. ${req.method} ${req.path}`);
       }
 
-      req.oidc = { user: { sub: toBeUser } };
+      req.oidc = {
+        user: { sub: toBeUser },
+        isAuthenticated: () => true,
+      };
 
       next();
     };

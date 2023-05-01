@@ -11,7 +11,8 @@ const headers = {
 const connections = {};
 const subscribers = {};
 
-export default function clientServerBus() {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function clientServerBus(httpServer, isAuthorizedToAccessAttribute) {
   return (request, response, next) => {
     if (request.path === '/server-sent-events' && request.method === 'GET') {
       if (!request.signedCookies.sseClientId) {

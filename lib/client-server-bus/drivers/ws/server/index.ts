@@ -1,0 +1,67 @@
+/* eslint-disable no-param-reassign */
+import https from 'https';
+import http from 'http';
+import { Server } from 'socket.io';
+
+const connections = {};
+
+export interface AccessControl {
+  verifyAuthenitcated(
+    request: http.IncomingMessage
+  ): Promise<string>;
+
+  verifyAuthorizedChannelJoin(
+    userId: string,
+    channel: string,
+  ): Promise<boolean>;
+}
+
+export default function clientServerBus(
+  httpServer: https.Server,
+  app: any,
+  accessControl: AccessControl,
+) {
+  const io = new Server(httpServer, {
+    path: '/ws',
+    cookie: true,
+  });
+
+  io.on('connection', async (socket) => {
+    const request = socket?.request as any;
+    const userId = await accessControl.verifyAuthenitcated(request);
+
+    if (!userId) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.disconnect(true);
+      return;
+    }
+
+    if (!connections[socket.id]) {
+      connections[socket.id] = { socket, userId };
+
+      socket.on('subscribe', async ({ channel }, callback) => {
+        if (await accessControl.verifyAuthorizedChannelJoin(userId, channel)) {
+          socket.join(channel);
+          callback({ status: 'subscribed' });
+        } else {
+          callback({ status: 'unauthorized' });
+        }
+      });
+    }
+  });
+
+  io.engine.on('connection_error', (err) => {
+    console.log('websocket connection error', err);
+  });
+
+  app.use((request, response, next) => {
+    response.sendClientServerMessage = (channel: string, body: any) => {
+      io.to(channel).emit('data', {
+        ...body,
+        sseChannel: channel,
+      });
+    };
+
+    next();
+  });
+}
