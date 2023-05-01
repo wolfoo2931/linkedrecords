@@ -49,6 +49,8 @@
     "pg": "~8.8.0",
     "pino-http": "^8.3.3",
     "queue": "4.2.1",
+    "socket.io": "^4.6.1",
+    "socket.io-client": "^4.6.1",
     "ts-loader": "^9.3.0",
     "uuid": "^8.3.2",
     "webpack": "^5.73.0",

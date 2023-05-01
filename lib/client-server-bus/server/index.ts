@@ -1,3 +1,3 @@
-import clientServerBus from '../drivers/server-side-events/server';
+import clientServerBus from '../drivers/ws/server';
 
 export default clientServerBus;

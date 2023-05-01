@@ -269,4 +269,48 @@ describe('Auth', () => {
 
     expect(authorFacts.length).to.eql(1);
   });
+
+  it('does not allow to subscribe for foreign attributes changes', async () => {
+    let updateMessageReceived;
+    let subscriptionResult;
+
+    await changeUserContext('testuser-1-id');
+    const [client1] = await createClient();
+
+    await changeUserContext('testuser-2-id');
+    const [client2] = await createClient();
+
+    await changeUserContext('testuser-1-id');
+    const ofInterest = await client1.Attribute.create('keyValue', { name: 'bookC1a' });
+    const ofInterestID = ofInterest.id;
+    const ofInterestServerURL = ofInterest.serverURL;
+    const ofInterestClientID = ofInterest.clientId;
+
+    await changeUserContext('testuser-2-id');
+    const attr = await client2.Attribute.create('keyValue', { name: 'XXXX' });
+
+    if (!ofInterestID) {
+      throw new Error('ofInterestID should not be unefined');
+    }
+
+    const url = `${ofInterestServerURL}attributes/${ofInterestID}/changes?clientId=${ofInterestClientID}`;
+
+    const prom = new Promise<void>((resolve) => {
+      subscriptionResult = attr.clientServerBus.subscribe(url, ofInterestID, (parsedData) => {
+        updateMessageReceived = parsedData;
+        resolve();
+      }).catch((error) => error);
+    });
+
+    await changeUserContext('testuser-1-id');
+    await ofInterest.set({ foo: 'bar2' });
+
+    await Promise.race([
+      new Promise((r) => { setTimeout(r, 2000); }),
+      prom,
+    ]);
+
+    expect(updateMessageReceived).to.eql(undefined);
+    expect((await subscriptionResult).message).to.eql('unauthorized');
+  });
 });
