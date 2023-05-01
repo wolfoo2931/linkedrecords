@@ -7,7 +7,7 @@ import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import KeyValueChange from '../attributes/key_value/key_value_change';
 import LongTextChange from '../attributes/long_text/long_text_change';
-import ClientServerBus, { IsSubscribable } from '../../lib/client-server-bus/client';
+import ClientServerBus from '../../lib/client-server-bus/client';
 import FactsRepository from './facts_repository';
 import AttributesRepository from './attributes_repository';
 
@@ -28,7 +28,7 @@ export {
 export default class LinkedRecords {
   static ensureUserIdIsKnownPromise;
 
-  clientServerBus: IsSubscribable;
+  clientServerBus: ClientServerBus;
 
   serverURL: URL;
 
@@ -62,7 +62,7 @@ export default class LinkedRecords {
     return userId;
   }
 
-  constructor(serverURL: URL, clientServerBus?: IsSubscribable, loginURL?: URL) {
+  constructor(serverURL: URL, clientServerBus?: ClientServerBus, loginURL?: URL) {
     this.serverURL = serverURL;
     this.loginURL = loginURL;
     this.actorId = LinkedRecords.readUserIdFromCookies();

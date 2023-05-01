@@ -17,11 +17,10 @@ export default class ClientServerBus implements IsSubscribable {
     : Promise<[string, (data: any) => any]> {
     const parsedUrl: URL = new URL(url);
     const subId = `${parsedUrl.origin}-${channel}`;
-
-    await this.ensureConnection(parsedUrl.origin);
+    const connection = await this.ensureConnection(parsedUrl.origin);
 
     const subResult = await new Promise((resolve) => {
-      this.connetions[parsedUrl.origin].emit('subscribe', { channel }, resolve);
+      connection.emit('subscribe', { channel }, resolve);
     }) as any;
 
     if (subResult.status === 'unauthorized') {
@@ -36,6 +35,23 @@ export default class ClientServerBus implements IsSubscribable {
     this.subscriptions[subId].push(handler);
 
     return [subId, handler];
+  }
+
+  public async send(url: string, channel: string, message: object) {
+    const parsedUrl: URL = new URL(url);
+    const connection = await this.ensureConnection(parsedUrl.origin);
+
+    const sendResult = await new Promise((resolve) => {
+      connection.emit('message', { channel, message }, resolve);
+    }) as any;
+
+    if (sendResult.status === 'unauthorized') {
+      throw new Error('unauthorized');
+    }
+
+    if (sendResult.status !== 'delivered') {
+      throw new Error(`unkown error when sending message to ${channel}`);
+    }
   }
 
   public async unsubscribe([subId, handler]: [string, (data: any) => any]) {

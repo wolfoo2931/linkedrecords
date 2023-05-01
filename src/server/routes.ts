@@ -1,3 +1,4 @@
+/* eslint-disable class-methods-use-this */
 /* eslint-disable max-len */
 import 'dotenv/config';
 import https from 'https';
@@ -8,7 +9,7 @@ import cors from 'cors';
 import multer from 'multer';
 import pino from 'pino-http';
 import clientServerBus from '../../lib/client-server-bus/server';
-import attributeMiddleware from './middleware/attribute';
+import attributeMiddleware, { getAttributeByMessage } from './middleware/attribute';
 import factMiddleware from './middleware/fact';
 import errorHandler from './middleware/error_handler';
 import Fact from '../facts/server';
@@ -16,6 +17,7 @@ import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
 import userinfoController, { uid } from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
+import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 
 const blobUpload = multer().single('change');
 
@@ -102,7 +104,7 @@ async function isAuthorizedToAccessAttribute(userid, request, attrRecord?) {
 const authorizer = {
   isAuthorizedToCreateAttribute: () => true,
   isAuthorizedToReadAttribute: (userid, request, record) => isAuthorizedToAccessAttribute(userid, request, record),
-  isAuthorizedToUpdateAttribute: (userid, request) => isAuthorizedToAccessAttribute(userid, request),
+  isAuthorizedToUpdateAttribute: (userid, request, record?) => isAuthorizedToAccessAttribute(userid, request, record),
   isAuthorizedToCreateFact: (userid, request, record) => isAuthorizedToAccessFact(userid, request, record),
   isAuthorizedToReadFact: (userid, request, fact) => isAuthorizedToAccessFact(userid, request, fact),
   isAuthorizedToUpdateFact: () => false,
@@ -133,7 +135,6 @@ class WSAccessControl {
     });
   }
 
-  // eslint-disable-next-line class-methods-use-this
   public async verifyAuthorizedChannelJoin(
     userId: string,
     channel: string,
@@ -144,6 +145,17 @@ class WSAccessControl {
 
     return authorizer.isAuthorizedToReadAttribute(userId, undefined, channel);
   }
+
+  public async verifyAuthorizedSend(
+    userId: string,
+    channel: string,
+  ): Promise<boolean> {
+    if (!userId) {
+      return Promise.resolve(false);
+    }
+
+    return authorizer.isAuthorizedToUpdateAttribute(userId, undefined, channel);
+  }
 }
 
 function createApp(httpServer: https.Server) {
@@ -152,7 +164,16 @@ function createApp(httpServer: https.Server) {
   }
 
   const app = express();
-  clientServerBus(httpServer, app, new WSAccessControl(app));
+
+  const sendMessage = clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change) => {
+    const attribute = getAttributeByMessage(attributeId, change);
+
+    const commitedChange: SerializedChangeWithMetadata<any> = await attribute.change(
+      change,
+    );
+
+    sendMessage(attributeId, commitedChange);
+  });
 
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));

@@ -6,12 +6,12 @@ import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import BlobAttribute from '../attributes/blob/client';
 import { CompoundAttributeQuery } from '../attributes/attribute_query';
-import { IsSubscribable } from '../../lib/client-server-bus/client';
+import ClientServerBus from '../../lib/client-server-bus/client';
 
 export default class AttributesRepository {
   linkedRecords: LinkedRecords;
 
-  private clientServerBus: IsSubscribable;
+  private clientServerBus: ClientServerBus;
 
   static attributeTypes = [
     LongTextAttribute,
@@ -19,7 +19,7 @@ export default class AttributesRepository {
     BlobAttribute,
   ];
 
-  constructor(linkedRecords: LinkedRecords, clientServerBus: IsSubscribable) {
+  constructor(linkedRecords: LinkedRecords, clientServerBus: ClientServerBus) {
     this.linkedRecords = linkedRecords;
     this.clientServerBus = clientServerBus;
   }

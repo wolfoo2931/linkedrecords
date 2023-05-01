@@ -14,17 +14,30 @@ export interface AccessControl {
     userId: string,
     channel: string,
   ): Promise<boolean>;
+
+  verifyAuthorizedSend(
+    userId: string,
+    channel: string,
+  ): Promise<boolean>;
 }
 
 export default function clientServerBus(
   httpServer: https.Server,
   app: any,
   accessControl: AccessControl,
+  onMessage: (channel: string, message: any, send) => void,
 ) {
   const io = new Server(httpServer, {
     path: '/ws',
     cookie: true,
   });
+
+  const sendClientServerMessage = (channel: string, body: any) => {
+    io.to(channel).emit('data', {
+      ...body,
+      sseChannel: channel,
+    });
+  };
 
   io.on('connection', async (socket) => {
     const request = socket?.request as any;
@@ -40,9 +53,24 @@ export default function clientServerBus(
       connections[socket.id] = { socket, userId };
 
       socket.on('subscribe', async ({ channel }, callback) => {
-        if (await accessControl.verifyAuthorizedChannelJoin(userId, channel)) {
+        if (!channel) {
+          callback({ status: 'invalid channel' });
+        } else if (await accessControl.verifyAuthorizedChannelJoin(userId, channel)) {
           socket.join(channel);
           callback({ status: 'subscribed' });
+        } else {
+          callback({ status: 'unauthorized' });
+        }
+      });
+
+      socket.on('message', async ({ channel, message }, callback) => {
+        if (!channel) {
+          callback({ status: 'invalid channel' });
+        } else if (!message) {
+          callback({ status: 'invalid message' });
+        } else if (await accessControl.verifyAuthorizedSend(userId, channel)) {
+          onMessage(channel, message, sendClientServerMessage);
+          callback({ status: 'delivered' });
         } else {
           callback({ status: 'unauthorized' });
         }
@@ -55,13 +83,9 @@ export default function clientServerBus(
   });
 
   app.use((request, response, next) => {
-    response.sendClientServerMessage = (channel: string, body: any) => {
-      io.to(channel).emit('data', {
-        ...body,
-        sseChannel: channel,
-      });
-    };
-
+    response.sendClientServerMessage = sendClientServerMessage;
     next();
   });
+
+  return sendClientServerMessage;
 }
