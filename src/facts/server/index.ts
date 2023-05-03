@@ -1,6 +1,7 @@
 import intersect from 'intersect';
 import { FactQuery } from '../fact_query';
-import pgPool from '../../../lib/pg-log';
+import PgPoolWithLog from '../../../lib/pg-log';
+import IsLogger from '../../../lib/is_logger';
 
 const ensureArray = (a) => (Array.isArray(a) ? a : [a]);
 export default class Fact {
@@ -10,12 +11,18 @@ export default class Fact {
 
   object: string;
 
+  logger?: IsLogger;
+
   static async initDB() {
     const createQuery = 'CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);';
-    await pgPool.query(createQuery);
+    await (new PgPoolWithLog()).query(createQuery);
   }
 
-  private static async resolveToAttributeIds(query: string | string[]): Promise<string[]> {
+  private static async resolveToAttributeIds(
+    query: string | string[],
+    logger?: IsLogger,
+  ): Promise<string[]> {
+    const pool = new PgPoolWithLog(logger);
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
     if (typeof query === 'string') {
@@ -30,12 +37,12 @@ export default class Fact {
     let previousLength;
 
     if (query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
-      const dbRows = await pgPool.query('SELECT subject FROM facts WHERE predicate=$1', [query[0]]);
+      const dbRows = await pool.query('SELECT subject FROM facts WHERE predicate=$1', [query[0]]);
       dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
     } else if (query[1] === '$anything') {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     } else {
-      let dbRows = await pgPool.query('SELECT subject FROM facts WHERE predicate=$1 AND object=$2', [query[0], query[1]]);
+      let dbRows = await pool.query('SELECT subject FROM facts WHERE predicate=$1 AND object=$2', [query[0], query[1]]);
       dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
 
       // For now all facts are transitive.
@@ -44,7 +51,7 @@ export default class Fact {
         // TODO: run in parallel - or better - compose a single query
         // TODO: Make sure sql injections do not work here
         // eslint-disable-next-line no-await-in-loop
-        dbRows = await pgPool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${Array.from(resultSet).map((sub) => `'${sub}'`).join(',')})`, [query[0]]);
+        dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${Array.from(resultSet).map((sub) => `'${sub}'`).join(',')})`, [query[0]]);
         dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
       }
     }
@@ -52,9 +59,17 @@ export default class Fact {
     return Array.from(resultSet);
   }
 
-  static async findAll({ subject, predicate, object }: FactQuery): Promise<Fact[]> {
-    const subjectIdsPromise = subject ? ensureArray(subject).map(Fact.resolveToAttributeIds) : [];
-    const objectIdsPromise = object ? ensureArray(object).map(Fact.resolveToAttributeIds) : [];
+  static async findAll(
+    { subject, predicate, object }: FactQuery,
+    logger?: IsLogger,
+  ): Promise<Fact[]> {
+    const pool = new PgPoolWithLog(logger);
+    const subjectIdsPromise = subject
+      ? ensureArray(subject).map((s) => Fact.resolveToAttributeIds(s, logger))
+      : [];
+    const objectIdsPromise = object
+      ? ensureArray(object).map((o) => Fact.resolveToAttributeIds(o, logger))
+      : [];
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
 
@@ -93,7 +108,7 @@ export default class Fact {
         queryAsSQL.push(`${queryEntry[0]} IN (${ids.join(',')})`);
       });
 
-    const result = await pgPool.query(
+    const result = await pool.query(
       `SELECT * FROM facts WHERE ${queryAsSQL.join(' AND ')}`,
       queryParams,
     );
@@ -102,16 +117,18 @@ export default class Fact {
       row.subject.trim(),
       row.predicate.trim(),
       row.object.trim(),
+      logger,
     ));
   }
 
-  constructor(subject: string, predicate: string, object: string) {
+  constructor(subject: string, predicate: string, object: string, logger?: IsLogger) {
     this.subject = subject;
     this.predicate = predicate;
     this.object = object;
+    this.logger = logger;
   }
 
-  async match(factQuery: FactQuery): Promise<boolean> {
+  async match(factQuery: FactQuery, logger: IsLogger): Promise<boolean> {
     let concreateObjectSpecMatch = false;
     let concreateSubjectSpecMatch = false;
     let subjectMatch;
@@ -151,21 +168,21 @@ export default class Fact {
     if (!concreateSubjectSpecMatch) {
       subjectMatch = !factQuery.subject ? [] : Fact.findAll({
         subject: [this.subject, ...factQuery.subject],
-      });
+      }, logger);
     }
 
     if (!concreateObjectSpecMatch) {
       objectMatch = !factQuery.object ? [] : Fact.findAll({
         subject: [this.object, ...factQuery.object],
-      });
+      }, logger);
     }
 
     return (concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
       && (concreateObjectSpecMatch || (await objectMatch).length !== 0);
   }
 
-  async matchAny(factQueries: FactQuery[]): Promise<boolean> {
-    const allResults = await Promise.all(factQueries.map((fq) => this.match(fq)));
+  async matchAny(factQueries: FactQuery[], logger: IsLogger): Promise<boolean> {
+    const allResults = await Promise.all(factQueries.map((fq) => this.match(fq, logger)));
     return !!allResults.find((x) => x);
   }
 
@@ -178,15 +195,17 @@ export default class Fact {
   }
 
   async save(userid?) {
+    const pool = new PgPoolWithLog(this.logger);
+
     if (this.predicate === '$isATermFor') {
-      const dbRows = await pgPool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
+      const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
 
       if (!dbRows.rows.length) {
         if (!userid) {
           throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
         }
 
-        await pgPool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3), ($1, $4, $5)', [
+        await pool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3), ($1, $4, $5)', [
           this.subject,
           this.predicate,
           this.object,
@@ -195,7 +214,7 @@ export default class Fact {
         ]);
       }
     } else {
-      await pgPool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3)', [
+      await pool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3)', [
         this.subject,
         this.predicate,
         this.object,

@@ -3,6 +3,7 @@ import Fact from '../facts/server';
 import LongTextAttribute from './long_text/server';
 import KeyValueAttribute from './key_value/server';
 import BlobAttribute from './blob/server';
+import IsLogger from '../../lib/is_logger';
 
 export type AttributeQuery = string | string[][];
 
@@ -15,13 +16,18 @@ const asyncFilter = async (arr, fn) => {
   return arr.filter((_v, index) => results[index]);
 };
 
-export default {
+export default class QueryExecutor {
+  logger: IsLogger;
 
-  getAttributeClassByAttributeId(id: string) : any {
+  static getAttributeClassByAttributeId(id: string) : any {
     const attributeTypes = [LongTextAttribute, KeyValueAttribute, BlobAttribute];
     const [attributeTypePrefix] = id.split('-');
     return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
-  },
+  }
+
+  constructor(logger: IsLogger) {
+    this.logger = logger;
+  }
 
   async resolveToAttributes(
     query: AttributeQuery | CompoundAttributeQuery,
@@ -68,7 +74,7 @@ export default {
     const attributes = {};
 
     await Promise.all(flatIds.map(async (id) => {
-      const AttributeClass = this.getAttributeClassByAttributeId(id);
+      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
 
       if (!AttributeClass) {
         attributes[id] = null;
@@ -96,7 +102,7 @@ export default {
     });
 
     return resultWithIds;
-  },
+  }
 
   async resolveToIds(
     query: AttributeQuery | CompoundAttributeQuery,
@@ -123,7 +129,7 @@ export default {
         .filter((x) => x.length === 2),
     };
 
-    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery);
+    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, this.logger);
 
     let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
 
@@ -136,7 +142,7 @@ export default {
 
     if (objectFactsQuery.length !== 0) {
       const factsWhereItIsTheObject = await Promise.all(
-        objectFactsQuery.map((q) => Fact.findAll(q)),
+        objectFactsQuery.map((q) => Fact.findAll(q, this.logger)),
       );
 
       const mapped: string[][] = [];
@@ -151,7 +157,7 @@ export default {
     }
 
     return matchedIds.filter((value, index, array) => array.indexOf(value) === index);
-  },
+  }
 
   async resolveCompoundQueryToIds(query: CompoundAttributeQuery): Promise<({
     [key: string]: string | string[]
@@ -179,5 +185,5 @@ export default {
     });
 
     return result;
-  },
-};
+  }
+}

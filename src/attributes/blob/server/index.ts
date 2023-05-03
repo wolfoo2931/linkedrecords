@@ -18,8 +18,8 @@ IsAttributeStorage
   }
 
   async create(value: Blob) : Promise<{ id: string }> {
-    const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId);
-    await createdByFact.save();
+    const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId, this.logger);
+    await createdByFact.save(this.logger);
 
     const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
     return this.storage.createAttribute(this.id, this.actorId, content);
@@ -49,7 +49,7 @@ IsAttributeStorage
           mimetype = typeFromBinary.mime;
         }
       } catch (ex) {
-        console.log(`failed to determine mimetype for blob attribute with id: ${this.id}`);
+        this.logger.warn(`failed to determine mimetype for blob attribute with id: ${this.id}`);
       }
     }
 

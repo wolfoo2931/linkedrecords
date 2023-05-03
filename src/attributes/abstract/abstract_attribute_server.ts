@@ -1,5 +1,6 @@
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
+import IsLogger from '../../../lib/is_logger';
 
 export default abstract class AbstractAttributeServer <
   Type,
@@ -13,11 +14,20 @@ export default abstract class AbstractAttributeServer <
 
   storage: IsAttributeStorage;
 
-  constructor(id: string, clientId: string, actorId: string, storage: IsAttributeStorage) {
+  logger: IsLogger;
+
+  constructor(
+    id: string,
+    clientId: string,
+    actorId: string,
+    storage: IsAttributeStorage,
+    logger: IsLogger,
+  ) {
     this.id = id;
     this.clientId = clientId;
     this.actorId = actorId;
     this.storage = storage;
+    this.logger = logger;
   }
 
   public static getDataTypePrefix(): string {
