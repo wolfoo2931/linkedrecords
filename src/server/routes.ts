@@ -18,6 +18,7 @@ import attributesController from './controllers/attributes_controller';
 import userinfoController, { uid } from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
+import IsLogger from '../../lib/is_logger';
 
 const blobUpload = multer().single('change');
 
@@ -43,7 +44,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
   const uploadWrappedControllerAction = (request, response) => {
     blobUpload(request, response, async (err) => {
       if (err) {
-        console.error(`error uploading file for ${req.method} ${req.path}`, err);
+        req.log.error(`error uploading file for ${req.method} ${req.path}`, err);
       }
 
       if (request?.file?.fieldname === 'change' && request.body) {
@@ -96,6 +97,7 @@ async function isAuthorizedToAccessAttribute(userid, request, attrRecord?) {
 
   const permits = await Fact.findAll(
     { subject: [attributeId], predicate: ['$wasCreatedBy'], object: [userid] },
+    request.log,
   );
 
   return permits.length !== 0;
@@ -138,23 +140,25 @@ class WSAccessControl {
   public async verifyAuthorizedChannelJoin(
     userId: string,
     channel: string,
+    request: http.IncomingMessage,
   ): Promise<boolean> {
     if (!userId) {
       return Promise.resolve(false);
     }
 
-    return authorizer.isAuthorizedToReadAttribute(userId, undefined, channel);
+    return authorizer.isAuthorizedToReadAttribute(userId, request, channel);
   }
 
   public async verifyAuthorizedSend(
     userId: string,
     channel: string,
+    request: http.IncomingMessage,
   ): Promise<boolean> {
     if (!userId) {
       return Promise.resolve(false);
     }
 
-    return authorizer.isAuthorizedToUpdateAttribute(userId, undefined, channel);
+    return authorizer.isAuthorizedToUpdateAttribute(userId, request, channel);
   }
 }
 
@@ -165,8 +169,8 @@ async function createApp(httpServer: https.Server) {
 
   const app = express();
 
-  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change) => {
-    const attribute = getAttributeByMessage(attributeId, change);
+  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request) => {
+    const attribute = getAttributeByMessage(attributeId, change, request.log as unknown as IsLogger);
 
     const commitedChange: SerializedChangeWithMetadata<any> = await attribute.change(
       change,

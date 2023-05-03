@@ -16,7 +16,7 @@ export default {
       subject,
       predicate,
       object,
-    });
+    }, req.log);
 
     res.status(200);
     res.send(await asyncFilter(facts, isAuthorizedToReadFact));
@@ -27,7 +27,7 @@ export default {
     const savedRawFacts: object[] = [];
 
     for (let i = 0; i < rawFacts.length; i += 1) {
-      const fact = new Fact(rawFacts[i][0], rawFacts[i][1], rawFacts[i][2]);
+      const fact = new Fact(rawFacts[i][0], rawFacts[i][1], rawFacts[i][2], req.log);
 
       if (await isAuthorizedToCreateFact(fact)) {
         await fact.save(req.hasedUserID);

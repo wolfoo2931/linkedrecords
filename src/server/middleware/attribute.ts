@@ -1,9 +1,8 @@
 import md5 from 'md5';
-import attributeQuery from '../../attributes/attribute_query';
+import QueryExecutor from '../../attributes/attribute_query';
 import { PsqlStorage } from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
-
-const storage = new PsqlStorage();
+import IsLogger from '../../../lib/is_logger';
 
 function getAttributeIdByRquest(req) {
   let urlMatch = req.originalUrl.match(/\/attributes\/(.*?)[?&/^]/);
@@ -39,8 +38,8 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
   return new AttributeClass(id, req.clientId, req.actorId, req.attributeStorage);
 }
 
-export function getAttributeByMessage(attributeId, message) {
-  const AttributeClass = attributeQuery.getAttributeClassByAttributeId(attributeId);
+export function getAttributeByMessage(attributeId, message, logger?: IsLogger) {
+  const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
 
   if (!AttributeClass) {
     throw new Error(`Server is unkown of Attribute Type Prefix for id ${attributeId}`);
@@ -54,14 +53,20 @@ export function getAttributeByMessage(attributeId, message) {
     throw new Error(`The request does not contain a clientId for attribute id: ${attributeId}`);
   }
 
-  return new AttributeClass(attributeId, message.clientId, message.actorId, storage);
+  return new AttributeClass(
+    attributeId,
+    message.clientId,
+    message.actorId,
+    new PsqlStorage(logger),
+    logger,
+  );
 }
 
 export default function attributeMiddleware() {
   return (req, res, next) => {
     const id = getAttributeIdByRquest(req);
 
-    req.attributeStorage = storage;
+    req.attributeStorage = new PsqlStorage(req.log);
     req.clientId = req.query?.clientId || req.body?.clientId;
     req.actorId = req?.oidc?.user?.sub;
 
@@ -70,7 +75,7 @@ export default function attributeMiddleware() {
     } else {
       req.actorId = `us-${md5(req.actorId)}`;
       if (id) {
-        req.attributeClass = attributeQuery.getAttributeClassByAttributeId(id);
+        req.attributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
         req.attribute = getAttributeByParams(req, req.attributeClass);
       }
 

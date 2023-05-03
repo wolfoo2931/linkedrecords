@@ -15,11 +15,13 @@ export interface AccessControl {
   verifyAuthorizedChannelJoin(
     userId: string,
     channel: string,
+    request: http.IncomingMessage,
   ): Promise<boolean>;
 
   verifyAuthorizedSend(
     userId: string,
     channel: string,
+    request: http.IncomingMessage,
   ): Promise<boolean>;
 }
 
@@ -27,7 +29,7 @@ export default async function clientServerBus(
   httpServer: https.Server,
   app: any,
   accessControl: AccessControl,
-  onMessage: (channel: string, message: any, send) => void,
+  onMessage: (channel: string, message: any, request: http.IncomingMessage) => void,
 ) {
   const wsOptions: any = {
     path: '/ws',
@@ -57,7 +59,7 @@ export default async function clientServerBus(
   };
 
   io.on('connection', async (socket) => {
-    const request = socket?.request as any;
+    const request = socket?.request;
     const userId = await accessControl.verifyAuthenitcated(request);
 
     if (!userId) {
@@ -72,7 +74,7 @@ export default async function clientServerBus(
       socket.on('subscribe', async ({ channel }, callback) => {
         if (!channel) {
           callback({ status: 'invalid channel' });
-        } else if (await accessControl.verifyAuthorizedChannelJoin(userId, channel)) {
+        } else if (await accessControl.verifyAuthorizedChannelJoin(userId, channel, request)) {
           socket.join(channel);
           callback({ status: 'subscribed' });
         } else {
@@ -85,8 +87,8 @@ export default async function clientServerBus(
           callback({ status: 'invalid channel' });
         } else if (!message) {
           callback({ status: 'invalid message' });
-        } else if (await accessControl.verifyAuthorizedSend(userId, channel)) {
-          onMessage(channel, message, sendClientServerMessage);
+        } else if (await accessControl.verifyAuthorizedSend(userId, channel, request)) {
+          onMessage(channel, message, request);
           callback({ status: 'delivered' });
         } else {
           callback({ status: 'unauthorized' });

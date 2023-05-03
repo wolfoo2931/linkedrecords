@@ -1,27 +1,36 @@
-import pg from 'pg';
+import { Pool } from 'pg';
+import IsLogger from '../is_logger';
 
-const pool = new pg.Pool({
+const pool = new Pool({
   max: 3,
   connectionTimeoutMillis: 2000,
 });
 
-const pgPool = {
-  query: async function query(...args) {
+export default class PgPoolWithLog {
+  logger?: IsLogger;
+
+  pool: Pool;
+
+  constructor(logger?: IsLogger) {
+    this.logger = logger;
+  }
+
+  async query(...args) {
     const startTime = Date.now();
     const pgresult = await pool.query(...args);
     const endTime = Date.now();
 
-    const log = {
-      queryTemplate: args[0],
-      query: pgresult.command,
-      timeInMS: endTime - startTime,
-      results: pgresult.rowCount,
-    };
+    if (this.logger) {
+      const log = {
+        queryTemplate: args[0],
+        queryType: pgresult.command,
+        timeInMS: endTime - startTime,
+        results: pgresult.rowCount,
+      };
 
-    console.log(JSON.stringify(log));
+      this.logger.info(log);
+    }
 
     return pgresult;
-  },
-};
-
-export default pgPool;
+  }
+}

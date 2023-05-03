@@ -1,10 +1,11 @@
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
-import queryExector, { AttributeQuery } from '../../attributes/attribute_query';
+import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
 
 export default {
   async index(req, res, isAuthorizedToReadAttribute) {
     const { clientId, actorId, attributeStorage } = req;
     const query: AttributeQuery = JSON.parse(req.query.query);
+    const queryExector = new QueryExecutor(req.log);
     const result = await queryExector.resolveToAttributes(
       query,
       clientId,
