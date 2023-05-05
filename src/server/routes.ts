@@ -61,7 +61,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
     });
   };
 
-  if (!req?.oidc?.user?.sub || !(await isAuthorized(uid(req), req))) {
+  if (!req?.oidc?.user?.sub || !req.oidc.isAuthenticated() || !(await isAuthorized(uid(req), req))) {
     res.sendStatus(401);
   } else {
     if (!req.signedCookies.userId) {

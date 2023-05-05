@@ -48,13 +48,15 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
       // deleting the key.
       changes = changes.filter((ch) => ch.key !== key);
 
-      // We tranmit the key value pair only if it actually changed
+      // We transmit the key value pair only if it actually changed
       if (flatOldValue[key] !== value) {
         changes.push({ key, value });
       }
     });
 
-    this.change(new KeyValueChange(changes));
+    if (changes.length) {
+      await this.change(new KeyValueChange(changes));
+    }
   }
 
   protected async rawChange(change: KeyValueChange) {

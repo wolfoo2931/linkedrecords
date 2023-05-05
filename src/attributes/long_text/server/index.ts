@@ -1,10 +1,12 @@
+// eslint-disable-next-line max-classes-per-file
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 import Fact from '../../../facts/server';
+import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
 
-const queue = require('queue')({ concurrency: 1, autostart: true });
+const queue: IsQueue = QueuedTasks.create();
 
 export default class LongTextAttribute extends AbstractAttributeServer<
 string,
@@ -32,13 +34,8 @@ IsAttributeStorage
   }
 
   async set(value: string) : Promise<{ id: string }> {
-    return new Promise((resolve) => {
-      queue.push(async (cb) => {
-        const result = await this.storage.insertAttributeSnapshot(this.id, this.actorId, value);
-        resolve(result);
-        cb();
-      });
-    });
+    return queue
+      .do(this.id, () => this.storage.insertAttributeSnapshot(this.id, this.actorId, value));
   }
 
   async change(
@@ -57,28 +54,21 @@ IsAttributeStorage
       throw new Error('the changeset must also contain a parent version');
     }
 
-    return new Promise((resolve, reject) => {
-      queue.push(async (cb) => {
-        try {
-          const result = await this.changeByChangeset(
-            LongTextChange.fromString(serializedChangeset),
-            parentVersion,
-          );
+    return queue
+      .do(this.id, async () => {
+        const result = await this.changeByChangeset(
+          LongTextChange.fromString(serializedChangeset),
+          parentVersion,
+        );
 
-          resolve(new SerializedChangeWithMetadata(
-            this.id,
-            result.actorId,
-            result.clientId,
-            new LongTextChange(result.transformedClientChange, result.changeId),
-            result.updatedAt,
-          ));
-        } catch (ex) {
-          reject(ex);
-        }
-
-        cb();
+        return new SerializedChangeWithMetadata(
+          this.id,
+          result.actorId,
+          result.clientId,
+          new LongTextChange(result.transformedClientChange, result.changeId),
+          result.updatedAt,
+        );
       });
-    });
   }
 
   private async getByChangeId(
