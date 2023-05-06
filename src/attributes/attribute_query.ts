@@ -90,14 +90,18 @@ export default class QueryExecutor {
     }
 
     if (Array.isArray(resultWithIds)) {
-      return resultWithIds.map((id) => attributes[id]);
+      return resultWithIds
+        .map((id) => attributes[id])
+        .filter((x) => x);
     }
 
     Object.keys(resultWithIds).forEach((group) => {
       if (typeof resultWithIds[group] === 'string') {
         resultWithIds[group] = attributes[resultWithIds[group] as string];
       } else if (Array.isArray(resultWithIds[group])) {
-        resultWithIds[group] = (resultWithIds[group] as string[]).map((id) => attributes[id]);
+        resultWithIds[group] = (resultWithIds[group] as string[])
+          .map((id) => attributes[id])
+          .filter((x) => x);
       }
     });
 

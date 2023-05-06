@@ -1,9 +1,64 @@
+/* eslint-disable no-plusplus */
 import intersect from 'intersect';
 import { FactQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 
 const ensureArray = (a) => (Array.isArray(a) ? a : [a]);
+
+function isNotStatement(statement: string | string[]): boolean {
+  if (!Array.isArray(statement) || !statement[1]) {
+    return false;
+  }
+
+  return !!statement[1].match(/^\$not\(.+\)$/);
+}
+
+function isNotNotStatement(statement: string | string[]): boolean {
+  return !isNotStatement(statement);
+}
+
+function getExcluded(allConditions): string[][] | undefined {
+  if (!allConditions) {
+    return undefined;
+  }
+
+  const checkedArray: string[][] = allConditions
+    .filter((c) => c !== undefined && c[0] !== undefined && c[1] !== undefined) as string[][];
+
+  const notConditions = checkedArray
+    .filter(isNotStatement)
+    .map((c) => [
+      c[0],
+      c[1] && c[1]!.match(/^\$not\((.+)\)$/)![1],
+    ]);
+
+  return notConditions as string[][];
+}
+
+function getSQLClauseByConditions(conditions: string[][] | undefined, placehoderStartIndex = 0, comp = '=', prefix = 'AND ', suffix = ''): [string, string[]] {
+  const resultSQL: string[] = [];
+  const resultValues: string[] = [];
+  let index = 0;
+
+  if (!conditions || !conditions.length) {
+    return ['', []];
+  }
+
+  conditions.forEach((condition) => {
+    if (condition[0] && condition[1]) {
+      resultSQL.push(`predicate ${comp} $${index++ + placehoderStartIndex} AND object ${comp} $${index++ + placehoderStartIndex}`);
+      resultValues.push(condition[0]);
+      resultValues.push(condition[1]);
+    }
+  });
+
+  return [
+    resultSQL.length ? prefix + resultSQL.join(' AND ') + suffix : '',
+    resultValues,
+  ];
+}
+
 export default class Fact {
   subject: string;
 
@@ -20,6 +75,7 @@ export default class Fact {
 
   private static async resolveToAttributeIds(
     query: string | string[],
+    exluded: string[][] | undefined,
     logger?: IsLogger,
   ): Promise<string[]> {
     const pool = new PgPoolWithLog(logger);
@@ -42,19 +98,20 @@ export default class Fact {
     } else if (query[1] === '$anything') {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     } else {
-      let dbRows = await pool.query('SELECT subject FROM facts WHERE predicate=$1 AND object=$2', [query[0], query[1]]);
+      let [excludeExtensionSQL, excludeExtensionValues] = getSQLClauseByConditions(exluded, 3, '=', ' AND subject NOT IN (SELECT subject FROM facts WHERE ', ')');
+      let dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object=$2 ${excludeExtensionSQL}`, [query[0], query[1], ...excludeExtensionValues]);
       dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
 
       // For now all facts are transitive.
       while (resultSet.size !== previousLength && resultSet.size !== 0) {
         previousLength = resultSet.size;
-        // TODO: run in parallel - or better - compose a single query
-
         const ids = Array.from(resultSet);
         const idsIdexes = ids.map((_, i) => `$${i + 2}`);
 
+        [excludeExtensionSQL, excludeExtensionValues] = getSQLClauseByConditions(exluded, idsIdexes.length + 2, '=', ' AND subject NOT IN (SELECT subject FROM facts WHERE ', ')');
+
         // eslint-disable-next-line no-await-in-loop
-        dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${idsIdexes.join(',')})`, [query[0], ...ids]);
+        dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${idsIdexes.join(',')}) ${excludeExtensionSQL}`, [query[0], ...ids, ...excludeExtensionValues]);
 
         dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
       }
@@ -68,11 +125,19 @@ export default class Fact {
     logger?: IsLogger,
   ): Promise<Fact[]> {
     const pool = new PgPoolWithLog(logger);
+
+    const subjectExcluded = getExcluded(subject?.filter(Array.isArray));
+    const objectExcluded = getExcluded(object?.filter(Array.isArray));
+
     const subjectIdsPromise = subject
-      ? ensureArray(subject).map((s) => Fact.resolveToAttributeIds(s, logger))
+      ? ensureArray(subject)
+        .filter(isNotNotStatement)
+        .map((s) => Fact.resolveToAttributeIds(s, subjectExcluded, logger))
       : [];
     const objectIdsPromise = object
-      ? ensureArray(object).map((o) => Fact.resolveToAttributeIds(o, logger))
+      ? ensureArray(object)
+        .filter(isNotNotStatement)
+        .map((o) => Fact.resolveToAttributeIds(o, objectExcluded, logger))
       : [];
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];

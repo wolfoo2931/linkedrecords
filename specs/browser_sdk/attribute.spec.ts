@@ -315,6 +315,118 @@ describe('Attribute', () => {
       expect(allTeamsOfUserB.length).to.equal(0);
     });
 
+    it('supports the $not modifier', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const mobyDickVol1 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 1' });
+      const mobyDickVol2 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 2' });
+      const mobyDickVol3 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 3' });
+
+      await client.Fact.createAll([
+        ['deleted', '$isATermFor', 'something that is not existing anymore'],
+        ['Book', '$isATermFor', 'some concept'],
+
+        ['Biography', 'isA', 'Book'],
+        ['Autobiography', 'isA', 'Biography'],
+
+        [mobyDickVol1.id, 'isA', 'Book'],
+        [mobyDickVol2.id, 'isA', 'Book'],
+        [mobyDickVol3.id, 'isA', 'Book'],
+
+        [mobyDickVol2.id, 'is', 'deleted'],
+      ]);
+
+      const { books } = await otherClient.Attribute.findAll({
+        books: [
+          ['$it', 'isA', 'Book'],
+          ['$it', 'is', '$not(deleted)'],
+        ],
+      }) as any;
+
+      expect(books.length).to.eq(2);
+      expect(books[0].value.title).to.eq('Moby Dick Volume 1');
+      expect(books[1].value.title).to.eq('Moby Dick Volume 3');
+    });
+
+    it('supports the $not modifier with transitiv relationships', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const mobyDickVol1 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 1' });
+      const mobyDickVol2 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 2' });
+      const mobyDickVol3 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 3' });
+      const marksAutoBio = await client.Attribute.create('keyValue', { title: 'Autobiography of Mark Twain' });
+      const chrisAutoBio = await client.Attribute.create('keyValue', { title: 'Finding Hildasay' });
+      const YusraAutoBio = await client.Attribute.create('keyValue', { title: 'Butterfly' });
+      const FullersBio = await client.Attribute.create('keyValue', { title: 'Inventor of the Future' });
+      const MonksBio = await client.Attribute.create('keyValue', { title: 'Free Press Thelonious Monk' });
+      const RalphsBio = await client.Attribute.create('keyValue', { title: 'Ralph Ellison' });
+
+      await client.Fact.createAll([
+        ['deleted', '$isATermFor', 'something that is not existing anymore'],
+
+        ['Book', '$isATermFor', 'some concept'],
+        ['Biography', '$isATermFor', 'is a book about a persons life'],
+        ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
+
+        ['Biography', 'isA', 'Book'],
+        ['Autobiography', 'isA', 'Biography'],
+
+        [mobyDickVol1.id, 'isA', 'Book'],
+        [mobyDickVol2.id, 'isA', 'Book'],
+        [mobyDickVol3.id, 'isA', 'Book'],
+        [marksAutoBio.id, 'isA', 'Autobiography'],
+        [chrisAutoBio.id, 'isA', 'Autobiography'],
+        [YusraAutoBio.id, 'isA', 'Autobiography'],
+
+        [FullersBio.id, 'isA', 'Biography'],
+        [MonksBio.id, 'isA', 'Biography'],
+        [RalphsBio.id, 'isA', 'Biography'],
+
+        [mobyDickVol2.id, 'is', 'deleted'],
+        [chrisAutoBio.id, 'is', 'deleted'],
+        [RalphsBio.id, 'is', 'deleted'],
+      ]);
+
+      const {
+        books, bios, autobios, allBooks, allBios, allAutobios,
+      } = await otherClient.Attribute.findAll({
+        books: [
+          ['$it', 'isA', 'Book'],
+          ['$it', 'is', '$not(deleted)'],
+        ],
+        bios: [
+          ['$it', 'isA', 'Biography'],
+          ['$it', 'is', '$not(deleted)'],
+        ],
+        autobios: [
+          ['$it', 'isA', 'Autobiography'],
+          ['$it', 'is', '$not(deleted)'],
+        ],
+        allBooks: [
+          ['$it', 'isA', 'Book'],
+        ],
+        allBios: [
+          ['$it', 'isA', 'Biography'],
+        ],
+        allAutobios: [
+          ['$it', 'isA', 'Autobiography'],
+        ],
+      }) as any;
+
+      expect(allBooks.length).to.eq(9);
+      expect(allBios.length).to.eq(6);
+      expect(allAutobios.length).to.eq(3);
+
+      expect(books.length).to.eq(6);
+      expect(bios.length).to.eq(4);
+      expect(autobios.length).to.eq(2);
+
+      expect(books[0].value.title).to.eq('Moby Dick Volume 1');
+      expect(books[1].value.title).to.eq('Moby Dick Volume 3');
+    });
+
     it('can be executed in parallel', async () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
