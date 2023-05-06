@@ -49,9 +49,13 @@ export default class Fact {
       while (resultSet.size !== previousLength && resultSet.size !== 0) {
         previousLength = resultSet.size;
         // TODO: run in parallel - or better - compose a single query
-        // TODO: Make sure sql injections do not work here
+
+        const ids = Array.from(resultSet);
+        const idsIdexes = ids.map((_, i) => `$${i + 2}`);
+
         // eslint-disable-next-line no-await-in-loop
-        dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${Array.from(resultSet).map((sub) => `'${sub}'`).join(',')})`, [query[0]]);
+        dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${idsIdexes.join(',')})`, [query[0], ...ids]);
+
         dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
       }
     }
