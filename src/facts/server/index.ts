@@ -4,9 +4,7 @@ import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 
-const ensureArray = (a) => (Array.isArray(a) ? a : [a]);
-
-function isNotStatement(statement: string | string[]): boolean {
+function isNotStatement(statement: SubjectQuery): boolean {
   if (!Array.isArray(statement) || !statement[1]) {
     return false;
   }
@@ -14,17 +12,31 @@ function isNotStatement(statement: string | string[]): boolean {
   return !!statement[1].match(/^\$not\(.+\)$/);
 }
 
-function isNotNotStatement(statement: string | string[]): boolean {
+function parseLatestModifier(subjectQuery: SubjectQuery): [SubjectQuery, boolean] {
+  if (!Array.isArray(subjectQuery) || subjectQuery.length === 3) {
+    return [subjectQuery, false];
+  }
+
+  const lastModifierMatch = subjectQuery[0].match(/^\$latest\((.+)\)$/);
+
+  if (!lastModifierMatch || !lastModifierMatch[1]) {
+    return [subjectQuery, false];
+  }
+
+  return [[lastModifierMatch[1], subjectQuery[1]], true];
+}
+
+function isNotNotStatement(statement: SubjectQuery): boolean {
   return !isNotStatement(statement);
 }
 
-function getExcluded(allConditions): string[][] | undefined {
+function getExcluded(allConditions: SubjectQueries): string[][] | undefined {
   if (!allConditions) {
     return undefined;
   }
 
-  const checkedArray: string[][] = allConditions
-    .filter((c) => c !== undefined && c[0] !== undefined && c[1] !== undefined) as string[][];
+  const checkedArray: SubjectQueries = allConditions
+    .filter((c) => c !== undefined && c[0] !== undefined && c[1] !== undefined);
 
   const notConditions = checkedArray
     .filter(isNotStatement)
@@ -88,6 +100,7 @@ export default class Fact {
   private static async resolveToSubjectIds(
     query: SubjectQuery,
     exluded: string[][] | undefined,
+    withLatestModifier: boolean,
     logger?: IsLogger,
   ): Promise<string[]> {
     const pool = new PgPoolWithLog(logger);
@@ -110,8 +123,15 @@ export default class Fact {
     } else if (query[1] === '$anything') {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     } else {
+      let table = 'facts';
+
+      if (withLatestModifier) {
+        table = '(SELECT * FROM facts WHERE id IN (SELECT max(id) as latestFact FROM facts WHERE predicate=$1 GROUP BY subject)) as facts';
+      }
+
       let [excludeExtensionSQL, excludeExtensionValues] = getSQLClauseByConditions(exluded, 3, '=', ' AND subject NOT IN (SELECT subject FROM facts WHERE ', ')');
-      let dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object=$2 ${excludeExtensionSQL}`, [query[0], query[1], ...excludeExtensionValues]);
+
+      let dbRows = await pool.query(`SELECT subject FROM ${table} WHERE predicate=$1 AND object=$2 ${excludeExtensionSQL}`, [query[0], query[1], ...excludeExtensionValues]);
       dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
 
       // For now all facts are transitive.
@@ -123,7 +143,7 @@ export default class Fact {
         [excludeExtensionSQL, excludeExtensionValues] = getSQLClauseByConditions(exluded, idsIdexes.length + 2, '=', ' AND subject NOT IN (SELECT subject FROM facts WHERE ', ')');
 
         // eslint-disable-next-line no-await-in-loop
-        dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 AND object IN (${idsIdexes.join(',')}) ${excludeExtensionSQL}`, [query[0], ...ids, ...excludeExtensionValues]);
+        dbRows = await pool.query(`SELECT subject FROM ${table} WHERE predicate=$1 AND object IN (${idsIdexes.join(',')}) ${excludeExtensionSQL}`, [query[0], ...ids, ...excludeExtensionValues]);
 
         dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
       }
@@ -142,9 +162,12 @@ export default class Fact {
 
     const subjectExcluded = getExcluded(subjectQueries.filter(Array.isArray));
 
-    const subjectIdsPromise = ensureArray(subjectQueries)
+    const subjectIdsPromise = subjectQueries
       .filter(isNotNotStatement)
-      .map((s) => Fact.resolveToSubjectIds(s, subjectExcluded, logger));
+      .map(parseLatestModifier)
+      .map((
+        [subjectQuery, withLatestModifier],
+      ) => Fact.resolveToSubjectIds(subjectQuery, subjectExcluded, withLatestModifier, logger));
 
     return Promise.all(subjectIdsPromise);
   }

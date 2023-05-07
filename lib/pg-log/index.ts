@@ -20,6 +20,16 @@ export default class PgPoolWithLog {
     const pgresult = await pool.query(...args);
     const endTime = Date.now();
 
+    let interpolated = args[0];
+
+    if (args[1]) {
+      args[1].forEach((arg, i) => {
+        interpolated = interpolated.replaceAll(`$${i + 1}`, `'${arg}'`);
+      });
+    }
+
+    console.log(`\x1b[33m RUN SQL: ${interpolated} \x1b[0m`);
+
     if (this.logger) {
       const log = {
         queryTemplate: args[0],
