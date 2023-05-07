@@ -1,11 +1,13 @@
 import intersect from 'intersect';
 import Fact from '../facts/server';
+import { FactQuery, SubjectQuery } from '../facts/fact_query';
 import LongTextAttribute from './long_text/server';
 import KeyValueAttribute from './key_value/server';
 import BlobAttribute from './blob/server';
 import IsLogger from '../../lib/is_logger';
 
-export type AttributeQuery = string | string[][];
+export type FactQueryWithOptionalSubjectPlaceholder = [string, string, string?];
+export type AttributeQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
 
 export type CompoundAttributeQuery = {
   [key: string]: AttributeQuery
@@ -15,6 +17,24 @@ const asyncFilter = async (arr, fn) => {
   const results = await Promise.all(arr.map(fn));
   return arr.filter((_v, index) => results[index]);
 };
+
+function FactQueryWithOptionalSubjectPlaceholderToFactQuery(
+  x: FactQueryWithOptionalSubjectPlaceholder,
+): SubjectQuery {
+  if (x.length === 3 && x[0] === '$it' && x[2]) {
+    return [x[1], x[2]];
+  }
+
+  if (x.length === 3 && x[2] === '$it') {
+    return [x[0], x[1], x[2]];
+  }
+
+  if (x.length === 2 && x[0] && x[1]) {
+    return [x[0], x[1]];
+  }
+
+  throw new Error('FactQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input');
+}
 
 export default class QueryExecutor {
   logger: IsLogger;
@@ -127,9 +147,9 @@ export default class QueryExecutor {
       return [];
     }
 
-    const subjectFactsQuery = {
+    const subjectFactsQuery: FactQuery = {
       subject: query
-        .map((x) => ((x.length === 3 && x[0] === '$it') ? [x[1] as string, x[2] as string] : x))
+        .map(FactQueryWithOptionalSubjectPlaceholderToFactQuery)
         .filter((x) => x.length === 2),
     };
 
