@@ -427,6 +427,79 @@ describe('Attribute', () => {
       expect(books[1].value.title).to.eq('Moby Dick Volume 3');
     });
 
+    it('supports the $latest modifier for predicates', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const mobyDickVol1 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 1' });
+      const mobyDickVol2 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 2' });
+      const mobyDickVol3 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 3' });
+      const marksAutoBio = await client.Attribute.create('keyValue', { title: 'Autobiography of Mark Twain' });
+      const chrisAutoBio = await client.Attribute.create('keyValue', { title: 'Finding Hildasay' });
+      const YusraAutoBio = await client.Attribute.create('keyValue', { title: 'Butterfly' });
+      const FullersBio = await client.Attribute.create('keyValue', { title: 'Inventor of the Future' });
+      const MonksBio = await client.Attribute.create('keyValue', { title: 'Free Press Thelonious Monk' });
+      const RalphsBio = await client.Attribute.create('keyValue', { title: 'Ralph Ellison' });
+
+      await client.Fact.createAll([
+        ['inTrasbin', '$isATermFor', 'a state meaning it is marked to be deleted'],
+        ['visiable', '$isATermFor', 'a state meaning it is not marked to be deleted'],
+        ['superVisiable', '$isATermFor', 'a state meaning introduced for testing only'],
+
+        ['Book', '$isATermFor', 'some concept'],
+        ['Biography', '$isATermFor', 'is a book about a persons life'],
+        ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
+        ['Biography', 'isA', 'Book'],
+        ['Autobiography', 'isA', 'Biography'],
+
+        [mobyDickVol1.id, 'isA', 'Book'],
+        [mobyDickVol2.id, 'isA', 'Book'],
+        [mobyDickVol3.id, 'isA', 'Book'],
+        [marksAutoBio.id, 'isA', 'Autobiography'],
+        [chrisAutoBio.id, 'isA', 'Autobiography'],
+        [YusraAutoBio.id, 'isA', 'Autobiography'],
+
+        [FullersBio.id, 'isA', 'Biography'],
+        [MonksBio.id, 'isA', 'Biography'],
+        [RalphsBio.id, 'isA', 'Biography'],
+
+        [mobyDickVol3.id, 'delitionStateIs', 'inTrasbin'],
+        [mobyDickVol3.id, 'delitionStateIs', 'superVisiable'],
+
+        [mobyDickVol1.id, 'delitionStateIs', 'inTrasbin'],
+        [mobyDickVol1.id, 'delitionStateIs', 'visiable'],
+
+        // This should lead to be deleted
+        [mobyDickVol2.id, 'delitionStateIs', 'inTrasbin'],
+        [mobyDickVol2.id, 'delitionStateIs', 'visiable'],
+        [mobyDickVol2.id, 'delitionStateIs', 'inTrasbin'],
+
+        [chrisAutoBio.id, 'delitionStateIs', 'inTrasbin'],
+        [chrisAutoBio.id, 'delitionStateIs', 'visiable'],
+        [chrisAutoBio.id, 'delitionStateIs', 'inTrasbin'],
+
+        [RalphsBio.id, 'delitionStateIs', 'inTrasbin'],
+      ]);
+
+      console.log('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
+      const {
+        booksInTrasbin,
+        booksNotInTrasbin,
+      } = await otherClient.Attribute.findAll({
+        booksInTrasbin: [
+          ['$it', 'isA', 'Book'],
+          ['$it', '$latest(delitionStateIs)', 'inTrasbin'],
+        ],
+        booksNotInTrasbin: [
+          ['$it', 'isA', 'Book'],
+          ['$it', '$latest(delitionStateIs)', '$not(inTrasbin)'],
+        ],
+      }) as any;
+
+      expect(booksInTrasbin.length).to.eq(3);
+      // expect(booksNotInTrasbin.length).to.eq(6);
+    });
+
     it('can be executed in parallel', async () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
