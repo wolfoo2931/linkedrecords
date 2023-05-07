@@ -263,7 +263,7 @@ export default class Fact {
     };
   }
 
-  async save(userid?) {
+  async save(userid?: string) {
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isATermFor') {
