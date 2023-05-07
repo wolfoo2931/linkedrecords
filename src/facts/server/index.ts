@@ -69,8 +69,20 @@ export default class Fact {
   logger?: IsLogger;
 
   static async initDB() {
+    const pg = new PgPoolWithLog();
     const createQuery = 'CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);';
-    await (new PgPoolWithLog()).query(createQuery);
+    await pg.query(createQuery);
+
+    const rawFactTableColums = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
+    const factTableColums = rawFactTableColums.rows.map((c) => c.column_name);
+
+    if (!factTableColums.includes('created_at')) {
+      await pg.query(`
+        ALTER TABLE facts ADD COLUMN created_at timestamp DEFAULT NOW();
+        ALTER TABLE facts ADD COLUMN created_by CHAR(40);
+        ALTER TABLE facts ADD COLUMN id SERIAL;
+      `);
+    }
   }
 
   private static async resolveToSubjectIds(
@@ -276,7 +288,7 @@ export default class Fact {
           throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
         }
 
-        await pool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3), ($1, $4, $5)', [
+        await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $5), ($1, $4, $5, NULL)', [
           this.subject,
           this.predicate,
           this.object,
@@ -285,10 +297,11 @@ export default class Fact {
         ]);
       }
     } else {
-      await pool.query('INSERT INTO facts (subject, predicate, object) VALUES ($1, $2, $3)', [
+      await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
         this.subject,
         this.predicate,
         this.object,
+        userid,
       ]);
     }
   }
