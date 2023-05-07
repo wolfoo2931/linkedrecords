@@ -1,6 +1,6 @@
 /* eslint-disable no-plusplus */
 import intersect from 'intersect';
-import { FactQuery } from '../fact_query';
+import { FactQuery, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 
@@ -73,7 +73,7 @@ export default class Fact {
     await (new PgPoolWithLog()).query(createQuery);
   }
 
-  private static async resolveToAttributeIds(
+  private static async resolveToSubjectIds(
     query: string | string[],
     exluded: string[][] | undefined,
     logger?: IsLogger,
@@ -86,7 +86,7 @@ export default class Fact {
     }
 
     if (!query || !query.length || query.length !== 2) {
-      throw new Error('resolveToAttributeIds must be string or array with two elements');
+      throw new Error('resolveToSubjectIds must be string or array with two elements');
     }
 
     const resultSet = new Set<string>();
@@ -120,32 +120,34 @@ export default class Fact {
     return Array.from(resultSet);
   }
 
+  static async resolveToSubjectIdsWithModifiers(subjectQuery?: SubjectQuery, logger?: IsLogger) {
+    if (!subjectQuery) {
+      return [];
+    }
+
+    const subjectExcluded = getExcluded(subjectQuery.filter(Array.isArray));
+
+    const subjectIdsPromise = ensureArray(subjectQuery)
+      .filter(isNotNotStatement)
+      .map((s) => Fact.resolveToSubjectIds(s, subjectExcluded, logger));
+
+    return Promise.all(subjectIdsPromise);
+  }
+
   static async findAll(
     { subject, predicate, object }: FactQuery,
     logger?: IsLogger,
   ): Promise<Fact[]> {
     const pool = new PgPoolWithLog(logger);
-
-    const subjectExcluded = getExcluded(subject?.filter(Array.isArray));
-    const objectExcluded = getExcluded(object?.filter(Array.isArray));
-
-    const subjectIdsPromise = subject
-      ? ensureArray(subject)
-        .filter(isNotNotStatement)
-        .map((s) => Fact.resolveToAttributeIds(s, subjectExcluded, logger))
-      : [];
-    const objectIdsPromise = object
-      ? ensureArray(object)
-        .filter(isNotNotStatement)
-        .map((o) => Fact.resolveToAttributeIds(o, objectExcluded, logger))
-      : [];
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
+    const subjectIdsPromise = Fact.resolveToSubjectIdsWithModifiers(subject);
+    const objectIdsPromise = Fact.resolveToSubjectIdsWithModifiers(object);
 
     const query: { [key: string]: string[] } = {};
 
     if (subject) {
-      query['subject'] = intersect(await Promise.all(subjectIdsPromise));
+      query['subject'] = intersect(await subjectIdsPromise);
     }
 
     if (predicate) {
@@ -153,7 +155,7 @@ export default class Fact {
     }
 
     if (object) {
-      query['object'] = intersect(await Promise.all(objectIdsPromise));
+      query['object'] = intersect(await objectIdsPromise);
     }
 
     if (query['subject'] && query['subject'].length === 0) {

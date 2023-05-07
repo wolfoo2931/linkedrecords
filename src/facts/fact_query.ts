@@ -1,5 +1,7 @@
+export type SubjectQuery = (string | string[])[];
+
 export type FactQuery = {
-  subject?: (string | string[])[],
+  subject?: SubjectQuery,
   predicate?: string[],
-  object?: (string | string[])[]
+  object?: SubjectQuery
 };
