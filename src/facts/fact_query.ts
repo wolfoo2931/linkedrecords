@@ -1,7 +1,9 @@
-export type SubjectQuery = (string | string[])[];
+export type SubjectQuery = string | [string, string, '$it'?];
+
+export type SubjectQueries = SubjectQuery[];
 
 export type FactQuery = {
-  subject?: SubjectQuery,
+  subject?: SubjectQueries,
   predicate?: string[],
-  object?: SubjectQuery
+  object?: SubjectQueries
 };

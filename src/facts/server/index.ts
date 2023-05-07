@@ -1,6 +1,6 @@
 /* eslint-disable no-plusplus */
 import intersect from 'intersect';
-import { FactQuery, SubjectQuery } from '../fact_query';
+import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 
@@ -86,7 +86,7 @@ export default class Fact {
   }
 
   private static async resolveToSubjectIds(
-    query: string | string[],
+    query: SubjectQuery,
     exluded: string[][] | undefined,
     logger?: IsLogger,
   ): Promise<string[]> {
@@ -132,14 +132,17 @@ export default class Fact {
     return Array.from(resultSet);
   }
 
-  static async resolveToSubjectIdsWithModifiers(subjectQuery?: SubjectQuery, logger?: IsLogger) {
-    if (!subjectQuery) {
+  static async resolveToSubjectIdsWithModifiers(
+    subjectQueries?: SubjectQueries,
+    logger?: IsLogger,
+  ) {
+    if (!subjectQueries) {
       return [];
     }
 
-    const subjectExcluded = getExcluded(subjectQuery.filter(Array.isArray));
+    const subjectExcluded = getExcluded(subjectQueries.filter(Array.isArray));
 
-    const subjectIdsPromise = ensureArray(subjectQuery)
+    const subjectIdsPromise = ensureArray(subjectQueries)
       .filter(isNotNotStatement)
       .map((s) => Fact.resolveToSubjectIds(s, subjectExcluded, logger));
 
