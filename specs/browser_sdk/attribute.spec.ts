@@ -427,7 +427,7 @@ describe('Attribute', () => {
       expect(books[1].value.title).to.eq('Moby Dick Volume 3');
     });
 
-    it('supports the $latest modifier for predicates', async () => {
+    it('supports the $latest and $not modifier for predicates', async () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
@@ -481,7 +481,6 @@ describe('Attribute', () => {
         [RalphsBio.id, 'delitionStateIs', 'inTrasbin'],
       ]);
 
-      console.log('XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
       const {
         booksInTrasbin,
         booksNotInTrasbin,
@@ -497,7 +496,16 @@ describe('Attribute', () => {
       }) as any;
 
       expect(booksInTrasbin.length).to.eq(3);
-      // expect(booksNotInTrasbin.length).to.eq(6);
+      expect(booksNotInTrasbin.length).to.eq(6);
+
+      [RalphsBio, chrisAutoBio, mobyDickVol2].forEach((book) => {
+        const fromResults = booksInTrasbin.find((b) => b.id === book.id);
+        expect(fromResults.id).to.eql(book.id);
+      });
+
+      [mobyDickVol1, mobyDickVol3, marksAutoBio, YusraAutoBio, FullersBio, MonksBio].forEach((book) => {
+        expect(booksNotInTrasbin.find((b) => b.id === book.id).id).to.eql(book.id);
+      });
     });
 
     it('can be executed in parallel', async () => {
