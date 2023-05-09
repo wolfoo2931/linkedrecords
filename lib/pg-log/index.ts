@@ -15,10 +15,10 @@ export default class PgPoolWithLog {
     this.logger = logger;
   }
 
-  async query(...args) {
-    const startTime = Date.now();
-    const pgresult = await pool.query(...args);
-    const endTime = Date.now();
+  logResolvedQuery(args) {
+    if (!this.logger) {
+      return;
+    }
 
     let interpolated = args[0];
 
@@ -28,7 +28,25 @@ export default class PgPoolWithLog {
       });
     }
 
+    console.log('\n\n');
     console.log(`\x1b[33m RUN SQL: ${interpolated} \x1b[0m`);
+    console.log('\n\n');
+  }
+
+  async query(...args) {
+    let pgresult;
+
+    const startTime = Date.now();
+
+    try {
+      pgresult = await pool.query(...args);
+    } catch (ex) {
+      console.error('\x1b[33m Error Executing query: \x1b[0m', args[0]);
+      this.logger?.warn(`\x1b[33m Error Executing query: \x1b[0m ${args[0]}`);
+      throw ex;
+    }
+
+    const endTime = Date.now();
 
     if (this.logger) {
       const log = {

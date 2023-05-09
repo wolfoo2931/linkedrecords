@@ -4,7 +4,7 @@ import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 
-function isNotStatement(statement: SubjectQuery): boolean {
+function hasNotModifier(statement: SubjectQuery): boolean {
   if (!Array.isArray(statement) || !statement[1]) {
     return false;
   }
@@ -12,63 +12,12 @@ function isNotStatement(statement: SubjectQuery): boolean {
   return !!statement[1].match(/^\$not\(.+\)$/);
 }
 
-function parseLatestModifier(subjectQuery: SubjectQuery): [SubjectQuery, boolean] {
-  if (!Array.isArray(subjectQuery) || subjectQuery.length === 3) {
-    return [subjectQuery, false];
+function hasLatestModifier(statement: SubjectQuery): boolean {
+  if (!Array.isArray(statement) || !statement[1]) {
+    return false;
   }
 
-  const lastModifierMatch = subjectQuery[0].match(/^\$latest\((.+)\)$/);
-
-  if (!lastModifierMatch || !lastModifierMatch[1]) {
-    return [subjectQuery, false];
-  }
-
-  return [[lastModifierMatch[1], subjectQuery[1]], true];
-}
-
-function isNotNotStatement(statement: SubjectQuery): boolean {
-  return !isNotStatement(statement);
-}
-
-function getExcluded(allConditions: SubjectQueries): string[][] | undefined {
-  if (!allConditions) {
-    return undefined;
-  }
-
-  const checkedArray: SubjectQueries = allConditions
-    .filter((c) => c !== undefined && c[0] !== undefined && c[1] !== undefined);
-
-  const notConditions = checkedArray
-    .filter(isNotStatement)
-    .map((c) => [
-      c[0],
-      c[1] && c[1]!.match(/^\$not\((.+)\)$/)![1],
-    ]);
-
-  return notConditions as string[][];
-}
-
-function getSQLClauseByConditions(conditions: string[][] | undefined, placehoderStartIndex = 0, comp = '=', prefix = 'AND ', suffix = ''): [string, string[]] {
-  const resultSQL: string[] = [];
-  const resultValues: string[] = [];
-  let index = 0;
-
-  if (!conditions || !conditions.length) {
-    return ['', []];
-  }
-
-  conditions.forEach((condition) => {
-    if (condition[0] && condition[1]) {
-      resultSQL.push(`predicate ${comp} $${index++ + placehoderStartIndex} AND object ${comp} $${index++ + placehoderStartIndex}`);
-      resultValues.push(condition[0]);
-      resultValues.push(condition[1]);
-    }
-  });
-
-  return [
-    resultSQL.length ? prefix + resultSQL.join(' AND ') + suffix : '',
-    resultValues,
-  ];
+  return !!statement[0].match(/^\$latest\(.+\)$/);
 }
 
 export default class Fact {
@@ -99,8 +48,7 @@ export default class Fact {
 
   private static async resolveToSubjectIds(
     query: SubjectQuery,
-    exluded: string[][] | undefined,
-    withLatestModifier: boolean,
+    sqlPrefix: string,
     logger?: IsLogger,
   ): Promise<string[]> {
     const pool = new PgPoolWithLog(logger);
@@ -114,42 +62,38 @@ export default class Fact {
       throw new Error('resolveToSubjectIds must be string or array with two elements');
     }
 
-    const resultSet = new Set<string>();
-    let previousLength;
-
     if (query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
-      const dbRows = await pool.query('SELECT subject FROM facts WHERE predicate=$1', [query[0]]);
-      dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
-    } else if (query[1] === '$anything') {
-      throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
-    } else {
-      let table = 'facts';
-
-      if (withLatestModifier) {
-        table = '(SELECT * FROM facts WHERE id IN (SELECT max(id) as latestFact FROM facts WHERE predicate=$1 GROUP BY subject)) as facts';
-      }
-
-      let [excludeExtensionSQL, excludeExtensionValues] = getSQLClauseByConditions(exluded, 3, '=', ' AND subject NOT IN (SELECT subject FROM facts WHERE ', ')');
-
-      let dbRows = await pool.query(`SELECT subject FROM ${table} WHERE predicate=$1 AND object=$2 ${excludeExtensionSQL}`, [query[0], query[1], ...excludeExtensionValues]);
-      dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
-
-      // For now all facts are transitive.
-      while (resultSet.size !== previousLength && resultSet.size !== 0) {
-        previousLength = resultSet.size;
-        const ids = Array.from(resultSet);
-        const idsIdexes = ids.map((_, i) => `$${i + 2}`);
-
-        [excludeExtensionSQL, excludeExtensionValues] = getSQLClauseByConditions(exluded, idsIdexes.length + 2, '=', ' AND subject NOT IN (SELECT subject FROM facts WHERE ', ')');
-
-        // eslint-disable-next-line no-await-in-loop
-        dbRows = await pool.query(`SELECT subject FROM ${table} WHERE predicate=$1 AND object IN (${idsIdexes.join(',')}) ${excludeExtensionSQL}`, [query[0], ...ids, ...excludeExtensionValues]);
-
-        dbRows.rows.forEach((row) => resultSet.add(row.subject.trim()));
-      }
+      const conditionSuffix = sqlPrefix ? `AND ${sqlPrefix}` : '';
+      const dbRows = await pool.query(`SELECT subject FROM facts WHERE predicate=$1 ${conditionSuffix}`, [query[0]]);
+      return dbRows.rows.map((row) => row.subject.trim());
     }
 
-    return Array.from(resultSet);
+    if (query[1] === '$anything') {
+      throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
+    }
+
+    const table = `(WITH RECURSIVE rfacts AS (
+      SELECT facts.* FROM facts
+                      WHERE object = $2
+                      AND predicate = $1
+    UNION ALL
+      SELECT facts.* FROM facts, rfacts
+                      WHERE facts.object = rfacts.subject
+                      AND facts.predicate = $1
+    )
+    CYCLE subject
+      SET cycl TO 'Y' DEFAULT 'N'
+    USING path_array
+    SELECT *
+      FROM rfacts
+      WHERE cycl = 'N') as f`;
+
+    const conditionSuffix = sqlPrefix ? `WHERE ${sqlPrefix}` : '';
+
+    console.log(`SELECT subject FROM ${table} ${conditionSuffix}`);
+
+    const dbRows = await pool.query(`SELECT subject FROM ${table} ${conditionSuffix}`, [query[0], query[1]]);
+    return dbRows.rows.map((row) => row.subject.trim());
   }
 
   static async resolveToSubjectIdsWithModifiers(
@@ -160,16 +104,51 @@ export default class Fact {
       return [];
     }
 
-    const subjectExcluded = getExcluded(subjectQueries.filter(Array.isArray));
+    const transitiveQueries: SubjectQuery[] = [];
+    const sqlConditions: [string, string, string][] = [];
+    let sqlPrefix = '';
 
-    const subjectIdsPromise = subjectQueries
-      .filter(isNotNotStatement)
-      .map(parseLatestModifier)
-      .map((
-        [subjectQuery, withLatestModifier],
-      ) => Fact.resolveToSubjectIds(subjectQuery, subjectExcluded, withLatestModifier, logger));
+    subjectQueries.forEach((query) => {
+      if (!hasNotModifier(query) && !hasLatestModifier(query)) {
+        transitiveQueries.push(query);
+      } else if (hasNotModifier(query) && !hasLatestModifier(query)) {
+        const object = query[1].match(/^\$not\(([a-zA-Z]+)\)$/)![1];
 
-    return Promise.all(subjectIdsPromise);
+        if (object) {
+          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject from facts WHERE predicate='${query[0]}' AND object='${object}')`]);
+        }
+      } else if (!hasNotModifier(query) && hasLatestModifier(query)) {
+        const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
+        if (predicate) {
+          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM facts WHERE id IN (SELECT max(id) FROM facts WHERE predicate='${predicate}' GROUP BY subject) AND object='${query[1]}')`]);
+        }
+      } else if (hasNotModifier(query) && hasLatestModifier(query)) {
+        const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
+        const object = query[1].match(/^\$not\(([a-zA-Z]+)\)$/)![1];
+
+        if (predicate && object) {
+          sqlConditions.push(['subject', 'IN', `(SELECT
+            subject
+            FROM facts
+            WHERE (object != '${object}' AND id IN (SELECT max(id) FROM facts WHERE predicate='${predicate}' GROUP BY subject))
+            OR subject NOT IN (SELECT subject FROM facts WHERE predicate='${predicate}'))`]);
+        }
+      }
+    });
+
+    if (sqlConditions.length) {
+      sqlPrefix = `${sqlConditions
+        .map((x) => x.join(' '))
+        .join(' AND ')
+        .trim()}`;
+    }
+
+    const subjectIdsPromise = transitiveQueries
+      .map((subjectQuery) => Fact.resolveToSubjectIds(subjectQuery, sqlPrefix, logger));
+
+    const result = intersect(await Promise.all(subjectIdsPromise));
+
+    return result;
   }
 
   static async findAll(
@@ -179,13 +158,10 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const queryAsSQL: string[] = [];
     const queryParams: string[] = [];
-    const subjectIdsPromise = Fact.resolveToSubjectIdsWithModifiers(subject);
-    const objectIdsPromise = Fact.resolveToSubjectIdsWithModifiers(object);
-
     const query: { [key: string]: string[] } = {};
 
     if (subject) {
-      query['subject'] = intersect(await subjectIdsPromise);
+      query['subject'] = await Fact.resolveToSubjectIdsWithModifiers(subject);
     }
 
     if (predicate) {
@@ -193,7 +169,7 @@ export default class Fact {
     }
 
     if (object) {
-      query['object'] = intersect(await objectIdsPromise);
+      query['object'] = await Fact.resolveToSubjectIdsWithModifiers(object);
     }
 
     if (query['subject'] && query['subject'].length === 0) {
