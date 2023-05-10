@@ -9,7 +9,7 @@ export default class PsqlStorage implements IsAttributeStorage {
 
   pgPool: PgPoolWithLog;
 
-  constructor(logger?: IsLogger) {
+  constructor(logger: IsLogger) {
     this.logger = logger;
     this.pgPool = new PgPoolWithLog(this.logger);
   }

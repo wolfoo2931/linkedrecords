@@ -441,16 +441,25 @@ describe('Attribute', () => {
       const MonksBio = await client.Attribute.create('keyValue', { title: 'Free Press Thelonious Monk' });
       const RalphsBio = await client.Attribute.create('keyValue', { title: 'Ralph Ellison' });
 
+      const shelf1 = await client.Attribute.create('keyValue', { title: 'a shelf' });
+
       await client.Fact.createAll([
         ['inTrasbin', '$isATermFor', 'a state meaning it is marked to be deleted'],
         ['visiable', '$isATermFor', 'a state meaning it is not marked to be deleted'],
         ['superVisiable', '$isATermFor', 'a state meaning introduced for testing only'],
 
+        ['Shelf', '$isATermFor', 'a thing holding books'],
+
         ['Book', '$isATermFor', 'some concept'],
         ['Biography', '$isATermFor', 'is a book about a persons life'],
         ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
+
         ['Biography', 'isA', 'Book'],
         ['Autobiography', 'isA', 'Biography'],
+
+        ['Book', 'isA', 'Autobiography'], // does it detect cylces?
+
+        [shelf1.id, 'isA', 'Shelf'],
 
         [mobyDickVol1.id, 'isA', 'Book'],
         [mobyDickVol2.id, 'isA', 'Book'],
