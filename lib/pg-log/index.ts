@@ -11,12 +11,16 @@ export default class PgPoolWithLog {
 
   pool: Pool;
 
-  constructor(logger?: IsLogger) {
+  constructor(logger: IsLogger) {
     this.logger = logger;
   }
 
   logResolvedQuery(args) {
     if (!this.logger) {
+      console.log('\n\n');
+      console.log('\x1b[33m RUN SQL: Logger is Not available!!! \x1b[0m', args);
+      console.log('\n\n');
+
       return;
     }
 

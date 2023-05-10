@@ -27,10 +27,10 @@ export default class Fact {
 
   object: string;
 
-  logger?: IsLogger;
+  logger: IsLogger;
 
   static async initDB() {
-    const pg = new PgPoolWithLog();
+    const pg = new PgPoolWithLog(console as unknown as IsLogger);
     const createQuery = 'CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);';
     await pg.query(createQuery);
 
@@ -49,7 +49,7 @@ export default class Fact {
   private static async resolveToSubjectIds(
     query: SubjectQuery,
     sqlPrefix: string,
-    logger?: IsLogger,
+    logger: IsLogger,
   ): Promise<string[]> {
     const pool = new PgPoolWithLog(logger);
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
@@ -90,20 +90,14 @@ export default class Fact {
 
     const conditionSuffix = sqlPrefix ? `WHERE ${sqlPrefix}` : '';
 
-    console.log(`SELECT subject FROM ${table} ${conditionSuffix}`);
-
     const dbRows = await pool.query(`SELECT subject FROM ${table} ${conditionSuffix}`, [query[0], query[1]]);
     return dbRows.rows.map((row) => row.subject.trim());
   }
 
   static async resolveToSubjectIdsWithModifiers(
-    subjectQueries?: SubjectQueries,
-    logger?: IsLogger,
+    subjectQueries: SubjectQueries,
+    logger: IsLogger,
   ) {
-    if (!subjectQueries) {
-      return [];
-    }
-
     const transitiveQueries: SubjectQuery[] = [];
     const sqlConditions: [string, string, string][] = [];
     let sqlPrefix = '';
@@ -153,7 +147,7 @@ export default class Fact {
 
   static async findAll(
     { subject, predicate, object }: FactQuery,
-    logger?: IsLogger,
+    logger: IsLogger,
   ): Promise<Fact[]> {
     const pool = new PgPoolWithLog(logger);
     const queryAsSQL: string[] = [];
@@ -161,7 +155,7 @@ export default class Fact {
     const query: { [key: string]: string[] } = {};
 
     if (subject) {
-      query['subject'] = await Fact.resolveToSubjectIdsWithModifiers(subject);
+      query['subject'] = await Fact.resolveToSubjectIdsWithModifiers(subject, logger);
     }
 
     if (predicate) {
@@ -169,7 +163,7 @@ export default class Fact {
     }
 
     if (object) {
-      query['object'] = await Fact.resolveToSubjectIdsWithModifiers(object);
+      query['object'] = await Fact.resolveToSubjectIdsWithModifiers(object, logger);
     }
 
     if (query['subject'] && query['subject'].length === 0) {
@@ -206,7 +200,7 @@ export default class Fact {
     ));
   }
 
-  constructor(subject: string, predicate: string, object: string, logger?: IsLogger) {
+  constructor(subject: string, predicate: string, object: string, logger: IsLogger) {
     this.subject = subject;
     this.predicate = predicate;
     this.object = object;

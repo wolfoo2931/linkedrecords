@@ -38,7 +38,7 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
   return new AttributeClass(id, req.clientId, req.actorId, req.attributeStorage);
 }
 
-export function getAttributeByMessage(attributeId, message, logger?: IsLogger) {
+export function getAttributeByMessage(attributeId, message, logger: IsLogger) {
   const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
 
   if (!AttributeClass) {
