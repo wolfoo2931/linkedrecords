@@ -609,7 +609,7 @@ describe('Attribute', () => {
         content: LongTextAttribute,
         refernces: KeyValueAttribute[],
       }> <unknown> await client.Attribute.findAll({
-        content: 'not exsting',
+        content: 'not-exsting',
         refernces: [
           ['isA', 'notExsting'],
         ],
