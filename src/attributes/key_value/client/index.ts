@@ -72,6 +72,10 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
       return JSON.stringify(this.value[key]) !== JSON.stringify(value);
     });
 
+    if (actualChanges.length === 0) {
+      return;
+    }
+
     this.transmitChange(new KeyValueChange(actualChanges, this.version));
     this.value = change.apply(this.value);
   }
