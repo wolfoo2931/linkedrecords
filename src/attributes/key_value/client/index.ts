@@ -60,7 +60,19 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
   }
 
   protected async rawChange(change: KeyValueChange) {
-    this.transmitChange(new KeyValueChange(change.change, this.version));
+    const actualChanges = change.change.filter(({ key, value }) => {
+      if (!this.value[key] && value) {
+        return true;
+      }
+
+      if (this.value[key] && !value) {
+        return true;
+      }
+
+      return JSON.stringify(this.value[key]) !== JSON.stringify(value);
+    });
+
+    this.transmitChange(new KeyValueChange(actualChanges, this.version));
     this.value = change.apply(this.value);
   }
 
