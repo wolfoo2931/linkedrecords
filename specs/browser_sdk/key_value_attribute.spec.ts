@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
+import { KeyValueChange } from '../../src/browser_sdk';
 import {
   createClient, cleanupClients, truncateDB, waitFor,
 } from '../helpers';
@@ -74,6 +75,28 @@ describe('Key Value Attributes', () => {
       expect(convergedValueClientB.foo).to.equal('bar');
       expect(convergedValueClientA.new).to.equal('value');
       expect(convergedValueClientB.new).to.equal('value');
+    });
+  });
+
+  describe('attribute.change()', () => {
+    it('allows to change only parts of the document when the value is a JSON object', async () => {
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+
+      await attributeClientA.change(new KeyValueChange([
+        { key: 'foo2', value: { nested: 'values', more: undefined } },
+      ]));
+
+      const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
+
+      await waitFor(async () => Object.keys((await reloadedAttribute!.getValue())).length === 2);
+
+      expect(await reloadedAttribute!.getValue()).to.eqls({
+        foo: 'bar',
+        foo2: { nested: 'values' },
+      });
     });
   });
 });

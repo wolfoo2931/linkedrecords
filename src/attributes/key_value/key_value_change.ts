@@ -1,6 +1,6 @@
 export type AtomicChange = {
   key: string,
-  value: string | null,
+  value: object | string | null,
 };
 
 export default class KeyValueChange {
