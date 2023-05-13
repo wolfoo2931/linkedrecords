@@ -54,7 +54,6 @@ function esureValidFactQuery({ subject, predicate, object }: FactQuery) {
   [...(subject || []), ...(object || [])].forEach((sq) => {
     if (typeof sq === 'string') {
       if (!isValidId(sq)) {
-        console.log({ subject, predicate, object });
         throw new Error(`invalid Id in subject query: ${sq}`);
       }
     } else if (Array.isArray(sq)) {
@@ -284,8 +283,8 @@ export default class Fact {
       }, logger);
     }
 
-    return (concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
-      && (concreateObjectSpecMatch || (await objectMatch).length !== 0);
+    return (!factQuery.subject || concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
+      && (!factQuery.object || concreateObjectSpecMatch || (await objectMatch).length !== 0);
   }
 
   async matchAny(factQueries: FactQuery[], logger: IsLogger): Promise<boolean> {

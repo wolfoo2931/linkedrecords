@@ -81,8 +81,18 @@ async function isAuthorizedToAccessFact(userid, request, factRecord?) {
     request.body.object,
   );
 
+  if (!userid || !userid.trim()) {
+    return false;
+  }
+
   if (fact.predicate === '$isATermFor') {
     return true;
+  }
+
+  if (userid === fact.object) {
+    return fact.matchAny([
+      { subject: [['$wasCreatedBy', userid]] },
+    ]);
   }
 
   return fact.matchAny([

@@ -5,6 +5,10 @@ import {
   createClient, truncateDB, cleanupClients, changeUserContext, sleep,
 } from '../helpers';
 
+function filterAutoCreatedFacts(facts) {
+  return facts.filter((fact) => !['$wasCreatedBy'].includes(fact.predicate));
+}
+
 describe('Auth', () => {
   beforeEach(truncateDB);
   afterEach(cleanupClients);
@@ -248,8 +252,8 @@ describe('Auth', () => {
       ],
     });
 
-    expect(termFacts.length).to.eql(2);
-    expect(authorFacts.length).to.eql(2);
+    expect(filterAutoCreatedFacts(termFacts).length).to.eql(2);
+    expect(filterAutoCreatedFacts(authorFacts).length).to.eql(2);
   });
 
   it('is not allowed to create a term if it exists already', async () => {
@@ -314,4 +318,28 @@ describe('Auth', () => {
     expect(updateMessageReceived).to.eql(undefined);
     expect((await subscriptionResult).message).to.eql('unauthorized');
   });
+
+  it('is allowed to create facts which refere to the authenticated users', async () => {
+    const [client] = await createClient();
+    const [otherClient] = await createClient();
+
+    await client.Attribute.create('keyValue', { name: 'some data' }, [
+      ['belongsTo', client.actorId],
+    ]);
+
+    const { myRecords } = await otherClient.Attribute.findAll({
+      myRecords: [
+        ['belongsTo', client.actorId],
+      ],
+    });
+
+    if (!Array.isArray(myRecords)) {
+      throw new Error('myRecords is not an array');
+    }
+
+    expect(myRecords.length).to.eq(1);
+  });
+
+  it('allows to create facts about the authenticated users');
+  it('allows to create facts refere to the authenticated users');
 });
