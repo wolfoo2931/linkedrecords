@@ -21,6 +21,7 @@ export function waitFor(fn) {
 }
 
 export async function changeUserContext(pretendToBe: string) {
+  Cookies.remove('userId', { path: '', doamin: 'localhost' });
   Cookies.remove('pretendToBeUser', { path: '', doamin: 'localhost' });
   Cookies.set('pretendToBeUser', pretendToBe, { path: '', doamin: 'localhost' });
 }
