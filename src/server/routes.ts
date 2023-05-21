@@ -192,7 +192,7 @@ async function createApp(httpServer: https.Server) {
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
-  app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true })); // TODO: cache prefligt results via Access-Control-Max-Age
+  app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true, maxAge: 86400 }));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
