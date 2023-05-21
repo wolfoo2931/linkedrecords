@@ -1,3 +1,5 @@
+import set from 'set-value';
+
 export type AtomicChange = {
   key: string,
   value: object | string | null,
@@ -36,7 +38,7 @@ export default class KeyValueChange {
       if (aChange.value === null) {
         delete result[aChange.key];
       } else {
-        result[aChange.key] = aChange.value;
+        set(result, aChange.key, aChange.value);
       }
     });
 

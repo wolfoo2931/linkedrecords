@@ -76,6 +76,38 @@ describe('Key Value Attributes', () => {
       expect(convergedValueClientA.new).to.equal('value');
       expect(convergedValueClientB.new).to.equal('value');
     });
+
+    it('propagetes all changes to all attribute instances', async () => {
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id!);
+
+      await attributeClientA.set({
+        foo: 'bar',
+        foo2: {
+          deep: {
+            nested: {
+              value: 'dn',
+            },
+          },
+        },
+      });
+
+      await waitFor(async () => Object.keys((await attributeClientB!.getValue())).length === 2);
+
+      expect(await attributeClientB!.getValue()).to.eqls({
+        foo: 'bar',
+        foo2: {
+          deep: {
+            nested: {
+              value: 'dn',
+            },
+          },
+        },
+      });
+    });
   });
 
   describe('attribute.change()', () => {
@@ -96,6 +128,31 @@ describe('Key Value Attributes', () => {
       expect(await reloadedAttribute!.getValue()).to.eqls({
         foo: 'bar',
         foo2: { nested: 'values' },
+      });
+    });
+
+    it('propagetes all changes to all attribute instances', async () => {
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id!);
+
+      await attributeClientA.change(new KeyValueChange([
+        { key: 'foo2', value: { deep: { nested: { value: 'dn' } }, more: undefined } },
+      ]));
+
+      await waitFor(async () => Object.keys((await attributeClientB!.getValue())).length === 2);
+
+      expect(await attributeClientB!.getValue()).to.eqls({
+        foo: 'bar',
+        foo2: {
+          deep: {
+            nested: {
+              value: 'dn',
+            },
+          },
+        },
       });
     });
   });
