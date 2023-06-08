@@ -15,13 +15,13 @@ if (process.env['HTTPS'] === 'true') {
     cert: process.env['SSL_CRT'].replace(/\\n/g, '\n').replace(/^\$/, ''),
   }).then((server) => {
     server.listen(port);
-    console.log(`LinkedRecords is running on port ${port}`);
+    console.log(`LinkedRecords is running on port ${port} (https)`);
   });
 } else {
   createServer({
     transportDriver: http,
   }).then((server) => {
     server.listen(port);
-    console.log(`LinkedRecords is running on port ${port}`);
+    console.log(`LinkedRecords is running on port ${port} (http)`);
   });
 }

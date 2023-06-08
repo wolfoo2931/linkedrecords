@@ -173,8 +173,8 @@ class WSAccessControl {
 }
 
 async function createApp(httpServer: https.Server) {
-  if (!process.env['APP_BASE_URL']) {
-    throw new Error('You nee to set the APP_BASE_URL configuration as environment variable.');
+  if (!process.env['FRONTEND_BASE_URL']) {
+    throw new Error('You nee to set the FRONTEND_BASE_URL configuration as environment variable.');
   }
 
   const app = express();
@@ -192,7 +192,7 @@ async function createApp(httpServer: https.Server) {
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
-  app.use(cors({ origin: process.env['APP_BASE_URL'], credentials: true, maxAge: 86400 }));
+  app.use(cors({ origin: process.env['FRONTEND_BASE_URL'], credentials: true, maxAge: 86400 }));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/', factMiddleware());
