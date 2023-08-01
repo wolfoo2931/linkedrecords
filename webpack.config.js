@@ -11,7 +11,7 @@ const client = {
   watch: false,
   output: {
     path: path.resolve(__dirname, "dist"),
-    filename: "client.js",
+    filename: "browser_sdk.js",
     library: {
       type: "umd",
     },

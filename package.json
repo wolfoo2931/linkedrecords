@@ -4,7 +4,7 @@
   "description": "A backend as a service for declarative and functional API development",
   "exports": {
     "./server": "./dist/server.js",
-    "./client": "./dist/client.js"
+    "./browser_sdk": "./dist/browser_sdk.js"
   },
   "types": "./dist/src/browser_sdk/index.d.ts",
   "scripts": {
