@@ -23,7 +23,7 @@ const client = {
         use: {
           loader: "ts-loader",
           options: {
-            transpileOnly: true
+            transpileOnly: false,
           },
         },
         exclude: (e) => {
