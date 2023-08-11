@@ -43,8 +43,18 @@ module.exports = function (config) {
       module: {
         rules: [
           {
-            test: /\.ts$/,
-            use: 'ts-loader',
+            test: /\.tsx?$/,
+            use: {
+              loader: "ts-loader",
+              options: {
+                transpileOnly: true
+              },
+            },
+            exclude: (e) => {
+              let file = e.replace(__dirname, '.');
+
+              return file.match(/node_modules/)
+            }
           },
         ],
       },
