@@ -34,7 +34,7 @@ async function withAuthForEach(req, res, controllerAction, isAuthorized) {
 
     const isAuthorizedAsLoggedInUser = (record) => isAuthorized(uid(req), req, record);
 
-    req.hasedUserID = uid(req);
+    req.hashedUserID = uid(req);
 
     await controllerAction(req, res, isAuthorizedAsLoggedInUser);
   }
@@ -68,7 +68,7 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
       res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
     }
 
-    req.hasedUserID = uid(req);
+    req.hashedUserID = uid(req);
 
     uploadWrappedControllerAction(req, res);
   }
@@ -201,7 +201,7 @@ async function createApp(httpServer: https.Server) {
   app.get('/attributes', errorHandler((req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute)));
   app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
-  app.get('/attributes/:attributeId/changes', errorHandler((req, res) => withAuth(req, res, attributesController.subsribe, authorizer.isAuthorizedToReadAttribute)));
+  app.get('/attributes/:attributeId/changes', errorHandler((req, res) => withAuth(req, res, attributesController.subscribe, authorizer.isAuthorizedToReadAttribute)));
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
   app.get('/facts', errorHandler((req, res) => withAuthForEach(req, res, factsController.index, authorizer.isAuthorizedToReadFact)));
   app.post('/facts', errorHandler((req, res) => withAuthForEach(req, res, factsController.create, authorizer.isAuthorizedToCreateFact)));

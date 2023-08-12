@@ -9,11 +9,11 @@ export const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 // eslint-disable-next-line import/prefer-default-export
 export function waitFor(fn) {
   return new Promise<void>((resolve) => {
-    const intervallId = setInterval(async () => {
+    const intervalId = setInterval(async () => {
       const result = await fn();
 
       if (result) {
-        clearInterval(intervallId);
+        clearInterval(intervalId);
         resolve();
       }
     }, 100);

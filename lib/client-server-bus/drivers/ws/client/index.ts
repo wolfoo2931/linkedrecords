@@ -27,7 +27,7 @@ export default class ClientServerBus {
     }
 
     if (subResult.status !== 'subscribed') {
-      throw new Error(`unkown error when subscribing to ${channel}`);
+      throw new Error(`unknown error when subscribing to ${channel}`);
     }
 
     this.subscriptions[subId] = this.subscriptions[subId] || [];
@@ -49,7 +49,7 @@ export default class ClientServerBus {
     }
 
     if (sendResult.status !== 'delivered') {
-      throw new Error(`unkown error when sending message to ${channel}`);
+      throw new Error(`unknown error when sending message to ${channel}`);
     }
   }
 

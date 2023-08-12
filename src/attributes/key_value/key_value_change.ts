@@ -19,7 +19,7 @@ export default class KeyValueChange {
   }
 
   constructor(changeset: AtomicChange[], changeId?: string) {
-    this.changeId = changeId ?? 'uncommited';
+    this.changeId = changeId ?? 'uncommitted';
     this.change = changeset;
   }
 

@@ -10,7 +10,7 @@ export default class LongTextChange {
 
   constructor(changeset, changeId?: string) {
     this.changeset = changeset;
-    this.changeId = changeId ?? 'uncommited';
+    this.changeId = changeId ?? 'uncommitted';
   }
 
   public static fromString(change: string): LongTextChange {

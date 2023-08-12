@@ -4,7 +4,7 @@ export default class BlobChange {
   changeId: string;
 
   constructor(newValue: Blob, changeId?: string) {
-    this.changeId = changeId ?? 'uncommited';
+    this.changeId = changeId ?? 'uncommitted';
     this.value = newValue;
   }
 

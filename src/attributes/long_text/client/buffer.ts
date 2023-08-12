@@ -12,7 +12,7 @@ export default class ChangeBuffer {
   // this function returns a transformed version of the foreignChange which
   // fits into the current client state. This is required because the client
   // could have some changes which has not been send to the server yet. So, the
-  // server don't know about these changes and the changes comming from the server
+  // server don't know about these changes and the changes coming from the server
   // would not fit into the client state.
   transformAgainst(
     foreignChange: LongTextChange,
