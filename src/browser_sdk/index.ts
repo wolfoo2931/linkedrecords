@@ -18,6 +18,13 @@ type FetchOptions = {
   isJSON?: boolean,
 };
 
+type SessionTokenConfig = {
+  clientServerBus?: ClientServerBus,
+  loginURL?: URL,
+};
+
+type Config = SessionTokenConfig;
+
 export {
   LongTextAttribute,
   KeyValueAttribute,
@@ -62,7 +69,7 @@ export default class LinkedRecords {
     return userId;
   }
 
-  constructor(serverURL: URL, clientServerBus?: ClientServerBus, loginURL?: URL) {
+  constructor(serverURL: URL, { clientServerBus, loginURL }: Config) {
     this.serverURL = serverURL;
     this.loginURL = loginURL;
     this.actorId = LinkedRecords.readUserIdFromCookies();
