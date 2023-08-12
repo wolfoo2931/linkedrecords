@@ -66,7 +66,7 @@ IsAttributeStorage
     const queryOptions = { maxChangeId: changeId };
     const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
 
-    const commulatedResult = {
+    const accumulatedResult = {
       value: JSON.parse(result.value),
       changeId: result.changeId,
       actorId: result.actorId,
@@ -78,12 +78,12 @@ IsAttributeStorage
 
     changes.forEach((change) => {
       const tmpChange = KeyValueChange.fromString(change.value);
-      commulatedResult.value = tmpChange.apply(commulatedResult.value);
-      commulatedResult.changeId = change.changeId;
-      commulatedResult.actorId = change.actorId;
-      commulatedResult.updatedAt = change.time;
+      accumulatedResult.value = tmpChange.apply(accumulatedResult.value);
+      accumulatedResult.changeId = change.changeId;
+      accumulatedResult.actorId = change.actorId;
+      accumulatedResult.updatedAt = change.time;
     });
 
-    return commulatedResult;
+    return accumulatedResult;
   }
 }

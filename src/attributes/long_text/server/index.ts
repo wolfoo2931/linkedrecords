@@ -84,7 +84,7 @@ IsAttributeStorage
     const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
 
     // TODO: query options should be something
-    // like { minChangeId: result.cahngeId, maxChangeId: changeId }
+    // like { minChangeId: result.changeId, maxChangeId: changeId }
     const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
 
     changes.forEach((change) => {
@@ -120,10 +120,10 @@ IsAttributeStorage
   }
 
   // Applies the changeset which can be based on
-  // an older version of the veriable value.
+  // an older version of the variable value.
   // This is because the client which constructed
   // the changeset might not have the latest changes from the server
-  // This is the "one-step diamond problem" in operational transfomration
+  // This is the "one-step diamond problem" in operational transformation
   // see: http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
   private async changeByChangeset(
     changeset: LongTextChange,
@@ -137,8 +137,8 @@ IsAttributeStorage
       transformedClientChange: string
     }> {
     // the a in the simple one-step diamond problem
-    // the changeset comming from the client, probably
-    // made on an older version of the attribute (the server version migth be newr)
+    // the changeset coming from the client, probably
+    // made on an older version of the attribute (the server version might be newer)
     const clientChange = changeset;
 
     // the b in the simple one-step diamond problem
@@ -160,7 +160,7 @@ IsAttributeStorage
     // transformAgainst function. see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
     const transformedServerChange = serverChange?.transformAgainst(clientChange, true).toString();
 
-    // TODO: we do not know yet for sure if this changeset will be applyable
+    // TODO: we do not know yet for sure if this changeset will be applicable
     // to the already inserted changesets.
     const insertResult = await this.storage.insertAttributeChange(
       this.id,

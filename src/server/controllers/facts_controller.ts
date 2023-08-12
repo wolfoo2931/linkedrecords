@@ -30,7 +30,7 @@ export default {
       const fact = new Fact(rawFacts[i][0], rawFacts[i][1], rawFacts[i][2], req.log);
 
       if (await isAuthorizedToCreateFact(fact)) {
-        await fact.save(req.hasedUserID);
+        await fact.save(req.hashedUserID);
 
         savedRawFacts.push(fact.toJSON());
       }

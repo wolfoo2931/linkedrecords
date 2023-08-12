@@ -55,7 +55,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
 
     if (this.changeInTransmission) {
       if (
-        this.getLastChangeTransmitedMillisecondsAgo() > LongTextAttribute.serverApprovalTimeoutInMS
+        this.getLastChangeTransmittedMillisecondsAgo() > LongTextAttribute.serverApprovalTimeoutInMS
       ) {
         console.log(`No approval received from server after ${LongTextAttribute.serverApprovalTimeoutInMS} ms`);
         this.linkedRecords.handleConnectionError(new Error(`No approval received from server after ${LongTextAttribute.serverApprovalTimeoutInMS} ms`));
@@ -67,7 +67,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     }
   }
 
-  protected getLastChangeTransmitedMillisecondsAgo(): number {
+  protected getLastChangeTransmittedMillisecondsAgo(): number {
     if (!this.changeInTransmissionSendAt) {
       return -1;
     }

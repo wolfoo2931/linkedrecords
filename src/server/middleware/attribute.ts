@@ -4,7 +4,7 @@ import { PsqlStorage } from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 import IsLogger from '../../../lib/is_logger';
 
-function getAttributeIdByRquest(req) {
+function getAttributeIdByRequest(req) {
   let urlMatch = req.originalUrl.match(/\/attributes\/(.*?)[?&/^]/);
 
   if (urlMatch && urlMatch[1]) {
@@ -21,14 +21,14 @@ function getAttributeIdByRquest(req) {
 }
 
 function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any, any, any> {
-  const id = getAttributeIdByRquest(req);
+  const id = getAttributeIdByRequest(req);
 
   if (!AttributeClass) {
-    throw new Error(`Server is unkown of Attribute Type Prefix for id ${id}`);
+    throw new Error(`Server is unknown of Attribute Type Prefix for id ${id}`);
   }
 
   if (!req.actorId || req.actorId === 'undefined') {
-    throw new Error(`The request does not contain a actorid for attribute id: ${id}`);
+    throw new Error(`The request does not contain a actorId for attribute id: ${id}`);
   }
 
   if (!req.clientId || req.clientId === 'undefined') {
@@ -42,11 +42,11 @@ export function getAttributeByMessage(attributeId, message, logger: IsLogger) {
   const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
 
   if (!AttributeClass) {
-    throw new Error(`Server is unkown of Attribute Type Prefix for id ${attributeId}`);
+    throw new Error(`Server is unknown of Attribute Type Prefix for id ${attributeId}`);
   }
 
   if (!message.actorId || message.actorId === 'undefined') {
-    throw new Error(`The request does not contain a actorid for attribute id: ${attributeId}`);
+    throw new Error(`The request does not contain a actorId for attribute id: ${attributeId}`);
   }
 
   if (!message.clientId || message.clientId === 'undefined') {
@@ -64,7 +64,7 @@ export function getAttributeByMessage(attributeId, message, logger: IsLogger) {
 
 export default function attributeMiddleware() {
   return (req, res, next) => {
-    const id = getAttributeIdByRquest(req);
+    const id = getAttributeIdByRequest(req);
 
     req.attributeStorage = new PsqlStorage(req.log);
     req.clientId = req.query?.clientId || req.body?.clientId;

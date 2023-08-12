@@ -5,8 +5,8 @@ export default {
   async index(req, res, isAuthorizedToReadAttribute) {
     const { clientId, actorId, attributeStorage } = req;
     const query: AttributeQuery = JSON.parse(req.query.query);
-    const queryExector = new QueryExecutor(req.log);
-    const result = await queryExector.resolveToAttributes(
+    const queryExecutor = new QueryExecutor(req.log);
+    const result = await queryExecutor.resolveToAttributes(
       query,
       clientId,
       actorId,
@@ -59,18 +59,18 @@ export default {
     res.send(result);
   },
 
-  async subsribe(req, res) {
+  async subscribe(req, res) {
     res.subscribeClientServerbus(req.params.attributeId);
     res.send({ status: 'ok' });
   },
 
   async update(req, res) {
     const parsedChange: SerializedChangeWithMetadata<any> = req.body;
-    const commitedChange: SerializedChangeWithMetadata<any> = await req.attribute.change(
+    const committedChange: SerializedChangeWithMetadata<any> = await req.attribute.change(
       parsedChange,
     );
 
-    res.sendClientServerMessage(req.params.attributeId, commitedChange);
+    res.sendClientServerMessage(req.params.attributeId, committedChange);
     res.status(200);
     res.send();
   },

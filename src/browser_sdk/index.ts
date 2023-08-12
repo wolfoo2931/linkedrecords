@@ -18,12 +18,12 @@ type FetchOptions = {
   isJSON?: boolean,
 };
 
-type SessionTokenConfig = {
+type ConfidentialClientModeConfig = {
   clientServerBus?: ClientServerBus,
   loginURL?: URL,
 };
 
-type Config = SessionTokenConfig;
+type Config = ConfidentialClientModeConfig;
 
 export {
   LongTextAttribute,
@@ -45,7 +45,7 @@ export default class LinkedRecords {
 
   connectionLostHandler?: (err?) => void;
 
-  unkownServerErrorHandler?: (response) => void;
+  unknownServerErrorHandler?: (response) => void;
 
   clientId: string;
 
@@ -118,7 +118,7 @@ export default class LinkedRecords {
     }
 
     if (!response.ok) {
-      this.handleUnkownServerError(response);
+      this.handleUnknownServerError(response);
       return false;
     }
 
@@ -159,15 +159,15 @@ export default class LinkedRecords {
     }
   }
 
-  public setUnkownServerErrorHandler(handler: (response) => void) {
-    this.unkownServerErrorHandler = handler;
+  public setUnknownServerErrorHandler(handler: (response) => void) {
+    this.unknownServerErrorHandler = handler;
   }
 
-  public handleUnkownServerError(response) {
-    if (this.unkownServerErrorHandler) {
-      this.unkownServerErrorHandler(response);
+  public handleUnknownServerError(response) {
+    if (this.unknownServerErrorHandler) {
+      this.unknownServerErrorHandler(response);
     } else {
-      console.log('UnkownServerError', response);
+      console.log('UnknownServerError', response);
     }
   }
 
