@@ -29,7 +29,7 @@ export async function changeUserContext(pretendToBe: string) {
 export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]> {
   const clientServerBus = new ClientServerBus();
   const client = new LinkedRecords(new URL('http://localhost:3000'), clientServerBus);
-  await await changeUserContext('testuser-1-id');
+  await changeUserContext('testuser-1-id');
   await client.ensureUserIdIsKnown();
   clients.push(client);
   return [client, clientServerBus];
