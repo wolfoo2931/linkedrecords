@@ -25,19 +25,9 @@ const blobUpload = multer().single('change');
 Fact.initDB();
 
 async function withAuthForEach(req, res, controllerAction, isAuthorized) {
-  if (!req?.oidc?.user?.sub) {
-    res.sendStatus(401);
-  } else {
-    if (!req.signedCookies.userId) {
-      res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
-    }
-
-    const isAuthorizedAsLoggedInUser = (record) => isAuthorized(uid(req), req, record);
-
-    req.hashedUserID = uid(req);
-
-    await controllerAction(req, res, isAuthorizedAsLoggedInUser);
-  }
+  await req.whenAuthenticated(async (hashedUserID) => {
+    await controllerAction(req, res, (record) => isAuthorized(hashedUserID, req, record));
+  });
 }
 
 async function withAuth(req, res, controllerAction, isAuthorized) {
@@ -61,17 +51,13 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
     });
   };
 
-  if (!req?.oidc?.user?.sub || !req.oidc.isAuthenticated() || !(await isAuthorized(uid(req), req))) {
-    res.sendStatus(401);
-  } else {
-    if (!req.signedCookies.userId) {
-      res.cookie('userId', uid(req), { signed: true, httpOnly: false, domain: process.env['COOKIE_DOMAIN'] });
+  await req.whenAuthenticated(async (hashedUserID) => {
+    if (await isAuthorized(hashedUserID, req)) {
+      uploadWrappedControllerAction(req, res);
+    } else {
+      res.sendStatus(401);
     }
-
-    req.hashedUserID = uid(req);
-
-    uploadWrappedControllerAction(req, res);
-  }
+  });
 }
 
 async function isAuthorizedToAccessFact(userid, request, factRecord?) {
@@ -129,7 +115,7 @@ class WSAccessControl {
     this.app = app;
   }
 
-  public verifyAuthenitcated(
+  public verifyAuthenticated(
     request: http.IncomingMessage,
   ): Promise<string> {
     const response = new http.ServerResponse(request);
