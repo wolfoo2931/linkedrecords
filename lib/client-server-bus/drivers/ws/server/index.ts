@@ -8,7 +8,7 @@ import { createAdapter } from '@socket.io/redis-streams-adapter';
 const connections = {};
 
 export interface AccessControl {
-  verifyAuthenitcated(
+  verifyAuthenticated(
     request: http.IncomingMessage
   ): Promise<string>;
 
@@ -60,7 +60,7 @@ export default async function clientServerBus(
 
   io.on('connection', async (socket) => {
     const request = socket?.request;
-    const userId = await accessControl.verifyAuthenitcated(request);
+    const userId = await accessControl.verifyAuthenticated(request);
 
     if (!userId) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');

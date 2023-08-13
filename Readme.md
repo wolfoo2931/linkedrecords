@@ -12,7 +12,6 @@ LinkedRecords is configured via environment variables. See table below.
 | PGDATABASE | xxxx | The PostgreSQL database name. |
 | SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
 | FRONTEND_BASE_URL | http://localhost:3001 | The base URL of the frontend. It will be used for the Access-Control-Allow-Origin HTTP header and is also required for the OpenID connect redirection. |
-| COOKIE_DOMAIN | localhost.com | The domain for which the cookies should be set. If your single-page application is available via "app.localhost.com" and the LinkedRecords endpoint is available via "api.localhost.com", you have to set this value to "localhost.com".|
 | AUTH_COOKIE_SIGNING_SECRET | xxxx | The secret used to sign cookies. |
 | AUTH_ISSUER_BASE_URL | https://dev-onljhxvyw71o4mbs.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
 | AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
