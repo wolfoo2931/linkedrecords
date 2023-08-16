@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 export DISABLE_AUTHENTICATION=true
-export COOKIE_DOMAIN=localhost
 export NODE_ENV=production
 
 npx webpack --config ./webpack-testserver.config.js

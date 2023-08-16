@@ -3,8 +3,8 @@ export default function errorHandler(fn) {
     try {
       await fn(req, res);
     } catch (ex) {
-      res.sendStatus(500);
       req.log.error(ex);
+      res.sendStatus(500);
     }
   };
 }
