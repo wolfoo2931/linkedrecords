@@ -17,8 +17,19 @@ function biggestCommonSuffix(str1, str2) {
 function getCookieSettings(frontendURL: string, backendURL: string) {
   const frontend = new URL(frontendURL);
   const backend = new URL(backendURL);
+  const backendHost = backend.host.replace(/:\d*$/, '');
+  const frontendHost = frontend.host.replace(/:\d*$/, '');
 
-  let commonHostSuffix = biggestCommonSuffix(backend.host, frontend.host);
+  let commonHostSuffix = biggestCommonSuffix(
+    backendHost,
+    frontendHost,
+  );
+
+  if (backendHost === 'localhost' && frontendHost === 'localhost') {
+    return {
+      domain: backendHost,
+    };
+  }
 
   if (commonHostSuffix) {
     commonHostSuffix = commonHostSuffix.replace(/^\./, '');
@@ -26,7 +37,7 @@ function getCookieSettings(frontendURL: string, backendURL: string) {
 
   if (!commonHostSuffix || !commonHostSuffix.match(/\./)) {
     return {
-      domain: backend.host,
+      domain: backendHost,
       sameSite: 'None',
     };
   }
