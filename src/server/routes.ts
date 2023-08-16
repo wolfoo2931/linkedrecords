@@ -168,11 +168,11 @@ async function createApp(httpServer: https.Server) {
   const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request) => {
     const attribute = getAttributeByMessage(attributeId, change, request.log as unknown as IsLogger);
 
-    const commitedChange: SerializedChangeWithMetadata<any> = await attribute.change(
+    const committedChange: SerializedChangeWithMetadata<any> = await attribute.change(
       change,
     );
 
-    sendMessage(attributeId, commitedChange);
+    sendMessage(attributeId, committedChange);
   });
 
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
