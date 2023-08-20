@@ -77,6 +77,12 @@ export default class LinkedRecords {
     this.clientServerBus = clientServerBus || new ClientServerBus();
     this.Attribute = new AttributesRepository(this, this.clientServerBus);
     this.Fact = new FactsRepository(this);
+
+    this.clientServerBus.subscribeConnectionInterrupted(() => {
+      if (this.connectionLostHandler) {
+        this.connectionLostHandler();
+      }
+    });
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
