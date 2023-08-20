@@ -4,13 +4,19 @@ import { io } from 'socket.io-client';
 export default class ClientServerBus {
   subscriptions = {};
 
-  connetions = {};
+  connections = {};
 
-  connetionsInEstablishment = {};
+  connectionsInEstablishment = {};
 
   isPaused: boolean = false;
 
+  connectionInterruptedSubscribers: ((error?: any) => void)[] = [];
+
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
+
+  public subscribeConnectionInterrupted(sub: (error?: any) => void): void {
+    this.connectionInterruptedSubscribers.push(sub);
+  }
 
   public async subscribe(url: string, channel: string, handler: (data: any) => any)
     : Promise<[string, (data: any) => any]> {
@@ -60,11 +66,11 @@ export default class ClientServerBus {
   }
 
   public unsubscribeAll() {
-    Object.values(this.connetions).forEach((connection: any) => {
+    Object.values(this.connections).forEach((connection: any) => {
       connection.close();
     });
 
-    this.connetions = {};
+    this.connections = {};
   }
 
   public pauseNotification() {
@@ -79,7 +85,7 @@ export default class ClientServerBus {
     this.messagesWhilePaused = [];
   }
 
-  private static getWSAsync(url: URL) {
+  private getWSAsync(url: URL) {
     return new Promise((resolve, reject) => {
       const socket = io(url.origin, {
         withCredentials: true,
@@ -91,6 +97,18 @@ export default class ClientServerBus {
         resolve(socket);
       });
 
+      socket.on('error', (error) => {
+        this.connectionInterruptedSubscribers.forEach((sub) => {
+          sub(error);
+        });
+      });
+
+      socket.on('disconnect', () => {
+        this.connectionInterruptedSubscribers.forEach((sub) => {
+          sub();
+        });
+      });
+
       socket.on('connect_error', reject);
     });
   }
@@ -99,16 +117,16 @@ export default class ClientServerBus {
     const url = new URL(origin);
     url.pathname = '/ws';
 
-    if (this.connetionsInEstablishment[url.origin]) {
-      const connection = await this.connetionsInEstablishment[url.origin];
+    if (this.connectionsInEstablishment[url.origin]) {
+      const connection = await this.connectionsInEstablishment[url.origin];
       return connection;
     }
 
-    if (!this.connetions[url.origin]) {
-      this.connetionsInEstablishment[url.origin] = ClientServerBus.getWSAsync(url);
-      this.connetions[url.origin] = await this.connetionsInEstablishment[url.origin];
+    if (!this.connections[url.origin]) {
+      this.connectionsInEstablishment[url.origin] = this.getWSAsync(url);
+      this.connections[url.origin] = await this.connectionsInEstablishment[url.origin];
 
-      this.connetions[url.origin].on('data', (data) => {
+      this.connections[url.origin].on('data', (data) => {
         const { sseChannel } = data;
 
         if (!sseChannel) {
@@ -132,6 +150,6 @@ export default class ClientServerBus {
       });
     }
 
-    return this.connetions[origin];
+    return this.connections[origin];
   }
 }
