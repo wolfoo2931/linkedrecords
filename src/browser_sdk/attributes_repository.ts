@@ -67,19 +67,14 @@ export default class AttributesRepository {
     return attribute;
   }
 
-  // TODO: FIXME: use idToAttribute
   async find(attributeId: string)
     :Promise<AbstractAttributeClient<any, IsSerializable> | undefined> {
-    const [attributeTypePrefix] = attributeId.split('-');
-    const AttributeClass = AttributesRepository
-      .attributeTypes
-      .find((c) => c.getDataTypePrefix() === attributeTypePrefix);
+    const attribute = await this.idToAttribute(attributeId);
 
-    if (!AttributeClass) {
+    if (!attribute) {
       throw new Error(`Attribute ID ${attributeId} is unknown`);
     }
 
-    const attribute = new AttributeClass(this.linkedRecords, this.clientServerBus, attributeId);
     const isOk = await attribute.get();
 
     if (!isOk) {
