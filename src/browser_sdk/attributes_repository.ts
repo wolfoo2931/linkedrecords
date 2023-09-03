@@ -5,8 +5,12 @@ import IsSerializable from '../attributes/abstract/is_serializable';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import BlobAttribute from '../attributes/blob/client';
-import { CompoundAttributeQuery } from '../attributes/attribute_query';
+import { CompoundAttributeQuery, FactQueryWithOptionalSubjectPlaceholder } from '../attributes/attribute_query';
 import ClientServerBus from '../../lib/client-server-bus/client';
+
+type TransformValue<X>
+  = (X extends Array<FactQueryWithOptionalSubjectPlaceholder>
+    ? Array<AbstractAttributeClient<any, any>> : AbstractAttributeClient<any, any>);
 
 export default class AttributesRepository {
   linkedRecords: LinkedRecords;
@@ -24,7 +28,7 @@ export default class AttributesRepository {
     this.clientServerBus = clientServerBus;
   }
 
-  idToAttribute(id, serverState?) {
+  idToAttribute(id, serverState?): AbstractAttributeClient<any, any> | undefined {
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = AttributesRepository
       .attributeTypes
@@ -85,9 +89,9 @@ export default class AttributesRepository {
   }
 
   // TODO: check for null values in the query
-  async findAll(query: CompoundAttributeQuery)
+  async findAll<T extends CompoundAttributeQuery>(query: T)
     : Promise<
-    { [key: string]: AbstractAttributeClient<any, any>[] | AbstractAttributeClient<any, any> }
+    { [K in keyof T]: TransformValue<T[K]> }
     > {
     const params = new URLSearchParams();
     params.append('query', JSON.stringify(query));
@@ -95,7 +99,7 @@ export default class AttributesRepository {
     const result = await this.linkedRecords.fetch(`/attributes?${params.toString()}`);
     const records = await result.json();
 
-    const attributeResult = {};
+    const attributeResult = {} as any;
 
     Object.keys(records).forEach((key) => {
       if (Array.isArray(records[key])) {

@@ -156,7 +156,7 @@ describe('Attribute', () => {
         [userAB.id, 'isMemberOf', teamB.id],
       ]);
 
-      const teams = await otherClient.Attribute.findAll({
+      const { allTeamsOfUserA, allTeamsOfUserB, allTeamsOfUserAB } = await otherClient.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
           [userA.id!, 'isMemberOf', '$it'],
@@ -170,12 +170,6 @@ describe('Attribute', () => {
           [userAB.id!, 'isMemberOf', '$it'],
         ],
       });
-
-      const { allTeamsOfUserA, allTeamsOfUserB, allTeamsOfUserAB } = <{
-        allTeamsOfUserA: KeyValueAttribute[],
-        allTeamsOfUserB: KeyValueAttribute[],
-        allTeamsOfUserAB: KeyValueAttribute[],
-      }> <unknown> teams;
 
       expect(allTeamsOfUserA.length).to.equal(1);
       expect(allTeamsOfUserA[0]!.id).to.equal(teamA.id);
@@ -207,7 +201,7 @@ describe('Attribute', () => {
         [userB.id, 'isMemberOf', teamC.id],
       ]);
 
-      const teams = await otherClient.Attribute.findAll({
+      const { allTeamsOfUserA, allTeamsOfUserB, commonTeams } = await otherClient.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
           [userA.id!, 'isMemberOf', '$it'],
@@ -222,12 +216,6 @@ describe('Attribute', () => {
           [userB.id!, 'isMemberOf', '$it'],
         ],
       });
-
-      const { allTeamsOfUserA, allTeamsOfUserB, commonTeams } = <{
-        allTeamsOfUserA: KeyValueAttribute[],
-        allTeamsOfUserB: KeyValueAttribute[],
-        commonTeams: KeyValueAttribute[],
-      }> <unknown> teams;
 
       expect(allTeamsOfUserA.length).to.equal(2);
       expect(allTeamsOfUserB.length).to.equal(2);
@@ -260,7 +248,7 @@ describe('Attribute', () => {
         [memberC.id, 'isMemberOf', teamB.id],
       ]);
 
-      const users = await otherClient.Attribute.findAll({
+      const { allMembersOfTeamA, allMembersOfTeamB, commonMembers } = await otherClient.Attribute.findAll({
         allMembersOfTeamA: [
           ['$it', 'isMemberOf', teamA.id!],
         ],
@@ -272,12 +260,6 @@ describe('Attribute', () => {
           ['$it', 'isMemberOf', teamB.id!],
         ],
       });
-
-      const { allMembersOfTeamA, allMembersOfTeamB, commonMembers } = <{
-        allMembersOfTeamA: KeyValueAttribute[],
-        allMembersOfTeamB: KeyValueAttribute[],
-        commonMembers: KeyValueAttribute[],
-      }> <unknown> users;
 
       expect(allMembersOfTeamA.length).to.equal(2);
       expect(allMembersOfTeamB.length).to.equal(2);
@@ -297,7 +279,7 @@ describe('Attribute', () => {
         ['team', '$isATermFor', 'a group of people'],
       ]);
 
-      const teams = await client.Attribute.findAll({
+      const { allTeamsOfUserA, allTeamsOfUserB } = await client.Attribute.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
         ],
@@ -305,11 +287,6 @@ describe('Attribute', () => {
           ['$it', 'isA', 'team'],
         ],
       });
-
-      const { allTeamsOfUserA, allTeamsOfUserB } = <{
-        allTeamsOfUserA: KeyValueAttribute[],
-        allTeamsOfUserB: KeyValueAttribute[],
-      }> <unknown> teams;
 
       expect(allTeamsOfUserA.length).to.equal(0);
       expect(allTeamsOfUserB.length).to.equal(0);
@@ -577,17 +554,8 @@ describe('Attribute', () => {
         ],
       });
 
-      const { content: contentAttribute1, refernces: [referencesAttribute1], referenceSources: [referenceSourcesAttribute1] } = <{
-        content: LongTextAttribute,
-        refernces: KeyValueAttribute[],
-        referenceSources: KeyValueAttribute[]
-      }> <unknown> await exec1;
-
-      const { content: contentAttribute2, refernces: [referencesAttribute2], referenceSources: [referenceSourcesAttribute2] } = <{
-        content: LongTextAttribute,
-        refernces: KeyValueAttribute[],
-        referenceSources: KeyValueAttribute[]
-      }> <unknown> await exec2;
+      const { content: contentAttribute1, refernces: [referencesAttribute1], referenceSources: [referenceSourcesAttribute1] } = await exec1;
+      const { content: contentAttribute2, refernces: [referencesAttribute2], referenceSources: [referenceSourcesAttribute2] } = await exec2;
 
       expect(await contentAttribute1.getValue()).to.equal('the init value');
       expect(await referencesAttribute1!.getValue()).to.deep.equal({ foo: 'bar' });
@@ -608,7 +576,7 @@ describe('Attribute', () => {
       const { content: contentAttribute, refernces } = <{
         content: LongTextAttribute,
         refernces: KeyValueAttribute[],
-      }> <unknown> await client.Attribute.findAll({
+      }> await client.Attribute.findAll({
         content: 'not-exsting',
         refernces: [
           ['isA', 'notExsting'],
