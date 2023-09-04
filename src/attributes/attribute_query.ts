@@ -25,7 +25,7 @@ const asyncFilter = async (arr, fn) => {
 };
 
 function factQueryWithOptionalSubjectPlaceholderToFactQuery(
-  x: FactQueryWithOptionalSubjectPlaceholder,
+  x: [string, string, string?],
 ): SubjectQuery {
   if (x.length === 3 && x[0] === '$it' && x[2]) {
     return [x[1], x[2]];
@@ -181,7 +181,7 @@ export default class QueryExecutor {
       }
 
       return true;
-    });
+    }) as [string, string, string?][];
 
     const subjectFactsQuery: FactQuery = {
       subject: filterUndefinedSubjectQueries(queryWithoutDataTypeFilter
