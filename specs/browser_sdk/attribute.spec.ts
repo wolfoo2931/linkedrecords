@@ -272,6 +272,37 @@ describe('Attribute', () => {
       expect(commonMembers[0]!.id).to.equal(memberC.id);
     });
 
+    it('allows to find attributes by datatype', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const memberA = await client.Attribute.create('keyValue', { name: 'Paul' });
+      const memberB = await client.Attribute.create('longText', 'test');
+      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
+
+      await client.Fact.createAll([
+        [memberA.id, 'isMemberOf', teamA.id],
+        [memberB.id, 'isMemberOf', teamA.id],
+      ]);
+
+      const { keyValueMembers, longTextMembers } = await otherClient.Attribute.findAll({
+        keyValueMembers: [
+          ['$it', '$hasDataType', KeyValueAttribute],
+          ['$it', 'isMemberOf', teamA.id],
+        ],
+        longTextMembers: [
+          ['$hasDataType', LongTextAttribute],
+          ['isMemberOf', teamA.id!],
+        ],
+      });
+
+      expect(keyValueMembers.find((attr) => attr.id === memberA.id)).to.not.eq(undefined);
+      expect(keyValueMembers.find((attr) => attr.id === memberB.id)).to.eq(undefined);
+
+      expect(longTextMembers.find((attr) => attr.id === memberB.id)).to.not.eq(undefined);
+      expect(longTextMembers.find((attr) => attr.id === memberA.id)).to.eq(undefined);
+    });
+
     it('returns empty records when the object relations do not exists', async () => {
       const [client] = await createClient();
 
@@ -326,7 +357,7 @@ describe('Attribute', () => {
       expect(books[1].value.title).to.eq('Moby Dick Volume 3');
     });
 
-    it('supports the $not modifier with transitiv relationships', async () => {
+    it('supports the $not modifier with transitive relationships', async () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
