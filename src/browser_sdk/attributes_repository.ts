@@ -142,47 +142,27 @@ export default class AttributesRepository {
     return attributeResult;
   }
 
-  // async findAllAsValue<T extends CompoundAttributeQuery>(query: T)
-  //   : Promise<
-  //   { [K in keyof T]: TransformQueryRecord<T[K]> }
-  //   > {
-  //   const compound = await this.findAll(query);
+  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T)
+    : Promise<
+    { [K in keyof T]: TransformQueryRecord<T[K]> }
+    > {
+    const result = await this.findAll(query);
+    const promises: Promise<boolean>[] = [];
 
-  //   const result = {};
+    Object.keys(result).forEach((compoundName) => {
+      if (result[compoundName]) {
+        if (Array.isArray(result[compoundName])) {
+          (result[compoundName] as Array<AbstractAttributeClient<any, any>>).forEach((attr) => {
+            promises.push(attr.load());
+          });
+        } else {
+          promises.push((result[compoundName] as AbstractAttributeClient<any, any>).load());
+        }
+      }
+    });
 
-  //   const entries = Object.entries(compound);
+    await Promise.all(promises);
 
-  //   for (let i = 0; i < entries.length; i += 1) {
-  //     const compoundName = entries[i]![0];
-  //     result[compoundName] = result[compoundName] || [];
-
-  //     for (let j = 0; j < entries[i]![1].length; j += 1) {
-  //       result[compoundName].push({
-  //         meta: {
-  //           id: entries[i]![1][j].id,
-  //           attribute: entries[i]![1][j],
-  //         },
-  //         data: entries[i]![1][j].getValue(),
-  //       });
-  //     }
-  //   }
-
-  //   const promises = [];
-
-  //   Object.values(result).forEach((records) => {
-  //     records.forEach((record) => {
-  //       promises.push(record.data);
-  //     });
-  //   });
-
-  //   await Promise.all(promises);
-
-  //   Object.values(result).forEach(async (records) => {
-  //     records.forEach(async (record) => {
-  //       record.data = await record.data;
-  //     });
-  //   });
-
-  //   return result;
-  // }
+    return result;
+  }
 }

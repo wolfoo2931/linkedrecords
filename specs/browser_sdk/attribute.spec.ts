@@ -11,6 +11,69 @@ describe('Attribute', () => {
   beforeEach(truncateDB);
   afterEach(cleanupClients);
 
+  describe('Attribute.findAndLoadAll()', () => {
+    it('find attributes by facts', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const content = await client.Attribute.create('longText', 'the init value');
+      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+
+      const userAB = await client.Attribute.create('keyValue', {});
+      const userXX = await client.Attribute.create('keyValue', {});
+      const userCB = await client.Attribute.create('keyValue', {});
+
+      const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
+      const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
+      const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
+
+      await client.Fact.createAll([
+        ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
+        [references.id, 'belongsTo', content.id],
+        [references.id, 'isA', 'referenceStore'],
+        [referenceSources1.id, 'isA', 'referenceSourceStore'],
+        [referenceSources2.id, 'isA', 'referenceSourceStore'],
+        [referenceSources3.id, 'isA', 'referenceSourceStore'],
+        [referenceSources1.id, 'belongsTo', content.id],
+        [referenceSources2.id, 'belongsTo', content.id],
+        [referenceSources3.id, 'belongsTo', content.id],
+        [referenceSources1.id, 'belongsTo', userAB.id],
+        [referenceSources2.id, 'belongsTo', userXX.id],
+        [referenceSources3.id, 'belongsTo', userCB.id],
+      ]);
+
+      const {
+        content: contentAttribute,
+        references: [referencesAttribute],
+        referenceSources: [referenceSourcesAttribute],
+      } = await otherClient.Attribute.findAndLoadAll({
+        content: content.id!,
+        references: [
+          ['belongsTo', content.id!],
+          ['isA', 'referenceStore'],
+        ],
+        referenceSources: [
+          ['belongsTo', content.id!],
+          ['isA', 'referenceSourceStore'],
+          ['belongsTo', userXX.id!],
+        ],
+      });
+
+      if (!referencesAttribute) {
+        throw Error('referencesAttribute is null');
+      }
+
+      if (!referenceSourcesAttribute) {
+        throw Error('referenceSourcesAttribute is null');
+      }
+
+      expect(contentAttribute.value).to.equal('the init value');
+      expect(referencesAttribute.value).to.deep.equal({ foo: 'bar' });
+      expect(referenceSourcesAttribute.value).to.deep.equal({ user: 'usr-xx' });
+    });
+  });
+
   describe('Attribute.findAll()', () => {
     it('find attributes by facts', async () => {
       const [client] = await createClient();
