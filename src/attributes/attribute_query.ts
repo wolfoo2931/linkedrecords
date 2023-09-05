@@ -1,3 +1,4 @@
+/* eslint-disable import/no-cycle */
 import intersect from 'intersect';
 import Fact from '../facts/server';
 import { FactQuery, SubjectQuery } from '../facts/fact_query';
@@ -5,8 +6,13 @@ import LongTextAttribute from './long_text/server';
 import KeyValueAttribute from './key_value/server';
 import BlobAttribute from './blob/server';
 import IsLogger from '../../lib/is_logger';
+import AbstractAttributeClient from './abstract/abstract_attribute_client';
 
-export type FactQueryWithOptionalSubjectPlaceholder = [string, string, string?];
+export type FactQueryWithOptionalSubjectPlaceholder =
+  [string, string, string?] |
+  [string, string, typeof AbstractAttributeClient<any, any>] |
+  [string, typeof AbstractAttributeClient<any, any>];
+
 export type AttributeQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
 
 export type CompoundAttributeQuery = {
@@ -18,8 +24,8 @@ const asyncFilter = async (arr, fn) => {
   return arr.filter((_v, index) => results[index]);
 };
 
-function FactQueryWithOptionalSubjectPlaceholderToFactQuery(
-  x: FactQueryWithOptionalSubjectPlaceholder,
+function factQueryWithOptionalSubjectPlaceholderToFactQuery(
+  x: [string, string, string?],
 ): SubjectQuery {
   if (x.length === 3 && x[0] === '$it' && x[2]) {
     return [x[1], x[2]];
@@ -33,7 +39,21 @@ function FactQueryWithOptionalSubjectPlaceholderToFactQuery(
     return [x[0], x[1]];
   }
 
-  throw new Error('FactQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input');
+  throw new Error('factQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input');
+}
+
+function filterUndefinedSubjectQueries(
+  array: Array<SubjectQuery | undefined>,
+): Array<SubjectQuery> {
+  const result: Array<SubjectQuery> = [];
+
+  array.forEach((el) => {
+    if (el) {
+      result.push(el);
+    }
+  });
+
+  return result;
 }
 
 export default class QueryExecutor {
@@ -147,17 +167,41 @@ export default class QueryExecutor {
       return [];
     }
 
+    let dataTypeFilter;
+
+    const queryWithoutDataTypeFilter = query.filter((q) => {
+      if (q[1] === '$hasDataType') {
+        [, , dataTypeFilter] = q;
+        return false;
+      }
+
+      if (q[0] === '$hasDataType') {
+        [, dataTypeFilter] = q;
+        return false;
+      }
+
+      return true;
+    }) as [string, string, string?][];
+
     const subjectFactsQuery: FactQuery = {
-      subject: query
-        .map(FactQueryWithOptionalSubjectPlaceholderToFactQuery)
-        .filter((x) => x.length === 2),
+      subject: filterUndefinedSubjectQueries(queryWithoutDataTypeFilter
+        .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
+        .filter((x) => x && x.length === 2)),
     };
 
     const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, this.logger);
 
     let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
 
-    const objectFactsQuery = query
+    if (dataTypeFilter === 'KeyValueAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('kv-'));
+    } else if (dataTypeFilter === 'LongTextAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('l-'));
+    } else if (dataTypeFilter === 'BlobAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('bl-'));
+    }
+
+    const objectFactsQuery = queryWithoutDataTypeFilter
       .filter((q) => q.length === 3 && q[2] === '$it')
       .map(([subject, predicate]) => ({
         subject: [subject as string],

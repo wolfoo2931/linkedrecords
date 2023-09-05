@@ -178,8 +178,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       throw new Error('cannot load an attribute without id');
     }
 
-    this.isInitialized = true;
-
     if (!result) {
       const url = `/attributes/${this.id}?clientId=${this.clientId}`;
       const response = await this.linkedRecords.fetch(url);
@@ -208,6 +206,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.value = await this.deserializeValue(serializedValue);
     this.createdAt = new Date(result.createdAt);
     this.updatedAt = new Date(result.updatedAt);
+    this.isInitialized = true;
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 

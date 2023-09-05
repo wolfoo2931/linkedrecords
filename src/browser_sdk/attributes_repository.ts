@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /* eslint-disable import/no-cycle */
 import LinkedRecords from '.';
 import AbstractAttributeClient from '../attributes/abstract/abstract_attribute_client';
@@ -8,9 +9,21 @@ import BlobAttribute from '../attributes/blob/client';
 import { CompoundAttributeQuery, FactQueryWithOptionalSubjectPlaceholder } from '../attributes/attribute_query';
 import ClientServerBus from '../../lib/client-server-bus/client';
 
-type TransformValue<X>
+type ArrayContains<T, U> = T extends Array<infer E>
+  ? Extract<E, U> extends never
+    ? T & Array<U>
+    : T
+  : never;
+
+type ConcreteTypedArray<X> =
+  X extends ArrayContains<X, [string, string, typeof KeyValueAttribute] | [string, typeof KeyValueAttribute]> ? Array<KeyValueAttribute> :
+    X extends ArrayContains<X, [string, string, typeof LongTextAttribute] | [string, typeof LongTextAttribute]> ? Array<LongTextAttribute> :
+      X extends ArrayContains<X, [string, string, typeof BlobAttribute] | [string, typeof BlobAttribute]> ? Array<BlobAttribute> :
+        Array<AbstractAttributeClient<any, any>>;
+
+type TransformQueryRecord<X>
   = (X extends Array<FactQueryWithOptionalSubjectPlaceholder>
-    ? Array<AbstractAttributeClient<any, any>> : AbstractAttributeClient<any, any>);
+    ? ConcreteTypedArray<X> : AbstractAttributeClient<any, any>);
 
 export default class AttributesRepository {
   linkedRecords: LinkedRecords;
@@ -91,10 +104,25 @@ export default class AttributesRepository {
   // TODO: check for null values in the query
   async findAll<T extends CompoundAttributeQuery>(query: T)
     : Promise<
-    { [K in keyof T]: TransformValue<T[K]> }
+    { [K in keyof T]: TransformQueryRecord<T[K]> }
     > {
     const params = new URLSearchParams();
-    params.append('query', JSON.stringify(query));
+
+    params.append('query', JSON.stringify(query, (_, v) => {
+      if (v === KeyValueAttribute) {
+        return 'KeyValueAttribute';
+      }
+
+      if (v === LongTextAttribute) {
+        return 'LongTextAttribute';
+      }
+
+      if (v === BlobAttribute) {
+        return 'BlobAttribute';
+      }
+
+      return v;
+    }));
 
     const result = await this.linkedRecords.fetch(`/attributes?${params.toString()}`);
     const records = await result.json();
@@ -112,5 +140,29 @@ export default class AttributesRepository {
     });
 
     return attributeResult;
+  }
+
+  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T)
+    : Promise<
+    { [K in keyof T]: TransformQueryRecord<T[K]> }
+    > {
+    const result = await this.findAll(query);
+    const promises: Promise<boolean>[] = [];
+
+    Object.keys(result).forEach((compoundName) => {
+      if (result[compoundName]) {
+        if (Array.isArray(result[compoundName])) {
+          (result[compoundName] as Array<AbstractAttributeClient<any, any>>).forEach((attr) => {
+            promises.push(attr.load());
+          });
+        } else {
+          promises.push((result[compoundName] as AbstractAttributeClient<any, any>).load());
+        }
+      }
+    });
+
+    await Promise.all(promises);
+
+    return result;
   }
 }
