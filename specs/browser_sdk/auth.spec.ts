@@ -38,7 +38,7 @@ describe('Auth', () => {
 
     expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'authorized' });
 
-    // FIXME: This test scenario does not work anymore after switching to Websockets
+    // FIXME: This test scenario does not work anymore after switching to websockets
     // const authorizedReadAttributeDirtyHack = await client1.Attribute.find(attribute.id!);
 
     await changeUserContext('testuser-unauthorized-id');
@@ -319,7 +319,7 @@ describe('Auth', () => {
     expect((await subscriptionResult).message).to.eql('unauthorized');
   });
 
-  it('is allowed to create facts which refere to the authenticated users', async () => {
+  it('is allowed to create facts which refer to the authenticated users', async () => {
     const [client] = await createClient();
     const [otherClient] = await createClient();
 
@@ -341,5 +341,5 @@ describe('Auth', () => {
   });
 
   it('allows to create facts about the authenticated users');
-  it('allows to create facts refere to the authenticated users');
+  it('allows to create facts refer to the authenticated users');
 });

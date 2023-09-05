@@ -5,7 +5,7 @@ import AbstractAttributeClient from '../../abstract/abstract_attribute_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
 
-export default class KeyValueAttribute extends AbstractAttributeClient<Blob, BlobChange> {
+export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobChange> {
   public static getDataTypePrefix() : string {
     return 'bl';
   }
@@ -15,11 +15,11 @@ export default class KeyValueAttribute extends AbstractAttributeClient<Blob, Blo
   }
 
   public getDataTypePrefix() : string {
-    return KeyValueAttribute.getDataTypePrefix();
+    return BlobAttribute.getDataTypePrefix();
   }
 
   public getDataTypeName() : string {
-    return KeyValueAttribute.getDataTypeName();
+    return BlobAttribute.getDataTypeName();
   }
 
   public getDefaultValue() : Blob {

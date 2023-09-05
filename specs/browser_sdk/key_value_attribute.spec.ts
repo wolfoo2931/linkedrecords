@@ -11,7 +11,7 @@ describe('Key Value Attributes', () => {
   afterEach(cleanupClients);
 
   describe('attribute.create()', () => {
-    it('creates an attriubte which can be retrieved by an other client', async () => {
+    it('creates an attribute which can be retrieved by an other client', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
@@ -77,7 +77,7 @@ describe('Key Value Attributes', () => {
       expect(convergedValueClientB.new).to.equal('value');
     });
 
-    it('propagetes all changes to all attribute instances', async () => {
+    it('propagates all changes to all attribute instances', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
@@ -131,7 +131,7 @@ describe('Key Value Attributes', () => {
       });
     });
 
-    it('propagetes all changes to all attribute instances', async () => {
+    it('propagates all changes to all attribute instances', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
