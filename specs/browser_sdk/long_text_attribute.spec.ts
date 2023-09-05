@@ -20,7 +20,7 @@ describe('Long Text Attributes', () => {
   afterEach(cleanupClients);
 
   describe('attribute.create()', () => {
-    it('creates an attriubte which can be retrieved by an other client', async () => {
+    it('creates an attribute which can be retrieved by an other client', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 

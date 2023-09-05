@@ -28,7 +28,7 @@ describe('Attribute', () => {
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
-        ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
+        ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
@@ -43,13 +43,13 @@ describe('Attribute', () => {
         [referenceSources3.id, 'belongsTo', userCB.id],
       ]);
 
-      const { content: contentAttribute, refernces: [referencesAttribute], referenceSources: [referenceSourcesAttribute] } = <{
+      const { content: contentAttribute, references: [referencesAttribute], referenceSources: [referenceSourcesAttribute] } = <{
         content: LongTextAttribute,
-        refernces: KeyValueAttribute[],
+        references: KeyValueAttribute[],
         referenceSources: KeyValueAttribute[]
       }> <unknown> await otherClient.Attribute.findAll({
         content: content.id!,
-        refernces: [
+        references: [
           ['belongsTo', content.id!],
           ['isA', 'referenceStore'],
         ],
@@ -98,7 +98,7 @@ describe('Attribute', () => {
       expect(afterCreationTime).to.be.greaterThan(content.updatedAt);
 
       if (!content.id || !references.id) {
-        throw new Error('id of attribute is not initilized');
+        throw new Error('id of attribute is not initialized');
       }
 
       const sameContent = await otherClient.Attribute.find(content.id);
@@ -111,7 +111,7 @@ describe('Attribute', () => {
       expect(sameContent!.createdAt?.toString()).to.equals(content.updatedAt?.toString());
 
       if (!sameContent!.updatedAt) {
-        throw new Error('updatedAt is not initilized');
+        throw new Error('updatedAt is not initialized');
       }
 
       const beforeUpdatedTime = new Date();
@@ -221,11 +221,11 @@ describe('Attribute', () => {
       expect(allTeamsOfUserB.length).to.equal(2);
       expect(commonTeams.length).to.equal(1);
 
-      expect(allTeamsOfUserA.find((attr) => attr.id === teamA.id));
-      expect(allTeamsOfUserA.find((attr) => attr.id === teamC.id));
+      expect(allTeamsOfUserA.find((attr) => attr.id === teamA.id)).to.not.eq(undefined);
+      expect(allTeamsOfUserA.find((attr) => attr.id === teamC.id)).to.not.eq(undefined);
 
-      expect(allTeamsOfUserB.find((attr) => attr.id === teamB.id));
-      expect(allTeamsOfUserB.find((attr) => attr.id === teamC.id));
+      expect(allTeamsOfUserB.find((attr) => attr.id === teamB.id)).to.not.eq(undefined);
+      expect(allTeamsOfUserB.find((attr) => attr.id === teamC.id)).to.not.eq(undefined);
       expect(commonTeams[0]!.id).to.equal(teamC.id);
     });
 
@@ -265,10 +265,10 @@ describe('Attribute', () => {
       expect(allMembersOfTeamB.length).to.equal(2);
       expect(commonMembers.length).to.equal(1);
 
-      expect(allMembersOfTeamA.find((attr) => attr.id === memberA.id));
-      expect(allMembersOfTeamA.find((attr) => attr.id === memberC.id));
-      expect(allMembersOfTeamB.find((attr) => attr.id === memberB.id));
-      expect(allMembersOfTeamB.find((attr) => attr.id === memberC.id));
+      expect(allMembersOfTeamA.find((attr) => attr.id === memberA.id)).to.not.eq(undefined);
+      expect(allMembersOfTeamA.find((attr) => attr.id === memberC.id)).to.not.eq(undefined);
+      expect(allMembersOfTeamB.find((attr) => attr.id === memberB.id)).to.not.eq(undefined);
+      expect(allMembersOfTeamB.find((attr) => attr.id === memberC.id)).to.not.eq(undefined);
       expect(commonMembers[0]!.id).to.equal(memberC.id);
     });
 
@@ -540,7 +540,7 @@ describe('Attribute', () => {
       const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
-        ['referenceStore', '$isATermFor', 'A storage which stores infromation about references cited in papers'],
+        ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
@@ -561,7 +561,7 @@ describe('Attribute', () => {
 
       const exec1 = otherClient.Attribute.findAll({
         content: content.id,
-        refernces: [
+        references: [
           ['belongsTo', content.id],
           ['isA', 'referenceStore'],
         ],
@@ -574,7 +574,7 @@ describe('Attribute', () => {
 
       const exec2 = otherClient.Attribute.findAll({
         content: content.id,
-        refernces: [
+        references: [
           ['belongsTo', content.id],
           ['isA', 'referenceStore'],
         ],
@@ -585,8 +585,8 @@ describe('Attribute', () => {
         ],
       });
 
-      const { content: contentAttribute1, refernces: [referencesAttribute1], referenceSources: [referenceSourcesAttribute1] } = await exec1;
-      const { content: contentAttribute2, refernces: [referencesAttribute2], referenceSources: [referenceSourcesAttribute2] } = await exec2;
+      const { content: contentAttribute1, references: [referencesAttribute1], referenceSources: [referenceSourcesAttribute1] } = await exec1;
+      const { content: contentAttribute2, references: [referencesAttribute2], referenceSources: [referenceSourcesAttribute2] } = await exec2;
 
       expect(await contentAttribute1.getValue()).to.equal('the init value');
       expect(await referencesAttribute1!.getValue()).to.deep.equal({ foo: 'bar' });
@@ -601,21 +601,21 @@ describe('Attribute', () => {
       const [client] = await createClient();
 
       await client.Fact.createAll([
-        ['notExsting', '$isATermFor', 'a dummy contecpt for testing'],
+        ['notExisting', '$isATermFor', 'a dummy concept for testing'],
       ]);
 
-      const { content: contentAttribute, refernces } = <{
+      const { content: contentAttribute, references } = <{
         content: LongTextAttribute,
-        refernces: KeyValueAttribute[],
+        references: KeyValueAttribute[],
       }> await client.Attribute.findAll({
-        content: 'not-exsting',
-        refernces: [
-          ['isA', 'notExsting'],
+        content: 'not-existing',
+        references: [
+          ['isA', 'notExisting'],
         ],
       });
 
       expect(contentAttribute).to.equal(undefined);
-      expect(refernces.length).to.equal(0);
+      expect(references.length).to.equal(0);
     });
   });
 });
