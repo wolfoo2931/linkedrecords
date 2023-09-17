@@ -73,7 +73,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   protected abstract onServerMessage(payload: SerializedChangeWithMetadata<TypedChange>);
   protected abstract onLoad();
 
-  public async create(value: Type) {
+  public async create(value: Type, facts?: [ string?, string? ][]) {
     if (this.id) {
       throw new Error(`Cannot create attribute because it has an id assigned (${this.id})`);
     }
@@ -82,7 +82,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     const requestConfig: any = {
       method: 'POST',
-      body: this.getCreatePayload(value),
+      body: this.getCreatePayload(value, facts),
     };
 
     if (typeof requestConfig.body !== 'string') {
@@ -104,10 +104,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
   }
 
-  protected getCreatePayload(value: Type): string | FormData {
+  protected getCreatePayload(value: Type, facts: [ string?, string? ][] = []): string | FormData {
     return JSON.stringify({
       clientId: this.clientId,
       actorId: this.actorId,
+      facts,
       value,
     });
   }

@@ -75,11 +75,7 @@ export default class AttributesRepository {
       this.clientServerBus,
     );
 
-    await attribute.create(value);
-
-    if (facts) {
-      await this.linkedRecords.Fact.createAll(facts.map(([p, o]) => [attribute.id, p, o]));
-    }
+    await attribute.create(value, facts);
 
     return attribute;
   }
