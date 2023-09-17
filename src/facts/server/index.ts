@@ -31,7 +31,7 @@ function hasLatestModifier(statement: SubjectQuery): boolean {
   return !!statement[0].match(/^\$latest\(.+\)$/);
 }
 
-function esureValidFactQuery({ subject, predicate, object }: FactQuery) {
+function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
   const isSubjectEmpty = !subject || subject.length === 0;
   const isObjectEmpty = !object || object.length === 0;
   const isPredicateEmpty = !predicate || predicate.length === 0;
@@ -48,7 +48,7 @@ function esureValidFactQuery({ subject, predicate, object }: FactQuery) {
   }
 
   if (predicate && predicate.find((p) => !isValidPredicate(p))) {
-    throw new Error(`invalid prdicate in query: ${predicate}`);
+    throw new Error(`invalid predicate in query: ${predicate}`);
   }
 
   [...(subject || []), ...(object || [])].forEach((sq) => {
@@ -58,15 +58,15 @@ function esureValidFactQuery({ subject, predicate, object }: FactQuery) {
       }
     } else if (Array.isArray(sq)) {
       if (!isValidSubject(sq[0])) {
-        throw new Error(`invalid subject part in fact query detectd: ${sq[0]}`);
+        throw new Error(`invalid subject part in fact query detected: ${sq[0]}`);
       }
 
       if (!isValidSubject(sq[1])) {
-        throw new Error(`invalid predicate part in fact query detectd: ${sq[1]}`);
+        throw new Error(`invalid predicate part in fact query detected: ${sq[1]}`);
       }
 
       if (sq[2] && sq[2] !== '$it') {
-        throw new Error(`invalid object part in fact query detectd: ${sq[2]}`);
+        throw new Error(`invalid object part in fact query detected: ${sq[2]}`);
       }
 
       if (sq.length > 3) {
@@ -198,7 +198,7 @@ export default class Fact {
     { subject, predicate, object }: FactQuery,
     logger: IsLogger,
   ): Promise<Fact[]> {
-    esureValidFactQuery({ subject, predicate, object });
+    ensureValidFactQuery({ subject, predicate, object });
 
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();

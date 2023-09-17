@@ -1,5 +1,6 @@
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
+import Fact from '../../facts/server';
 
 export default {
   async index(req, res, isAuthorizedToReadAttribute) {
@@ -17,9 +18,22 @@ export default {
     res.send(result);
   },
 
-  async create(req, res) {
+  async create(req, res, isAuthorizedToCreateFact?) {
     await req.attribute.create(req.body.value);
     const result = await req.attribute.get();
+    const rawFacts = req.body.facts || [];
+
+    if (typeof isAuthorizedToCreateFact === 'function' && rawFacts.length) {
+      await Promise.all(rawFacts.map(async (rawFact) => {
+        if (rawFact.length === 2) {
+          const fact = new Fact(req.attribute.id, rawFact[0], rawFact[1], req.log);
+
+          if (await isAuthorizedToCreateFact(fact)) {
+            await fact.save(req.hashedUserID);
+          }
+        }
+      }));
+    }
 
     if (result instanceof Error) {
       console.error(`error in POST /attributes/${req.params.attributeId}`, result.message);

@@ -30,8 +30,8 @@ async function withAuthForEach(req, res, controllerAction, isAuthorized) {
   });
 }
 
-async function withAuth(req, res, controllerAction, isAuthorized) {
-  const uploadWrappedControllerAction = (request, response) => {
+async function withAuth(req, res, controllerAction, isAuthorized, isEachFactCreationAuthorized?) {
+  const uploadWrappedControllerAction = (request, response, _hashedUserID, _isEachFactCreationAuthorized) => {
     blobUpload(request, response, async (err) => {
       if (err) {
         req.log.error(`error uploading file for ${req.method} ${req.path}`, err);
@@ -47,13 +47,13 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
         }
       }
 
-      await controllerAction(request, response);
+      await controllerAction(request, response, (record) => _isEachFactCreationAuthorized(_hashedUserID, req, record));
     });
   };
 
   await req.whenAuthenticated(async (hashedUserID) => {
     if (await isAuthorized(hashedUserID, req)) {
-      uploadWrappedControllerAction(req, res);
+      uploadWrappedControllerAction(req, res, hashedUserID, isEachFactCreationAuthorized);
     } else {
       res.sendStatus(401);
     }
@@ -185,7 +185,7 @@ async function createApp(httpServer: https.Server) {
 
   app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
   app.get('/attributes', errorHandler((req, res) => withAuthForEach(req, res, attributesController.index, authorizer.isAuthorizedToReadAttribute)));
-  app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
+  app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute, authorizer.isAuthorizedToCreateFact)));
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
   app.get('/attributes/:attributeId/changes', errorHandler((req, res) => withAuth(req, res, attributesController.subscribe, authorizer.isAuthorizedToReadAttribute)));
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
