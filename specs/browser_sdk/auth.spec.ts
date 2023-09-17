@@ -161,6 +161,38 @@ describe('Auth', () => {
     expect(book1unauth).to.equal(undefined);
   });
 
+  it('filters unauthorized facts when creating attribute with facts', async () => {
+    await changeUserContext('testuser-1-id');
+    const [client1] = await createClient();
+
+    await changeUserContext('testuser-2-id');
+    const [client2] = await createClient();
+
+    await changeUserContext('testuser-1-id');
+    await client1.Fact.createAll([
+      ['Book', '$isATermFor', 'a book'],
+    ]);
+
+    const bookOfC1 = await client1.Attribute.create('keyValue', { name: 'bookBelongingToClient1' }, [
+      ['isA', 'Book'],
+    ]);
+
+    await changeUserContext('testuser-2-id');
+    await client2.Attribute.create('keyValue', { name: 'bookC1a' }, [
+      ['isA', 'Book'],
+      ['belongsTo', bookOfC1.id],
+    ]);
+
+    await changeUserContext('testuser-1-id');
+    const { unauthorizedMatches } = await client1.Attribute.findAll({
+      unauthorizedMatches: [
+        ['belongsTo', bookOfC1.id!],
+      ],
+    });
+
+    expect(unauthorizedMatches.length).to.equal(0);
+  });
+
   it('filters attributes in find', async () => {
     await changeUserContext('testuser-1-id');
     const [client1] = await createClient();
