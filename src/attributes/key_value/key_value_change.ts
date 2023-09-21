@@ -1,4 +1,5 @@
 import set from 'set-value';
+import unset from '../../../lib/utils/unset';
 
 export type AtomicChange = {
   key: string,
@@ -36,7 +37,7 @@ export default class KeyValueChange {
 
     this.change.forEach((aChange) => {
       if (aChange.value === null) {
-        delete result[aChange.key];
+        unset(result, aChange.key);
       } else {
         set(result, aChange.key, aChange.value);
       }
