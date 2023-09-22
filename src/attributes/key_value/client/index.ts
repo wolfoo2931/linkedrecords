@@ -5,6 +5,8 @@ import flatten, { unflatten } from 'flat';
 import AbstractAttributeClient from '../../abstract/abstract_attribute_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import KeyValueChange, { AtomicChange } from '../key_value_change';
+import getAllPrefixes from '../../../../lib/utils/all_prefixes';
+import get from 'get-value';
 
 export default class KeyValueAttribute extends AbstractAttributeClient<object, KeyValueChange> {
   public static getDataTypePrefix() : string {
@@ -31,23 +33,38 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     return Promise.resolve(unflatten(JSON.parse(serializedValue)));
   }
 
+  public async getValue() : Promise<object | undefined> {
+    const isOk = await this.load();
+
+    if (!isOk) {
+      return undefined;
+    }
+
+    if (!this.value) {
+      return this.value;
+    }
+
+    return JSON.parse(JSON.stringify(this.value));
+  }
+
   protected async rawSet(newValue: object) {
     let changes: AtomicChange[] = [];
     const flatOldValue = flatten(this.value) as object;
     const flatValue = flatten(newValue) as object;
 
-    Object.entries(this.value).forEach(([key]) => {
+    Object.entries(flatOldValue).forEach(([key]) => {
       // in case keys are not present in newValue anymore,
       // we want to remove them from the key value store.
-      changes.push({ key, value: null });
+      // flatOldValue.split('.').
+      getAllPrefixes(key.split('.')).forEach((path) => {
+        changes.push({ key: path.join('.'), value: null });
+      });
     });
 
-    Object.entries(flatValue).forEach(([key, value]) => {
-      // Remove the null value for this key: because the key is present
-      // in the newValue we do not wont it to be set to null which would mean
-      // deleting the key.
-      changes = changes.filter((ch) => ch.key !== key);
+    changes = changes.filter(({ key }) => (
+      get(newValue, key) === null || get(newValue, key) === undefined));
 
+    Object.entries(flatValue).forEach(([key, value]) => {
       // We transmit the key value pair only if it actually changed
       if (flatOldValue[key] !== value) {
         changes.push({ key, value });

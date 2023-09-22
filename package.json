@@ -53,6 +53,7 @@
     "express-openid-connect": "^2.8.0",
     "file-type": "^16.5.1",
     "flat": "^5.0.2",
+    "get-value": "^3.0.1",
     "intersect": "^1.0.1",
     "ioredis": "^5.3.2",
     "js-cookie": "^3.0.1",

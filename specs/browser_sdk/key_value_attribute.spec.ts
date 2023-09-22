@@ -108,6 +108,129 @@ describe('Key Value Attributes', () => {
         },
       });
     });
+
+    it('does not reset value if nested object did not change', async () => {
+      const [clientA] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', {
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: 'todo2', checked: false },
+        },
+      });
+
+      await attributeClientA.set({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: 'todo2', checked: false },
+        },
+      });
+
+      const value = await attributeClientA.getValue();
+
+      expect(value).to.deep.equal({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: 'todo2', checked: false },
+        },
+      });
+    });
+
+    it('does work when setting a nested value to null', async () => {
+      const [clientA] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', {
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: 'todo2', checked: false },
+        },
+      });
+
+      await attributeClientA.set({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: null, checked: null },
+        },
+      });
+
+      const value = await attributeClientA.getValue();
+
+      expect(value).to.deep.equal({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { },
+        },
+      });
+    });
+
+    it('does work when setting a nested value to empty object', async () => {
+      const [clientA] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', {
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: 'todo2', checked: false },
+        },
+      });
+
+      await attributeClientA.set({
+        foo: 'bar',
+        todos: {
+          id1: { },
+        },
+      });
+
+      const value = await attributeClientA.getValue();
+
+      expect(value).to.deep.equal({
+        foo: 'bar',
+        todos: {
+          id1: { },
+        },
+      });
+    });
+
+    it('does not reset value if entry has been removed from nested object', async () => {
+      const [clientA] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.create('keyValue', {
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+          id2: { title: 'todo2', checked: false },
+        },
+      });
+
+      await attributeClientA.set({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+        },
+      });
+
+      const value = await attributeClientA.getValue();
+
+      console.log('desired result', JSON.stringify({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+        },
+      }));
+
+      expect(value).to.deep.equal({
+        foo: 'bar',
+        todos: {
+          id1: { title: 'todo1', checked: false },
+        },
+      });
+    });
   });
 
   describe('attribute.change()', () => {
