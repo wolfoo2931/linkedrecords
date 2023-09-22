@@ -33,6 +33,20 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     return Promise.resolve(unflatten(JSON.parse(serializedValue)));
   }
 
+  public async getValue() : Promise<object | undefined> {
+    const isOk = await this.load();
+
+    if (!isOk) {
+      return undefined;
+    }
+
+    if (!this.value) {
+      return this.value;
+    }
+
+    return JSON.parse(JSON.stringify(this.value));
+  }
+
   protected async rawSet(newValue: object) {
     let changes: AtomicChange[] = [];
     const flatOldValue = flatten(this.value) as object;
