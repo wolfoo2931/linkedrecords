@@ -21,6 +21,7 @@ module.exports = function (config) {
       }
     },
 
+    browserNoActivityTimeout: 400000,
     logLevel: config.DEBUG,
 
     browsers: ['Chrome_with_third_party_cookies'],
