@@ -36,7 +36,7 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
   const isObjectEmpty = !object || object.length === 0;
   const isPredicateEmpty = !predicate || predicate.length === 0;
   const isValidId = (p) => typeof p === 'string' && p.match(/^[a-zA-Z0-9-]+$/);
-  const isValidPredicate = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+$/);
+  const isValidPredicate = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+\*?$/);
   const isValidSubject = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+$/);
 
   if (isSubjectEmpty && isObjectEmpty && isPredicateEmpty) {
@@ -57,8 +57,12 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
         throw new Error(`invalid Id in subject query: ${sq}`);
       }
     } else if (Array.isArray(sq)) {
-      if (!isValidSubject(sq[0])) {
+      if (sq.length === 3 && !isValidSubject(sq[0])) {
         throw new Error(`invalid subject part in fact query detected: ${sq[0]}`);
+      }
+
+      if (sq.length === 2 && !isValidPredicate(sq[0])) {
+        throw new Error(`invalid predicate part in fact query detected: ${sq[0]}`);
       }
 
       if (!isValidSubject(sq[1])) {
@@ -128,21 +132,27 @@ export default class Fact {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     }
 
-    const table = `(WITH RECURSIVE rfacts AS (
-      SELECT facts.* FROM facts
-                      WHERE object = '${query[1]}'
-                      AND predicate = '${query[0]}'
-    UNION ALL
-      SELECT facts.* FROM facts, rfacts
-                      WHERE facts.object = rfacts.subject
-                      AND facts.predicate = '${query[0]}'
-    )
-    CYCLE subject
-      SET cycl TO 'Y' DEFAULT 'N'
-    USING path_array
-    SELECT *
-      FROM rfacts
-      WHERE cycl = 'N') as f`;
+    let table = `(SELECT facts.* FROM facts
+                  WHERE object = '${query[1]}'
+                  AND predicate = '${query[0]}') as f`;
+
+    if (query[0].endsWith('*')) {
+      table = `(WITH RECURSIVE rfacts AS (
+        SELECT facts.* FROM facts
+                        WHERE object = '${query[1]}'
+                        AND predicate = '${query[0]}'
+      UNION ALL
+        SELECT facts.* FROM facts, rfacts
+                        WHERE facts.object = rfacts.subject
+                        AND facts.predicate = '${query[0]}'
+      )
+      CYCLE subject
+        SET cycl TO 'Y' DEFAULT 'N'
+      USING path_array
+      SELECT *
+        FROM rfacts
+        WHERE cycl = 'N') as f`;
+    }
 
     return `SELECT subject FROM ${table} ${sqlPrefix ? `WHERE ${sqlPrefix}` : ''}`;
   }

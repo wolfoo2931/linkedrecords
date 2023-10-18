@@ -398,19 +398,19 @@ describe('Attribute', () => {
         ['deleted', '$isATermFor', 'something that is not existing anymore'],
         ['Book', '$isATermFor', 'some concept'],
 
-        ['Biography', 'isA', 'Book'],
-        ['Autobiography', 'isA', 'Biography'],
+        ['Biography', 'isA*', 'Book'],
+        ['Autobiography', 'isA*', 'Biography'],
 
-        [mobyDickVol1.id, 'isA', 'Book'],
-        [mobyDickVol2.id, 'isA', 'Book'],
-        [mobyDickVol3.id, 'isA', 'Book'],
+        [mobyDickVol1.id, 'isA*', 'Book'],
+        [mobyDickVol2.id, 'isA*', 'Book'],
+        [mobyDickVol3.id, 'isA*', 'Book'],
 
         [mobyDickVol2.id, 'is', 'deleted'],
       ]);
 
       const { books } = await otherClient.Attribute.findAll({
         books: [
-          ['$it', 'isA', 'Book'],
+          ['$it', 'isA*', 'Book'],
           ['$it', 'is', '$not(deleted)'],
         ],
       }) as any;
@@ -441,19 +441,19 @@ describe('Attribute', () => {
         ['Biography', '$isATermFor', 'is a book about a persons life'],
         ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
 
-        ['Biography', 'isA', 'Book'],
-        ['Autobiography', 'isA', 'Biography'],
+        ['Biography', 'isA*', 'Book'],
+        ['Autobiography', 'isA*', 'Biography'],
 
-        [mobyDickVol1.id, 'isA', 'Book'],
-        [mobyDickVol2.id, 'isA', 'Book'],
-        [mobyDickVol3.id, 'isA', 'Book'],
-        [marksAutoBio.id, 'isA', 'Autobiography'],
-        [chrisAutoBio.id, 'isA', 'Autobiography'],
-        [YusraAutoBio.id, 'isA', 'Autobiography'],
+        [mobyDickVol1.id, 'isA*', 'Book'],
+        [mobyDickVol2.id, 'isA*', 'Book'],
+        [mobyDickVol3.id, 'isA*', 'Book'],
+        [marksAutoBio.id, 'isA*', 'Autobiography'],
+        [chrisAutoBio.id, 'isA*', 'Autobiography'],
+        [YusraAutoBio.id, 'isA*', 'Autobiography'],
 
-        [FullersBio.id, 'isA', 'Biography'],
-        [MonksBio.id, 'isA', 'Biography'],
-        [RalphsBio.id, 'isA', 'Biography'],
+        [FullersBio.id, 'isA*', 'Biography'],
+        [MonksBio.id, 'isA*', 'Biography'],
+        [RalphsBio.id, 'isA*', 'Biography'],
 
         [mobyDickVol2.id, 'is', 'deleted'],
         [chrisAutoBio.id, 'is', 'deleted'],
@@ -464,25 +464,25 @@ describe('Attribute', () => {
         books, bios, autobios, allBooks, allBios, allAutobios,
       } = await otherClient.Attribute.findAll({
         books: [
-          ['$it', 'isA', 'Book'],
+          ['$it', 'isA*', 'Book'],
           ['$it', 'is', '$not(deleted)'],
         ],
         bios: [
-          ['$it', 'isA', 'Biography'],
+          ['$it', 'isA*', 'Biography'],
           ['$it', 'is', '$not(deleted)'],
         ],
         autobios: [
-          ['$it', 'isA', 'Autobiography'],
+          ['$it', 'isA*', 'Autobiography'],
           ['$it', 'is', '$not(deleted)'],
         ],
         allBooks: [
-          ['$it', 'isA', 'Book'],
+          ['$it', 'isA*', 'Book'],
         ],
         allBios: [
-          ['$it', 'isA', 'Biography'],
+          ['$it', 'isA*', 'Biography'],
         ],
         allAutobios: [
-          ['$it', 'isA', 'Autobiography'],
+          ['$it', 'isA*', 'Autobiography'],
         ],
       }) as any;
 
@@ -525,23 +525,23 @@ describe('Attribute', () => {
         ['Biography', '$isATermFor', 'is a book about a persons life'],
         ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
 
-        ['Biography', 'isA', 'Book'],
-        ['Autobiography', 'isA', 'Biography'],
+        ['Biography', 'isA*', 'Book'],
+        ['Autobiography', 'isA*', 'Biography'],
 
-        ['Book', 'isA', 'Autobiography'], // does it detect cylces?
+        ['Book', 'isA*', 'Autobiography'], // does it detect cylces?
 
-        [shelf1.id, 'isA', 'Shelf'],
+        [shelf1.id, 'isA*', 'Shelf'],
 
-        [mobyDickVol1.id, 'isA', 'Book'],
-        [mobyDickVol2.id, 'isA', 'Book'],
-        [mobyDickVol3.id, 'isA', 'Book'],
-        [marksAutoBio.id, 'isA', 'Autobiography'],
-        [chrisAutoBio.id, 'isA', 'Autobiography'],
-        [YusraAutoBio.id, 'isA', 'Autobiography'],
+        [mobyDickVol1.id, 'isA*', 'Book'],
+        [mobyDickVol2.id, 'isA*', 'Book'],
+        [mobyDickVol3.id, 'isA*', 'Book'],
+        [marksAutoBio.id, 'isA*', 'Autobiography'],
+        [chrisAutoBio.id, 'isA*', 'Autobiography'],
+        [YusraAutoBio.id, 'isA*', 'Autobiography'],
 
-        [FullersBio.id, 'isA', 'Biography'],
-        [MonksBio.id, 'isA', 'Biography'],
-        [RalphsBio.id, 'isA', 'Biography'],
+        [FullersBio.id, 'isA*', 'Biography'],
+        [MonksBio.id, 'isA*', 'Biography'],
+        [RalphsBio.id, 'isA*', 'Biography'],
 
         [mobyDickVol3.id, 'delitionStateIs', 'inTrasbin'],
         [mobyDickVol3.id, 'delitionStateIs', 'superVisiable'],
@@ -566,11 +566,11 @@ describe('Attribute', () => {
         booksNotInTrasbin,
       } = await otherClient.Attribute.findAll({
         booksInTrasbin: [
-          ['$it', 'isA', 'Book'],
+          ['$it', 'isA*', 'Book'],
           ['$it', '$latest(delitionStateIs)', 'inTrasbin'],
         ],
         booksNotInTrasbin: [
-          ['$it', 'isA', 'Book'],
+          ['$it', 'isA*', 'Book'],
           ['$it', '$latest(delitionStateIs)', '$not(inTrasbin)'],
         ],
       }) as any;
