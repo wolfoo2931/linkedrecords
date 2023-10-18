@@ -1,7 +1,7 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 
-import { v4 as uuid } from 'uuid';
+import { uuidv7 as uuid } from 'uuidv7';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';

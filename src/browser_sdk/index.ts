@@ -1,6 +1,6 @@
 /* eslint-disable import/no-cycle */
 
-import { v4 as uuid } from 'uuid';
+import { uuidv7 as uuid } from 'uuidv7';
 
 import Cookies from 'js-cookie';
 import LongTextAttribute from '../attributes/long_text/client';
