@@ -141,17 +141,17 @@ export default class Fact {
         SELECT facts.* FROM facts
                         WHERE object = '${query[1]}'
                         AND predicate = '${query[0]}'
-      UNION ALL
-        SELECT facts.* FROM facts, rfacts
-                        WHERE facts.object = rfacts.subject
-                        AND facts.predicate = '${query[0]}'
-      )
-      CYCLE subject
-        SET cycl TO 'Y' DEFAULT 'N'
-      USING path_array
-      SELECT *
-        FROM rfacts
-        WHERE cycl = 'N') as f`;
+        UNION ALL
+          SELECT facts.* FROM facts, rfacts
+                          WHERE facts.object = rfacts.subject
+                          AND facts.predicate = '${query[0]}'
+        )
+        CYCLE subject
+          SET cycl TO 'Y' DEFAULT 'N'
+        USING path_array
+        SELECT *
+          FROM rfacts
+          WHERE cycl = 'N') as f`;
     }
 
     return `SELECT subject FROM ${table} ${sqlPrefix ? `WHERE ${sqlPrefix}` : ''}`;
