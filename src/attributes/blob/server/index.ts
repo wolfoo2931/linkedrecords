@@ -19,7 +19,7 @@ IsAttributeStorage
 
   async create(value: Blob) : Promise<{ id: string }> {
     const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId, this.logger);
-    await createdByFact.save();
+    await createdByFact.save(this.actorId);
 
     const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
     return this.storage.createAttribute(this.id, this.actorId, content);
@@ -32,7 +32,7 @@ IsAttributeStorage
     createdAt: number,
     updatedAt: number
   }> {
-    const content = await this.storage.getAttributeLatestSnapshot(this.id, { maxChangeId: '2147483647' });
+    const content = await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
     const match = content.value.match(/^data:(.*?);base64,/);
 
     if (!match) {

@@ -19,11 +19,6 @@ export type CompoundAttributeQuery = {
   [key: string]: AttributeQuery
 };
 
-const asyncFilter = async (arr, fn) => {
-  const results = await Promise.all(arr.map(fn));
-  return arr.filter((_v, index) => results[index]);
-};
-
 function factQueryWithOptionalSubjectPlaceholderToFactQuery(
   x: [string, string, string?],
 ): SubjectQuery {
@@ -74,9 +69,8 @@ export default class QueryExecutor {
     clientId,
     actorId,
     storage,
-    isAuthorizedToReadAttribute,
   ) {
-    let resultWithIds = await this.resolveToIds(query);
+    let resultWithIds = await this.resolveToIds(query, actorId);
 
     if (!resultWithIds) {
       return [];
@@ -92,8 +86,9 @@ export default class QueryExecutor {
       flatIds = Object.values(resultWithIds).flat();
     }
 
-    flatIds = flatIds.filter((value, index, array) => array.indexOf(value) === index);
-    flatIds = await asyncFilter(flatIds, isAuthorizedToReadAttribute);
+    flatIds = flatIds
+      .filter((id) => id !== undefined)
+      .filter((value, index, array) => array.indexOf(value) === index);
 
     if (Array.isArray(resultWithIds)) {
       resultWithIds = resultWithIds.filter((id) => flatIds.includes(id));
@@ -101,12 +96,18 @@ export default class QueryExecutor {
       return undefined;
     } else {
       Object.keys(resultWithIds).forEach((group) => {
+        if (!resultWithIds) {
+          return;
+        }
+
         if (typeof resultWithIds[group] === 'string') {
           if (!flatIds.includes(resultWithIds[group])) {
             resultWithIds[group] = undefined;
           }
         } else {
-          resultWithIds[group] = resultWithIds[group].filter((id) => flatIds.includes(id));
+          resultWithIds[group] = resultWithIds[group]
+            ? resultWithIds[group].filter((id) => flatIds.includes(id))
+            : undefined;
         }
       });
     }
@@ -136,6 +137,10 @@ export default class QueryExecutor {
     }
 
     Object.keys(resultWithIds).forEach((group) => {
+      if (!resultWithIds) {
+        return;
+      }
+
       if (typeof resultWithIds[group] === 'string') {
         resultWithIds[group] = attributes[resultWithIds[group] as string];
       } else if (Array.isArray(resultWithIds[group])) {
@@ -150,17 +155,26 @@ export default class QueryExecutor {
 
   async resolveToIds(
     query: AttributeQuery | CompoundAttributeQuery,
-  ): Promise<string | string[] | { [key: string]: string | string[] }> {
+    userid: string,
+  ): Promise<undefined | string | string[] | { [key: string]: string | string[] }> {
+    if (!userid) {
+      throw new Error('resolveToIds needs to receive a valid userid!');
+    }
+
     if (query === undefined) {
       throw new Error('query is undefined');
     }
 
     if (typeof query === 'string') {
-      return query;
+      if (await Fact.isAuthorizedToReadPayload(query, userid, this.logger)) {
+        return query;
+      }
+
+      return undefined;
     }
 
     if (!Array.isArray(query)) {
-      return this.resolveCompoundQueryToIds(query);
+      return this.resolveCompoundQueryToIds(query, userid);
     }
 
     if (query.find((q) => (!q[0] && !q[1] && !q[2]))) {
@@ -189,7 +203,7 @@ export default class QueryExecutor {
         .filter((x) => x && x.length === 2)),
     };
 
-    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, this.logger);
+    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
 
     let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
 
@@ -210,7 +224,7 @@ export default class QueryExecutor {
 
     if (objectFactsQuery.length !== 0) {
       const factsWhereItIsTheObject = await Promise.all(
-        objectFactsQuery.map((q) => Fact.findAll(q, this.logger)),
+        objectFactsQuery.map((q) => Fact.findAll(q, userid, this.logger)),
       );
 
       const mapped: string[][] = [];
@@ -227,9 +241,13 @@ export default class QueryExecutor {
     return matchedIds.filter((value, index, array) => array.indexOf(value) === index);
   }
 
-  async resolveCompoundQueryToIds(query: CompoundAttributeQuery): Promise<({
+  async resolveCompoundQueryToIds(query: CompoundAttributeQuery, userid: string): Promise<({
     [key: string]: string | string[]
   })> {
+    if (!userid) {
+      throw new Error('resolveCompoundQueryToIds needs to receive a valid userid!');
+    }
+
     const result = {};
     const promises: Promise<any>[] = [];
     const qEntries = Object.entries(query);
@@ -241,7 +259,7 @@ export default class QueryExecutor {
         const n = qEntry[0];
         const q = qEntry[1];
 
-        result[n] = this.resolveToIds(q);
+        result[n] = this.resolveToIds(q, userid);
         promises.push(result[n]);
       }
     }

@@ -3,7 +3,7 @@ import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query'
 import Fact from '../../facts/server';
 
 export default {
-  async index(req, res, isAuthorizedToReadAttribute) {
+  async index(req, res) {
     const { clientId, actorId, attributeStorage } = req;
     const query: AttributeQuery = JSON.parse(req.query.query);
     const queryExecutor = new QueryExecutor(req.log);
@@ -12,44 +12,52 @@ export default {
       clientId,
       actorId,
       attributeStorage,
-      isAuthorizedToReadAttribute,
     );
 
     res.send(result);
   },
 
-  async create(req, res, isAuthorizedToCreateFact?) {
-    await req.attribute.create(req.body.value);
-    const result = await req.attribute.get();
+  async create(req, res) {
     const rawFacts = req.body.facts || [];
+    const facts = rawFacts
+      .filter((rawFact) => rawFact.length === 2)
+      .map((rawFact) => new Fact(
+        req.attribute.id,
+        rawFact[0],
+        rawFact[1],
+        req.log,
+      ));
 
-    if (typeof isAuthorizedToCreateFact === 'function' && rawFacts.length) {
-      await Promise.all(rawFacts.map(async (rawFact) => {
-        if (rawFact.length === 2) {
-          const fact = new Fact(req.attribute.id, rawFact[0], rawFact[1], req.log);
+    const unauthorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
+    const containsUnauthorizedFacts = (await Promise.all(unauthorizedChecks))
+      .includes((isAuthorized) => !isAuthorized);
 
-          if (await isAuthorizedToCreateFact(fact)) {
-            await fact.save(req.hashedUserID);
-          }
-        }
-      }));
+    if (containsUnauthorizedFacts) {
+      res.status(401);
+      res.send({});
+      return;
     }
 
+    await req.attribute.create(req.body.value);
+    const result = await req.attribute.get();
+
+    await Promise.all(facts.map((fact) => fact.save(req.hashedUserID)));
+
     if (result instanceof Error) {
-      console.error(`error in POST /attributes/${req.params.attributeId}`, result.message);
+      req.log(`error in POST /attributes/${req.params.attributeId}`, result.message);
       res.status(404).send({ error: result.message });
     } else {
       res.send(result);
     }
   },
 
-  async get(req, res) {
+  async get(req, res) { // TODO: auth
     let result = await req.attribute.get();
     const mimetype = result?.value?.type;
     const isBlob = result.value instanceof Blob;
 
     if (result instanceof Error) {
-      console.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
+      req.log(`error in GET /attributes/${req.params.attributeId}`, result.message);
       res.status(404).send({ error: result.message });
       return;
     }
@@ -73,12 +81,7 @@ export default {
     res.send(result);
   },
 
-  async subscribe(req, res) {
-    res.subscribeClientServerbus(req.params.attributeId);
-    res.send({ status: 'ok' });
-  },
-
-  async update(req, res) {
+  async update(req, res) { // TODO: auth
     const parsedChange: SerializedChangeWithMetadata<any> = req.body;
     const committedChange: SerializedChangeWithMetadata<any> = await req.attribute.change(
       parsedChange,

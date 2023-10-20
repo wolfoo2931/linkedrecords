@@ -27,9 +27,10 @@ export default class PsqlStorage implements IsAttributeStorage {
     return { id: attributeId };
   }
 
-  async getAttributeLatestSnapshot(attributeId: string, { maxChangeId = '2147483647' }) : Promise<{ value: string, changeId: string, actorId: string, createdAt: number, updatedAt: number }> {
+  async getAttributeLatestSnapshot(attributeId: string, actorId: string, { maxChangeId = '2147483647' }) : Promise<{ value: string, changeId: string, actorId: string, createdAt: number, updatedAt: number }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
 
+    // TODO: auth
     const snapshots = await this.pgPool.query(`SELECT value, change_id, actor_id, time as updated_at, (SELECT MIN(time) FROM ${pgTableName} LIMIT 1) as created_at FROM ${pgTableName} WHERE delta=false AND change_id <= $1 ORDER BY change_id DESC LIMIT 1`, [maxChangeId]);
 
     const snapshot = snapshots.rows[0];
@@ -47,9 +48,10 @@ export default class PsqlStorage implements IsAttributeStorage {
     };
   }
 
-  async getAttributeChanges(attributeId: string, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
+  async getAttributeChanges(attributeId: string, actorId: string, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
 
+    // TODO: auth
     const changes = await this.pgPool.query(`SELECT value, change_id, actor_id, time FROM ${pgTableName} WHERE change_id > $1 AND change_id <= $2 AND delta = true ORDER BY change_id ASC`, [minChangeId, maxChangeId]);
 
     return changes.rows.map((row) => ({
@@ -67,6 +69,7 @@ export default class PsqlStorage implements IsAttributeStorage {
   ) : Promise<{ id: string, updatedAt: Date }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
 
+    // TODO: auth
     const result = await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, true) RETURNING change_id, time`, [actorId, new Date(), change]);
 
     return { id: result.rows[0].change_id, updatedAt: new Date(result.rows[0].time) };
@@ -78,6 +81,8 @@ export default class PsqlStorage implements IsAttributeStorage {
     value: string,
   ) : Promise<{ id: string }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
+    // TODO: auth
+
     const result = await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id`, [actorId, new Date(), value]);
 
     return { id: result.rows[0].change_id };
