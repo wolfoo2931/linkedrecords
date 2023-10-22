@@ -18,6 +18,10 @@ export default class FactsRepository {
       body: JSON.stringify(facts),
     });
 
+    if (!response) {
+      return [];
+    }
+
     const createdRawFacts = await response.json();
 
     return createdRawFacts.map((rawFact) => new Fact(

@@ -1,7 +1,9 @@
+/* eslint-disable import/no-cycle */
 /* eslint-disable no-plusplus */
 import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
+import AuthorizationError from '../../attributes/errors/authorization_error';
 
 function andFactory() {
   let whereUsed = false;
@@ -386,8 +388,7 @@ export default class Fact {
 
   async save(userid: string) {
     if (!(await this.isAuthorizedToSave(userid))) {
-      return; // TODO: throw an error and escalate to forntend client
-      throw Error('user in unauthorized to save fact');
+      throw new AuthorizationError(userid, 'fact', this, this.logger);
     }
 
     const pool = new PgPoolWithLog(this.logger);

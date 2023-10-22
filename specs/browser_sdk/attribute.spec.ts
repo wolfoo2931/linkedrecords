@@ -397,6 +397,8 @@ describe('Attribute', () => {
       await client.Fact.createAll([
         ['deleted', '$isATermFor', 'something that is not existing anymore'],
         ['Book', '$isATermFor', 'some concept'],
+        ['Biography', '$isATermFor', 'some concept'],
+        ['Autobiography', '$isATermFor', 'some concept'],
 
         ['Biography', 'isA*', 'Book'],
         ['Autobiography', 'isA*', 'Biography'],

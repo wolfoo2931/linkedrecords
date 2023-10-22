@@ -16,13 +16,14 @@ import attributesController from './controllers/attributes_controller';
 import userinfoController from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
 import mountServiceBus from './service_bus_mount';
+import AuthorizationError from '../attributes/errors/authorization_error';
 
 const blobUpload = multer().single('change');
 
 Fact.initDB();
 
-async function withAuth(req, res, controllerAction, isAuthorized) {
-  const uploadWrappedControllerAction = (request, response) => {
+async function withAuth(req, res, controllerAction) {
+  const uploadWrappedControllerAction = (request, response) => new Promise((resolve, reject) => {
     blobUpload(request, response, async (err) => {
       if (err) {
         req.log.error(`error uploading file for ${req.method} ${req.path}`, err);
@@ -38,42 +39,24 @@ async function withAuth(req, res, controllerAction, isAuthorized) {
         }
       }
 
-      await controllerAction(request, response);
+      controllerAction(request, response)
+        .catch(reject)
+        .then(resolve);
     });
-  };
+  });
 
-  await req.whenAuthenticated(async (hashedUserID) => {
-    if (await isAuthorized(hashedUserID, req)) {
-      uploadWrappedControllerAction(req, res);
-    } else {
-      res.sendStatus(401);
+  await req.whenAuthenticated(async () => {
+    try {
+      await uploadWrappedControllerAction(req, res);
+    } catch (ex) {
+      if (ex instanceof AuthorizationError) {
+        res.sendStatus(401);
+      } else {
+        res.sendStatus(500);
+      }
     }
   });
 }
-
-async function isAuthorizedToAccessFact(userid, request, factRecord?) {
-  const fact = factRecord || new request.Fact(
-    request.body.subject,
-    request.body.predicate,
-    request.body.object,
-  );
-
-  return fact.isAuthorizedToSave(userid);
-}
-
-async function isAuthorizedToAccessAttribute(userid, request, attrRecord?) {
-  const attribute = attrRecord || request.attribute;
-  const attributeId = typeof attribute === 'string' ? attribute : attribute.id;
-
-  return Fact.isAuthorizedToReadPayload(attributeId, userid, request.log);
-}
-
-const authorizer = {
-  isAuthorizedToCreateAttribute: () => true,
-  isAuthorizedToReadAttribute: (userid, request, record) => isAuthorizedToAccessAttribute(userid, request, record),
-  isAuthorizedToUpdateAttribute: (userid, request, record?) => isAuthorizedToAccessAttribute(userid, request, record),
-  isAuthorizedToCreateFact: (userid, request, record) => isAuthorizedToAccessFact(userid, request, record),
-};
 
 async function createApp(httpServer: https.Server) {
   if (!process.env['FRONTEND_BASE_URL']) {
@@ -93,11 +76,11 @@ async function createApp(httpServer: https.Server) {
 
   app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
   app.get('/attributes', errorHandler((req, res) => attributesController.index(req, res)));
-  app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create, authorizer.isAuthorizedToCreateAttribute)));
-  app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get, authorizer.isAuthorizedToReadAttribute)));
-  app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update, authorizer.isAuthorizedToUpdateAttribute)));
-  app.get('/facts', errorHandler((req, res) => withAuth(req, res, factsController.index, () => true)));
-  app.post('/facts', errorHandler((req, res) => withAuth(req, res, factsController.create, () => true)));
+  app.post('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.create)));
+  app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get)));
+  app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update)));
+  app.get('/facts', errorHandler((req, res) => withAuth(req, res, factsController.index)));
+  app.post('/facts', errorHandler((req, res) => withAuth(req, res, factsController.create)));
 
   return app;
 }

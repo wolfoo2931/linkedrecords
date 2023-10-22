@@ -51,7 +51,7 @@ export default {
     }
   },
 
-  async get(req, res) { // TODO: auth
+  async get(req, res) {
     let result = await req.attribute.get();
     const mimetype = result?.value?.type;
     const isBlob = result.value instanceof Blob;

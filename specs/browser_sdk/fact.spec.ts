@@ -154,13 +154,16 @@ describe('Fact', () => {
         ['Book', 'isNarrowConceptOf', 'ContentType'],
         ['Author', 'isNarrowConceptOf', 'ContentType'],
         ['Author', 'relatesTo', 'Book'],
-        ['Author', 'hasPartnershipWith', 'ThePublisherClub'],
 
         [mobyDick.id, 'isA', 'Book'],
         [hermanMelville.id, 'isA', 'Author'],
         [hermanMelville.id, 'relatesTo', mobyDick.id],
         [mobyDickContent.id, 'relatesTo', mobyDick.id],
         [mobyDickSummary.id, 'relatesTo', mobyDick.id],
+      ]);
+
+      await client.Fact.createAll([
+        ['Author', 'hasPartnershipWith', 'ThePublisherClub'],
       ]);
 
       const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({

@@ -92,6 +92,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     const url = `/attributes/${this.id}?clientId=${this.clientId}`;
     const response = await this.linkedRecords.fetch(url, requestConfig);
 
+    if (!response) {
+      return;
+    }
+
     if (response.status !== 200) {
       throw new Error(`Error creating attribute: ${await response.text()}`);
     }

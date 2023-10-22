@@ -119,6 +119,8 @@ export default class LinkedRecords {
     const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, options));
 
     if (response.status === 401) {
+      console.error(`Authorziation Error when calling ${method} ${url}`);
+
       this.handleExpiredLoginSession();
       return false;
     }
