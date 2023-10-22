@@ -65,4 +65,9 @@ export default class PgPoolWithLog {
 
     return pgresult;
   }
+
+  async findAny(...args) {
+    const result = await this.query(...args);
+    return result.rows.length;
+  }
 }

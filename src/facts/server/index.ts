@@ -4,6 +4,7 @@ import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
+import SQL from './authorization_sql_builder';
 
 function andFactory() {
   let whereUsed = false;
@@ -120,13 +121,11 @@ export default class Fact {
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
 
-    const result = await pool.query(`SELECT subject
-      FROM facts
-      WHERE subject = '${nodeId}'
-      AND predicate = '$wasCreatedBy'
-      AND object = '${userid}'`);
-
-    return result.rows.length;
+    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['creator'],
+      nodeId,
+    ));
   }
 
   public static async isAuthorizedToReadPayload(
@@ -136,32 +135,27 @@ export default class Fact {
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
 
-    const result = await pool.query(`SELECT subject
-      FROM facts
-      WHERE subject = '${nodeId}'
-      AND predicate = '$wasCreatedBy'
-      AND object = '${userid}'`);
-
-    return result.rows.length;
+    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['creator'],
+      nodeId,
+    ));
   }
 
   private static authorizedWhereClause(userid: string, factTable: string = 'facts') {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
-    const authorizedSubjects = `(
-      (SELECT ${factTable}.subject FROM ${factTable} WHERE ${factTable}.predicate = '$wasCreatedBy' AND ${factTable}.object = '${userid}')
-      UNION
-      (SELECT '${userid}')
-    )`;
 
-    const authorizedObjects = `(
-      (SELECT ${factTable}.subject FROM ${factTable} WHERE ${factTable}.predicate = '$wasCreatedBy' AND ${factTable}.object = '${userid}')
-      UNION
-      (SELECT ${factTable}.subject FROM ${factTable} WHERE ${factTable}.predicate='$isATermFor')
-      UNION
-      (SELECT '${userid}')
-    )`;
+    const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['selfAccess', 'creator'],
+    );
+
+    const authorizedObjects = SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['selfAccess', 'term', 'creator'],
+    );
 
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
   }
@@ -428,29 +422,30 @@ export default class Fact {
       return true;
     }
 
+    if (await this.isValidCreatedAtFact(userid)) {
+      return true;
+    }
+
+    const pool = new PgPoolWithLog(this.logger);
+
+    return pool.findAny(`
+      SELECT *
+      FROM facts
+      WHERE subject IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator'], this.subject)}
+      AND object IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator', 'term', 'selfAccess'], this.subject)}
+    `);
+  }
+
+  async isValidCreatedAtFact(userid: string) {
     if (this.predicate === '$wasCreatedBy') {
       if (this.object !== userid) {
         return false;
       }
+
       const pool = new PgPoolWithLog(this.logger);
-      const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
-
-      if (dbRows.rows.length) {
-        return false;
-      }
-
-      return true;
+      return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
     }
 
-    if (userid === this.object) {
-      return this.matchAny([
-        { subject: [['$wasCreatedBy', userid]] },
-      ], userid);
-    }
-
-    return this.matchAny([
-      { subject: [['$wasCreatedBy', userid]], object: [['$wasCreatedBy', userid]] },
-      { subject: [['$wasCreatedBy', userid]], object: [['$isATermFor', '$anything']] },
-    ], userid);
+    return false;
   }
 }
