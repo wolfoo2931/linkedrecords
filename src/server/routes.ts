@@ -52,6 +52,7 @@ async function withAuth(req, res, controllerAction) {
       if (ex instanceof AuthorizationError) {
         res.sendStatus(401);
       } else {
+        req.log.error(ex);
         res.sendStatus(500);
       }
     }

@@ -13,3 +13,6 @@ example/client/index.packaged.js
 example/server/index.packaged.js
 .env
 .DS_Store
+testapp/client.packaged.js
+testapp/testserver.js
+testapp/testserver.js.map

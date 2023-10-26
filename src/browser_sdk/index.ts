@@ -69,7 +69,7 @@ export default class LinkedRecords {
     return userId;
   }
 
-  constructor(serverURL: URL, { clientServerBus, loginURL }: Config) {
+  constructor(serverURL: URL, { clientServerBus, loginURL }: Config = {}) {
     this.serverURL = serverURL;
     this.loginURL = loginURL;
     this.actorId = LinkedRecords.readUserIdFromCookies();
