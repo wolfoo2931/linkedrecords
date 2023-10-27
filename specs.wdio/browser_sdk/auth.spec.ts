@@ -20,10 +20,5 @@ describe('authorization', () => {
 
     authorizedValue = await user1.Attribute.findAndGetValue(authorizedReadAttributeId);
     expect(authorizedValue).to.eql({ foo: 'authorized' });
-
-    // const unauthorizedReadAttributeId = await user2.do(async (lr, attrId) => {
-    //   const unauthorizedReadAttribute = await lr.Attribute.find(attrId);
-    //   return unauthorizedReadAttribute?.id;
-    // }, attributeId);
   });
 });
