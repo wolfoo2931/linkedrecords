@@ -28,6 +28,49 @@ class RemoteAttributeRepository {
       return foundAttribute.id;
     }, attributeType, value, facts);
   }
+
+  async expectToFind(attributeId: string) {
+    const result = await this.session.do(async (lr, _attributeId) => {
+      const attribute = await lr.Attribute.find(_attributeId);
+      return attribute.id;
+    }, attributeId);
+
+    expect(result.length).toBe(39);
+    expect(result).toEqual(attributeId);
+  }
+
+  async expectNotToFind(attributeId: string) {
+    const result = await this.session.do(async (lr, _attributeId) => {
+      const attribute = await lr.Attribute.find(_attributeId);
+
+      if (attribute === undefined) {
+        return undefined;
+      }
+
+      return attribute.id;
+    }, attributeId);
+
+    expect(result).toBe(null);
+  }
+
+  async findAndGetValue(attributeId: string) {
+    return this.session.do(async (lr, _attributeId) => {
+      const attribute = await lr.Attribute.find(_attributeId);
+
+      if (attribute === undefined) {
+        return undefined;
+      }
+
+      return attribute.getValue();
+    }, attributeId);
+  }
+
+  async findAndSetValue(attributeId: string, value: any) {
+    return this.session.do(async (lr, _attributeId, _value) => {
+      const attribute = await lr.Attribute.find(_attributeId);
+      await attribute.set(_value);
+    }, attributeId, value);
+  }
 }
 
 export default class Session {
