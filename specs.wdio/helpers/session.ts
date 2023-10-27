@@ -1,3 +1,4 @@
+/* eslint-disable max-classes-per-file */
 /* eslint-disable no-eval */
 import { multiremote } from 'webdriverio';
 
@@ -9,8 +10,30 @@ const capabilities = {
   },
 };
 
+class RemoteAttributeRepository {
+  session: Session;
+
+  constructor(session: Session) {
+    this.session = session;
+  }
+
+  async create(
+    attributeType: string,
+    value: any,
+    facts?: [ string?, string? ][],
+  ): Promise<string> {
+    return this.session.do(async (lr, _attributeType, _value, _facts) => {
+      const attribute = await lr.Attribute.create(_attributeType, _value, _facts);
+      const foundAttribute = await lr.Attribute.find(attribute.id!);
+      return foundAttribute.id;
+    }, attributeType, value, facts);
+  }
+}
+
 export default class Session {
   browser: WebdriverIO.Browser;
+
+  Attribute: RemoteAttributeRepository;
 
   static async getSessions(count: number): Promise<Session[]> {
     const mrConfig = {};
@@ -88,13 +111,16 @@ export default class Session {
 
   constructor(browser) {
     this.browser = browser;
+    this.Attribute = new RemoteAttributeRepository(this);
   }
 
-  async do<T = any>(script): Promise<T> {
-    return this.browser.executeAsync(async (fnStr, done) => {
+  async do<T = any>(script, ...rest): Promise<T> {
+    return this.browser.executeAsync(async (...args) => {
+      const fnStr = args.shift();
+      const done = args.pop();
       const fn = eval(fnStr);
-      const result = await fn((window as any).lr);
+      const result = await fn((window as any).lr, ...args);
       done(result as T);
-    }, `${script}`);
+    }, `${script}`, ...rest);
   }
 }
