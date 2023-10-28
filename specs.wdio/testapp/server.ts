@@ -1,6 +1,6 @@
 import pg from 'pg';
 import http from 'http';
-import createServer from '../src/server/routes';
+import createServer from '../../src/server/routes';
 
 const pgPool = new pg.Pool({ max: 2 });
 

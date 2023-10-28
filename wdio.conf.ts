@@ -35,7 +35,7 @@ exports.config = {
     ['static-server', {
       port: 3002,
       folders: [
-        { mount: '/', path: './testapp' },
+        { mount: '/', path: './specs.wdio/testapp' },
       ],
       middleware: [
         {

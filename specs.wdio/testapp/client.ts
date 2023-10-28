@@ -1,4 +1,4 @@
-import LinkedRecords from '../src/browser_sdk';
+import LinkedRecords from '../../src/browser_sdk';
 
 async function init() {
   const client = new LinkedRecords(new URL('http://localhost:3000'));
