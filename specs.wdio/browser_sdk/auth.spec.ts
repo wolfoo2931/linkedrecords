@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import Session from '../helpers/session';
+import WdioRemote from '../helpers/wdio_remote';
 
 describe('authorization', () => {
   it('does not allow to read attributes create by other users', async () => {
@@ -20,5 +21,19 @@ describe('authorization', () => {
 
     authorizedValue = await user1.Attribute.findAndGetValue(authorizedReadAttributeId);
     expect(authorizedValue).to.eql({ foo: 'authorized' });
+  });
+
+  it.only('do', async () => {
+    const user1 = await Session.getOneSession();
+    const remote = new WdioRemote(user1.browser);
+
+    const attribute = await remote.execute(async () => {
+      const { lr } = window as any;
+      return lr.Attribute.create('keyValue', { foo: 'bar-u1' });
+    });
+
+    console.log(await attribute.getValue());
+    await attribute.set({ remote: 'update' });
+    console.log(await attribute.getValue());
   });
 });
