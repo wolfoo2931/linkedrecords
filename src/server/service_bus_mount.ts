@@ -25,7 +25,7 @@ class WSAccessControl {
         const { oidc } = request as any;
 
         if (!oidc || !oidc.isAuthenticated() || !oidc?.user?.sub) {
-          reject();
+          reject(new Error('No user id found in request'));
         } else {
           resolve(uid(request));
         }
