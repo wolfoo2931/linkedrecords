@@ -35,6 +35,11 @@ export default class WdioRemote {
           return new Proxy(() => {}, {
             apply: (t, thisArg, argumentsList) => self.execute(async (remoteId, method, args) => {
               const robj = (window as any).remoteInstances[remoteId];
+
+              if (!robj[method]) {
+                throw new Error(`executing remote method via wdio did not work as method ${method} is undefined on ${robj}.`);
+              }
+
               return robj[method](...args);
             }, proxyInstanceId, prop, argumentsList),
           });

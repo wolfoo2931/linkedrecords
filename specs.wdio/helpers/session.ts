@@ -1,6 +1,12 @@
 /* eslint-disable max-classes-per-file */
 /* eslint-disable no-eval */
 import { multiremote } from 'webdriverio';
+import pg from 'pg';
+import WdioRemote from './wdio_remote';
+import AttributesRepository from '../../src/browser_sdk/attributes_repository';
+import FactsRepository from '../../src/browser_sdk/facts_repository';
+
+const pgPool = new pg.Pool({ max: 2 });
 
 const capabilities = {
   browserName: 'chrome',
@@ -10,75 +16,14 @@ const capabilities = {
   },
 };
 
-class RemoteAttributeRepository {
-  session: Session;
-
-  constructor(session: Session) {
-    this.session = session;
-  }
-
-  async create(
-    attributeType: string,
-    value: any,
-    facts?: [ string?, string? ][],
-  ): Promise<string> {
-    return this.session.do(async (lr, _attributeType, _value, _facts) => {
-      const attribute = await lr.Attribute.create(_attributeType, _value, _facts);
-      const foundAttribute = await lr.Attribute.find(attribute.id!);
-      return foundAttribute.id;
-    }, attributeType, value, facts);
-  }
-
-  async expectToFind(attributeId: string) {
-    const result = await this.session.do(async (lr, _attributeId) => {
-      const attribute = await lr.Attribute.find(_attributeId);
-      return attribute.id;
-    }, attributeId);
-
-    expect(result.length).toBe(39);
-    expect(result).toEqual(attributeId);
-  }
-
-  async expectNotToFind(attributeId: string) {
-    const result = await this.session.do(async (lr, _attributeId) => {
-      const attribute = await lr.Attribute.find(_attributeId);
-
-      if (attribute === undefined) {
-        return undefined;
-      }
-
-      return attribute.id;
-    }, attributeId);
-
-    expect(result).toBe(null);
-  }
-
-  async findAndGetValue(attributeId: string) {
-    return this.session.do(async (lr, _attributeId) => {
-      const attribute = await lr.Attribute.find(_attributeId);
-
-      if (attribute === undefined) {
-        return undefined;
-      }
-
-      return attribute.getValue();
-    }, attributeId);
-  }
-
-  async findAndSetValue(attributeId: string, value: any) {
-    return this.session.do(async (lr, _attributeId, _value) => {
-      const attribute = await lr.Attribute.find(_attributeId);
-      await attribute.set(_value);
-    }, attributeId, value);
-  }
-}
-
 export default class Session {
   browser: WebdriverIO.Browser;
 
-  Attribute: RemoteAttributeRepository;
+  Attribute?: AttributesRepository;
 
-  static async getSessions(count: number): Promise<Session[]> {
+  Fact?: FactsRepository;
+
+  static async getSessions(count: number): Promise<InitilizedSession[]> {
     const mrConfig = {};
     const browsers = Array.from({ length: count }, (_, index) => `browser${index + 1}`);
     const frontendBaseURL = process.env['FRONTEND_BASE_URL'];
@@ -112,10 +57,13 @@ export default class Session {
       }
     }));
 
-    return sessions.map((sess) => new Session(sess));
+    const result = sessions.map((s) => new Session(s));
+    await Promise.all(result.map((s) => s.initLinkedRecord()));
+
+    return result as InitilizedSession[];
   }
 
-  static async getOneSession(): Promise<Session> {
+  static async getOneSession(): Promise<InitilizedSession> {
     const session = await this.getSessions(1);
 
     if (!session[0]) {
@@ -125,7 +73,7 @@ export default class Session {
     return session[0];
   }
 
-  static async getTwoSessions(): Promise<[Session, Session]> {
+  static async getTwoSessions(): Promise<[InitilizedSession, InitilizedSession]> {
     const session = await this.getSessions(2);
 
     if (!session[0] || !session[1]) {
@@ -138,7 +86,8 @@ export default class Session {
     ];
   }
 
-  static async getThreeSessions(): Promise<[Session, Session, Session]> {
+  static async getThreeSessions()
+  : Promise<[InitilizedSession, InitilizedSession, InitilizedSession]> {
     const session = await this.getSessions(2);
 
     if (!session[0] || !session[1] || !session[2]) {
@@ -152,9 +101,23 @@ export default class Session {
     ];
   }
 
+  static async truncateDB() {
+    await pgPool.query('TRUNCATE facts;');
+  }
+
   constructor(browser) {
     this.browser = browser;
-    this.Attribute = new RemoteAttributeRepository(this);
+  }
+
+  async initLinkedRecord() {
+    const remote = new WdioRemote(this.browser);
+    this.Attribute = (await remote.execute(
+      () => (window as any).lr.Attribute,
+    )) as AttributesRepository;
+
+    this.Fact = (await remote.execute(
+      () => (window as any).lr.Fact,
+    )) as FactsRepository;
   }
 
   async do<T = any>(script, ...rest): Promise<T> {
@@ -165,5 +128,17 @@ export default class Session {
       const result = await fn((window as any).lr, ...args);
       done(result as T);
     }, `${script}`, ...rest);
+  }
+}
+
+class InitilizedSession extends Session {
+  Attribute: AttributesRepository;
+
+  Fact: FactsRepository;
+
+  constructor(browser, attr, fact) {
+    super(browser);
+    this.Attribute = attr;
+    this.Fact = fact;
   }
 }

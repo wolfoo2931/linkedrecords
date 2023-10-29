@@ -8,6 +8,7 @@ createServer({ transportDriver: http }).then((server) => {
   server.listen(process.env['PORT'] || 3000);
 });
 
+// TODO: this is only needed for the karma test, can be removed once all tests are migrated to wdio
 http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
     await pgPool.query('TRUNCATE facts;');

@@ -1,39 +1,35 @@
 import { expect } from 'chai';
 import Session from '../helpers/session';
-import WdioRemote from '../helpers/wdio_remote';
 
 describe('authorization', () => {
-  it('does not allow to read attributes create by other users', async () => {
-    const [user1, user2] = await Session.getTwoSessions();
+  beforeEach(Session.truncateDB);
 
-    const authorizedReadAttributeId = await user1.Attribute.create('keyValue', { foo: 'bar-u1' });
+  it.only('does not allow to read attributes create by other users', async () => {
+    const [client1, client2] = await Session.getTwoSessions();
 
-    await user1.Attribute.expectToFind(authorizedReadAttributeId);
-    await user2.Attribute.expectNotToFind(authorizedReadAttributeId);
+    const attribute = await client1.Attribute.create('keyValue', { foo: 'bar' });
+    const authorizedReadAttribute = await client1.Attribute.find(await attribute.getId());
 
-    let authorizedValue = await user1.Attribute.findAndGetValue(authorizedReadAttributeId);
-    expect(authorizedValue).to.eql({ foo: 'bar-u1' });
+    const unauthorizedReadAttribute = await client2.Attribute.find(await attribute.getId());
 
-    const unauthorizedValue = await user2.Attribute.findAndGetValue(authorizedReadAttributeId);
-    expect(unauthorizedValue).to.eql(null);
+    expect(await unauthorizedReadAttribute).to.eql(null);
 
-    await user1.Attribute.findAndSetValue(authorizedReadAttributeId, { foo: 'authorized' });
+    expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'bar' });
 
-    authorizedValue = await user1.Attribute.findAndGetValue(authorizedReadAttributeId);
-    expect(authorizedValue).to.eql({ foo: 'authorized' });
-  });
+    await authorizedReadAttribute!.set({ foo: 'authorized' });
 
-  it.only('do', async () => {
-    const user1 = await Session.getOneSession();
-    const remote = new WdioRemote(user1.browser);
+    expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'authorized' });
 
-    const attribute = await remote.execute(async () => {
-      const { lr } = window as any;
-      return lr.Attribute.create('keyValue', { foo: 'bar-u1' });
+    expect(unauthorizedReadAttribute).to.eql(null);
+
+    const authorizedCompound = await client1.Attribute.findAll({ doc: await attribute.getId() });
+
+    const unauthorizedCompound = await client2.Attribute.findAll({
+      doc: await attribute.getId(),
     });
 
-    console.log(await attribute.getValue());
-    await attribute.set({ remote: 'update' });
-    console.log(await attribute.getValue());
+    expect(unauthorizedCompound).to.eql({});
+
+    expect(await authorizedCompound.doc.getValue()).to.eql({ foo: 'authorized' });
   });
 });
