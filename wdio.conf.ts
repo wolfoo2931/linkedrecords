@@ -16,12 +16,9 @@ exports.config = {
   maxInstances: 1,
 
   capabilities: [{
-    maxInstances: 1,
-
     browserName: 'chrome',
     'goog:chromeOptions': {
-      w3c: false,
-      args: ['headless', 'disable-gpu', 'window-size=1920,1080'],
+      args: ['headless'],
     },
   }],
 

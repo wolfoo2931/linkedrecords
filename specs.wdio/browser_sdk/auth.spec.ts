@@ -49,6 +49,9 @@ describe('authorization', () => {
     expect(unauthorizedCompound).to.eql({});
 
     expect(await authorizedCompound.doc.getValue()).to.eql({ foo: 'authorized' });
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('allows to create user term facts for everybody', async () => {
@@ -91,6 +94,9 @@ describe('authorization', () => {
     });
 
     expect(books2.length).to.equal(1);
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('filters attributes in findAll when the query is a string', async () => {
@@ -129,6 +135,9 @@ describe('authorization', () => {
     });
 
     expect(book1unauth).to.equal(undefined);
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('filters unauthorized facts when creating attribute with facts', async () => {
@@ -154,6 +163,9 @@ describe('authorization', () => {
     });
 
     expect(unauthorizedMatches.length).to.equal(0);
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('filters attributes in find', async () => {
@@ -188,6 +200,9 @@ describe('authorization', () => {
     const book1unauth = await client2.Attribute.find(await atrBook1.getId());
 
     expect(book1unauth).to.equal(null);
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('does not allow to use a term as subject if the term was not created by the same user', async () => {
@@ -231,6 +246,9 @@ describe('authorization', () => {
 
     expect((await filterAutoCreatedFacts(termFacts)).length).to.eql(2);
     expect((await filterAutoCreatedFacts(authorFacts)).length).to.eql(2);
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('is not allowed to create a term if it exists already', async () => {
@@ -250,6 +268,8 @@ describe('authorization', () => {
     });
 
     expect(authorFacts.length).to.eql(1);
+
+    client.browser.deleteSession();
   });
 
   it('does not allow to subscribe for foreign attributes changes', async () => {
@@ -285,6 +305,9 @@ describe('authorization', () => {
 
     expect(updateMessageReceived).to.eql(null);
     expect(subscriptionResultError).to.eql('unauthorized');
+
+    client1.browser.deleteSession();
+    client2.browser.deleteSession();
   });
 
   it('is allowed to create facts which refer to the authenticated users', async () => {
@@ -308,6 +331,9 @@ describe('authorization', () => {
 
     expect(myRecords.length).to.eq(1);
     expect(sombodyElsesRecords.length).to.eq(0);
+
+    client.browser.deleteSession();
+    otherClient.browser.deleteSession();
   });
 
   it('allows to create facts about the authenticated users');
