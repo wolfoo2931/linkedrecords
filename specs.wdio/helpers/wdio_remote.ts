@@ -25,11 +25,16 @@ export default class WdioRemote {
     } else if (obj['proxy-instance']) {
       const self = this;
       const proxyInstanceId = obj['proxy-instance'];
+      const objId = obj.id;
 
       obj = new Proxy({}, {
         get(target, prop) {
           if (prop === 'then') {
             return Reflect.get(target, prop);
+          }
+
+          if (prop === 'id') {
+            return objId;
           }
 
           if (prop === 'proxy-instance') {
@@ -84,7 +89,10 @@ export default class WdioRemote {
           const remoteId = `proxy-${Date.now()}-${Math.random().toString(36)}`;
           (window as any).remoteInstances = (window as any).remoteInstances || {};
           (window as any).remoteInstances[remoteId] = obj;
-          obj = { 'proxy-instance': remoteId };
+          obj = {
+            'proxy-instance': remoteId,
+            id: obj.id,
+          };
         }
 
         return obj;

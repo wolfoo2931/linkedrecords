@@ -6,7 +6,9 @@ const proxy = httpProxy.createProxyServer();
 
 exports.config = {
   specs: [
-    './specs.wdio/browser_sdk/**/*.spec.ts',
+    [
+      './specs.wdio/browser_sdk/**/*.spec.ts',
+    ],
   ],
 
   exclude: [
