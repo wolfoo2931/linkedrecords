@@ -112,6 +112,22 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return this.id;
   }
 
+  public getClientId(): string {
+    if (!this.clientId) {
+      throw new Error('clientId can not return the attribute id as id is undefined');
+    }
+
+    return this.clientId;
+  }
+
+  public getServerURL(): string {
+    if (!this.serverURL) {
+      throw new Error('serverURL can not return the attribute id as id is undefined');
+    }
+
+    return this.serverURL.toString();
+  }
+
   public getDataURL() {
     return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
   }

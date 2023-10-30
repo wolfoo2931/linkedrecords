@@ -32,6 +32,10 @@ export default class WdioRemote {
             return Reflect.get(target, prop);
           }
 
+          if (prop === 'proxy-instance') {
+            return proxyInstanceId;
+          }
+
           return new Proxy(() => {}, {
             apply: (t, thisArg, argumentsList) => self.execute(async (remoteId, method, args) => {
               const robj = (window as any).remoteInstances[remoteId];

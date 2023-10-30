@@ -120,6 +120,14 @@ export default class Session {
     )) as FactsRepository;
   }
 
+  async getActorId() {
+    const remote = new WdioRemote(this.browser);
+
+    return remote.execute(
+      () => (window as any).lr.actorId,
+    );
+  }
+
   async do<T = any>(script, ...rest): Promise<T> {
     return this.browser.executeAsync(async (...args) => {
       const fnStr = args.shift();
