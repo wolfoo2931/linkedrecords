@@ -1,6 +1,6 @@
 /* eslint-disable import/no-cycle */
 
-import { v4 as uuid } from 'uuid';
+import { uuidv7 as uuid } from 'uuidv7';
 
 import Cookies from 'js-cookie';
 import LongTextAttribute from '../attributes/long_text/client';
@@ -69,7 +69,7 @@ export default class LinkedRecords {
     return userId;
   }
 
-  constructor(serverURL: URL, { clientServerBus, loginURL }: Config) {
+  constructor(serverURL: URL, { clientServerBus, loginURL }: Config = {}) {
     this.serverURL = serverURL;
     this.loginURL = loginURL;
     this.actorId = LinkedRecords.readUserIdFromCookies();
@@ -119,6 +119,8 @@ export default class LinkedRecords {
     const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, options));
 
     if (response.status === 401) {
+      console.error(`Authorziation Error when calling ${method} ${url}`);
+
       this.handleExpiredLoginSession();
       return false;
     }

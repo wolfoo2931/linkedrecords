@@ -26,7 +26,7 @@ type TransformQueryRecord<X>
     ? ConcreteTypedArray<X> : AbstractAttributeClient<any, any>);
 
 export default class AttributesRepository {
-  linkedRecords: LinkedRecords;
+  private linkedRecords: LinkedRecords;
 
   private clientServerBus: ClientServerBus;
 
@@ -41,7 +41,7 @@ export default class AttributesRepository {
     this.clientServerBus = clientServerBus;
   }
 
-  idToAttribute(id, serverState?): AbstractAttributeClient<any, any> | undefined {
+  private idToAttribute(id, serverState?): AbstractAttributeClient<any, any> | undefined {
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = AttributesRepository
       .attributeTypes

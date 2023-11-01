@@ -60,7 +60,14 @@ export default async function clientServerBus(
 
   io.on('connection', async (socket) => {
     const request = socket?.request;
-    const userId = await accessControl.verifyAuthenticated(request);
+    let userId;
+
+    try {
+      userId = await accessControl.verifyAuthenticated(request);
+    } catch (ex) {
+      request.log.info(`User not authenticated: ${(ex as Error).message}`);
+      throw ex;
+    }
 
     if (!userId) {
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');

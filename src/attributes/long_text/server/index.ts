@@ -19,7 +19,7 @@ IsAttributeStorage
 
   async create(value: string) : Promise<{ id: string }> {
     const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId, this.logger);
-    await createdByFact.save();
+    await createdByFact.save(this.actorId);
     return this.storage.createAttribute(this.id, this.actorId, value);
   }
 
@@ -81,11 +81,19 @@ IsAttributeStorage
       updatedAt: number
     }> {
     const queryOptions = { maxChangeId: changeId };
-    const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
+    const result = await this.storage.getAttributeLatestSnapshot(
+      this.id,
+      this.actorId,
+      queryOptions,
+    );
 
     // TODO: query options should be something
     // like { minChangeId: result.changeId, maxChangeId: changeId }
-    const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
+    const changes = await this.storage.getAttributeChanges(
+      this.id,
+      this.actorId,
+      queryOptions,
+    );
 
     changes.forEach((change) => {
       result.value = LongTextChange.fromString(change.value).apply(result.value);
@@ -98,7 +106,11 @@ IsAttributeStorage
   }
 
   private async getChangeSince(changeId: string) : Promise<LongTextChange | null> {
-    const changes = await this.storage.getAttributeChanges(this.id, { minChangeId: changeId });
+    const changes = await this.storage.getAttributeChanges(
+      this.id,
+      this.actorId,
+      { minChangeId: changeId },
+    );
 
     if (!changes.length) {
       return null;

@@ -1,7 +1,7 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 
-import { v4 as uuid } from 'uuid';
+import { uuidv7 as uuid } from 'uuidv7';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
@@ -92,12 +92,40 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     const url = `/attributes/${this.id}?clientId=${this.clientId}`;
     const response = await this.linkedRecords.fetch(url, requestConfig);
 
+    if (!response) {
+      return;
+    }
+
     if (response.status !== 200) {
       throw new Error(`Error creating attribute: ${await response.text()}`);
     }
 
     const responseBody = await response.json();
     await this.load(responseBody);
+  }
+
+  public getId(): string {
+    if (!this.id) {
+      throw new Error('getId can not return the attribute id as id is undefined');
+    }
+
+    return this.id;
+  }
+
+  public getClientId(): string {
+    if (!this.clientId) {
+      throw new Error('clientId can not return the attribute id as id is undefined');
+    }
+
+    return this.clientId;
+  }
+
+  public getServerURL(): string {
+    if (!this.serverURL) {
+      throw new Error('serverURL can not return the attribute id as id is undefined');
+    }
+
+    return this.serverURL.toString();
   }
 
   public getDataURL() {

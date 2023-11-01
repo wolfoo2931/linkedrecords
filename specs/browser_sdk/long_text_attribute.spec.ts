@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 
 import { expect } from 'chai';
-import { v4 as uuid } from 'uuid';
+import { uuidv7 as uuid } from 'uuidv7';
 import {
   createClient, cleanupClients, truncateDB, waitFor,
 } from '../helpers';

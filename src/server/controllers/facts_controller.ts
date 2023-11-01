@@ -1,13 +1,8 @@
 /* eslint-disable no-await-in-loop */
 import Fact from '../../facts/server';
 
-const asyncFilter = async (arr, fn) => {
-  const results = await Promise.all(arr.map(fn));
-  return arr.filter((_v, index) => results[index]);
-};
-
 export default {
-  async index(req, res, isAuthorizedToReadFact) {
+  async index(req, res) {
     const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
     const predicate = req.query.predicate ? JSON.parse(req.query.predicate) : undefined;
     const object = req.query.object ? JSON.parse(req.query.object) : undefined;
@@ -16,27 +11,38 @@ export default {
       subject,
       predicate,
       object,
-    }, req.log);
+    }, req.hashedUserID, req.log);
 
     res.status(200);
-    res.send(await asyncFilter(facts, isAuthorizedToReadFact));
+    res.send(facts);
   },
 
-  async create(req, res, isAuthorizedToCreateFact) {
-    const rawFacts = req.body;
-    const savedRawFacts: object[] = [];
+  async create(req, res) {
+    const facts = req.body.map((rawFact) => new Fact(
+      rawFact[0],
+      rawFact[1],
+      rawFact[2],
+      req.log,
+    ));
 
-    for (let i = 0; i < rawFacts.length; i += 1) {
-      const fact = new Fact(rawFacts[i][0], rawFacts[i][1], rawFacts[i][2], req.log);
+    const authorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
 
-      if (await isAuthorizedToCreateFact(fact)) {
-        await fact.save(req.hashedUserID);
+    const containsUnauthorizedFacts = (await Promise.all(authorizedChecks))
+      .includes((isAuthorized) => !isAuthorized);
 
-        savedRawFacts.push(fact.toJSON());
+    if (containsUnauthorizedFacts) {
+      res.status(401);
+      res.send({});
+    } else {
+      const savedRawFacts: Fact[] = [];
+
+      for (let i = 0; i < facts.length; i += 1) {
+        await facts[i].save(req.hashedUserID);
+        savedRawFacts.push(facts[i]);
       }
-    }
 
-    res.status(200);
-    res.send(savedRawFacts);
+      res.status(200);
+      res.send(await Promise.all(savedRawFacts));
+    }
   },
 };

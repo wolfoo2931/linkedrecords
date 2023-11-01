@@ -70,13 +70,13 @@ describe('Fact', () => {
 
       await client.Fact.createAll([
         ['ContentType', '$isATermFor', 'some concept'],
-        [todo.id, 'isA', 'ContentType'],
-        [openTodo.id, 'isA', todo.id],
-        [importantOpenTodo.id, 'isA', openTodo.id],
+        [todo.id, 'isA*', 'ContentType'],
+        [openTodo.id, 'isA*', todo.id],
+        [importantOpenTodo.id, 'isA*', openTodo.id],
       ]);
 
       const todos = filterAutoCreatedFacts(await otherClient.Fact.findAll({
-        subject: [['isA', 'ContentType']],
+        subject: [['isA*', 'ContentType']],
       }));
 
       expect(todos.length).to.be.equal(3);
@@ -154,13 +154,16 @@ describe('Fact', () => {
         ['Book', 'isNarrowConceptOf', 'ContentType'],
         ['Author', 'isNarrowConceptOf', 'ContentType'],
         ['Author', 'relatesTo', 'Book'],
-        ['Author', 'hasPartnershipWith', 'ThePublisherClub'],
 
         [mobyDick.id, 'isA', 'Book'],
         [hermanMelville.id, 'isA', 'Author'],
         [hermanMelville.id, 'relatesTo', mobyDick.id],
         [mobyDickContent.id, 'relatesTo', mobyDick.id],
         [mobyDickSummary.id, 'relatesTo', mobyDick.id],
+      ]);
+
+      await client.Fact.createAll([
+        ['Author', 'hasPartnershipWith', 'ThePublisherClub'],
       ]);
 
       const hermanMelvilleFacts = filterAutoCreatedFacts(await otherClient.Fact.findAll({

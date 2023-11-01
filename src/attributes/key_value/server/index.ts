@@ -18,7 +18,7 @@ IsAttributeStorage
 
   async create(value: object) : Promise<{ id: string }> {
     const createdByFact = new Fact(this.id, '$wasCreatedBy', this.actorId, this.logger);
-    await createdByFact.save();
+    await createdByFact.save(this.actorId);
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
   }
 
@@ -64,7 +64,11 @@ IsAttributeStorage
       updatedAt: number
     }> {
     const queryOptions = { maxChangeId: changeId };
-    const result = await this.storage.getAttributeLatestSnapshot(this.id, queryOptions);
+    const result = await this.storage.getAttributeLatestSnapshot(
+      this.id,
+      this.actorId,
+      queryOptions,
+    );
 
     const accumulatedResult = {
       value: JSON.parse(result.value),
@@ -74,7 +78,11 @@ IsAttributeStorage
       updatedAt: result.updatedAt,
     };
 
-    const changes = await this.storage.getAttributeChanges(this.id, queryOptions);
+    const changes = await this.storage.getAttributeChanges(
+      this.id,
+      this.actorId,
+      queryOptions,
+    );
 
     changes.forEach((change) => {
       const tmpChange = KeyValueChange.fromString(change.value);

@@ -17,6 +17,14 @@ export default class Fact {
     this.object = object;
   }
 
+  toJSON() {
+    return {
+      subject: this.subject,
+      predicate: this.predicate,
+      object: this.object,
+    };
+  }
+
   async save() {
     await this.linkedRecords.fetch('/facts', {
       method: 'POST',

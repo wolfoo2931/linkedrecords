@@ -1,7 +1,10 @@
+/* eslint-disable import/no-cycle */
 /* eslint-disable no-plusplus */
 import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
+import AuthorizationError from '../../attributes/errors/authorization_error';
+import SQL from './authorization_sql_builder';
 
 function andFactory() {
   let whereUsed = false;
@@ -15,6 +18,7 @@ function andFactory() {
     return 'AND';
   };
 }
+
 function hasNotModifier(statement: SubjectQuery): boolean {
   if (!Array.isArray(statement) || !statement[1]) {
     return false;
@@ -36,7 +40,7 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
   const isObjectEmpty = !object || object.length === 0;
   const isPredicateEmpty = !predicate || predicate.length === 0;
   const isValidId = (p) => typeof p === 'string' && p.match(/^[a-zA-Z0-9-]+$/);
-  const isValidPredicate = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+$/);
+  const isValidPredicate = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+\*?$/);
   const isValidSubject = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+$/);
 
   if (isSubjectEmpty && isObjectEmpty && isPredicateEmpty) {
@@ -57,8 +61,12 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
         throw new Error(`invalid Id in subject query: ${sq}`);
       }
     } else if (Array.isArray(sq)) {
-      if (!isValidSubject(sq[0])) {
+      if (sq.length === 3 && !isValidSubject(sq[0])) {
         throw new Error(`invalid subject part in fact query detected: ${sq[0]}`);
+      }
+
+      if (sq.length === 2 && !isValidPredicate(sq[0])) {
+        throw new Error(`invalid predicate part in fact query detected: ${sq[0]}`);
       }
 
       if (!isValidSubject(sq[1])) {
@@ -106,9 +114,56 @@ export default class Fact {
     }
   }
 
+  public static async isAuthorizedToModifyPayload(
+    nodeId: string, // where nodeId is in most cases a attriburteId
+    userid: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const pool = new PgPoolWithLog(logger);
+
+    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['creator'],
+      nodeId,
+    ));
+  }
+
+  public static async isAuthorizedToReadPayload(
+    nodeId: string, // where nodeId is in most cases a attriburteId
+    userid: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const pool = new PgPoolWithLog(logger);
+
+    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['creator'],
+      nodeId,
+    ));
+  }
+
+  private static authorizedWhereClause(userid: string, factTable: string = 'facts') {
+    if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
+      throw new Error(`userId is invalid: "${userid}"`);
+    }
+
+    const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['selfAccess', 'creator'],
+    );
+
+    const authorizedObjects = SQL.selectSubjectsInAnyGroup(
+      userid,
+      ['selfAccess', 'term', 'creator'],
+    );
+
+    return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
+  }
+
   private static getSQLToResolvePossibleTrasitiveQuery(
     query: SubjectQuery,
     sqlPrefix: string,
+    userid: string,
   ): string | string[] {
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
@@ -128,27 +183,38 @@ export default class Fact {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     }
 
-    const table = `(WITH RECURSIVE rfacts AS (
-      SELECT facts.* FROM facts
-                      WHERE object = '${query[1]}'
-                      AND predicate = '${query[0]}'
-    UNION ALL
-      SELECT facts.* FROM facts, rfacts
-                      WHERE facts.object = rfacts.subject
-                      AND facts.predicate = '${query[0]}'
-    )
-    CYCLE subject
-      SET cycl TO 'Y' DEFAULT 'N'
-    USING path_array
-    SELECT *
-      FROM rfacts
-      WHERE cycl = 'N') as f`;
+    let table = `(SELECT facts.* FROM facts
+                  WHERE object = '${query[1]}'
+                  AND predicate = '${query[0]}') as f`;
 
-    return `SELECT subject FROM ${table} ${sqlPrefix ? `WHERE ${sqlPrefix}` : ''}`;
+    if (query[0].endsWith('*')) {
+      table = `(WITH RECURSIVE rfacts AS (
+        SELECT facts.* FROM facts
+                        WHERE object = '${query[1]}'
+                        AND predicate = '${query[0]}'
+        UNION ALL
+          SELECT facts.* FROM facts, rfacts
+                          WHERE facts.object = rfacts.subject
+                          AND facts.predicate = '${query[0]}'
+        )
+        CYCLE subject
+          SET cycl TO 'Y' DEFAULT 'N'
+        USING path_array
+        SELECT *
+          FROM rfacts
+          WHERE cycl = 'N') as f`;
+    }
+
+    const condition = [sqlPrefix, this.authorizedWhereClause(userid)]
+      .filter((c) => c.trim())
+      .join(' AND ');
+
+    return `SELECT subject FROM ${table} ${condition ? `WHERE ${condition}` : ''}`;
   }
 
   static getSQLToResolveToSubjectIdsWithModifiers(
     subjectQueries: SubjectQueries,
+    userid: string,
   ): string {
     const transitiveQueries: SubjectQuery[] = [];
     const sqlConditions: [string, string, string][] = [];
@@ -190,12 +256,17 @@ export default class Fact {
     }
 
     return transitiveQueries
-      .map((subjectQuery) => Fact.getSQLToResolvePossibleTrasitiveQuery(subjectQuery, sqlPrefix))
+      .map((subjectQuery) => Fact.getSQLToResolvePossibleTrasitiveQuery(
+        subjectQuery,
+        sqlPrefix,
+        userid,
+      ))
       .join(' INTERSECT ');
   }
 
   static async findAll(
     { subject, predicate, object }: FactQuery,
+    userid: string,
     logger: IsLogger,
   ): Promise<Fact[]> {
     ensureValidFactQuery({ subject, predicate, object });
@@ -205,8 +276,10 @@ export default class Fact {
 
     let sqlQuery = 'SELECT * FROM facts';
 
+    sqlQuery += ` ${and()} ${Fact.authorizedWhereClause(userid)}`;
+
     if (subject) {
-      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
+      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject, userid)})`;
     }
 
     if (predicate) {
@@ -214,7 +287,7 @@ export default class Fact {
     }
 
     if (object) {
-      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
+      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object, userid)})`;
     }
 
     const result = await pool.query(sqlQuery);
@@ -234,11 +307,15 @@ export default class Fact {
     this.logger = logger;
   }
 
-  async match(factQuery: FactQuery, logger: IsLogger): Promise<boolean> {
+  async match(factQuery: FactQuery, userid: string, logger: IsLogger): Promise<boolean> {
     let concreateObjectSpecMatch = false;
     let concreateSubjectSpecMatch = false;
     let subjectMatch;
     let objectMatch;
+
+    if (!userid) {
+      throw new Error('Fact.match needs to receive a valid userid!');
+    }
 
     if (factQuery.predicate && !factQuery.predicate.includes(this.predicate)) {
       return false;
@@ -274,21 +351,24 @@ export default class Fact {
     if (!concreateSubjectSpecMatch) {
       subjectMatch = !factQuery.subject ? [] : Fact.findAll({
         subject: [this.subject, ...factQuery.subject],
-      }, logger);
+      }, userid, logger);
     }
 
     if (!concreateObjectSpecMatch) {
       objectMatch = !factQuery.object ? [] : Fact.findAll({
         subject: [this.object, ...factQuery.object],
-      }, logger);
+      }, userid, logger);
     }
 
     return (!factQuery.subject || concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
       && (!factQuery.object || concreateObjectSpecMatch || (await objectMatch).length !== 0);
   }
 
-  async matchAny(factQueries: FactQuery[], logger: IsLogger): Promise<boolean> {
-    const allResults = await Promise.all(factQueries.map((fq) => this.match(fq, logger)));
+  async matchAny(factQueries: FactQuery[], userid: string): Promise<boolean> {
+    const allResults = await Promise.all(
+      factQueries.map((fq) => this.match(fq, userid, this.logger)),
+    );
+
     return !!allResults.find((x) => x);
   }
 
@@ -300,7 +380,11 @@ export default class Fact {
     };
   }
 
-  async save(userid?: string) {
+  async save(userid: string) {
+    if (!(await this.isAuthorizedToSave(userid))) {
+      throw new AuthorizationError(userid, 'fact', this, this.logger);
+    }
+
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isATermFor') {
@@ -327,5 +411,41 @@ export default class Fact {
         userid,
       ]);
     }
+  }
+
+  async isAuthorizedToSave(userid) {
+    if (!userid || !userid.trim()) {
+      return false;
+    }
+
+    if (this.predicate === '$isATermFor') {
+      return true;
+    }
+
+    if (await this.isValidCreatedAtFact(userid)) {
+      return true;
+    }
+
+    const pool = new PgPoolWithLog(this.logger);
+
+    return pool.findAny(`
+      SELECT *
+      FROM facts
+      WHERE subject IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator'], this.subject)}
+      AND object IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator', 'term', 'selfAccess'], this.subject)}
+    `);
+  }
+
+  async isValidCreatedAtFact(userid: string) {
+    if (this.predicate === '$wasCreatedBy') {
+      if (this.object !== userid) {
+        return false;
+      }
+
+      const pool = new PgPoolWithLog(this.logger);
+      return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
+    }
+
+    return false;
   }
 }
