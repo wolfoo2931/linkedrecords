@@ -99,7 +99,9 @@ export default class Fact {
 
   static async initDB() {
     const pg = new PgPoolWithLog(console as unknown as IsLogger);
-    const createQuery = 'CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);';
+    const createQuery = `CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
+    CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));`;
+
     await pg.query(createQuery);
 
     const rawFactTableColums = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
@@ -420,10 +422,17 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
 
-    await pool.query('DELETE facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+    await pool.query(`WITH deleted_rows AS (
+        DELETE FROM facts
+        WHERE subject = $1 AND predicate = $2 AND object = $3
+        RETURNING *
+    )
+    INSERT INTO deleted_facts (subject, predicate, object, deleted_by)
+    SELECT subject, predicate, object, $4 FROM deleted_rows;`, [
       this.subject,
       this.predicate,
       this.object,
+      userid,
     ]);
   }
 

@@ -90,7 +90,7 @@ describe('Fact', () => {
         ],
       });
 
-      expect(books2.length).to.be.equal(2);
+      expect(books2.length).to.be.equal(1);
     });
 
     it('is not allowed to delete term definition facts');
