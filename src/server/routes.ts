@@ -82,6 +82,7 @@ async function createApp(httpServer: https.Server) {
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update)));
   app.get('/facts', errorHandler((req, res) => withAuth(req, res, factsController.index)));
   app.post('/facts', errorHandler((req, res) => withAuth(req, res, factsController.create)));
+  app.post('/facts/delete', errorHandler((req, res) => withAuth(req, res, factsController.delete)));
 
   return app;
 }

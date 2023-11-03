@@ -64,4 +64,11 @@ export default class FactsRepository {
       record.object,
     ));
   }
+
+  async deleteAll(facts: [ string, string, string ][]): Promise<void> {
+    await this.linkedRecords.fetch('/facts/delete', {
+      method: 'POST',
+      body: JSON.stringify(facts),
+    });
+  }
 }

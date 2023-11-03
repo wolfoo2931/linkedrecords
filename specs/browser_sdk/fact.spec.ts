@@ -57,6 +57,46 @@ describe('Fact', () => {
     // describe('$wasCreatedBy predicate');
   });
 
+  describe('Facts.deleteAll', () => {
+    it('deletes all facts if they exists', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
+      const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
+
+      await client.Fact.createAll([
+        ['Author', '$isATermFor', 'somebody who writes a book'],
+        ['Book', '$isATermFor', 'a book'],
+        [hermanMelville.id, 'isA', 'Book'],
+        [mobyDick.id, 'isA', 'Book'],
+      ]);
+
+      const { books } = await otherClient.Attribute.findAll({
+        books: [
+          ['isA', 'Book'],
+        ],
+      });
+
+      expect(books.length).to.be.equal(2);
+
+      await client.Fact.deleteAll([
+        [mobyDick.id!, 'isA', 'Book'],
+      ]);
+
+      const { books2 } = await otherClient.Attribute.findAll({
+        books2: [
+          ['isA', 'Book'],
+        ],
+      });
+
+      expect(books2.length).to.be.equal(2);
+    });
+
+    it('is not allowed to delete term definition facts');
+    it('archives delete facts');
+  });
+
   describe('Facts.findAll()', () => {
     // TODO: test path: throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
 

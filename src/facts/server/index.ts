@@ -413,6 +413,20 @@ export default class Fact {
     }
   }
 
+  async delete(userid: string) {
+    if (this.predicate === '$isATermFor' || !(await this.isAuthorizedToSave(userid))) {
+      throw new AuthorizationError(userid, 'fact', this, this.logger);
+    }
+
+    const pool = new PgPoolWithLog(this.logger);
+
+    await pool.query('DELETE facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+      this.subject,
+      this.predicate,
+      this.object,
+    ]);
+  }
+
   async isAuthorizedToSave(userid) {
     if (!userid || !userid.trim()) {
       return false;

@@ -45,4 +45,30 @@ export default {
       res.send(await Promise.all(savedRawFacts));
     }
   },
+
+  async delete(req, res) {
+    const facts = req.body.map((rawFact) => new Fact(
+      rawFact[0],
+      rawFact[1],
+      rawFact[2],
+      req.log,
+    ));
+
+    const authorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
+
+    const containsUnauthorizedFacts = (await Promise.all(authorizedChecks))
+      .includes((isAuthorized) => !isAuthorized);
+
+    if (containsUnauthorizedFacts) {
+      res.status(401);
+      res.send({});
+    } else {
+      for (let i = 0; i < facts.length; i += 1) {
+        await facts[i].delete(req.hashedUserID);
+      }
+
+      res.status(200);
+      res.send({ status: 'ok' });
+    }
+  },
 };
