@@ -416,7 +416,7 @@ export default class Fact {
   }
 
   async delete(userid: string) {
-    if (this.predicate === '$isATermFor' || !(await this.isAuthorizedToSave(userid))) {
+    if (!(await this.isAuthorizedToDelete(userid))) {
       throw new AuthorizationError(userid, 'fact', this, this.logger);
     }
 
@@ -434,6 +434,23 @@ export default class Fact {
       this.object,
       userid,
     ]);
+  }
+
+  async isAuthorizedToDelete(userid) {
+    if (this.predicate === '$isATermFor') {
+      const pool = new PgPoolWithLog(this.logger);
+
+      return pool.findAny(
+        'SELECT * FROM facts where subject = $1 AND predicate = $2 AND created_by = $3',
+        [this.subject, '$isATermFor', userid],
+      );
+    }
+
+    if (!(await this.isAuthorizedToSave(userid))) {
+      throw new AuthorizationError(userid, 'fact', this, this.logger);
+    }
+
+    return true;
   }
 
   async isAuthorizedToSave(userid) {

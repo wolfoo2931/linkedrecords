@@ -336,6 +336,41 @@ describe('authorization', () => {
     otherClient.browser.deleteSession();
   });
 
+  it('does only allow to delete term definition facts by the user who crated it', async () => {
+    const [client, otherClient] = await Session.getTwoSessions();
+
+    await client.Fact.createAll([
+      ['Author', '$isATermFor', 'somebody who writes a book'],
+      ['Book', '$isATermFor', '... you know what it is'],
+    ]);
+
+    const termFacts = await client.Fact.findAll({
+      predicate: ['$isATermFor'],
+    });
+
+    expect(termFacts.length).to.eql(2);
+
+    await otherClient.Fact.deleteAll([
+      ['Author', '$isATermFor', 'somebody who writes a book'],
+    ]);
+
+    const termFacts2 = await client.Fact.findAll({
+      predicate: ['$isATermFor'],
+    });
+
+    expect(termFacts2.length).to.eql(2);
+
+    client.Fact.deleteAll([
+      ['Author', '$isATermFor', 'somebody who writes a book'],
+    ]);
+
+    const termFacts3 = await client.Fact.findAll({
+      predicate: ['$isATermFor'],
+    });
+
+    expect(termFacts3.length).to.eql(1);
+  });
+
   it('allows to create facts about the authenticated users');
   it('allows to create facts refer to the authenticated users');
 });

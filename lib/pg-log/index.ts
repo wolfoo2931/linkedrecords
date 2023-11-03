@@ -68,6 +68,6 @@ export default class PgPoolWithLog {
 
   async findAny(...args) {
     const result = await this.query(...args);
-    return result.rows.length;
+    return !!result.rows.length;
   }
 }
