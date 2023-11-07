@@ -162,7 +162,7 @@ export default class Fact {
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
   }
 
-  private static getSQLToResolvePossibleTrasitiveQuery(
+  private static getSQLToResolvePossibleTransitiveQuery(
     query: SubjectQuery,
     sqlPrefix: string,
     userid: string,
@@ -258,7 +258,7 @@ export default class Fact {
     }
 
     return transitiveQueries
-      .map((subjectQuery) => Fact.getSQLToResolvePossibleTrasitiveQuery(
+      .map((subjectQuery) => Fact.getSQLToResolvePossibleTransitiveQuery(
         subjectQuery,
         sqlPrefix,
         userid,
@@ -310,8 +310,8 @@ export default class Fact {
   }
 
   async match(factQuery: FactQuery, userid: string, logger: IsLogger): Promise<boolean> {
-    let concreateObjectSpecMatch = false;
-    let concreateSubjectSpecMatch = false;
+    let concreteObjectSpecMatch = false;
+    let concreteSubjectSpecMatch = false;
     let subjectMatch;
     let objectMatch;
 
@@ -323,47 +323,47 @@ export default class Fact {
       return false;
     }
 
-    const concreateSubjectSpec = factQuery.subject?.filter((x) => typeof x === 'string');
-    const concreateObjectSpec = factQuery.object?.filter((x) => typeof x === 'string');
+    const concreteSubjectSpec = factQuery.subject?.filter((x) => typeof x === 'string');
+    const concreteObjectSpec = factQuery.object?.filter((x) => typeof x === 'string');
 
-    if (concreateSubjectSpec && concreateSubjectSpec.length) {
-      if (concreateSubjectSpec.length > 1) {
+    if (concreteSubjectSpec && concreteSubjectSpec.length) {
+      if (concreteSubjectSpec.length > 1) {
         return false;
       }
 
-      if (this.subject !== concreateSubjectSpec[0]) {
+      if (this.subject !== concreteSubjectSpec[0]) {
         return false;
       }
 
-      concreateSubjectSpecMatch = true;
+      concreteSubjectSpecMatch = true;
     }
 
-    if (concreateObjectSpec && concreateObjectSpec.length) {
-      if (concreateObjectSpec.length > 1) {
+    if (concreteObjectSpec && concreteObjectSpec.length) {
+      if (concreteObjectSpec.length > 1) {
         return false;
       }
 
-      if (this.object !== concreateObjectSpec[0]) {
+      if (this.object !== concreteObjectSpec[0]) {
         return false;
       }
 
-      concreateObjectSpecMatch = true;
+      concreteObjectSpecMatch = true;
     }
 
-    if (!concreateSubjectSpecMatch) {
+    if (!concreteSubjectSpecMatch) {
       subjectMatch = !factQuery.subject ? [] : Fact.findAll({
         subject: [this.subject, ...factQuery.subject],
       }, userid, logger);
     }
 
-    if (!concreateObjectSpecMatch) {
+    if (!concreteObjectSpecMatch) {
       objectMatch = !factQuery.object ? [] : Fact.findAll({
         subject: [this.object, ...factQuery.object],
       }, userid, logger);
     }
 
-    return (!factQuery.subject || concreateSubjectSpecMatch || (await subjectMatch).length !== 0)
-      && (!factQuery.object || concreateObjectSpecMatch || (await objectMatch).length !== 0);
+    return (!factQuery.subject || concreteSubjectSpecMatch || (await subjectMatch).length !== 0)
+      && (!factQuery.object || concreteObjectSpecMatch || (await objectMatch).length !== 0);
   }
 
   async matchAny(factQueries: FactQuery[], userid: string): Promise<boolean> {
