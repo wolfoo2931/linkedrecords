@@ -29,7 +29,7 @@ function logAggregate(agg) {
   console.log(`${'url query'.padStart(13, ' ')}: ${JSON.stringify(agg.logs[0].req?.query).replaceAll(/\\"/g, '"')}`);
   agg.logs.forEach(log => {
     if(log.queryTemplate) {
-      console.log(`${timeOutput(log?.timeInMS, 13)}: ${log.queryTemplate}`);
+      console.log(`${timeOutput(log?.timeInMS, 13)} (Results ${log.results}): ${log.queryTemplate}`);
     } else if(log.msg !== 'request completed') {
       console.log(log)
     }
