@@ -207,14 +207,14 @@ export default class Fact {
           WHERE cycl = 'N') as f`;
     }
 
-    const condition = [sqlPrefix, this.authorizedWhereClause(userid)]
+    const condition = [sqlPrefix]
       .filter((c) => c.trim())
       .join(' AND ');
 
     return `SELECT subject FROM ${table} ${condition ? `WHERE ${condition}` : ''}`;
   }
 
-  static getSQLToResolveToSubjectIdsWithModifiers(
+  private static getSQLToResolveToSubjectIdsWithModifiers(
     subjectQueries: SubjectQueries,
     userid: string,
   ): string {
