@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "start": "npm run build && node dist/server.js --enable-source-maps",
+    "start": "npm run build && node dist/server.js --enable-source-maps | node bin/plogs.js",
     "test": "bin/test.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -49,6 +49,7 @@
     "@wdio/static-server-service": "^8.20.0",
     "chai": "^4.3.6",
     "changesets": "~1.0.2",
+    "colors": "^1.4.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "diff_match_patch": "~0.1.1",

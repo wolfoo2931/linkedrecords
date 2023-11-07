@@ -20,19 +20,19 @@ export default class AuthorizationSqlBuilder {
   }
 
   public static getSqlToSeeSubjectsInGroups(userid: string, roles: Role[], anyOrAllGroups: AnyOrAllGroups = 'all', attributeId?: string) {
-    const creatorSubselect = roles
+    const creatorSubSelect = roles
       .filter((role) => role === 'creator')
       .map(() => `SELECT facts.subject FROM facts WHERE facts.predicate = '$wasCreatedBy' AND facts.object = '${userid}' ${attributeId ? `AND facts.subject = '${attributeId}'` : ''}`);
 
-    const selfSubselect = roles
+    const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
       .map(() => `SELECT '${userid}'`);
 
-    const termsSubselect = roles
+    const termsSubSelect = roles
       .filter((role) => role === 'term')
       .map(() => "SELECT facts.subject FROM facts WHERE facts.predicate='$isATermFor'");
 
-    const groupSubselect = roles
+    const groupSubSelect = roles
       .filter((role) => role !== 'selfAccess' && role !== 'creator' && role !== 'term')
       .map((role) => `
         SELECT facts.subject
@@ -43,10 +43,10 @@ export default class AuthorizationSqlBuilder {
       `);
 
     return `(${[
-      ...creatorSubselect,
-      ...selfSubselect,
-      ...termsSubselect,
-      ...groupSubselect,
+      ...creatorSubSelect,
+      ...selfSubSelect,
+      ...termsSubSelect,
+      ...groupSubSelect,
     ].join(anyOrAllGroupsMap[anyOrAllGroups])})`;
   }
 }

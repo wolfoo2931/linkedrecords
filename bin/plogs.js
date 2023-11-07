@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+
+const readline = require('readline');
+const colors = require('colors');
+
+const req = {}
+
+function timeOutput(timeInMs, padStart=0) {
+  let text = `${timeInMs}ms`.padStart(padStart, ' ');
+  let result = colors.bold(text);
+
+  if(timeInMs >= 300) {
+    result = colors.red(result);
+  }
+
+  return result.toString();
+}
+
+function logAggregate(agg) {
+  if(!agg.logs[0]) {
+    return;
+  }
+
+  const requestDoneLog = agg.logs.find((l) => l.msg === 'request completed')
+
+  console.log('')
+  console.log('')
+  console.log(`Response Time: ${timeOutput(requestDoneLog?.responseTime)} Status: ${requestDoneLog?.res?.statusCode} - ${colors.bold(agg.logs[0]?.req?.method)} ${agg.logs[0]?.req?.url?.split('?')[0]}`);
+  console.log(`${'url query'.padStart(13, ' ')}: ${JSON.stringify(agg.logs[0].req?.query).replaceAll(/\\"/g, '"')}`);
+  agg.logs.forEach(log => {
+    if(log.queryTemplate) {
+      console.log(`${timeOutput(log?.timeInMS, 13)}: ${log.queryTemplate}`);
+    } else if(log.msg !== 'request completed') {
+      console.log(log)
+    }
+  })
+  console.log('')
+  console.log('')
+}
+
+function processJSONLog(json) {
+
+  if(json?.req?.id && !json?.req?.url?.startsWith('/ws/')) {
+    req[json?.req?.id] =  req[json?.req?.id] || { logs: [] };
+    req[json?.req?.id].logs.push(json);
+
+    if(json.msg === 'request completed') {
+      logAggregate(req[json?.req?.id]);
+      delete req[json?.req?.id];
+    }
+
+  } else {
+    console.log(`WS${timeOutput(json?.timeInMS, 11)}: ${json?.queryTemplate}`);
+  }
+}
+
+function processTextLog(text) {
+  console.log('text', text);
+}
+
+function processLog(log) {
+  try {
+    processJSONLog(JSON.parse(log));
+  } catch (ex) {
+    processTextLog(log)
+  }
+}
+
+const rl = readline.createInterface({
+  input: process.stdin,
+});
+
+rl.on('line', async (input) => {
+  processLog(input);
+});
+
+rl.on('close', () => {
+  console.log('End of input stream');
+});

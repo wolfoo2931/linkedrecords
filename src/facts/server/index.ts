@@ -104,10 +104,10 @@ export default class Fact {
 
     await pg.query(createQuery);
 
-    const rawFactTableColums = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
-    const factTableColums = rawFactTableColums.rows.map((c) => c.column_name);
+    const rawFactTableColumns = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
+    const factTableColumns = rawFactTableColumns.rows.map((c) => c.column_name);
 
-    if (!factTableColums.includes('created_at')) {
+    if (!factTableColumns.includes('created_at')) {
       await pg.query(`
         ALTER TABLE facts ADD COLUMN created_at timestamp DEFAULT NOW();
         ALTER TABLE facts ADD COLUMN created_by CHAR(40);
@@ -117,7 +117,7 @@ export default class Fact {
   }
 
   public static async isAuthorizedToModifyPayload(
-    nodeId: string, // where nodeId is in most cases a attriburteId
+    nodeId: string, // where nodeId is in most cases a attributeId
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
@@ -131,7 +131,7 @@ export default class Fact {
   }
 
   public static async isAuthorizedToReadPayload(
-    nodeId: string, // where nodeId is in most cases a attriburteId
+    nodeId: string, // where nodeId is in most cases a attributeId
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
