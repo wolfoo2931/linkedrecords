@@ -24,8 +24,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   serverURL: URL;
 
-  loginURL?: URL;
-
   observers: Function[];
 
   isInitialized: boolean;
@@ -41,7 +39,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.linkedRecords = linkedRecords;
     this.clientServerBus = clientServerBus;
     this.serverURL = linkedRecords.serverURL;
-    this.loginURL = linkedRecords.loginURL;
     this.createdAt = undefined;
     this.updatedAt = undefined;
     this.observers = [];

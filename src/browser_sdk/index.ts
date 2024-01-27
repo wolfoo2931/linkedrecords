@@ -18,13 +18,6 @@ type FetchOptions = {
   isJSON?: boolean,
 };
 
-type ConfidentialClientModeConfig = {
-  clientServerBus?: ClientServerBus,
-  loginURL?: URL,
-};
-
-type Config = ConfidentialClientModeConfig;
-
 export {
   LongTextAttribute,
   KeyValueAttribute,
@@ -39,9 +32,7 @@ export default class LinkedRecords {
 
   serverURL: URL;
 
-  loginURL?: URL;
-
-  loginHandler?: (URL) => void;
+  loginHandler?: () => void;
 
   connectionLostHandler?: (err?) => void;
 
@@ -69,12 +60,11 @@ export default class LinkedRecords {
     return userId;
   }
 
-  constructor(serverURL: URL, { clientServerBus, loginURL }: Config = {}) {
+  constructor(serverURL: URL) {
     this.serverURL = serverURL;
-    this.loginURL = loginURL;
     this.actorId = LinkedRecords.readUserIdFromCookies();
     this.clientId = uuid();
-    this.clientServerBus = clientServerBus || new ClientServerBus();
+    this.clientServerBus = new ClientServerBus();
     this.Attribute = new AttributesRepository(this, this.clientServerBus);
     this.Fact = new FactsRepository(this);
 
@@ -83,6 +73,10 @@ export default class LinkedRecords {
         this.connectionLostHandler();
       }
     });
+  }
+
+  public getClientServerBus(): ClientServerBus {
+    return this.clientServerBus;
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
@@ -157,13 +151,13 @@ export default class LinkedRecords {
     }
   }
 
-  public setLoginHandler(handler: (URL) => void) {
+  public setLoginHandler(handler: () => void) {
     this.loginHandler = handler;
   }
 
   public handleExpiredLoginSession() {
-    if (this.loginURL && this.loginHandler) {
-      this.loginHandler(this.loginURL);
+    if (this.loginHandler) {
+      this.loginHandler();
     }
   }
 
