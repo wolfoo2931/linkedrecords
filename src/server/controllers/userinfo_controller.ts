@@ -1,6 +1,7 @@
 import md5 from 'md5';
 
-export const uid = (req) => req?.oidc?.user?.sub && `us-${md5(req.oidc.user.sub)}`;
+export const hashUserId = (id) => `us-${md5(id)}`;
+export const uid = (req) => req?.oidc?.user?.sub && hashUserId(req.oidc.user.sub);
 
 export default {
   async userinfo(req, res) {

@@ -1,4 +1,9 @@
-import { uid } from '../controllers/userinfo_controller';
+/* eslint-disable @typescript-eslint/naming-convention */
+/* eslint-disable @typescript-eslint/dot-notation */
+import { decodeJwt } from 'jose';
+import * as EmailValidator from 'email-validator';
+import { uid, hashUserId } from '../controllers/userinfo_controller';
+import Fact from '../../facts/server';
 
 const { auth } = require('express-openid-connect');
 
@@ -117,8 +122,24 @@ export default function authentication() {
       secret: process.env['AUTH_COOKIE_SIGNING_SECRET'],
       clientSecret: process.env['AUTH_CLIENT_SECRET'],
       errorOnRequiredAuth: true,
+      enableTelemetry: false,
+      afterCallback: (_, __, session: any) => {
+        const { email, email_verified, sub } = decodeJwt(session.id_token);
+
+        if (email_verified === true
+          && typeof email === 'string'
+          && EmailValidator.validate(email)
+          && typeof sub === 'string'
+          && sub.trim()) {
+          Fact.recordUserEmail(email, hashUserId(sub), req.log);
+        }
+
+        return session;
+      },
       authorizationParams: {
-        scope: 'openid offline_access',
+        // We need offline_access because we do XHR call in the background
+        // which can not be redirected for refreshing the token.
+        scope: 'openid email offline_access',
         response_type: 'code',
       },
       session: {

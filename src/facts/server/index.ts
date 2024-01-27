@@ -1,5 +1,6 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable no-plusplus */
+import md5 from 'md5';
 import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
@@ -99,10 +100,12 @@ export default class Fact {
 
   static async initDB() {
     const pg = new PgPoolWithLog(console as unknown as IsLogger);
-    const createQuery = `CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
-    CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));`;
 
-    await pg.query(createQuery);
+    await pg.query(`
+      CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
+      CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));
+      CREATE TABLE IF NOT EXISTS users (id CHAR(40), hashed_email CHAR(40), username CHAR(40));
+    `);
 
     const rawFactTableColumns = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
     const factTableColumns = rawFactTableColumns.rows.map((c) => c.column_name);
@@ -116,8 +119,14 @@ export default class Fact {
     }
   }
 
+  public static async recordUserEmail(email: string, userid: string, logger: IsLogger) {
+    const pool = new PgPoolWithLog(logger);
+
+    await pool.query('INSERT INTO users (id, hashed_email, username) VALUES ($1, $2, $3)', [userid, md5(email), email]);
+  }
+
   public static async isAuthorizedToModifyPayload(
-    nodeId: string, // where nodeId is in most cases a attributeId
+    nodeId: string, // where nodeId is in most cases an attributeId
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
@@ -131,7 +140,7 @@ export default class Fact {
   }
 
   public static async isAuthorizedToReadPayload(
-    nodeId: string, // where nodeId is in most cases a attributeId
+    nodeId: string, // where nodeId is in most cases an attributeId
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
@@ -165,7 +174,6 @@ export default class Fact {
   private static getSQLToResolvePossibleTransitiveQuery(
     query: SubjectQuery,
     sqlPrefix: string,
-    userid: string,
   ): string | string[] {
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
@@ -216,7 +224,6 @@ export default class Fact {
 
   private static getSQLToResolveToSubjectIdsWithModifiers(
     subjectQueries: SubjectQueries,
-    userid: string,
   ): string {
     const transitiveQueries: SubjectQuery[] = [];
     const sqlConditions: [string, string, string][] = [];
@@ -261,7 +268,6 @@ export default class Fact {
       .map((subjectQuery) => Fact.getSQLToResolvePossibleTransitiveQuery(
         subjectQuery,
         sqlPrefix,
-        userid,
       ))
       .join(' INTERSECT ');
   }
@@ -281,7 +287,7 @@ export default class Fact {
     sqlQuery += ` ${and()} ${Fact.authorizedWhereClause(userid)}`;
 
     if (subject) {
-      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject, userid)})`;
+      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
     }
 
     if (predicate) {
@@ -289,7 +295,7 @@ export default class Fact {
     }
 
     if (object) {
-      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object, userid)})`;
+      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
     }
 
     const result = await pool.query(sqlQuery);
