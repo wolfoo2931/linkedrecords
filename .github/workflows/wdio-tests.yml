@@ -7,13 +7,14 @@ on:
   workflow_dispatch:
     inputs: {}
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
     branches: [ main, develop ]
 
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    container: node:18
     services:
       postgres:
         image: postgres:11
@@ -26,11 +27,8 @@ jobs:
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v2.5.1
-        with:
-          node-version: 18
-      - run: npm install
+      - name: Install dependencies
+        run: npm ci
       - env:
           PGHOST: postgres
           PGUSER: postgres
@@ -45,4 +43,5 @@ jobs:
           AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
           AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
-        run: npm run wdio
+        run: |
+          npm run wdio
