@@ -1,8 +1,9 @@
-type Role = 'term' | 'creator' | 'selfAccess';
+type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member';
 type AnyOrAllGroups = 'any' | 'all';
 
-const rolePredicateMap = {
+export const rolePredicateMap = {
   member: '$isMemberOf',
+  host: '$isHostOf',
 };
 
 const anyOrAllGroupsMap = {
@@ -33,12 +34,12 @@ export default class AuthorizationSqlBuilder {
       .map(() => "SELECT facts.subject FROM facts WHERE facts.predicate='$isATermFor'");
 
     const groupSubSelect = roles
-      .filter((role) => role !== 'selfAccess' && role !== 'creator' && role !== 'term')
+      .filter((role) => Object.keys(rolePredicateMap).includes(role))
       .map((role) => `
-        SELECT facts.subject
+        SELECT subject
         FROM facts
-        WHERE facts.subject IN (SELECT subject FROM facts WHERE facts.predicate='$isMemberOf')
-        AND '${userid}' IN (SELECT subject FROM facts WHERE facts.predicate='${rolePredicateMap[role]}')'
+        WHERE facts.predicate='${rolePredicateMap[role]}'
+        AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate='$isMemberOf')
         ${attributeId ? `AND facts.subject = '${attributeId}'` : ''}
       `);
 

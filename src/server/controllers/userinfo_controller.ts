@@ -6,7 +6,20 @@ export const uid = (req) => req?.oidc?.user?.sub && hashUserId(req.oidc.user.sub
 export default {
   async userinfo(req, res) {
     await req.whenAuthenticated(async () => {
-      res.status(200).send('empty response');
+      if (req.query?.email) {
+        const user = await req.Fact.getUserIdByEmail(req.query.email, req.log);
+
+        if (user) {
+          res.status(200).send({ id: user });
+        } else {
+          res.status(200).send({ id: undefined });
+        }
+      } else {
+        // If no email is provided as query param
+        // this endpoint can be used to just set
+        // the auth cookie
+        res.status(200).send('empty response');
+      }
     });
   },
 };

@@ -18,9 +18,13 @@ const capabilities = {
 export default class Session {
   browser: WebdriverIO.Browser;
 
+  email: string;
+
   Attribute?: AttributesRepository;
 
   Fact?: FactsRepository;
+
+  getUserIdByEmail?: (email: string) => Promise<string>;
 
   static async getSessions(count: number): Promise<InitilizedSession[]> {
     const mrConfig = {};
@@ -56,7 +60,7 @@ export default class Session {
       }
     }));
 
-    const result = sessions.map((s) => new Session(s));
+    const result = sessions.map((s, i) => new Session(s, `wolfoo2931+${i + 1}@gmail.com`));
     await Promise.all(result.map((s) => s.initLinkedRecord()));
 
     return result as InitilizedSession[];
@@ -87,7 +91,7 @@ export default class Session {
 
   static async getThreeSessions()
   : Promise<[InitilizedSession, InitilizedSession, InitilizedSession]> {
-    const session = await this.getSessions(2);
+    const session = await this.getSessions(3);
 
     if (!session[0] || !session[1] || !session[2]) {
       throw new Error('Unknown error when initializing LinkedRecord test session');
@@ -104,8 +108,9 @@ export default class Session {
     await pgPool.query('TRUNCATE facts;');
   }
 
-  constructor(browser) {
+  constructor(browser, email) {
     this.browser = browser;
+    this.email = email;
   }
 
   async initLinkedRecord() {
@@ -117,6 +122,11 @@ export default class Session {
     this.Fact = (await remote.execute(
       () => (window as any).lr.Fact,
     )) as FactsRepository;
+
+    this.getUserIdByEmail = (email: string) => remote.execute(
+      (m) => (window as any).lr.getUserIdByEmail(m),
+      [email],
+    );
   }
 
   async getActorId() {
@@ -143,9 +153,12 @@ class InitilizedSession extends Session {
 
   Fact: FactsRepository;
 
-  constructor(browser, attr, fact) {
-    super(browser);
+  getUserIdByEmail: (email: string) => Promise<string>;
+
+  constructor(browser, attr, fact, getUserIdByEmail, email) {
+    super(browser, email);
     this.Attribute = attr;
     this.Fact = fact;
+    this.getUserIdByEmail = getUserIdByEmail;
   }
 }

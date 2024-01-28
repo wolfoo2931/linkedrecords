@@ -5,7 +5,7 @@ import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
-import SQL from './authorization_sql_builder';
+import SQL, { rolePredicateMap } from './authorization_sql_builder';
 
 function andFactory() {
   let whereUsed = false;
@@ -119,10 +119,27 @@ export default class Fact {
     }
   }
 
+  public static async getUserIdByEmail(
+    email: string,
+    logger:
+    IsLogger,
+  ): Promise<string | undefined> {
+    const pool = new PgPoolWithLog(logger);
+    const users = await pool.query('SELECT id FROM users WHERE hashed_email = $1', [md5(email)]);
+
+    if (users.rows.length === 1) {
+      return users.rows[0].id.trim();
+    }
+
+    return undefined;
+  }
+
   public static async recordUserEmail(email: string, userid: string, logger: IsLogger) {
     const pool = new PgPoolWithLog(logger);
 
-    await pool.query('INSERT INTO users (id, hashed_email, username) VALUES ($1, $2, $3)', [userid, md5(email), email]);
+    if (!(await Fact.getUserIdByEmail(email, logger))) {
+      await pool.query('INSERT INTO users (id, hashed_email, username) VALUES ($1, $2, $3)', [userid, md5(email), email]);
+    }
   }
 
   public static async isAuthorizedToModifyPayload(
@@ -145,12 +162,13 @@ export default class Fact {
     logger: IsLogger,
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
-
-    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+    const res = await pool.findAny(SQL.selectSubjectsInAnyGroup(
       userid,
-      ['creator'],
+      ['creator', 'host', 'member'],
       nodeId,
     ));
+
+    return res;
   }
 
   private static authorizedWhereClause(userid: string, factTable: string = 'facts') {
@@ -160,12 +178,12 @@ export default class Fact {
 
     const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'creator'],
+      ['selfAccess', 'creator', 'host', 'member'],
     );
 
     const authorizedObjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'term', 'creator'],
+      ['selfAccess', 'term', 'creator', 'host', 'member'],
     );
 
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
@@ -453,7 +471,7 @@ export default class Fact {
     }
 
     if (!(await this.isAuthorizedToSave(userid))) {
-      throw new AuthorizationError(userid, 'fact', this, this.logger);
+      return false;
     }
 
     return true;
@@ -468,8 +486,12 @@ export default class Fact {
       return true;
     }
 
-    if (await this.isValidCreatedAtFact(userid)) {
-      return true;
+    if (this.predicate === '$wasCreatedBy') {
+      return this.isValidCreatedAtFact(userid);
+    }
+
+    if (Object.values(rolePredicateMap).includes(this.predicate)) {
+      return this.isValidInvitation(userid);
     }
 
     const pool = new PgPoolWithLog(this.logger);
@@ -482,16 +504,28 @@ export default class Fact {
     `);
   }
 
-  async isValidCreatedAtFact(userid: string) {
-    if (this.predicate === '$wasCreatedBy') {
-      if (this.object !== userid) {
-        return false;
-      }
+  private async isValidInvitation(userid: string) {
+    const pool = new PgPoolWithLog(this.logger);
 
-      const pool = new PgPoolWithLog(this.logger);
-      return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
+    const hasObjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'host'], this.object));
+    const hasSubjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'member'], this.subject)); // TODO: need to add the conceptor role
+
+    const subjectIsKnownUserPromise = pool.findAny(`
+      SELECT *
+      FROM users
+      WHERE id=$1
+    `, [this.subject]);
+
+    return await hasObjectAccessPromise
+      && (await subjectIsKnownUserPromise || await hasSubjectAccessPromise);
+  }
+
+  private async isValidCreatedAtFact(userid: string) {
+    if (this.object !== userid) {
+      return false;
     }
 
-    return false;
+    const pool = new PgPoolWithLog(this.logger);
+    return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
   }
 }

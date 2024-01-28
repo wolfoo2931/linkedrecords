@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable arrow-body-style */
 /* eslint-disable no-return-assign */
 /* eslint-disable max-len */
@@ -371,6 +372,92 @@ describe('authorization', () => {
     expect(termFacts3.length).to.eql(1);
   });
 
+  it('allows to invite a user to a group', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+
+    const getTrident = async (c) => {
+      const { tridents } = await c.Attribute.findAll({
+        tridents: [
+          ['$it', '$hasDataType', 'KeyValueAttribute'],
+          ['isA', 'Trident'],
+        ],
+      });
+
+      return tridents;
+    };
+
+    await aquaman.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+      ['Tree', '$isATermFor', '...'],
+    ]);
+
+    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const mammalTeam = await aquaman.Attribute.createKeyValue({ name: 'mammal' }, [['isA', 'Team']]);
+
+    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', fishTeam.id],
+    ]);
+
+    await aquaman.Attribute.createKeyValue({ name: ' Eywa' }, [
+      ['isA', 'Tree'],
+      ['$isMemberOf', mammalTeam.id],
+    ]);
+
+    const aquamansTridents = await getTrident(aquaman);
+    const nemosTridents = await getTrident(nemo);
+    const mannisTridents = await getTrident(manni);
+
+    expect(aquamansTridents.length).to.eq(1);
+    expect(nemosTridents.length).to.eq(0);
+    expect(mannisTridents.length).to.eq(0);
+
+    // Make sure nemo cannot invite himself into the fish team,
+    // it needs to be done by aquaman.
+    await nemo.Fact.createAll([
+      [await nemo.getActorId(), '$isMemberOf', fishTeam.id],
+    ]);
+
+    const nemosTridentsQ2 = await getTrident(nemo);
+    const mannisTridentsQ2 = await getTrident(manni);
+
+    expect(nemosTridentsQ2.length).to.eq(0);
+    expect(mannisTridentsQ2.length).to.eq(0);
+
+    // Aquaman invites nemo
+    const nemoId = await aquaman.getUserIdByEmail(nemo.email);
+    expect(nemoId).eql(await nemo.getActorId());
+
+    await aquaman.Fact.createAll([
+      [nemoId, '$isMemberOf', fishTeam.id],
+    ]);
+
+    const nemosTridentsQ3 = await getTrident(nemo);
+    const mannisTridentsQ3 = await getTrident(manni);
+
+    expect(nemosTridentsQ3.length).to.eq(1);
+    expect(mannisTridentsQ3.length).to.eq(0);
+
+    // Make sure nemo cannot invite manni into mammal team because
+    // he is neither the creator nor a host of the group
+    const manniId = await aquaman.getUserIdByEmail(manni.email);
+    expect(manniId).eql(await manni.getActorId());
+
+    await nemo.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
+
+    const nemosTridentsQ4 = await getTrident(nemo);
+    const mannisTridentsQ4 = await getTrident(manni);
+
+    expect(nemosTridentsQ4.length).to.eq(1);
+    expect(mannisTridentsQ4.length).to.eq(0);
+  });
+
+  it('allows a creator of a group do delegate host access to other members so they can invite people too');
+  it('allows to revoke membership of a user');
+
   it('allows to create facts about the authenticated users');
   it('allows to create facts refer to the authenticated users');
+  it('is not possible to use a custom predicate which starts with "$"');
+  it('is not be possible to find out which groups a user is member in');
 });

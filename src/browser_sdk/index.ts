@@ -79,6 +79,12 @@ export default class LinkedRecords {
     return this.clientServerBus;
   }
 
+  public async getUserIdByEmail(email: string): Promise<string | undefined> {
+    const resp = await this.fetch(`/userinfo?email=${encodeURIComponent(email)}`);
+    const parsed = await resp.json();
+    return parsed.id;
+  }
+
   public async fetch(url: string, fetchOpt?: FetchOptions) {
     const {
       headers = undefined,

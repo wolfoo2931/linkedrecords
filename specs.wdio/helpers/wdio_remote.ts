@@ -46,7 +46,7 @@ export default class WdioRemote {
               const robj = (window as any).remoteInstances[remoteId];
 
               if (!robj[method]) {
-                throw new Error(`executing remote method via wdio did not work as method ${method} is undefined on ${robj}.`);
+                throw new Error(`executing remote method via wdio did not work as method ${method} is undefined on ${robj.create}.`);
               }
 
               return robj[method](...args);
@@ -55,7 +55,7 @@ export default class WdioRemote {
         },
 
         set(target, prop, value) {
-          throw new Error(`WDIO_REOMOTE: setting a value is not implemented on a remote object ${String(prop)}, ${value}`);
+          throw new Error(`WDIO_REMOTE: setting a value is not implemented on a remote object ${String(prop)}, ${value}`);
         },
       });
     }
