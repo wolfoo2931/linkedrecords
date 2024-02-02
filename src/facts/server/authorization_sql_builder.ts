@@ -4,6 +4,7 @@ type AnyOrAllGroups = 'any' | 'all';
 export const rolePredicateMap = {
   member: '$isMemberOf',
   host: '$isHostOf',
+  creator: '$isCreatorOf',
 };
 
 const anyOrAllGroupsMap = {
@@ -14,10 +15,6 @@ const anyOrAllGroupsMap = {
 export default class AuthorizationSqlBuilder {
   public static selectSubjectsInAnyGroup(userid: string, roles: Role[], attributeId?: string) {
     return this.getSqlToSeeSubjectsInGroups(userid, roles, 'any', attributeId);
-  }
-
-  public static selectSubjectsInAllGroup(userid: string, roles: Role[], attributeId?: string) {
-    return this.getSqlToSeeSubjectsInGroups(userid, roles, 'all', attributeId);
   }
 
   public static getSqlToSeeSubjectsInGroups(userid: string, roles: Role[], anyOrAllGroups: AnyOrAllGroups = 'all', attributeId?: string) {
@@ -33,15 +30,34 @@ export default class AuthorizationSqlBuilder {
       .filter((role) => role === 'term')
       .map(() => "SELECT facts.subject FROM facts WHERE facts.predicate='$isATermFor'");
 
-    const groupSubSelect = roles
+    const groupRoles = roles
       .filter((role) => Object.keys(rolePredicateMap).includes(role))
-      .map((role) => `
-        SELECT subject
-        FROM facts
-        WHERE facts.predicate='${rolePredicateMap[role]}'
-        AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate='$isMemberOf')
-        ${attributeId ? `AND facts.subject = '${attributeId}'` : ''}
-      `);
+      .map((r) => `'${rolePredicateMap[r]}'`);
+
+    const groupSubSelect: string[] = [];
+
+    if (groupRoles.length) {
+      if (attributeId) {
+        groupSubSelect.push(
+          `SELECT subject FROM facts
+           WHERE facts.subject = '${userid}'
+           AND facts.predicate IN (${groupRoles.join(',')})
+           AND facts.object = '${attributeId}'`,
+        );
+        groupSubSelect.push(
+          `SELECT subject FROM facts
+           WHERE facts.predicate='$isMemberOf'
+           AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))
+           AND facts.subject = '${attributeId}'`,
+        );
+      } else {
+        groupSubSelect.push(
+          `SELECT subject FROM facts
+           WHERE facts.predicate='$isMemberOf'
+           AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
+        );
+      }
+    }
 
     return `(${[
       ...creatorSubSelect,

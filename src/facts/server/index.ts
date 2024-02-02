@@ -151,7 +151,7 @@ export default class Fact {
 
     return pool.findAny(SQL.selectSubjectsInAnyGroup(
       userid,
-      ['creator'],
+      ['creator', 'host', 'member'], // TODO: add role attributeWriter
       nodeId,
     ));
   }
@@ -164,7 +164,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const res = await pool.findAny(SQL.selectSubjectsInAnyGroup(
       userid,
-      ['creator', 'host', 'member'],
+      ['creator', 'host', 'member'], // TODO: add role attributeReader
       nodeId,
     ));
 
@@ -327,9 +327,9 @@ export default class Fact {
   }
 
   constructor(subject: string, predicate: string, object: string, logger: IsLogger) {
-    this.subject = subject;
-    this.predicate = predicate;
-    this.object = object;
+    this.subject = subject.trim();
+    this.predicate = predicate.trim();
+    this.object = object.trim();
     this.logger = logger;
   }
 
@@ -429,6 +429,23 @@ export default class Fact {
           userid,
         ]);
       }
+    } else if (this.predicate === '$wasCreatedBy') {
+      const dbRows = await pool.query('SELECT subject, predicate, object FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
+      if (dbRows.rows.length) {
+        for (let index = 0; index < dbRows.rows.length; index++) {
+          const r = dbRows.rows[index];
+          const oldFact = new Fact(r.subject, r.predicate, r.object, this.logger);
+          // eslint-disable-next-line no-await-in-loop
+          await oldFact.delete(userid);
+        }
+      }
+
+      await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
+        this.subject,
+        this.predicate,
+        this.object,
+        userid,
+      ]);
     } else {
       await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
         this.subject,
@@ -487,7 +504,8 @@ export default class Fact {
     }
 
     if (this.predicate === '$wasCreatedBy') {
-      return this.isValidCreatedAtFact(userid);
+      return await this.isValidCreatedAtFact(userid)
+        || await this.isValidAccountabilityTransfer(userid);
     }
 
     if (Object.values(rolePredicateMap).includes(this.predicate)) {
@@ -507,8 +525,8 @@ export default class Fact {
   private async isValidInvitation(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
-    const hasObjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'host'], this.object));
     const hasSubjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'member'], this.subject)); // TODO: need to add the conceptor role
+    const hasObjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'host'], this.object));
 
     const subjectIsKnownUserPromise = pool.findAny(`
       SELECT *
@@ -527,5 +545,26 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
     return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
+  }
+
+  private async isValidAccountabilityTransfer(userid: string) {
+    const pool = new PgPoolWithLog(this.logger);
+
+    const existingFacts = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+      this.subject,
+      this.predicate,
+      userid,
+    ]);
+
+    if (existingFacts.rows.length !== 1) {
+      return false;
+    }
+
+    return pool.findAny(`
+      SELECT *
+      FROM facts
+      WHERE subject IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator'], this.subject)}
+      AND object IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator', 'selfAccess'], this.subject)}
+    `);
   }
 }

@@ -20,6 +20,17 @@ async function filterAutoCreatedFacts(facts) {
   return result;
 }
 
+const getTrident = async (c) => {
+  const { tridents } = await c.Attribute.findAll({
+    tridents: [
+      ['$it', '$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'Trident'],
+    ],
+  });
+
+  return tridents;
+};
+
 describe('authorization', () => {
   beforeEach(Session.truncateDB);
 
@@ -55,7 +66,7 @@ describe('authorization', () => {
     client2.browser.deleteSession();
   });
 
-  it('allows to create user term facts for everybody', async () => {
+  it('allows anybody to create term facts', async () => {
     const [client1, client2] = await Session.getTwoSessions();
 
     await client1.Fact.createAll([
@@ -324,20 +335,20 @@ describe('authorization', () => {
       ],
     });
 
-    const { sombodyElsesRecords } = await otherClient.Attribute.findAll({
-      sombodyElsesRecords: [
+    const { somebodyElsesRecords } = await otherClient.Attribute.findAll({
+      somebodyElsesRecords: [
         ['belongsTo', await client.getActorId()],
       ],
     });
 
     expect(myRecords.length).to.eq(1);
-    expect(sombodyElsesRecords.length).to.eq(0);
+    expect(somebodyElsesRecords.length).to.eq(0);
 
     client.browser.deleteSession();
     otherClient.browser.deleteSession();
   });
 
-  it('does only allow to delete term definition facts by the user who crated it', async () => {
+  it('does only allow to delete term definition facts by the user who created it', async () => {
     const [client, otherClient] = await Session.getTwoSessions();
 
     await client.Fact.createAll([
@@ -374,17 +385,6 @@ describe('authorization', () => {
 
   it('allows to invite a user to a group', async () => {
     const [aquaman, nemo, manni] = await Session.getThreeSessions();
-
-    const getTrident = async (c) => {
-      const { tridents } = await c.Attribute.findAll({
-        tridents: [
-          ['$it', '$hasDataType', 'KeyValueAttribute'],
-          ['isA', 'Trident'],
-        ],
-      });
-
-      return tridents;
-    };
 
     await aquaman.Fact.createAll([
       ['Team', '$isATermFor', '...'],
@@ -453,11 +453,193 @@ describe('authorization', () => {
     expect(mannisTridentsQ4.length).to.eq(0);
   });
 
-  it('allows a creator of a group do delegate host access to other members so they can invite people too');
-  it('allows to revoke membership of a user');
+  it('allows a creator of a group do delegate host access to other members so they can invite people too', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+
+    await aquaman.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', fishTeam.id],
+    ]);
+
+    // Aquaman invites nemo (makes him host)
+    const nemoId = await aquaman.getUserIdByEmail(nemo.email);
+    await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+    // No nemo can invite somebody else
+    const manniId = await nemo.getUserIdByEmail(manni.email);
+    await nemo.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
+
+    const nemosTridentsQ4 = await getTrident(nemo);
+    const mannisTridentsQ4 = await getTrident(manni);
+    const aquamanTridentsQ4 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ4.length).to.eq(1);
+    expect(mannisTridentsQ4.length).to.eq(1);
+    expect(aquamanTridentsQ4.length).to.eq(1);
+  });
+
+  it('allows to revoke membership of a user', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+
+    await aquaman.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', fishTeam.id],
+    ]);
+
+    // Aquaman invites nemo (makes him host)
+    const nemoId = await aquaman.getUserIdByEmail(nemo.email);
+    await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+    const nemosTridentsQ4 = await getTrident(nemo);
+    const mannisTridentsQ4 = await getTrident(manni);
+    const aquamanTridentsQ4 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ4.length).to.eq(1);
+    expect(aquamanTridentsQ4.length).to.eq(1);
+    expect(mannisTridentsQ4.length).to.eq(0);
+
+    // No nemo can invite somebody else
+    const manniId = await nemo.getUserIdByEmail(manni.email);
+    await nemo.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
+
+    const nemosTridentsQ5 = await getTrident(nemo);
+    const mannisTridentsQ5 = await getTrident(manni);
+    const aquamanTridentsQ5 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ5.length).to.eq(1);
+    expect(mannisTridentsQ5.length).to.eq(1);
+    expect(aquamanTridentsQ5.length).to.eq(1);
+
+    // Manni cannot invoke Nemos membership as Manni is not a host
+    await manni.Fact.deleteAll([[manniId, '$isMemberOf', fishTeam.id!]]);
+
+    const nemosTridentsQ6 = await getTrident(nemo);
+    const mannisTridentsQ6 = await getTrident(manni);
+    const aquamanTridentsQ6 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ6.length).to.eq(1);
+    expect(mannisTridentsQ6.length).to.eq(1);
+    expect(aquamanTridentsQ6.length).to.eq(1);
+
+    // Manni cannot invoke Nemos membership as Manni is not a host
+    await manni.Fact.deleteAll([[nemoId, '$isMemberOf', fishTeam.id!]]);
+
+    const nemosTridentsQ7 = await getTrident(nemo);
+    const mannisTridentsQ7 = await getTrident(manni);
+    const aquamanTridentsQ7 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ7.length).to.eq(1);
+    expect(mannisTridentsQ7.length).to.eq(1);
+    expect(aquamanTridentsQ7.length).to.eq(1);
+
+    // Nemo can invoke Mannis membership as he is host
+    await nemo.Fact.deleteAll([[manniId, '$isMemberOf', fishTeam.id!]]);
+
+    const nemosTridentsQ8 = await getTrident(nemo);
+    const mannisTridentsQ8 = await getTrident(manni);
+    const aquamanTridentsQ8 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ8.length).to.eq(1);
+    expect(mannisTridentsQ8.length).to.eq(0);
+    expect(aquamanTridentsQ8.length).to.eq(1);
+
+    // Aquaman can invoke Nemos membership as Manni is not a host
+    await aquaman.Fact.deleteAll([[nemoId, '$isHostOf', fishTeam.id!]]);
+
+    const nemosTridentsQ9 = await getTrident(nemo);
+    const mannisTridentsQ9 = await getTrident(manni);
+    const aquamanTridentsQ9 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ9.length).to.eq(0);
+    expect(mannisTridentsQ9.length).to.eq(0);
+    expect(aquamanTridentsQ9.length).to.eq(1);
+
+    // Aquaman cannot revoke his accountability for the attribute he created.
+    // Instead he has to transfer it to somebody else (see next step).
+    const aquamanId = await aquaman.getUserIdByEmail(aquaman.email);
+    await aquaman.Fact.deleteAll([[aquamanId, '$wasCreatedBy', fishTeam.id!]]);
+
+    const nemosTridentsQ10 = await getTrident(nemo);
+    const mannisTridentsQ10 = await getTrident(manni);
+    const aquamanTridentsQ10 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ10.length).to.eq(0);
+    expect(mannisTridentsQ10.length).to.eq(0);
+    expect(aquamanTridentsQ10.length).to.eq(1);
+
+    // ... he also cannot transfer the accountability to another user.
+    await aquaman.Fact.createAll([[manniId, '$wasCreatedBy', fishTeam.id!]]);
+
+    const nemosTridentsQ11 = await getTrident(nemo);
+    const mannisTridentsQ11 = await getTrident(manni);
+    const aquamanTridentsQ11 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ11.length).to.eq(0);
+    expect(mannisTridentsQ11.length).to.eq(0);
+    expect(aquamanTridentsQ11.length).to.eq(1);
+
+    // ... Instead he has to transfer it to another group he is is member in.
+    await aquaman.Fact.createAll([[aquamanTridentsQ8[0].id, '$wasCreatedBy', fishTeam.id!]]);
+
+    const nemosTridentsQ12 = await getTrident(nemo);
+    const mannisTridentsQ12 = await getTrident(manni);
+    const aquamanTridentsQ12 = await getTrident(aquaman);
+
+    expect(nemosTridentsQ12.length).to.eq(0);
+    expect(mannisTridentsQ12.length).to.eq(0);
+    expect(aquamanTridentsQ12.length).to.eq(0);
+  });
+
+  it('prevents membership revocation by users who are not host of the group');
+  it('allows to list all users of a group');
 
   it('allows to create facts about the authenticated users');
+  it('prevents a member can promote himself');
+  it('does not allow to read the attribute value if the user does not has access');
   it('allows to create facts refer to the authenticated users');
   it('is not possible to use a custom predicate which starts with "$"');
   it('is not be possible to find out which groups a user is member in');
+
+  describe('when the attribute is member of group', () => {
+    it('allows any member of the group can use the attribute as subject when creating facts');
+    it('allows any member of the group can use the attribute as object when creating facts');
+    it('allows any member can modify the content of the attribute');
+    it('allows any member can read the content of the attribute');
+
+    it('does NOT allow any NON member of the group can use the attribute as subject when creating facts');
+    it('does NOT allow any NON member of the group can use the attribute as object when creating facts');
+    it('does NOT allow any NON member can modify the content of the attribute');
+    it('does NOT allow any NON member can read the content of the attribute');
+  });
+
+  describe('when a user transfers the accountability of an attribute', () => {
+    it('allows a user to transfer the accountability to another group');
+    it('allows a user to transfer the accountability of an attribute from a group to himself');
+    it('allows a user to transfer the accountability of an attribute from a group to himself when he does not has access to this group');
+    it('does not allow the user to transfer the accountability to a term');
+    it('does not allow to create accountability facts where object  =subject');
+    it('does not allow to delete the "wasCreatedBy" fact, without assigning accountability to somebody else');
+
+    // how to prevent there is nobody left accountable anymore in a group?
+    // should it be possible to make a team accountable for itself?
+    // await aquaman.Fact.createAll([[fishTeam.id!, '$wasCreatedBy', fishTeam.id!]]);
+
+    describe('a member has been removed from a team', () => {
+      it('does not allow the ex member to view/edit/delete the attribute he created and assigned to this team');
+    });
+  });
 });
