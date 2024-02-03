@@ -90,6 +90,13 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
 }
 
 export default class Fact {
+  static reservedPredicates = [
+    '$isATermFor',
+    '$wasCreatedBy',
+    '$isMemberOf',
+    '$isHostOf',
+  ];
+
   subject: string;
 
   predicate: string;
@@ -496,6 +503,10 @@ export default class Fact {
 
   async isAuthorizedToSave(userid) {
     if (!userid || !userid.trim()) {
+      return false;
+    }
+
+    if (this.predicate.startsWith('$') && !Fact.reservedPredicates.includes(this.predicate)) {
       return false;
     }
 

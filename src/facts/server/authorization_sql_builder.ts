@@ -4,7 +4,6 @@ type AnyOrAllGroups = 'any' | 'all';
 export const rolePredicateMap = {
   member: '$isMemberOf',
   host: '$isHostOf',
-  creator: '$isCreatorOf',
 };
 
 const anyOrAllGroupsMap = {
@@ -51,10 +50,15 @@ export default class AuthorizationSqlBuilder {
            AND facts.subject = '${attributeId}'`,
         );
       } else {
+        // TODO: this will not work if it will be joined with anyOrAllGroupsMap['all']
         groupSubSelect.push(
           `SELECT subject FROM facts
            WHERE facts.predicate='$isMemberOf'
            AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
+        );
+        groupSubSelect.push(
+          `SELECT subject FROM facts
+           WHERE facts.subject in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
         );
       }
     }

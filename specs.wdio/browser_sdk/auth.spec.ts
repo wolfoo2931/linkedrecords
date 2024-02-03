@@ -20,7 +20,7 @@ async function filterAutoCreatedFacts(facts) {
   return result;
 }
 
-const getTrident = async (c) => {
+const getTridents = async (c) => {
   const { tridents } = await c.Attribute.findAll({
     tridents: [
       ['$it', '$hasDataType', 'KeyValueAttribute'],
@@ -29,6 +29,17 @@ const getTrident = async (c) => {
   });
 
   return tridents;
+};
+
+const getTeams = async (c) => {
+  const { teams } = await c.Attribute.findAll({
+    teams: [
+      ['$it', '$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'Team'],
+    ],
+  });
+
+  return teams;
 };
 
 describe('authorization', () => {
@@ -405,9 +416,9 @@ describe('authorization', () => {
       ['$isMemberOf', mammalTeam.id],
     ]);
 
-    const aquamansTridents = await getTrident(aquaman);
-    const nemosTridents = await getTrident(nemo);
-    const mannisTridents = await getTrident(manni);
+    const aquamansTridents = await getTridents(aquaman);
+    const nemosTridents = await getTridents(nemo);
+    const mannisTridents = await getTridents(manni);
 
     expect(aquamansTridents.length).to.eq(1);
     expect(nemosTridents.length).to.eq(0);
@@ -419,8 +430,8 @@ describe('authorization', () => {
       [await nemo.getActorId(), '$isMemberOf', fishTeam.id],
     ]);
 
-    const nemosTridentsQ2 = await getTrident(nemo);
-    const mannisTridentsQ2 = await getTrident(manni);
+    const nemosTridentsQ2 = await getTridents(nemo);
+    const mannisTridentsQ2 = await getTridents(manni);
 
     expect(nemosTridentsQ2.length).to.eq(0);
     expect(mannisTridentsQ2.length).to.eq(0);
@@ -433,8 +444,8 @@ describe('authorization', () => {
       [nemoId, '$isMemberOf', fishTeam.id],
     ]);
 
-    const nemosTridentsQ3 = await getTrident(nemo);
-    const mannisTridentsQ3 = await getTrident(manni);
+    const nemosTridentsQ3 = await getTridents(nemo);
+    const mannisTridentsQ3 = await getTridents(manni);
 
     expect(nemosTridentsQ3.length).to.eq(1);
     expect(mannisTridentsQ3.length).to.eq(0);
@@ -446,8 +457,8 @@ describe('authorization', () => {
 
     await nemo.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
 
-    const nemosTridentsQ4 = await getTrident(nemo);
-    const mannisTridentsQ4 = await getTrident(manni);
+    const nemosTridentsQ4 = await getTridents(nemo);
+    const mannisTridentsQ4 = await getTridents(manni);
 
     expect(nemosTridentsQ4.length).to.eq(1);
     expect(mannisTridentsQ4.length).to.eq(0);
@@ -476,9 +487,9 @@ describe('authorization', () => {
     const manniId = await nemo.getUserIdByEmail(manni.email);
     await nemo.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
 
-    const nemosTridentsQ4 = await getTrident(nemo);
-    const mannisTridentsQ4 = await getTrident(manni);
-    const aquamanTridentsQ4 = await getTrident(aquaman);
+    const nemosTridentsQ4 = await getTridents(nemo);
+    const mannisTridentsQ4 = await getTridents(manni);
+    const aquamanTridentsQ4 = await getTridents(aquaman);
 
     expect(nemosTridentsQ4.length).to.eq(1);
     expect(mannisTridentsQ4.length).to.eq(1);
@@ -504,9 +515,9 @@ describe('authorization', () => {
     const nemoId = await aquaman.getUserIdByEmail(nemo.email);
     await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
 
-    const nemosTridentsQ4 = await getTrident(nemo);
-    const mannisTridentsQ4 = await getTrident(manni);
-    const aquamanTridentsQ4 = await getTrident(aquaman);
+    const nemosTridentsQ4 = await getTridents(nemo);
+    const mannisTridentsQ4 = await getTridents(manni);
+    const aquamanTridentsQ4 = await getTridents(aquaman);
 
     expect(nemosTridentsQ4.length).to.eq(1);
     expect(aquamanTridentsQ4.length).to.eq(1);
@@ -516,9 +527,9 @@ describe('authorization', () => {
     const manniId = await nemo.getUserIdByEmail(manni.email);
     await nemo.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
 
-    const nemosTridentsQ5 = await getTrident(nemo);
-    const mannisTridentsQ5 = await getTrident(manni);
-    const aquamanTridentsQ5 = await getTrident(aquaman);
+    const nemosTridentsQ5 = await getTridents(nemo);
+    const mannisTridentsQ5 = await getTridents(manni);
+    const aquamanTridentsQ5 = await getTridents(aquaman);
 
     expect(nemosTridentsQ5.length).to.eq(1);
     expect(mannisTridentsQ5.length).to.eq(1);
@@ -527,9 +538,9 @@ describe('authorization', () => {
     // Manni cannot invoke Nemos membership as Manni is not a host
     await manni.Fact.deleteAll([[manniId, '$isMemberOf', fishTeam.id!]]);
 
-    const nemosTridentsQ6 = await getTrident(nemo);
-    const mannisTridentsQ6 = await getTrident(manni);
-    const aquamanTridentsQ6 = await getTrident(aquaman);
+    const nemosTridentsQ6 = await getTridents(nemo);
+    const mannisTridentsQ6 = await getTridents(manni);
+    const aquamanTridentsQ6 = await getTridents(aquaman);
 
     expect(nemosTridentsQ6.length).to.eq(1);
     expect(mannisTridentsQ6.length).to.eq(1);
@@ -538,9 +549,9 @@ describe('authorization', () => {
     // Manni cannot invoke Nemos membership as Manni is not a host
     await manni.Fact.deleteAll([[nemoId, '$isMemberOf', fishTeam.id!]]);
 
-    const nemosTridentsQ7 = await getTrident(nemo);
-    const mannisTridentsQ7 = await getTrident(manni);
-    const aquamanTridentsQ7 = await getTrident(aquaman);
+    const nemosTridentsQ7 = await getTridents(nemo);
+    const mannisTridentsQ7 = await getTridents(manni);
+    const aquamanTridentsQ7 = await getTridents(aquaman);
 
     expect(nemosTridentsQ7.length).to.eq(1);
     expect(mannisTridentsQ7.length).to.eq(1);
@@ -549,9 +560,9 @@ describe('authorization', () => {
     // Nemo can invoke Mannis membership as he is host
     await nemo.Fact.deleteAll([[manniId, '$isMemberOf', fishTeam.id!]]);
 
-    const nemosTridentsQ8 = await getTrident(nemo);
-    const mannisTridentsQ8 = await getTrident(manni);
-    const aquamanTridentsQ8 = await getTrident(aquaman);
+    const nemosTridentsQ8 = await getTridents(nemo);
+    const mannisTridentsQ8 = await getTridents(manni);
+    const aquamanTridentsQ8 = await getTridents(aquaman);
 
     expect(nemosTridentsQ8.length).to.eq(1);
     expect(mannisTridentsQ8.length).to.eq(0);
@@ -560,9 +571,9 @@ describe('authorization', () => {
     // Aquaman can invoke Nemos membership as Manni is not a host
     await aquaman.Fact.deleteAll([[nemoId, '$isHostOf', fishTeam.id!]]);
 
-    const nemosTridentsQ9 = await getTrident(nemo);
-    const mannisTridentsQ9 = await getTrident(manni);
-    const aquamanTridentsQ9 = await getTrident(aquaman);
+    const nemosTridentsQ9 = await getTridents(nemo);
+    const mannisTridentsQ9 = await getTridents(manni);
+    const aquamanTridentsQ9 = await getTridents(aquaman);
 
     expect(nemosTridentsQ9.length).to.eq(0);
     expect(mannisTridentsQ9.length).to.eq(0);
@@ -573,9 +584,9 @@ describe('authorization', () => {
     const aquamanId = await aquaman.getUserIdByEmail(aquaman.email);
     await aquaman.Fact.deleteAll([[aquamanId, '$wasCreatedBy', fishTeam.id!]]);
 
-    const nemosTridentsQ10 = await getTrident(nemo);
-    const mannisTridentsQ10 = await getTrident(manni);
-    const aquamanTridentsQ10 = await getTrident(aquaman);
+    const nemosTridentsQ10 = await getTridents(nemo);
+    const mannisTridentsQ10 = await getTridents(manni);
+    const aquamanTridentsQ10 = await getTridents(aquaman);
 
     expect(nemosTridentsQ10.length).to.eq(0);
     expect(mannisTridentsQ10.length).to.eq(0);
@@ -584,9 +595,9 @@ describe('authorization', () => {
     // ... he also cannot transfer the accountability to another user.
     await aquaman.Fact.createAll([[manniId, '$wasCreatedBy', fishTeam.id!]]);
 
-    const nemosTridentsQ11 = await getTrident(nemo);
-    const mannisTridentsQ11 = await getTrident(manni);
-    const aquamanTridentsQ11 = await getTrident(aquaman);
+    const nemosTridentsQ11 = await getTridents(nemo);
+    const mannisTridentsQ11 = await getTridents(manni);
+    const aquamanTridentsQ11 = await getTridents(aquaman);
 
     expect(nemosTridentsQ11.length).to.eq(0);
     expect(mannisTridentsQ11.length).to.eq(0);
@@ -595,23 +606,183 @@ describe('authorization', () => {
     // ... Instead he has to transfer it to another group he is is member in.
     await aquaman.Fact.createAll([[aquamanTridentsQ8[0].id, '$wasCreatedBy', fishTeam.id!]]);
 
-    const nemosTridentsQ12 = await getTrident(nemo);
-    const mannisTridentsQ12 = await getTrident(manni);
-    const aquamanTridentsQ12 = await getTrident(aquaman);
+    const nemosTridentsQ12 = await getTridents(nemo);
+    const mannisTridentsQ12 = await getTridents(manni);
+    const aquamanTridentsQ12 = await getTridents(aquaman);
 
     expect(nemosTridentsQ12.length).to.eq(0);
     expect(mannisTridentsQ12.length).to.eq(0);
     expect(aquamanTridentsQ12.length).to.eq(0);
   });
 
-  it('prevents membership revocation by users who are not host of the group');
-  it('allows to list all users of a group');
+  it('prevents membership revocation by users who are not host of the group', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+    const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
 
-  it('allows to create facts about the authenticated users');
-  it('prevents a member can promote himself');
-  it('does not allow to read the attribute value if the user does not has access');
-  it('allows to create facts refer to the authenticated users');
-  it('is not possible to use a custom predicate which starts with "$"');
+    const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+    const aquamanId = await randomUser!.getUserIdByEmail(nemo.email);
+
+    await randomUser!.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', fishTeam.id],
+    ]);
+
+    expect((await getTeams(nemo)).length).to.eq(0);
+    expect((await getTridents(nemo)).length).to.eq(0);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+    expect((await getTeams(nemo)).length).to.eq(1);
+    expect((await getTridents(nemo)).length).to.eq(1);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    await manni.Fact.deleteAll([[nemoId, '$isHostOf', fishTeam.id!]]);
+    await manni.Fact.deleteAll([[nemoId, '$wasCreatedBy', fishTeam.id!]]);
+    await manni.Fact.deleteAll([[trident.id!, '$wasCreatedBy', aquamanId]]);
+
+    expect((await getTeams(nemo)).length).to.eq(1);
+    expect((await getTridents(nemo)).length).to.eq(1);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    await nemo.Fact.deleteAll([[nemoId, '$wasCreatedBy', fishTeam.id!]]);
+    await nemo.Fact.deleteAll([[trident.id!, '$wasCreatedBy', aquamanId]]);
+    await nemo.Fact.deleteAll([[nemoId, '$isHostOf', fishTeam.id!]]);
+
+    expect((await getTeams(nemo)).length).to.eq(0);
+    expect((await getTridents(nemo)).length).to.eq(0);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+  });
+
+  it('prevents a member can promote himself', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+    const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+
+    const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+    await randomUser!.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', fishTeam.id],
+    ]);
+
+    await nemo.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+    expect((await getTeams(nemo)).length).to.eq(0);
+    expect((await getTridents(nemo)).length).to.eq(0);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    await nemo.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
+
+    expect((await getTeams(nemo)).length).to.eq(0);
+    expect((await getTridents(nemo)).length).to.eq(0);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    await manni.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+    expect((await getTeams(nemo)).length).to.eq(0);
+    expect((await getTridents(nemo)).length).to.eq(0);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    await manni.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
+
+    expect((await getTeams(nemo)).length).to.eq(0);
+    expect((await getTridents(nemo)).length).to.eq(0);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+  });
+
+  it('does not allow to read the attribute value if the user does not has access', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+    const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+
+    const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+    await randomUser!.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', fishTeam.id],
+    ]);
+
+    await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+    expect((await getTeams(nemo)).length).to.eq(1);
+    expect((await getTridents(nemo)).length).to.eq(1);
+    expect((await getTeams(manni)).length).to.eq(0);
+    expect((await getTridents(manni)).length).to.eq(0);
+    expect((await getTeams(aquaman)).length).to.eq(1);
+    expect((await getTridents(aquaman)).length).to.eq(1);
+
+    const aquamansResult = await aquaman.Attribute.find(trident.id!);
+    const nemosResult = await nemo.Attribute.find(trident.id!);
+    const mannisResult = await manni.Attribute.find(trident.id!);
+
+    expect(await aquamansResult!.getValue()).to.eql({ name: 'Trident of Atlan' });
+    expect(await nemosResult!.getValue()).to.eql({ name: 'Trident of Atlan' });
+    expect(await mannisResult).to.eql(null);
+  });
+
+  it('is not possible to use a custom predicate which starts with "$"', async () => {
+    const aquaman = await Session.getOneSession();
+    await aquaman.Fact.createAll([
+      ['Team', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      ['isA', 'Trident'],
+      ['$isMagicRelictIn', 'Team'],
+    ]);
+
+    const { tridents } = await aquaman.Attribute.findAll({
+      tridents: [
+        ['$isMagicRelictIn', 'Team'],
+      ],
+    });
+
+    expect(tridents).to.eql([]);
+  });
+
+  it('allows to list all users of a group');
   it('is not be possible to find out which groups a user is member in');
 
   describe('when the attribute is member of group', () => {
@@ -630,8 +801,10 @@ describe('authorization', () => {
     it('allows a user to transfer the accountability to another group');
     it('allows a user to transfer the accountability of an attribute from a group to himself');
     it('allows a user to transfer the accountability of an attribute from a group to himself when he does not has access to this group');
+
+    it('does not allow to delete accountability facts, it needs to be transferred to another user/group');
     it('does not allow the user to transfer the accountability to a term');
-    it('does not allow to create accountability facts where object  =subject');
+    it('does not allow to create accountability facts where object  = subject');
     it('does not allow to delete the "wasCreatedBy" fact, without assigning accountability to somebody else');
 
     // how to prevent there is nobody left accountable anymore in a group?
@@ -642,4 +815,11 @@ describe('authorization', () => {
       it('does not allow the ex member to view/edit/delete the attribute he created and assigned to this team');
     });
   });
+
+  it('allows to create facts about the authenticated users');
+  it('allows to create facts refer to the authenticated users');
+
+  // describe('when used with transitive teams');
+
+  // describe('when a user guessed an attribute id and tries to access it');
 });
