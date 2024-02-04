@@ -128,7 +128,7 @@ export default class Session {
       return;
     }
 
-    await this.deleteBrowsers();
+    await Session.deleteBrowsers();
   }
 
   static async deleteBrowsers() {
