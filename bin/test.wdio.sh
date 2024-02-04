@@ -13,6 +13,7 @@ sleep 2
 npx wdio run ./wdio.conf.ts
 succ=$?
 kill $SERVER_PID
+
 pkill -f '.*node.*testserver.js.*'
 
 if [ $succ -eq 0 ]; then
