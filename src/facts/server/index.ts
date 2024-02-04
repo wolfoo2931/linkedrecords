@@ -92,7 +92,7 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
 export default class Fact {
   static reservedPredicates = [
     '$isATermFor',
-    '$wasCreatedBy',
+    '$isAccountableFor',
     '$isMemberOf',
     '$isHostOf',
   ];
@@ -124,6 +124,19 @@ export default class Fact {
         ALTER TABLE facts ADD COLUMN id SERIAL;
       `);
     }
+
+    // migrate all facts from the old (x, '$wasCreatedBy', u)
+    // to the new (u, '$isAccountableFor', x) format
+    await pg.query(`
+      INSERT INTO facts (subject, predicate, object, created_at)
+      SELECT object as subject,
+          '$isAccountableFor' as predicate,
+          subject as object,
+          created_at
+      FROM facts as fSrc
+      WHERE fSrc.predicate='$wasCreatedBy'
+      AND fSrc.object NOT IN (SELECT subject from facts as f where f.predicate ='$isAccountableFor');
+    `);
   }
 
   public static async getUserIdByEmail(
@@ -428,22 +441,22 @@ export default class Fact {
           throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
         }
 
-        await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $5), ($1, $4, $5, NULL)', [
+        await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $5), ($5, $4, $1, NULL)', [
           this.subject,
           this.predicate,
           this.object,
-          '$wasCreatedBy',
+          '$isAccountableFor',
           userid,
         ]);
       }
-    } else if (this.predicate === '$wasCreatedBy') {
-      const dbRows = await pool.query('SELECT subject, predicate, object FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
+    } else if (this.predicate === '$isAccountableFor') {
+      const dbRows = await pool.query('SELECT subject, predicate, object FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]);
       if (dbRows.rows.length) {
         for (let index = 0; index < dbRows.rows.length; index++) {
           const r = dbRows.rows[index];
           const oldFact = new Fact(r.subject, r.predicate, r.object, this.logger);
           // eslint-disable-next-line no-await-in-loop
-          await oldFact.delete(userid);
+          await oldFact.deleteWithoutAuthCheck(userid);
         }
       }
 
@@ -468,6 +481,10 @@ export default class Fact {
       throw new AuthorizationError(userid, 'fact', this, this.logger);
     }
 
+    return this.deleteWithoutAuthCheck(userid);
+  }
+
+  private async deleteWithoutAuthCheck(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
     await pool.query(`WITH deleted_rows AS (
@@ -514,12 +531,12 @@ export default class Fact {
       return true;
     }
 
-    if (this.predicate === '$wasCreatedBy') {
+    if (this.predicate === '$isAccountableFor') {
       return await this.isValidCreatedAtFact(userid)
         || await this.isValidAccountabilityTransfer(userid);
     }
 
-    if (Object.values(rolePredicateMap).includes(this.predicate)) {
+    if (Object.values(rolePredicateMap).includes(this.predicate) && this.subject.trim().startsWith('us-')) {
       return this.isValidInvitation(userid);
     }
 
@@ -534,8 +551,7 @@ export default class Fact {
   private async isValidInvitation(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
-    const hasSubjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
-    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.object));
+    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object));
 
     const subjectIsKnownUserPromise = pool.findAny(`
       SELECT *
@@ -543,34 +559,33 @@ export default class Fact {
       WHERE id=$1
     `, [this.subject]);
 
-    return await hasObjectAccessPromise
-      && (await subjectIsKnownUserPromise || await hasSubjectAccessPromise);
+    return await hasObjectAccessPromise && await subjectIsKnownUserPromise;
   }
 
   private async isValidCreatedAtFact(userid: string) {
-    if (this.object !== userid) {
+    if (this.subject !== userid) {
       return false;
     }
 
     const pool = new PgPoolWithLog(this.logger);
-    return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
+    return !(await pool.findAny('SELECT subject FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]));
   }
 
   private async isValidAccountabilityTransfer(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
     const existingFacts = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
-      this.subject,
-      this.predicate,
       userid,
+      this.predicate,
+      this.subject,
     ]);
 
     if (existingFacts.rows.length !== 1) {
       return false;
     }
 
-    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.subject));
-    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess'], this.object));
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess'], this.subject));
+    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
