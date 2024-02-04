@@ -1,25 +1,25 @@
-type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member';
-type AnyOrAllGroups = 'any' | 'all';
+export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member';
 
 export const rolePredicateMap = {
   member: '$isMemberOf',
   host: '$isHostOf',
 };
 
-const anyOrAllGroupsMap = {
-  any: ' UNION ',
-  all: ' INTERSECT ',
-};
-
 export default class AuthorizationSqlBuilder {
-  public static selectSubjectsInAnyGroup(userid: string, roles: Role[], attributeId?: string) {
-    return this.getSqlToSeeSubjectsInGroups(userid, roles, 'any', attributeId);
+  public static selectSubjectsInAnyGroup(userid: string, roles: Role[]) {
+    return this.getSqlToSeeSubjectsInGroups(userid, roles);
   }
 
-  public static getSqlToSeeSubjectsInGroups(userid: string, roles: Role[], anyOrAllGroups: AnyOrAllGroups = 'all', attributeId?: string) {
+  public static getSQLToCheckAccess(userid: string, roles: Role[], attributeId: string) {
+    return `(SELECT *
+      FROM (${this.getSqlToSeeSubjectsInGroups(userid, roles)}) as facts
+      WHERE subject='${attributeId}')`;
+  }
+
+  public static getSqlToSeeSubjectsInGroups(userid: string, roles: Role[]) {
     const creatorSubSelect = roles
       .filter((role) => role === 'creator')
-      .map(() => `SELECT facts.subject FROM facts WHERE facts.predicate = '$wasCreatedBy' AND facts.object = '${userid}' ${attributeId ? `AND facts.subject = '${attributeId}'` : ''}`);
+      .map(() => `SELECT facts.subject FROM facts WHERE facts.predicate = '$wasCreatedBy' AND facts.object = '${userid}'`);
 
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
@@ -36,31 +36,15 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
-      if (attributeId) {
-        groupSubSelect.push(
-          `SELECT subject FROM facts
-           WHERE facts.subject = '${userid}'
-           AND facts.predicate IN (${groupRoles.join(',')})
-           AND facts.object = '${attributeId}'`,
-        );
-        groupSubSelect.push(
-          `SELECT subject FROM facts
-           WHERE facts.predicate='$isMemberOf'
-           AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))
-           AND facts.subject = '${attributeId}'`,
-        );
-      } else {
-        // TODO: this will not work if it will be joined with anyOrAllGroupsMap['all']
-        groupSubSelect.push(
-          `SELECT subject FROM facts
-           WHERE facts.predicate='$isMemberOf'
-           AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
-        );
-        groupSubSelect.push(
-          `SELECT subject FROM facts
-           WHERE facts.subject in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
-        );
-      }
+      groupSubSelect.push(
+        `SELECT subject FROM facts
+          WHERE facts.predicate='$isMemberOf'
+          AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`, // we do not have the wasCreatedBy objects here
+      );
+      groupSubSelect.push(
+        `SELECT subject FROM facts
+          WHERE facts.subject in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`, // we do not have the wasCreatedBy objects here
+      );
     }
 
     return `(${[
@@ -68,6 +52,6 @@ export default class AuthorizationSqlBuilder {
       ...selfSubSelect,
       ...termsSubSelect,
       ...groupSubSelect,
-    ].join(anyOrAllGroupsMap[anyOrAllGroups])})`;
+    ].join(' UNION ')})`;
   }
 }

@@ -156,7 +156,7 @@ export default class Fact {
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
 
-    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+    return pool.findAny(SQL.getSQLToCheckAccess(
       userid,
       ['creator', 'host', 'member'], // TODO: add role attributeWriter
       nodeId,
@@ -169,7 +169,7 @@ export default class Fact {
     logger: IsLogger,
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
-    const res = await pool.findAny(SQL.selectSubjectsInAnyGroup(
+    const res = await pool.findAny(SQL.getSQLToCheckAccess(
       userid,
       ['creator', 'host', 'member'], // TODO: add role attributeReader
       nodeId,
@@ -525,19 +525,17 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
 
-    return pool.findAny(`
-      SELECT *
-      FROM facts
-      WHERE subject IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator'], this.subject)}
-      AND object IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator', 'term', 'selfAccess'], this.subject)}
-    `);
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
+    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'term', 'member', 'selfAccess'], this.object));
+
+    return hasSubjectAccess && hasObjectAccess;
   }
 
   private async isValidInvitation(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
-    const hasSubjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'member'], this.subject)); // TODO: need to add the conceptor role
-    const hasObjectAccessPromise = pool.findAny(SQL.selectSubjectsInAnyGroup(userid, ['creator', 'host'], this.object));
+    const hasSubjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
+    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.object));
 
     const subjectIsKnownUserPromise = pool.findAny(`
       SELECT *
@@ -571,11 +569,9 @@ export default class Fact {
       return false;
     }
 
-    return pool.findAny(`
-      SELECT *
-      FROM facts
-      WHERE subject IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator'], this.subject)}
-      AND object IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator', 'selfAccess'], this.subject)}
-    `);
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.subject));
+    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess'], this.object));
+
+    return hasSubjectAccess && hasObjectAccess;
   }
 }

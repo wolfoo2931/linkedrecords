@@ -20,11 +20,11 @@ async function filterAutoCreatedFacts(facts) {
   return result;
 }
 
-const getTridents = async (c) => {
+const getTridents = async (c, type = 'Trident') => {
   const { tridents } = await c.Attribute.findAll({
     tridents: [
       ['$it', '$hasDataType', 'KeyValueAttribute'],
-      ['isA', 'Trident'],
+      ['isA', type],
     ],
   });
 
@@ -782,12 +782,127 @@ describe('authorization', () => {
     expect(tridents).to.eql([]);
   });
 
-  it('allows to list all users of a group');
-  it('is not be possible to find out which groups a user is member in');
-
   describe('when the attribute is member of group', () => {
-    it('allows any member of the group can use the attribute as subject when creating facts');
-    it('allows any member of the group can use the attribute as object when creating facts');
+    it('allows any host of the group to use the attribute as subject', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
+
+      expect((await getTridents(nemo, 'Weapon')).length).to.eql(0);
+
+      await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+      expect((await getTridents(nemo, 'Weapon')).length).to.eql(0);
+
+      await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
+
+      expect((await getTridents(nemo, 'Weapon')).length).to.eql(1);
+      expect((await getTridents(aquaman, 'Weapon')).length).to.eql(1);
+      expect((await getTridents(manni, 'Weapon')).length).to.eql(0);
+    });
+
+    it('allows any member of the group to use the attribute as subject', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
+
+      expect((await getTridents(nemo, 'Weapon')).length).to.eql(0);
+
+      await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
+
+      expect((await getTridents(nemo, 'Weapon')).length).to.eql(0);
+
+      await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
+
+      expect((await getTridents(nemo, 'Weapon')).length).to.eql(1);
+      expect((await getTridents(aquaman, 'Weapon')).length).to.eql(1);
+      expect((await getTridents(manni, 'Weapon')).length).to.eql(0);
+    });
+
+    it.only('allows any member of the group to use the attribute as object when creating facts', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      const atlantis = await nemo.Attribute.createKeyValue({ name: 'The City' });
+
+      await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
+
+      const { homes } = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+
+      expect(homes.length).to.eql(0);
+
+      await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
+      await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
+
+      const { homes2 } = await nemo.Attribute.findAll({ homes2: [['isHomeOf', trident.id!]] });
+      expect(homes2.length).to.eql(0);
+
+      await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
+
+      let nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(nemosHomeMatches.homes.length).to.eql(1);
+      let amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(amHomeMatches.homes.length).to.eql(0);
+
+      console.log('trident', trident.id);
+      console.log('atlantis', atlantis.id);
+      console.log('fishTeam', fishTeam.id);
+      // let mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      // expect(mannisHomeMatches.homes.length).to.eql(0);
+
+      await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
+
+      nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(nemosHomeMatches.homes.length).to.eql(1);
+      amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(amHomeMatches.homes.length).to.eql(1);
+      // mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      // expect(mannisHomeMatches.homes.length).to.eql(0);
+    });
+
+    it('allows any host of the group to use the attribute as object when creating facts');
     it('allows any member can modify the content of the attribute');
     it('allows any member can read the content of the attribute');
 
@@ -814,6 +929,12 @@ describe('authorization', () => {
     describe('a member has been removed from a team', () => {
       it('does not allow the ex member to view/edit/delete the attribute he created and assigned to this team');
     });
+  });
+
+  describe('group member discovery', () => {
+    it('allows to list all users of a group when the user is member of this group');
+    it('does not allow to list all users of a group when the user is not member of this group');
+    it('is not possible to find out which groups a user is member in when');
   });
 
   it('allows to create facts about the authenticated users');
