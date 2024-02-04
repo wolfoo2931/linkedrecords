@@ -29,7 +29,25 @@ jobs:
       - uses: actions/checkout@v3
       - name: Install dependencies
         run: npm ci
-      - env:
+      - name: Karma Tests
+        env:
+          PGHOST: postgres
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: ci_db_test
+          PGPORT: ${{ job.services.postgres.ports[5432] }}
+          TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
+          COOKIE_DOMAIN: localhost
+          FRONTEND_BASE_URL: http://localhost:3001
+          SERVER_BASE_URL: http://localhost:6543
+          AUTH_ISSUER_BASE_URL: https://dev-onljhxvyw71o4mbs.us.auth0.com/
+          AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
+          AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
+          AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
+        run: |
+          npm test
+      - name: WDIO Tests
+        env:
           PGHOST: postgres
           PGUSER: postgres
           PGPASSWORD: postgres
