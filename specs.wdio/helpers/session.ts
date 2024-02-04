@@ -128,6 +128,10 @@ export default class Session {
       return;
     }
 
+    await this.deleteBrowsers();
+  }
+
+  static async deleteBrowsers() {
     while (allSessionsToBeTerminated.length) {
       const s = allSessionsToBeTerminated.pop();
 

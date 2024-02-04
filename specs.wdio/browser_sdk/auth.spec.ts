@@ -45,6 +45,7 @@ const getTeams = async (c) => {
 describe('authorization', () => {
   beforeEach(Session.truncateDB);
   afterEach(Session.afterEach);
+  after(Session.deleteBrowsers);
 
   it('does not allow to read attributes create by other users', async () => {
     const [client1, client2] = await Session.getTwoSessions();
@@ -963,19 +964,156 @@ describe('authorization', () => {
       expect((await getTridents(manni)).length).to.eql(0);
     });
 
-    it('does not allow to delete accountability facts, it needs to be transferred to another group');
+    it('does not allow to delete accountability facts, it needs to be transferred to another group', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
-    it('allows a user to transfer the accountability of an attribute from a group to himself');
-    it('allows a user to transfer the accountability of an attribute from a group to himself when he does not has access to this group');
-    it('allows to specify accountably directly when creating the attribute');
+      await aquaman.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+      ]);
 
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      let facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(4);
+
+      await aquaman.Fact.deleteAll([
+        [aquamanId, '$isAccountableFor', trident.id!],
+      ]);
+
+      await aquaman.Fact.deleteAll([
+        [aquamanId, '$isAccountableFor', fishTeam.id!],
+        [aquamanId, '$isAccountableFor', 'Trident'],
+      ]);
+
+      await aquaman.Fact.deleteAll([
+        [aquamanId, '$isAccountableFor', 'Team'],
+      ]);
+
+      facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(4);
+    });
+
+    it('does not allow a user to transfer the accountability of an attribute from a group to himself', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
+
+      await nemo.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      let facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(2);
+
+      await aquaman.Fact.createAll([
+        [fishTeam.id, '$isAccountableFor', trident.id!],
+      ]);
+
+      facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(1);
+
+      await aquaman.Fact.createAll([
+        [aquamanId, '$isAccountableFor', trident.id!],
+      ]);
+
+      facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(1);
+    });
+
+    it('does not allow a user to transfer the accountability of an attribute from a group to himself when he does not has access to this group', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
+
+      await nemo.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+      ]);
+
+      const mannisTeam = await manni.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+      ]);
+
+      let facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(1);
+
+      await aquaman.Fact.createAll([
+        [mannisTeam.id, '$isAccountableFor', trident.id!],
+      ]);
+
+      facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(1);
+
+      facts = await aquaman.Fact.findAll({
+        subject: [mannisTeam.id!],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(0);
+
+      await aquaman.Fact.createAll([
+        [aquamanId, '$isAccountableFor', trident.id!],
+      ]);
+
+      facts = await aquaman.Fact.findAll({
+        subject: [aquamanId],
+        predicate: ['$isAccountableFor'],
+      });
+
+      expect(facts.length).to.eql(1);
+    });
+
+    it('does not allow a user to transfer the accountability of an attribute to a group he is not member of');
     it('does not allow the user to transfer the accountability to a term');
-    it('does not allow to create accountability facts where object  = subject');
-    it('does not allow to delete the "isAccountableFor" fact, without assigning accountability to somebody else');
 
-    // how to prevent there is nobody left accountable anymore in a group?
-    // should it be possible to make a team accountable for itself?
-    // await aquaman.Fact.createAll([[fishTeam.id!, '$isAccountableFor', fishTeam.id!]]);
+    it('allows to specify accountably directly when creating the attribute');
+    it('does not allow to create accountability facts where object = subject');
 
     describe('a member has been removed from a team', () => {
       it('does not allow the ex member to view/edit/delete the attribute he created and assigned to this team');
