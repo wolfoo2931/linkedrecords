@@ -16,6 +16,7 @@
     "lint:fix": "eslint . --fix",
     "build": "webpack --config ./webpack.config.js",
     "postinstall": "webpack --config ./webpack.config.js",
+    "wdio:fast": "REUSE_TEST_BROWSERS=true bin/test.wdio.sh",
     "wdio": "bin/test.wdio.sh"
   },
   "repository": {
