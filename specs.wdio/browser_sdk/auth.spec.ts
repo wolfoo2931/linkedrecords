@@ -42,6 +42,20 @@ const getTeams = async (c) => {
   return teams;
 };
 
+const canReadTheAttribute = async (client, attributeId) => {
+  const { attr1 } = await client.Attribute.findAll({
+    attr1: attributeId,
+  });
+
+  const attr2 = await client.Attribute.find(attributeId);
+
+  if (attr1 && !attr2) {
+    throw new Error('could read the attribute with findAll but not with find (or the other way around)');
+  }
+
+  return attr1 !== undefined || attr2 !== null;
+};
+
 describe('authorization', () => {
   beforeEach(Session.truncateDB);
   afterEach(Session.afterEach);
@@ -149,11 +163,11 @@ describe('authorization', () => {
 
     expect(await book1.getValue()).to.deep.equal({ name: 'bookC1a' });
 
-    const { book1unauth } = await client2.Attribute.findAll({
-      book1unauth: await atrBook1.getId(),
+    const { book1UnAuth } = await client2.Attribute.findAll({
+      book1UnAuth: await atrBook1.getId(),
     });
 
-    expect(book1unauth).to.equal(undefined);
+    expect(book1UnAuth).to.equal(undefined);
   });
 
   it('filters unauthorized facts when creating attribute with facts', async () => {
@@ -210,9 +224,9 @@ describe('authorization', () => {
 
     expect(await book1!.getValue()).to.deep.equal({ name: 'bookC1a' });
 
-    const book1unauth = await client2.Attribute.find(await atrBook1.getId());
+    const book1UnAuth = await client2.Attribute.find(await atrBook1.getId());
 
-    expect(book1unauth).to.equal(null);
+    expect(book1UnAuth).to.equal(null);
   });
 
   it('does not allow to use a term as subject if the term was not created by the same user', async () => {
@@ -288,14 +302,14 @@ describe('authorization', () => {
     const url = `${ofInterestServerURL}attributes/${ofInterestID}/changes?clientId=${ofInterestClientID}`;
 
     client2.do((lr, remoteIdOfMyAttr, _ofInterestID, _url) => new Promise<void>((resolve) => {
-      const lattr = (window as any).remoteInstances[remoteIdOfMyAttr];
+      const lAttr = (window as any).remoteInstances[remoteIdOfMyAttr];
 
-      (window as any).lattr = lattr;
+      (window as any).lAttr = lAttr;
       (window as any).remoteIdOfMyAttr = remoteIdOfMyAttr;
 
       setTimeout(resolve, 2000);
 
-      (window as any).subscriptionResult = lattr.clientServerBus.subscribe(_url, _ofInterestID, (parsedData) => {
+      (window as any).subscriptionResult = lAttr.clientServerBus.subscribe(_url, _ofInterestID, (parsedData) => {
         (window as any).updateMessageReceived = parsedData;
         resolve();
       }).catch((error) => {
@@ -927,14 +941,79 @@ describe('authorization', () => {
       expect(mannisHomeMatches.homes.length).to.eql(0);
     });
 
-    it('allows any host of the group to use the attribute as object when creating facts');
-    it('allows any member can modify the content of the attribute');
-    it('allows any member can read the content of the attribute');
+    it('allows any host of the group to use the attribute as object when creating facts', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
-    it('does NOT allow any NON member of the group can use the attribute as subject when creating facts');
-    it('does NOT allow any NON member of the group can use the attribute as object when creating facts');
-    it('does NOT allow any NON member can modify the content of the attribute');
-    it('does NOT allow any NON member can read the content of the attribute');
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
+      expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
+      expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
+
+      const atlantis = await nemo.Attribute.createKeyValue({ name: 'The City' });
+
+      await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
+      const { homes } = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+
+      expect(homes.length).to.eql(0);
+
+      await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+      expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
+      expect(await canReadTheAttribute(nemo, trident.id)).to.eql(true);
+      expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
+      expect(await canReadTheAttribute(aquaman, atlantis.id)).to.eql(false);
+      expect(await canReadTheAttribute(nemo, atlantis.id)).to.eql(true);
+      expect(await canReadTheAttribute(manni, atlantis.id)).to.eql(false);
+
+      const { homes2 } = await nemo.Attribute.findAll({ homes2: [['isHomeOf', trident.id!]] });
+      expect(homes2.length).to.eql(0);
+
+      await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
+
+      let nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(nemosHomeMatches.homes.length).to.eql(1);
+
+      let amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(amHomeMatches.homes.length).to.eql(0);
+
+      let mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(mannisHomeMatches.homes.length).to.eql(0);
+
+      await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
+
+      expect(await canReadTheAttribute(aquaman, atlantis.id)).to.eql(true);
+      expect(await canReadTheAttribute(nemo, atlantis.id)).to.eql(true);
+      expect(await canReadTheAttribute(manni, atlantis.id)).to.eql(false);
+
+      nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(nemosHomeMatches.homes.length).to.eql(1);
+      amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(amHomeMatches.homes.length).to.eql(1);
+      mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      expect(mannisHomeMatches.homes.length).to.eql(0);
+    });
+
+    it('allows any member to modify the content of the attribute');
+    it('allows any member to read the content of the attribute');
+
+    it('does NOT allow any NON member of the group to use the attribute as subject when creating facts');
+    it('does NOT allow any NON member of the group to use the attribute as object when creating facts');
+    it('does NOT allow any NON member to modify the content of the attribute');
+    it('does NOT allow any NON member to read the content of the attribute');
   });
 
   describe('when a user transfers the accountability of an attribute', () => {
@@ -1116,7 +1195,7 @@ describe('authorization', () => {
     it('does not allow to create accountability facts where object = subject');
 
     describe('a member has been removed from a team', () => {
-      it('does not allow the ex member to view/edit/delete the attribute he created and assigned to this team');
+      it('does not allow the ex member to view/edit/delete the attribute he created and delegated accountability to this team');
     });
   });
 

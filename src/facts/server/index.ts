@@ -543,7 +543,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(this.logger);
 
     const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
-    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'term', 'member', 'selfAccess'], this.object));
+    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'selfAccess'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
