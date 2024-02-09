@@ -1007,10 +1007,76 @@ describe('authorization', () => {
       expect(mannisHomeMatches.homes.length).to.eql(0);
     });
 
-    it('allows any member to modify the content of the attribute');
-    it('allows any member to read the content of the attribute');
+    it('allows any member to modify and read the content of the attribute if attribute and user are in the same team', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+      const manniId = await randomUser!.getUserIdByEmail(manni.email);
 
-    it('does NOT allow any NON member of the group to use the attribute as subject when creating facts');
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
+      expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
+
+      await aquaman.Fact.createAll([[trident.id, '$isMemberOf', fishTeam.id]]);
+      await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
+      await aquaman.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
+
+      const tridentByNemo = await nemo.Attribute.find(trident.id!);
+      expect(await tridentByNemo?.getValue()).to.eql({ name: 'Trident of Atlan' });
+
+      await tridentByNemo!.set({ name: 'Trident of Atlantis' });
+      await browser.pause(200);
+
+      const tridentByManni = await manni.Attribute.find(trident.id!);
+      expect(await tridentByManni?.getValue()).to.eql({ name: 'Trident of Atlantis' });
+    });
+
+    it('allows any member to modify and read the content of the group node', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+      const manniId = await randomUser!.getUserIdByEmail(manni.email);
+
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      expect(await canReadTheAttribute(nemo, fishTeam.id)).to.eql(false);
+      expect(await canReadTheAttribute(manni, fishTeam.id)).to.eql(false);
+
+      await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
+      await aquaman.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
+
+      const teamByNemo = await nemo.Attribute.find(fishTeam.id!);
+      expect(await teamByNemo?.getValue()).to.eql({ name: 'fish' });
+
+      await teamByNemo!.set({ name: 'fish & wales' });
+      await browser.pause(200);
+
+      const teamByManni = await nemo.Attribute.find(fishTeam.id!);
+      expect(await teamByManni?.getValue()).to.eql({ name: 'fish & wales' });
+    });
+
+    it('does NOT allow any NON member of the group to use the attribute as subject when creating facts', async () => {
+
+    });
+
     it('does NOT allow any NON member of the group to use the attribute as object when creating facts');
     it('does NOT allow any NON member to modify the content of the attribute');
     it('does NOT allow any NON member to read the content of the attribute');
