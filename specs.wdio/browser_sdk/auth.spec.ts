@@ -5,6 +5,7 @@
 /* eslint-disable no-await-in-loop */
 import { expect } from 'chai';
 import Session from '../helpers/session';
+import { expectFactToExists, expectFactToNotExists } from '../helpers/lr_expects';
 
 async function filterAutoCreatedFacts(facts) {
   const result: any[] = [];
@@ -1254,7 +1255,58 @@ describe('authorization', () => {
       expect(facts.length).to.eql(1);
     });
 
-    it('does not allow a user to transfer the accountability of an attribute to a group he is not member of');
+    it('does not allow a user to transfer the accountability of an attribute to a group he is not member of', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+
+      await nemo.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const otherTeam = await manni.Attribute.createKeyValue({ name: 'other' }, [['isA', 'Team']]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      await aquaman.Fact.createAll([
+        [fishTeam.id, '$isAccountableFor', trident.id!],
+      ]);
+
+      expect((await aquaman.Fact.findAll({
+        subject: [fishTeam.id!],
+        predicate: ['$isAccountableFor'],
+      })).length).to.eql(1);
+
+      await expectFactToExists([fishTeam.id!, '$isAccountableFor', trident.id!]);
+
+      expect((await aquaman.Fact.findAll({
+        subject: [otherTeam.id!],
+        predicate: ['$isAccountableFor'],
+      })).length).to.eql(0);
+
+      await expectFactToNotExists([otherTeam.id!, '$isAccountableFor', trident.id!]);
+
+      await aquaman.Fact.createAll([
+        [otherTeam.id, '$isAccountableFor', trident.id!],
+      ]);
+
+      await expectFactToExists([fishTeam.id!, '$isAccountableFor', trident.id!]);
+      await expectFactToNotExists([otherTeam.id!, '$isAccountableFor', trident.id!]);
+
+      expect((await aquaman.Fact.findAll({
+        subject: [fishTeam.id!],
+        predicate: ['$isAccountableFor'],
+      })).length).to.eql(1);
+
+      expect((await aquaman.Fact.findAll({
+        subject: [otherTeam.id!],
+        predicate: ['$isAccountableFor'],
+      })).length).to.eql(0);
+    });
+
     it('does not allow the user to transfer the accountability to a term');
 
     it('allows to specify accountably directly when creating the attribute');
