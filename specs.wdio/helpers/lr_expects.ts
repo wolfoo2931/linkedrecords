@@ -15,3 +15,40 @@ export async function expectFactToNotExists(fact: [string, string, string]) {
 
   expect(results.rows.length).to.eq(0);
 }
+
+export async function expectNotToBeAbleToReadAttribute(attributeId, client) {
+  const attributeWithAccess = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
+  const serverURL = await attributeWithAccess.getServerURL();
+  const clientId = await attributeWithAccess.getClientId();
+
+  expect((await client.Fact.findAll({
+    subject: [attributeId],
+  })).length).to.eql(0);
+
+  expect((await client.Fact.findAll({
+    object: [attributeId],
+  })).length).to.eql(0);
+
+  const noAccessAttr = await client.Attribute.find(attributeId);
+  const accessAttr = await client.Attribute.find(attributeWithAccess.id);
+
+  expect(!!noAccessAttr).to.eql(false);
+  expect(!!accessAttr).to.eql(true);
+
+  const authorizedContent = await client.do(
+    (lr, sURL, cId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, { credentials: 'include' }).then((r) => r.text()),
+    serverURL,
+    clientId,
+    attributeWithAccess.id,
+  );
+
+  const unauthorizedContent = await client.do(
+    (lr, sURL, cId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, { credentials: 'include' }).then((r) => r.text()),
+    serverURL,
+    clientId,
+    attributeId,
+  );
+
+  expect(authorizedContent).to.match(/anAttributeWithAccess/);
+  expect(unauthorizedContent).to.match(/Unauthorized/);
+}
