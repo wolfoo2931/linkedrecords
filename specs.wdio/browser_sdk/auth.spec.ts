@@ -43,6 +43,7 @@ const getTeams = async (c) => {
   return teams;
 };
 
+// TODO: replace with helper functions from lr_expects
 const canReadTheAttribute = async (client, attributeId) => {
   const { attr1 } = await client.Attribute.findAll({
     attr1: attributeId,
@@ -960,6 +961,9 @@ describe('authorization', () => {
         ['$isMemberOf', fishTeam.id],
       ]);
 
+      await expectNotToBeAbleToReadAttribute(trident.id, nemo);
+      await expectNotToBeAbleToReadAttribute(trident.id, manni);
+
       expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
       expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
@@ -972,6 +976,10 @@ describe('authorization', () => {
       expect(homes.length).to.eql(0);
 
       await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
+
+      await expectNotToBeAbleToReadAttribute(trident.id, manni);
+      await expectNotToBeAbleToReadAttribute(atlantis.id, aquaman);
+      await expectNotToBeAbleToReadAttribute(atlantis.id, manni);
 
       expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(true);
@@ -995,6 +1003,8 @@ describe('authorization', () => {
       expect(mannisHomeMatches.homes.length).to.eql(0);
 
       await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
+
+      await expectNotToBeAbleToReadAttribute(atlantis.id, manni);
 
       expect(await canReadTheAttribute(aquaman, atlantis.id)).to.eql(true);
       expect(await canReadTheAttribute(nemo, atlantis.id)).to.eql(true);
@@ -1027,6 +1037,9 @@ describe('authorization', () => {
         ['$isMemberOf', fishTeam.id],
       ]);
 
+      await expectNotToBeAbleToReadAttribute(trident.id, nemo);
+      await expectNotToBeAbleToReadAttribute(trident.id, manni);
+
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
       expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
 
@@ -1057,6 +1070,9 @@ describe('authorization', () => {
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+
+      await expectNotToBeAbleToReadAttribute(fishTeam.id, nemo);
+      await expectNotToBeAbleToReadAttribute(fishTeam.id, manni);
 
       expect(await canReadTheAttribute(nemo, fishTeam.id)).to.eql(false);
       expect(await canReadTheAttribute(manni, fishTeam.id)).to.eql(false);
