@@ -196,6 +196,8 @@ export default class Fact {
       throw new Error(`userId is invalid: "${userid}"`);
     }
 
+    // TODO: we can also add term into this, then authorizedSubjects and authorizedObjects
+    // are the same and we could probably optimize the query.
     const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
       userid,
       ['selfAccess', 'creator', 'host', 'member'],
