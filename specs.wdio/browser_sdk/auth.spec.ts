@@ -1075,10 +1075,71 @@ describe('authorization', () => {
     });
 
     it('does NOT allow any NON member of the group to use the attribute as subject when creating facts', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
 
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      await nemo.Fact.createAll([
+        [trident.id, 'isA', 'Weapon'],
+      ]);
+
+      await expectFactToNotExists([trident.id!, 'isA', 'Weapon']);
+
+      expect((await aquaman.Fact.findAll({
+        predicate: ['isA'],
+        object: ['Weapon'],
+      })).length).to.eql(0);
     });
 
-    it('does NOT allow any NON member of the group to use the attribute as object when creating facts');
+    it('does NOT allow any NON member of the group to use the attribute as object when creating facts', async () => {
+      const [aquaman, nemo] = await Session.getTwoSessions();
+      const nemoId = await aquaman!.getUserIdByEmail(nemo.email);
+
+      await nemo.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      await nemo.Fact.createAll([
+        ['Weapon', 'contains', trident.id],
+      ]);
+
+      await expectFactToNotExists(['Weapon', 'contains', trident.id!]);
+
+      expect((await aquaman.Fact.findAll({
+        subject: ['Weapon'],
+        predicate: ['contains'],
+      })).length).to.eql(0);
+
+      await aquaman.Fact.createAll([
+        [nemoId, '$isMemberOf', fishTeam.id],
+      ]);
+
+      await nemo.Fact.createAll([
+        ['Weapon', 'contains', trident.id],
+      ]);
+
+      await expectFactToExists(['Weapon', 'contains', trident.id!]);
+    });
+
     it('does NOT allow any NON member to modify the content of the attribute');
     it('does NOT allow any NON member to read the content of the attribute');
   });
