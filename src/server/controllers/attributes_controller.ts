@@ -81,7 +81,7 @@ export default {
     res.send(result);
   },
 
-  async update(req, res) { // TODO: auth
+  async update(req, res) {
     const parsedChange: SerializedChangeWithMetadata<any> = req.body;
     const committedChange: SerializedChangeWithMetadata<any> = await req.attribute.change(
       parsedChange,

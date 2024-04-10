@@ -5,7 +5,12 @@
 /* eslint-disable no-await-in-loop */
 import { expect } from 'chai';
 import Session from '../helpers/session';
-import { expectFactToExists, expectFactToNotExists, expectNotToBeAbleToReadAttribute } from '../helpers/lr_expects';
+import {
+  expectFactToExists,
+  expectFactToNotExists,
+  expectNotToBeAbleToReadAttribute,
+  expectNotToBeAbleToWriteAttribute,
+} from '../helpers/lr_expects';
 
 async function filterAutoCreatedFacts(facts) {
   const result: any[] = [];
@@ -1174,7 +1179,23 @@ describe('authorization', () => {
       await expectNotToBeAbleToReadAttribute(trident.id, nemo);
     });
 
-    it('does NOT allow any NON member to modify the content of the attribute');
+    it('does NOT allow any NON member to modify the content of the attribute', async () => {
+      const [aquaman, nemo] = await Session.getTwoSessions();
+
+      await nemo.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+        ['Weapon', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+      ]);
+
+      await expectNotToBeAbleToWriteAttribute(trident.id, nemo);
+    });
   });
 
   describe('when a user transfers the accountability of an attribute', () => {

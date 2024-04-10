@@ -16,6 +16,43 @@ export async function expectFactToNotExists(fact: [string, string, string]) {
   expect(results.rows.length).to.eq(0);
 }
 
+export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
+  const attributeWithAccess = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
+  const serverURL = await attributeWithAccess.getServerURL();
+  const clientId = await attributeWithAccess.getClientId();
+  const { actorId } = client;
+
+  const update = (lr, sURL, cId, actId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, {
+    credentials: 'include',
+    method: 'PATCH',
+    body: JSON.stringify({
+      clientId: cId,
+      actorId: actId,
+      facts: [],
+      body: { UPDATED: 'VALUE' },
+    }),
+  }).then((r) => r.status);
+
+  const authorizedContent = await client.do(
+    update,
+    serverURL,
+    clientId,
+    actorId,
+    attributeWithAccess.id,
+  );
+
+  const unauthorizedContent = await client.do(
+    update,
+    serverURL,
+    clientId,
+    actorId,
+    attributeId,
+  );
+
+  expect(authorizedContent).to.eql(200);
+  expect(unauthorizedContent).to.eql(401);
+}
+
 export async function expectNotToBeAbleToReadAttribute(attributeId, client) {
   const attributeWithAccess = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
   const serverURL = await attributeWithAccess.getServerURL();
