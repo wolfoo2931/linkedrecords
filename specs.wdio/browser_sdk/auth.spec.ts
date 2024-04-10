@@ -8,7 +8,7 @@ import Session from '../helpers/session';
 import {
   expectFactToExists,
   expectFactToNotExists,
-  expectNotToBeAbleToReadAttribute,
+  expectNotToBeAbleToReadOrWriteAttribute,
   expectNotToBeAbleToWriteAttribute,
 } from '../helpers/lr_expects';
 
@@ -966,8 +966,8 @@ describe('authorization', () => {
         ['$isMemberOf', fishTeam.id],
       ]);
 
-      await expectNotToBeAbleToReadAttribute(trident.id, nemo);
-      await expectNotToBeAbleToReadAttribute(trident.id, manni);
+      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
+      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, manni);
 
       expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
@@ -982,9 +982,9 @@ describe('authorization', () => {
 
       await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
 
-      await expectNotToBeAbleToReadAttribute(trident.id, manni);
-      await expectNotToBeAbleToReadAttribute(atlantis.id, aquaman);
-      await expectNotToBeAbleToReadAttribute(atlantis.id, manni);
+      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, manni);
+      await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, aquaman);
+      await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, manni);
 
       expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(true);
@@ -1009,7 +1009,7 @@ describe('authorization', () => {
 
       await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
 
-      await expectNotToBeAbleToReadAttribute(atlantis.id, manni);
+      await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, manni);
 
       expect(await canReadTheAttribute(aquaman, atlantis.id)).to.eql(true);
       expect(await canReadTheAttribute(nemo, atlantis.id)).to.eql(true);
@@ -1042,8 +1042,8 @@ describe('authorization', () => {
         ['$isMemberOf', fishTeam.id],
       ]);
 
-      await expectNotToBeAbleToReadAttribute(trident.id, nemo);
-      await expectNotToBeAbleToReadAttribute(trident.id, manni);
+      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
+      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, manni);
 
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
       expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
@@ -1076,8 +1076,8 @@ describe('authorization', () => {
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      await expectNotToBeAbleToReadAttribute(fishTeam.id, nemo);
-      await expectNotToBeAbleToReadAttribute(fishTeam.id, manni);
+      await expectNotToBeAbleToReadOrWriteAttribute(fishTeam.id, nemo);
+      await expectNotToBeAbleToReadOrWriteAttribute(fishTeam.id, manni);
 
       expect(await canReadTheAttribute(nemo, fishTeam.id)).to.eql(false);
       expect(await canReadTheAttribute(manni, fishTeam.id)).to.eql(false);
@@ -1176,7 +1176,7 @@ describe('authorization', () => {
         ['$isMemberOf', fishTeam.id],
       ]);
 
-      await expectNotToBeAbleToReadAttribute(trident.id, nemo);
+      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
     });
 
     it('does NOT allow any NON member to modify the content of the attribute', async () => {

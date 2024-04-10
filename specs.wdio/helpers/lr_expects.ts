@@ -53,7 +53,7 @@ export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
   expect(unauthorizedContent).to.eql(401);
 }
 
-export async function expectNotToBeAbleToReadAttribute(attributeId, client) {
+export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, client) {
   const attributeWithAccess = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
   const serverURL = await attributeWithAccess.getServerURL();
   const clientId = await attributeWithAccess.getClientId();
@@ -88,4 +88,6 @@ export async function expectNotToBeAbleToReadAttribute(attributeId, client) {
 
   expect(authorizedContent).to.match(/anAttributeWithAccess/);
   expect(unauthorizedContent).to.match(/Unauthorized/);
+
+  await expectNotToBeAbleToWriteAttribute(attributeId, client);
 }
