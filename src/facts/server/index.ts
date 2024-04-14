@@ -205,7 +205,7 @@ export default class Fact {
 
     const authorizedObjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'term', 'creator', 'host', 'member'],
+      ['selfAccess', 'term', 'creator', 'host', 'member'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
     );
 
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
@@ -503,7 +503,7 @@ export default class Fact {
     ]);
   }
 
-  async isAuthorizedToDelete(userid) {
+  async isAuthorizedToDelete(userid: string) {
     if (this.predicate === '$isATermFor') {
       const pool = new PgPoolWithLog(this.logger);
 
@@ -513,6 +513,10 @@ export default class Fact {
       );
     }
 
+    if (this.predicate === '$isAccountableFor' && userid === this.subject) {
+      return false;
+    }
+
     if (!(await this.isAuthorizedToSave(userid))) {
       return false;
     }
@@ -520,7 +524,7 @@ export default class Fact {
     return true;
   }
 
-  async isAuthorizedToSave(userid) {
+  async isAuthorizedToSave(userid: string) {
     if (!userid || !userid.trim()) {
       return false;
     }
@@ -576,17 +580,15 @@ export default class Fact {
   private async isValidAccountabilityTransfer(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
-    const existingFacts = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+    if (!await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
       userid,
       this.predicate,
-      this.subject,
-    ]);
-
-    if (existingFacts.rows.length !== 1) {
+      this.object,
+    ])) {
       return false;
     }
 
-    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess'], this.subject));
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member'], this.subject));
     const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;

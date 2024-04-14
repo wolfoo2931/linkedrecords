@@ -33,16 +33,26 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
+      // TODO: we can cache this and include the list
+      // of groups in the sub query instead of the select??
+      const allGroupsOfTheUser = `SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')})`;
+
       groupSubSelect.push(
         `SELECT subject
           FROM facts
           WHERE facts.predicate='$isMemberOf'
-          AND facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
+          AND facts.object in (${allGroupsOfTheUser})`,
       );
       groupSubSelect.push(
         `SELECT object
           FROM facts
-          WHERE facts.object in (SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')}))`,
+          WHERE facts.predicate='$isAccountableFor'
+          AND facts.subject in (${allGroupsOfTheUser})`,
+      );
+      groupSubSelect.push(
+        `SELECT object
+          FROM facts
+          WHERE facts.object in (${allGroupsOfTheUser})`,
       );
     }
 
