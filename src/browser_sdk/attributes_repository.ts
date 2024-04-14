@@ -62,7 +62,7 @@ export default class AttributesRepository {
 
   async createKeyValue(
     value?: object,
-    facts?: [ string?, string? ][],
+    facts?: [ string?, string?, string?][],
   ): Promise<KeyValueAttribute> {
     const attr = await this.create('keyValue', value || {}, facts);
     return attr as KeyValueAttribute;
@@ -84,7 +84,7 @@ export default class AttributesRepository {
     return attr as BlobAttribute;
   }
 
-  async create(attributeType: string, value: any, facts?: [ string?, string? ][])
+  async create(attributeType: string, value: any, facts?: [ string?, string?, string? ][])
     :Promise<AbstractAttributeClient<any, IsSerializable>> {
     const AttributeClass = AttributesRepository
       .attributeTypes

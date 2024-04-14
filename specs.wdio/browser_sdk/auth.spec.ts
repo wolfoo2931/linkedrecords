@@ -1480,9 +1480,37 @@ describe('authorization', () => {
       })).length).to.eql(0);
     });
 
+    it('allows to specify accountably directly when creating the attribute', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+      await nemo.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+        ['Trident', '$isATermFor', '...'],
+      ]);
+
+      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [
+        ['isA', 'Team'],
+        [nemoId, '$isMemberOf', '$it'],
+      ]);
+
+      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        ['isA', 'Trident'],
+        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$isAccountableFor', '$it'],
+      ]);
+
+      await expectFactToExists([nemoId, '$isMemberOf', fishTeam.id!]);
+      await expectFactToExists([fishTeam.id!, '$isAccountableFor', trident.id!]);
+
+      expect((await getTridents(aquaman)).length).to.eql(1);
+      expect((await getTridents(nemo)).length).to.eql(1);
+      expect((await getTridents(manni)).length).to.eql(0);
+    });
+
     it('does not allow the user to transfer the accountability to a term');
 
-    it('allows to specify accountably directly when creating the attribute');
     it('does not allow to create accountability facts where object = subject');
 
     describe('a member has been removed from a team', () => {
