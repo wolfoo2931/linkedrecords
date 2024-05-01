@@ -1673,9 +1673,143 @@ describe('authorization', () => {
     // using $isMemberOF and the subject is an user id, then the user needs to be host of the object
   });
 
-  // TODO: make sure:
-  // when a user '$isMemberOf' of a group he can NOT insert (userid, $isMemberOf, group) but he can insert (attr.id, $isMemberOf, group)
-  // Only a host can do this
+  it('allows a member of a group to assign attributes to the group', async () => {
+    const [aquaman, nemo] = await Session.getTwoSessions();
+    const randomUser = [aquaman, nemo][Math.floor(Math.random() * 2)];
+    const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+    await randomUser!.Fact.createAll([
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const group = await aquaman.Attribute.createKeyValue({}, [
+      [nemoId, '$isMemberOf', '$it'],
+    ]);
+
+    await aquaman.Attribute.createKeyValue({}, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', group.id!],
+    ]);
+
+    const nemosTridents = await getTridents(nemo);
+
+    expect(nemosTridents.length).to.eq(1);
+  });
+
+  it('does not allow a member of a group to assign users to the group', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+    const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+    const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+    const manniId = await randomUser!.getUserIdByEmail(manni.email);
+
+    await randomUser!.Fact.createAll([
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const group = await aquaman.Attribute.createKeyValue({}, [
+      [nemoId, '$isMemberOf', '$it'],
+    ]);
+
+    await aquaman.Attribute.createKeyValue({}, [
+      ['isA', 'Trident'],
+      ['$isMemberOf', group.id!],
+    ]);
+
+    await nemo.Fact.createAll([
+      [manniId, '$isMemberOf', group.id],
+    ]);
+
+    const nemosTridents = await getTridents(nemo);
+    const manniesTridents = await getTridents(manni);
+
+    expect(nemosTridents.length).to.eq(1);
+    expect(manniesTridents.length).to.eq(0);
+
+    await expectFactToNotExists([manniId, '$isMemberOf', group.id!]);
+  });
+
+  it('makes sure the user has access to the attribute if the user assigns it to a group', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+    const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+    const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+    const manniId = await randomUser!.getUserIdByEmail(manni.email);
+
+    await randomUser!.Fact.createAll([
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const group = await aquaman.Attribute.createKeyValue({}, [
+      [nemoId, '$isMemberOf', '$it'],
+      [manniId, '$isMemberOf', '$it'],
+    ]);
+
+    const trident = await aquaman.Attribute.createKeyValue({}, [
+      ['isA', 'Trident'],
+    ]);
+
+    await nemo.Fact.createAll([
+      [trident.id, '$isMemberOf', group.id],
+    ]);
+
+    const nemosTridents = await getTridents(nemo);
+    const manniesTridents = await getTridents(manni);
+    const aquamansTridents = await getTridents(aquaman);
+
+    expect(aquamansTridents.length).to.eq(1);
+    expect(nemosTridents.length).to.eq(0);
+    expect(manniesTridents.length).to.eq(0);
+
+    await expectFactToNotExists([trident.id!, '$isMemberOf', group.id!]);
+  });
+
+  it('does not allow a member of a group to assign a random string to the group', async () => {
+    const [aquaman, nemo, manni] = await Session.getThreeSessions();
+    const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+
+    await randomUser!.Fact.createAll([
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const group = await aquaman.Attribute.createKeyValue({});
+
+    await nemo.Fact.createAll([
+      ['randomstring', '$isMemberOf', group.id],
+    ]);
+
+    await expectFactToNotExists(['randomstring', '$isMemberOf', group.id!]);
+  });
+
+  it('does not allow to assign a term to a group when the user is not accountable for the term', async () => {
+    const [aquaman, nemo] = await Session.getTwoSessions();
+
+    await nemo.Fact.createAll([
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const group = await aquaman.Attribute.createKeyValue({});
+
+    await aquaman.Fact.createAll([
+      ['Trident', '$isMemberOf', group.id],
+    ]);
+
+    await expectFactToNotExists(['Trident', '$isMemberOf', group.id!]);
+  });
+
+  it('does not allow to assign a term to a group when the user is accountable for the term', async () => {
+    const aquaman = await Session.getOneSession();
+
+    await aquaman.Fact.createAll([
+      ['Trident', '$isATermFor', '...'],
+    ]);
+
+    const group = await aquaman.Attribute.createKeyValue({});
+
+    await aquaman.Fact.createAll([
+      ['Trident', '$isMemberOf', group.id],
+    ]);
+
+    await expectFactToNotExists(['Trident', '$isMemberOf', group.id!]);
+  });
 
   it('is not possible to use an existing attribute as subject in a term definition statement', async () => {
     const aquaman = await Session.getOneSession();

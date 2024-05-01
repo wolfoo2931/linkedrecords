@@ -453,6 +453,7 @@ export default class Fact {
       }
     } else if (this.predicate === '$isAccountableFor') {
       const dbRows = await pool.query('SELECT subject, predicate, object FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]);
+
       if (dbRows.rows.length) {
         for (let index = 0; index < dbRows.rows.length; index++) {
           const r = dbRows.rows[index];
@@ -547,6 +548,12 @@ export default class Fact {
     }
 
     const pool = new PgPoolWithLog(this.logger);
+
+    if (this.predicate === '$isMemberOf') {
+      if (await pool.findAny('SELECT * FROM facts WHERE predicate=$1 AND subject=$2', ['$isATermFor', this.subject])) {
+        return false;
+      }
+    }
 
     const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
     const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'selfAccess'], this.object));
