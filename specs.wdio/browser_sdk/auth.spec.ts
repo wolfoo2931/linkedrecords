@@ -335,7 +335,7 @@ describe('authorization', () => {
     expect(subscriptionResultError).to.eql('unauthorized');
   });
 
-  it('is allowed to create facts which refer to the authenticated users', async () => {
+  it('is not allowed to create facts which refer to the authenticated users', async () => {
     const [client, otherClient] = await Session.getTwoSessions();
 
     await client.Attribute.create('keyValue', { name: 'some data' }, [
@@ -354,7 +354,7 @@ describe('authorization', () => {
       ],
     });
 
-    expect(myRecords.length).to.eq(1);
+    expect(myRecords.length).to.eq(0);
     expect(somebodyElsesRecords.length).to.eq(0);
   });
 
@@ -1557,9 +1557,6 @@ describe('authorization', () => {
     it('is not possible to find out which groups a user is member in');
   });
 
-  it('allows to create facts about the authenticated users');
-  it('allows to create facts refer to the authenticated users');
-
   describe('when used with transitive teams', async () => {
     describe('when team A is accountable for team B and team B is accountable for attributes', async () => {
       it('does not inherit the memberships (member of team A cannot access the attributes) (accountable fact created AFTER attribute creation)', async () => {
@@ -1823,7 +1820,59 @@ describe('authorization', () => {
     await expectFactToNotExists([attr1.id!, '$isATermFor', '...']);
   });
 
-  // describe('when a user guessed an attribute id and tries to access it');
+  describe('when a user guessed an attribute id and tries to access it', () => {
+    it('is not possible for the user to access it', async () => {
+      const [aquaman, nemo] = await Session.getTwoSessions();
+      const attr = await aquaman.Attribute.createKeyValue({});
 
-  // user ids can only be used with $isMemberOf, $isAccountable facts, and also as subject
+      await expectNotToBeAbleToReadOrWriteAttribute(attr.id, nemo);
+    });
+  });
+
+  it('does not allow to use userIDs in fact statements (except as subject of $isMemberOf, $isHostOf, $isAccountableFor)', async () => {
+    let fact: [string, string, string];
+    const [aquaman, nemo] = await Session.getTwoSessions();
+    const aquamanId = await aquaman.getUserIdByEmail(aquaman.email);
+    const nemoId = await aquaman.getUserIdByEmail(nemo.email);
+
+    const relations = ['$isMemberOf', '$isHostOf', '$isAccountableFor'];
+
+    for (let index = 0; index < relations.length; index += 1) {
+      const rel = relations[index];
+      const attr = await aquaman.Attribute.createKeyValue({});
+
+      fact = [nemoId, rel!, nemoId];
+      await aquaman.Fact.createAll([fact]);
+      await expectFactToNotExists(fact);
+
+      fact = [aquamanId, rel!, nemoId];
+      await aquaman.Fact.createAll([fact]);
+      await expectFactToNotExists(fact);
+
+      fact = [nemoId, rel!, aquamanId];
+      await aquaman.Fact.createAll([fact]);
+      await expectFactToNotExists(fact);
+
+      fact = [attr.id!, rel!, aquamanId];
+      await aquaman.Fact.createAll([fact]);
+      await expectFactToNotExists(fact);
+    }
+
+    const attr = await aquaman.Attribute.createKeyValue({});
+    fact = [nemoId, 'foo', attr.id!];
+    await aquaman.Fact.createAll([fact]);
+    await expectFactToNotExists(fact);
+
+    fact = [attr.id!, 'foo', nemoId];
+    await aquaman.Fact.createAll([fact]);
+    await expectFactToNotExists(fact);
+
+    fact = [nemoId, 'foo', attr.id!];
+    await nemo.Fact.createAll([fact]);
+    await expectFactToNotExists(fact);
+
+    fact = [attr.id!, 'foo', nemoId];
+    await nemo.Fact.createAll([fact]);
+    await expectFactToNotExists(fact);
+  });
 });

@@ -530,6 +530,14 @@ export default class Fact {
       return false;
     }
 
+    if (this.object.startsWith('us-')) {
+      return false;
+    }
+
+    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isMemberOf', '$isHostOf'].includes(this.predicate)) {
+      return false;
+    }
+
     if (this.predicate.startsWith('$') && !Fact.reservedPredicates.includes(this.predicate)) {
       return false;
     }
