@@ -13,7 +13,9 @@ export async function expectFactToExists(fact: [string, string, string]) {
 
 export async function expectFactToNotExists(fact: [string, string, string]) {
   const results = await pgPool.query('SELECT * FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', fact);
-
+  if (results.rows.length !== 0) {
+    console.error('expectFactToNotExists but it does:', fact);
+  }
   expect(results.rows.length).to.eq(0);
 }
 
@@ -94,28 +96,57 @@ export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, clien
 }
 
 export async function expectNotToBeAbleToUseAsSubject(attributeId, client) {
-  const attributeWithAccessA = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
-  const attributeWithAccessB = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
-
-  const relations = ['belongsTo', '$isMemberOf'];
+  const relations = ['belongsTo', '$isMemberOf', '$isHostOf', '$isAccountableFor', '$isATermFor'];
 
   for (let index = 0; index < relations.length; index += 1) {
+    const attributeWithAccessA = await client.Attribute.createKeyValue({});
+    const attributeWithAccessB = await client.Attribute.createKeyValue({});
     const relation = relations[index];
 
     if (!relation) {
       throw new Error('relations[index] should not be undefined.');
     }
 
-    await client.Fact.createAll([
-      [attributeWithAccessA.id, relation, attributeWithAccessB.id],
-    ]);
+    if (relation !== '$isATermFor') {
+      await client.Fact.createAll([
+        [attributeWithAccessA.id, relation, attributeWithAccessB.id],
+      ]);
 
-    await expectFactToExists([attributeWithAccessA.id, relation, attributeWithAccessB.id]);
+      await expectFactToExists([attributeWithAccessA.id, relation, attributeWithAccessB.id]);
+    }
 
     await client.Fact.createAll([
       [attributeId, relation, attributeWithAccessB.id],
     ]);
 
     await expectFactToNotExists([attributeId, relation, attributeWithAccessB.id]);
+  }
+}
+
+export async function expectNotToBeAbleToUseAsObject(attributeId, client) {
+  const relations = ['belongsTo', '$isMemberOf', '$isHostOf', '$isAccountableFor', '$isATermFor'];
+
+  for (let index = 0; index < relations.length; index += 1) {
+    const attributeWithAccessA = await client.Attribute.createKeyValue({});
+    const attributeWithAccessB = await client.Attribute.createKeyValue({});
+    const relation = relations[index];
+
+    if (!relation) {
+      throw new Error('relations[index] should not be undefined.');
+    }
+
+    if (relation !== '$isATermFor') {
+      await client.Fact.createAll([
+        [attributeWithAccessB.id, relation, attributeWithAccessA.id],
+      ]);
+
+      await expectFactToExists([attributeWithAccessB.id, relation, attributeWithAccessA.id]);
+    }
+
+    await client.Fact.createAll([
+      [attributeWithAccessB.id, relation, attributeId],
+    ]);
+
+    await expectFactToNotExists([attributeWithAccessB.id, relation, attributeId]);
   }
 }

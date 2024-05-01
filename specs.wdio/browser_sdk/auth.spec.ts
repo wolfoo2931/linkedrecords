@@ -11,6 +11,7 @@ import {
   expectNotToBeAbleToReadOrWriteAttribute,
   expectNotToBeAbleToWriteAttribute,
   expectNotToBeAbleToUseAsSubject,
+  expectNotToBeAbleToUseAsObject,
 } from '../helpers/lr_expects';
 
 async function filterAutoCreatedFacts(facts) {
@@ -1634,7 +1635,7 @@ describe('authorization', () => {
 
         const tridentOfB = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
-          [aquamanId, '$isMemberOf', '$it'], // to not loose access when giving up accountably
+          [aquamanId, '$isMemberOf', '$it'], // to not loose access when giving up accountability
           [teamB.id, '$isAccountableFor', '$it'],
         ]);
 
@@ -1660,14 +1661,15 @@ describe('authorization', () => {
 
         await expectNotToBeAbleToReadOrWriteAttribute(attr3.id, nemo);
         await expectNotToBeAbleToUseAsSubject(attr3.id, nemo);
+        await expectNotToBeAbleToUseAsObject(attr3.id, nemo);
       });
     });
 
-    // a user can read an attribute but can not use it as object
+    // a user can read an attribute but can not use it as object (or subject)
     // because only admin users can refer to the attribute 'published'
     // still it should be possible for other users to read this attribute.
 
-    // using $isMemberOF and the subject is an attribute id, then having referer permissons for the object is not engouth, it needs to be member permissions
+    // using $isMemberOF and the subject is an attribute id, then having referer permissions for the object is not engouth, it needs to be member permissions
     // using $isMemberOF and the subject is an user id, then the user needs to be host of the object
   });
 
@@ -1675,6 +1677,19 @@ describe('authorization', () => {
   // when a user '$isMemberOf' of a group he can NOT insert (userid, $isMemberOf, group) but he can insert (attr.id, $isMemberOf, group)
   // Only a host can do this
 
-  it('is not possible to use an existing attribute as subject in a term definition statement');
+  it('is not possible to use an existing attribute as subject in a term definition statement', async () => {
+    const aquaman = await Session.getOneSession();
+
+    const attr1 = await aquaman.Attribute.createKeyValue({});
+
+    await aquaman.Fact.createAll([
+      [attr1.id, '$isATermFor', '...'],
+    ]);
+
+    await expectFactToNotExists([attr1.id!, '$isATermFor', '...']);
+  });
+
   // describe('when a user guessed an attribute id and tries to access it');
+
+  // user ids can only be used with $isMemberOf, $isAccountable facts, and also as subject
 });

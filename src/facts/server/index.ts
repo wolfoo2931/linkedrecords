@@ -436,7 +436,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isATermFor') {
-      const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
+      const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 OR object=$1 OR subject=$2', [this.subject, this.object]);
 
       if (!dbRows.rows.length) {
         if (!userid) {
