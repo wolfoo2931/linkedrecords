@@ -872,7 +872,7 @@ describe('authorization', () => {
       expect((await getTridents(manni, 'Weapon')).length).to.eql(0);
     });
 
-    it('allows any member of the group to use the attribute as subject', async () => {
+    it('allows any member of the group to use attributes assigned to the group as subject', async () => {
       const [aquaman, nemo, manni] = await Session.getThreeSessions();
       const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
@@ -904,7 +904,7 @@ describe('authorization', () => {
       expect((await getTridents(manni, 'Weapon')).length).to.eql(0);
     });
 
-    it('allows any member of the group to use the attribute as object when creating facts', async () => {
+    it('allows any member of the group to use the attributes assigned to the group as object when creating facts', async () => {
       const [aquaman, nemo, manni] = await Session.getThreeSessions();
       const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
@@ -1101,7 +1101,7 @@ describe('authorization', () => {
       expect(await teamByManni?.getValue()).to.eql({ name: 'fish & wales' });
     });
 
-    it('does NOT allow any NON member of the group to use the attribute as subject when creating facts', async () => {
+    it('does NOT allow any NON member of the group to use the attribute assigned to the group as subject when creating facts', async () => {
       const [aquaman, nemo, manni] = await Session.getThreeSessions();
       const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
 
