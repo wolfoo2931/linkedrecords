@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop */
 import pg from 'pg';
 import { expect } from 'chai';
 
@@ -90,4 +91,31 @@ export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, clien
   expect(unauthorizedContent).to.match(/Unauthorized/);
 
   await expectNotToBeAbleToWriteAttribute(attributeId, client);
+}
+
+export async function expectNotToBeAbleToUseAsSubject(attributeId, client) {
+  const attributeWithAccessA = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
+  const attributeWithAccessB = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
+
+  const relations = ['belongsTo', '$isMemberOf'];
+
+  for (let index = 0; index < relations.length; index += 1) {
+    const relation = relations[index];
+
+    if (!relation) {
+      throw new Error('relations[index] should not be undefined.');
+    }
+
+    await client.Fact.createAll([
+      [attributeWithAccessA.id, relation, attributeWithAccessB.id],
+    ]);
+
+    await expectFactToExists([attributeWithAccessA.id, relation, attributeWithAccessB.id]);
+
+    await client.Fact.createAll([
+      [attributeId, relation, attributeWithAccessB.id],
+    ]);
+
+    await expectFactToNotExists([attributeId, relation, attributeWithAccessB.id]);
+  }
 }

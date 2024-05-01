@@ -10,6 +10,7 @@ import {
   expectFactToNotExists,
   expectNotToBeAbleToReadOrWriteAttribute,
   expectNotToBeAbleToWriteAttribute,
+  expectNotToBeAbleToUseAsSubject,
 } from '../helpers/lr_expects';
 
 async function filterAutoCreatedFacts(facts) {
@@ -1558,7 +1559,122 @@ describe('authorization', () => {
   it('allows to create facts about the authenticated users');
   it('allows to create facts refer to the authenticated users');
 
-  // describe('when used with transitive teams');
+  describe('when used with transitive teams', async () => {
+    describe('when team A is accountable for team B and team B is accountable for attributes', async () => {
+      it('does not inherit the memberships (member of team A cannot access the attributes) (accountable fact created AFTER attribute creation)', async () => {
+        const [aquaman, nemo, manni] = await Session.getThreeSessions();
+        const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+        const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+        const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
+        await aquaman.Fact.createAll([
+          ['Team', '$isATermFor', '...'],
+          ['Trident', '$isATermFor', '...'],
+        ]);
+
+        const teamA = await aquaman.Attribute.createKeyValue({ name: 'teamA' }, [
+          ['isA', 'Team'],
+          [nemoId, '$isMemberOf', '$it'],
+        ]);
+
+        const teamB = await aquaman.Attribute.createKeyValue({ name: 'teamB' }, [
+          ['isA', 'Team'],
+          [teamA.id, '$isAccountableFor', '$it'],
+        ]);
+
+        const tridentOfA = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+          ['isA', 'Trident'],
+          [teamA.id, '$isAccountableFor', '$it'],
+        ]);
+
+        const tridentOfB = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+          ['isA', 'Trident'],
+        ]);
+
+        await aquaman.Fact.createAll([
+          [teamB.id, '$isAccountableFor', tridentOfB.id],
+        ]);
+
+        await expectNotToBeAbleToReadOrWriteAttribute(tridentOfB.id, nemo);
+        expect(await canReadTheAttribute(nemo, tridentOfA.id)).to.eql(true);
+        expect(await canReadTheAttribute(nemo, tridentOfB.id)).to.eql(false);
+
+        await expectNotToBeAbleToReadOrWriteAttribute(tridentOfB.id, aquaman);
+        await aquaman.Fact.createAll([
+          [aquamanId, '$isMemberOf', teamB.id],
+        ]);
+        expect(await canReadTheAttribute(aquaman, tridentOfB.id)).to.eql(true);
+      });
+
+      it('does not inherit the memberships (member of team A cannot access the attributes) (accountable fact created WITH attribute creation)', async () => {
+        const [aquaman, nemo, manni] = await Session.getThreeSessions();
+        const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+        const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+        const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
+
+        await aquaman.Fact.createAll([
+          ['Team', '$isATermFor', '...'],
+          ['Trident', '$isATermFor', '...'],
+        ]);
+
+        const teamA = await aquaman.Attribute.createKeyValue({ name: 'teamA' }, [
+          ['isA', 'Team'],
+          [nemoId, '$isMemberOf', '$it'],
+        ]);
+
+        const teamB = await aquaman.Attribute.createKeyValue({ name: 'teamB' }, [
+          ['isA', 'Team'],
+          [teamA.id, '$isAccountableFor', '$it'],
+        ]);
+
+        const tridentOfA = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+          ['isA', 'Trident'],
+          [teamA.id, '$isAccountableFor', '$it'],
+        ]);
+
+        const tridentOfB = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+          ['isA', 'Trident'],
+          [aquamanId, '$isMemberOf', '$it'], // to not loose access when giving up accountably
+          [teamB.id, '$isAccountableFor', '$it'],
+        ]);
+
+        await expectNotToBeAbleToReadOrWriteAttribute(tridentOfB.id, nemo);
+        expect(await canReadTheAttribute(nemo, tridentOfA.id)).to.eql(true);
+        expect(await canReadTheAttribute(nemo, tridentOfB.id)).to.eql(false);
+      });
+
+      it('does not allow $isMemberOf chain to inherit access', async () => {
+        const [aquaman, nemo] = await Session.getTwoSessions();
+        const randomUser = [aquaman, nemo][Math.floor(Math.random() * 2)];
+        const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+        const attr1 = await aquaman.Attribute.createKeyValue({});
+        const attr2 = await aquaman.Attribute.createKeyValue({});
+        const attr3 = await aquaman.Attribute.createKeyValue({});
+
+        await aquaman.Fact.createAll([
+          [nemoId, '$isMemberOf', attr1.id],
+          [attr2.id, '$isMemberOf', attr1.id],
+          [attr1.id, '$isMemberOf', attr3.id],
+        ]);
+
+        await expectNotToBeAbleToReadOrWriteAttribute(attr3.id, nemo);
+        await expectNotToBeAbleToUseAsSubject(attr3.id, nemo);
+      });
+    });
+
+    // a user can read an attribute but can not use it as object
+    // because only admin users can refer to the attribute 'published'
+    // still it should be possible for other users to read this attribute.
+
+    // using $isMemberOF and the subject is an attribute id, then having referer permissons for the object is not engouth, it needs to be member permissions
+    // using $isMemberOF and the subject is an user id, then the user needs to be host of the object
+  });
+
+  // TODO: make sure:
+  // when a user '$isMemberOf' of a group he can NOT insert (userid, $isMemberOf, group) but he can insert (attr.id, $isMemberOf, group)
+  // Only a host can do this
+
+  it('is not possible to use an existing attribute as subject in a term definition statement');
   // describe('when a user guessed an attribute id and tries to access it');
 });
