@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-node specs.wdio/testapp/testserver.js --enable-source-maps | bin/plogs.js
+node --enable-source-maps specs.wdio/testapp/testserver.js | bin/plogs.js
