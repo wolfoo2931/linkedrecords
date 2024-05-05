@@ -29,7 +29,7 @@ describe('Attribute', () => {
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
-        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -92,7 +92,7 @@ describe('Attribute', () => {
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
-        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -606,7 +606,7 @@ describe('Attribute', () => {
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
-        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources (e.g. Zotero)'],
+        ['referenceSourceStore', '$isATermFor', 'A source of external reference sources'],
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
