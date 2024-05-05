@@ -335,7 +335,7 @@ describe('authorization', () => {
     expect(subscriptionResultError).to.eql('unauthorized');
   });
 
-  it('is not allowed to create facts which refer to the authenticated users', async () => {
+  it('is allowed to create facts which refer to the authenticated users', async () => {
     const [client, otherClient] = await Session.getTwoSessions();
 
     await client.Attribute.create('keyValue', { name: 'some data' }, [
@@ -354,7 +354,7 @@ describe('authorization', () => {
       ],
     });
 
-    expect(myRecords.length).to.eq(0);
+    expect(myRecords.length).to.eq(1);
     expect(somebodyElsesRecords.length).to.eq(0);
   });
 
@@ -1877,7 +1877,6 @@ describe('authorization', () => {
 
     for (let index = 0; index < relations.length; index += 1) {
       const rel = relations[index];
-      const attr = await aquaman.Attribute.createKeyValue({});
 
       fact = [nemoId, rel!, nemoId];
       await aquaman.Fact.createAll([fact]);
@@ -1888,10 +1887,6 @@ describe('authorization', () => {
       await expectFactToNotExists(fact);
 
       fact = [nemoId, rel!, aquamanId];
-      await aquaman.Fact.createAll([fact]);
-      await expectFactToNotExists(fact);
-
-      fact = [attr.id!, rel!, aquamanId];
       await aquaman.Fact.createAll([fact]);
       await expectFactToNotExists(fact);
     }
@@ -1906,10 +1901,6 @@ describe('authorization', () => {
     await expectFactToNotExists(fact);
 
     fact = [nemoId, 'foo', attr.id!];
-    await nemo.Fact.createAll([fact]);
-    await expectFactToNotExists(fact);
-
-    fact = [attr.id!, 'foo', nemoId];
     await nemo.Fact.createAll([fact]);
     await expectFactToNotExists(fact);
   });

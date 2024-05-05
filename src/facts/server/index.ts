@@ -495,7 +495,7 @@ export default class Fact {
       return false;
     }
 
-    if (this.object.startsWith('us-')) {
+    if (this.object.startsWith('us-') && userid !== this.object) {
       return false;
     }
 
