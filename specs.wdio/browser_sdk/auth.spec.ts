@@ -557,6 +557,7 @@ describe('authorization', () => {
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const fishTeam2 = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
     const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
@@ -661,7 +662,7 @@ describe('authorization', () => {
 
     // ... Instead he has to transfer it to another group he is is member in.
     await aquaman.Fact.createAll([[fishTeam.id!, '$isAccountableFor', trident.id!]]);
-    await aquaman.Fact.createAll([[fishTeam.id!, '$isAccountableFor', fishTeam.id!]]);
+    await aquaman.Fact.createAll([[fishTeam2.id!, '$isAccountableFor', fishTeam.id!]]);
 
     const nemosTridentsQ12 = await getTridents(nemo);
     const mannisTridentsQ12 = await getTridents(manni);
@@ -1216,6 +1217,7 @@ describe('authorization', () => {
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam2 = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
@@ -1224,7 +1226,7 @@ describe('authorization', () => {
 
       await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id!]]);
       await aquaman.Fact.createAll([[fishTeam.id!, '$isAccountableFor', trident.id!]]);
-      await aquaman.Fact.createAll([[fishTeam.id!, '$isAccountableFor', fishTeam.id!]]);
+      await aquaman.Fact.createAll([[fishTeam2.id!, '$isAccountableFor', fishTeam.id!]]);
 
       expect((await getTridents(aquaman)).length).to.eql(0);
       expect((await getTridents(nemo)).length).to.eql(1);
@@ -1539,7 +1541,17 @@ describe('authorization', () => {
       await expectFactToNotExists(['xxxx', '$isAccountableFor', trident.id!]);
     });
 
-    it('does not allow to create accountability facts where object = subject');
+    it('does not allow to create accountability facts where object = subject', async () => {
+      const aquaman = await Session.getOneSession();
+
+      const trident = await aquaman.Attribute.createKeyValue({});
+
+      await aquaman.Fact.createAll([
+        [trident.id!, '$isAccountableFor', trident.id!],
+      ]);
+
+      await expectFactToNotExists([trident.id!, '$isAccountableFor', trident.id!]);
+    });
 
     describe('a member has been removed from a team', () => {
       it('does not allow the ex member to view/edit/delete the attribute he created and delegated accountability to this team', async () => {

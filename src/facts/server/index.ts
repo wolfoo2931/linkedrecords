@@ -530,6 +530,10 @@ export default class Fact {
   private async isValidAccountabilityTransfer(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
+    if (this.subject === this.object) {
+      return false;
+    }
+
     if (!await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
       userid,
       this.predicate,
