@@ -353,6 +353,8 @@ export default class Fact {
     this.predicate = predicate.trim();
     this.object = object.trim();
     this.logger = logger;
+
+    this.ensureValidSyntax();
   }
 
   toJSON() {
@@ -363,7 +365,35 @@ export default class Fact {
     };
   }
 
+  ensureValidSyntax() {
+    if (!this.hasValidSubject()
+      || !this.hasValidPredicate()
+      || !this.hasValidObject()) {
+      throw new Error(`Invalid Fact, it contains invalid charters: ${this.subject}, ${this.predicate}, ${this.object}`);
+    }
+  }
+
+  hasValidSubject() {
+    return typeof this.subject === 'string'
+      && this.subject.match(/^[a-zA-Z0-9-]+$/)
+      && this.subject.length <= 40;
+  }
+
+  hasValidPredicate() {
+    return typeof this.predicate === 'string'
+      && this.predicate.match(/^\$?[a-zA-Z0-9-]+\*?$/)
+      && this.predicate.length <= 40;
+  }
+
+  hasValidObject() {
+    return typeof this.object === 'string'
+      && this.object.match(/^[a-zA-Z0-9-\s]+$/)
+      && this.object.length <= 500;
+  }
+
   async save(userid: string) {
+    this.ensureValidSyntax();
+
     if (!(await this.isAuthorizedToSave(userid))) {
       throw new AuthorizationError(userid, 'fact', this, this.logger);
     }

@@ -363,7 +363,7 @@ describe('authorization', () => {
 
     await client.Fact.createAll([
       ['Author', '$isATermFor', 'somebody who writes a book'],
-      ['Book', '$isATermFor', '... you know what it is'],
+      ['Book', '$isATermFor', 'you know what it is'],
     ]);
 
     const termFacts = await client.Fact.findAll({
@@ -397,9 +397,9 @@ describe('authorization', () => {
     const [aquaman, nemo, manni] = await Session.getThreeSessions();
 
     await aquaman.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
-      ['Tree', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
+      ['Tree', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -466,8 +466,8 @@ describe('authorization', () => {
     const [aquaman, nemo, manni] = await Session.getThreeSessions();
 
     await aquaman.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -498,8 +498,8 @@ describe('authorization', () => {
     const [aquaman, nemo, manni] = await Session.getThreeSessions();
 
     await aquaman.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -523,8 +523,8 @@ describe('authorization', () => {
     const [aquaman, nemo, manni] = await Session.getThreeSessions();
 
     await aquaman.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -552,8 +552,8 @@ describe('authorization', () => {
     const [aquaman, nemo, manni] = await Session.getThreeSessions();
 
     await aquaman.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -681,8 +681,8 @@ describe('authorization', () => {
     const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
     await randomUser!.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -737,8 +737,8 @@ describe('authorization', () => {
     const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
     await randomUser!.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -791,8 +791,8 @@ describe('authorization', () => {
     const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
     await randomUser!.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -822,8 +822,8 @@ describe('authorization', () => {
   it('is not possible to use a custom predicate which starts with "$"', async () => {
     const aquaman = await Session.getOneSession();
     await aquaman.Fact.createAll([
-      ['Team', '$isATermFor', '...'],
-      ['Trident', '$isATermFor', '...'],
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
@@ -847,9 +847,9 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -879,9 +879,9 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -911,9 +911,9 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -961,9 +961,9 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1037,9 +1037,9 @@ describe('authorization', () => {
       const manniId = await randomUser!.getUserIdByEmail(manni.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1076,9 +1076,9 @@ describe('authorization', () => {
       const manniId = await randomUser!.getUserIdByEmail(manni.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1107,9 +1107,9 @@ describe('authorization', () => {
       const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1135,9 +1135,9 @@ describe('authorization', () => {
       const nemoId = await aquaman!.getUserIdByEmail(nemo.email);
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1172,9 +1172,9 @@ describe('authorization', () => {
       const [aquaman, nemo] = await Session.getTwoSessions();
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1190,9 +1190,9 @@ describe('authorization', () => {
       const [aquaman, nemo] = await Session.getTwoSessions();
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
-        ['Weapon', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
+        ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1212,8 +1212,8 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1239,8 +1239,8 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1266,8 +1266,8 @@ describe('authorization', () => {
       const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
       await randomUser!.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await nemo.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1293,8 +1293,8 @@ describe('authorization', () => {
       const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
       await aquaman.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1338,8 +1338,8 @@ describe('authorization', () => {
       const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1385,8 +1385,8 @@ describe('authorization', () => {
       const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const mannisTeam = await manni.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1436,8 +1436,8 @@ describe('authorization', () => {
       const [aquaman, nemo, manni] = await Session.getThreeSessions();
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1490,8 +1490,8 @@ describe('authorization', () => {
       const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
       await nemo.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
-        ['Trident', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [
@@ -1517,7 +1517,7 @@ describe('authorization', () => {
       const aquaman = await Session.getOneSession();
 
       await aquaman.Fact.createAll([
-        ['Team', '$isATermFor', '...'],
+        ['Team', '$isATermFor', 'a term for a concept'],
       ]);
 
       const trident = await aquaman.Attribute.createKeyValue({});
@@ -1559,8 +1559,8 @@ describe('authorization', () => {
         const nemoId = await aquaman.getUserIdByEmail(nemo.email);
 
         await nemo.Fact.createAll([
-          ['Team', '$isATermFor', '...'],
-          ['Trident', '$isATermFor', '...'],
+          ['Team', '$isATermFor', 'a term for a concept'],
+          ['Trident', '$isATermFor', 'a term for a concept'],
         ]);
 
         const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
@@ -1604,8 +1604,8 @@ describe('authorization', () => {
         const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
         await aquaman.Fact.createAll([
-          ['Team', '$isATermFor', '...'],
-          ['Trident', '$isATermFor', '...'],
+          ['Team', '$isATermFor', 'a term for a concept'],
+          ['Trident', '$isATermFor', 'a term for a concept'],
         ]);
 
         const teamA = await aquaman.Attribute.createKeyValue({ name: 'teamA' }, [
@@ -1649,8 +1649,8 @@ describe('authorization', () => {
         const aquamanId = await randomUser!.getUserIdByEmail(aquaman.email);
 
         await aquaman.Fact.createAll([
-          ['Team', '$isATermFor', '...'],
-          ['Trident', '$isATermFor', '...'],
+          ['Team', '$isATermFor', 'a term for a concept'],
+          ['Trident', '$isATermFor', 'a term for a concept'],
         ]);
 
         const teamA = await aquaman.Attribute.createKeyValue({ name: 'teamA' }, [
@@ -1714,7 +1714,7 @@ describe('authorization', () => {
     const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
     await randomUser!.Fact.createAll([
-      ['Trident', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const group = await aquaman.Attribute.createKeyValue({}, [
@@ -1738,7 +1738,7 @@ describe('authorization', () => {
     const manniId = await randomUser!.getUserIdByEmail(manni.email);
 
     await randomUser!.Fact.createAll([
-      ['Trident', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const group = await aquaman.Attribute.createKeyValue({}, [
@@ -1770,7 +1770,7 @@ describe('authorization', () => {
     const manniId = await randomUser!.getUserIdByEmail(manni.email);
 
     await randomUser!.Fact.createAll([
-      ['Trident', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const group = await aquaman.Attribute.createKeyValue({}, [
@@ -1802,7 +1802,7 @@ describe('authorization', () => {
     const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
 
     await randomUser!.Fact.createAll([
-      ['Trident', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const group = await aquaman.Attribute.createKeyValue({});
@@ -1818,7 +1818,7 @@ describe('authorization', () => {
     const [aquaman, nemo] = await Session.getTwoSessions();
 
     await nemo.Fact.createAll([
-      ['Trident', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const group = await aquaman.Attribute.createKeyValue({});
@@ -1834,7 +1834,7 @@ describe('authorization', () => {
     const aquaman = await Session.getOneSession();
 
     await aquaman.Fact.createAll([
-      ['Trident', '$isATermFor', '...'],
+      ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
     const group = await aquaman.Attribute.createKeyValue({});
@@ -1852,10 +1852,10 @@ describe('authorization', () => {
     const attr1 = await aquaman.Attribute.createKeyValue({});
 
     await aquaman.Fact.createAll([
-      [attr1.id, '$isATermFor', '...'],
+      [attr1.id, '$isATermFor', 'a term for a concept'],
     ]);
 
-    await expectFactToNotExists([attr1.id!, '$isATermFor', '...']);
+    await expectFactToNotExists([attr1.id!, '$isATermFor', 'a term for a concept']);
   });
 
   describe('when a user guessed an attribute id and tries to access it', () => {
