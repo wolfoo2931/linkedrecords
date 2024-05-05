@@ -1511,7 +1511,33 @@ describe('authorization', () => {
       expect((await getTridents(manni)).length).to.eql(0);
     });
 
-    it('does not allow the user to transfer the accountability to a term');
+    it('does not allow the user to transfer the accountability to a term', async () => {
+      const aquaman = await Session.getOneSession();
+
+      await aquaman.Fact.createAll([
+        ['Team', '$isATermFor', '...'],
+      ]);
+
+      const trident = await aquaman.Attribute.createKeyValue({});
+
+      await aquaman.Fact.createAll([
+        ['Team', '$isAccountableFor', trident.id!],
+      ]);
+
+      await expectFactToNotExists(['Team', '$isAccountableFor', trident.id!]);
+    });
+
+    it('does not allow the user to transfer the accountability to random string', async () => {
+      const aquaman = await Session.getOneSession();
+
+      const trident = await aquaman.Attribute.createKeyValue({});
+
+      await aquaman.Fact.createAll([
+        ['xxxx', '$isAccountableFor', trident.id!],
+      ]);
+
+      await expectFactToNotExists(['xxxx', '$isAccountableFor', trident.id!]);
+    });
 
     it('does not allow to create accountability facts where object = subject');
 

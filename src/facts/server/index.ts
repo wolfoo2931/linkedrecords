@@ -538,6 +538,12 @@ export default class Fact {
       return false;
     }
 
+    if (await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [
+      this.subject,
+    ])) {
+      return false;
+    }
+
     const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member'], this.subject));
     const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
