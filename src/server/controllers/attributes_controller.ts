@@ -50,7 +50,10 @@ export default {
     }
 
     await req.attribute.create(req.body.value);
-    const result = await req.attribute.get();
+    const result = {
+      ...await req.attribute.get(),
+      id: req.attribute.id,
+    };
 
     await Promise.all(facts.map((fact) => fact.save(req.hashedUserID)));
 
