@@ -1,10 +1,11 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable no-plusplus */
+import md5 from 'md5';
 import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
-import SQL from './authorization_sql_builder';
+import SQL, { rolePredicateMap } from './authorization_sql_builder';
 
 function andFactory() {
   let whereUsed = false;
@@ -89,6 +90,13 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
 }
 
 export default class Fact {
+  static reservedPredicates = [
+    '$isATermFor',
+    '$isAccountableFor',
+    '$isMemberOf',
+    '$isHostOf',
+  ];
+
   subject: string;
 
   predicate: string;
@@ -99,10 +107,12 @@ export default class Fact {
 
   static async initDB() {
     const pg = new PgPoolWithLog(console as unknown as IsLogger);
-    const createQuery = `CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
-    CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));`;
 
-    await pg.query(createQuery);
+    await pg.query(`
+      CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
+      CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));
+      CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
+    `);
 
     const rawFactTableColumns = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
     const factTableColumns = rawFactTableColumns.rows.map((c) => c.column_name);
@@ -114,34 +124,71 @@ export default class Fact {
         ALTER TABLE facts ADD COLUMN id SERIAL;
       `);
     }
+
+    // migrate all facts from the old (x, '$wasCreatedBy', u)
+    // to the new (u, '$isAccountableFor', x) format
+    await pg.query(`
+      INSERT INTO facts (subject, predicate, object, created_at)
+      SELECT object as subject,
+          '$isAccountableFor' as predicate,
+          subject as object,
+          created_at
+      FROM facts as fSrc
+      WHERE fSrc.predicate='$wasCreatedBy'
+      AND fSrc.object NOT IN (SELECT subject from facts as f where f.predicate ='$isAccountableFor');
+    `);
+  }
+
+  public static async getUserIdByEmail(
+    email: string,
+    logger:
+    IsLogger,
+  ): Promise<string | undefined> {
+    const pool = new PgPoolWithLog(logger);
+    const users = await pool.query('SELECT id FROM users WHERE hashed_email = $1', [md5(email)]);
+
+    if (users.rows.length === 1) {
+      return users.rows[0].id.trim();
+    }
+
+    return undefined;
+  }
+
+  public static async recordUserEmail(email: string, userid: string, logger: IsLogger) {
+    const pool = new PgPoolWithLog(logger);
+
+    if (!(await Fact.getUserIdByEmail(email, logger))) {
+      await pool.query('INSERT INTO users (id, hashed_email, username) VALUES ($1, $2, $3)', [userid, md5(email), email]);
+    }
   }
 
   public static async isAuthorizedToModifyPayload(
-    nodeId: string, // where nodeId is in most cases a attributeId
+    nodeId: string, // where nodeId is in most cases an attributeId
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
 
-    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+    return pool.findAny(SQL.getSQLToCheckAccess(
       userid,
-      ['creator'],
+      ['creator', 'host', 'member'], // TODO: add role attributeWriter
       nodeId,
     ));
   }
 
   public static async isAuthorizedToReadPayload(
-    nodeId: string, // where nodeId is in most cases a attributeId
+    nodeId: string, // where nodeId is in most cases an attributeId
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
-
-    return pool.findAny(SQL.selectSubjectsInAnyGroup(
+    const res = await pool.findAny(SQL.getSQLToCheckAccess(
       userid,
-      ['creator'],
+      ['creator', 'host', 'member'], // TODO: add role attributeReader
       nodeId,
     ));
+
+    return res;
   }
 
   private static authorizedWhereClause(userid: string, factTable: string = 'facts') {
@@ -149,14 +196,16 @@ export default class Fact {
       throw new Error(`userId is invalid: "${userid}"`);
     }
 
+    // TODO: we can also add term into this, then authorizedSubjects and authorizedObjects
+    // are the same and we could probably optimize the query.
     const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'creator'],
+      ['selfAccess', 'creator', 'host', 'member'],
     );
 
     const authorizedObjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'term', 'creator'],
+      ['selfAccess', 'term', 'creator', 'host', 'member'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
     );
 
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
@@ -165,7 +214,6 @@ export default class Fact {
   private static getSQLToResolvePossibleTransitiveQuery(
     query: SubjectQuery,
     sqlPrefix: string,
-    userid: string,
   ): string | string[] {
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
@@ -216,7 +264,6 @@ export default class Fact {
 
   private static getSQLToResolveToSubjectIdsWithModifiers(
     subjectQueries: SubjectQueries,
-    userid: string,
   ): string {
     const transitiveQueries: SubjectQuery[] = [];
     const sqlConditions: [string, string, string][] = [];
@@ -261,7 +308,6 @@ export default class Fact {
       .map((subjectQuery) => Fact.getSQLToResolvePossibleTransitiveQuery(
         subjectQuery,
         sqlPrefix,
-        userid,
       ))
       .join(' INTERSECT ');
   }
@@ -281,7 +327,7 @@ export default class Fact {
     sqlQuery += ` ${and()} ${Fact.authorizedWhereClause(userid)}`;
 
     if (subject) {
-      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject, userid)})`;
+      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
     }
 
     if (predicate) {
@@ -289,7 +335,7 @@ export default class Fact {
     }
 
     if (object) {
-      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object, userid)})`;
+      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
     }
 
     const result = await pool.query(sqlQuery);
@@ -303,75 +349,12 @@ export default class Fact {
   }
 
   constructor(subject: string, predicate: string, object: string, logger: IsLogger) {
-    this.subject = subject;
-    this.predicate = predicate;
-    this.object = object;
+    this.subject = subject.trim();
+    this.predicate = predicate.trim();
+    this.object = object.trim();
     this.logger = logger;
-  }
 
-  async match(factQuery: FactQuery, userid: string, logger: IsLogger): Promise<boolean> {
-    let concreteObjectSpecMatch = false;
-    let concreteSubjectSpecMatch = false;
-    let subjectMatch;
-    let objectMatch;
-
-    if (!userid) {
-      throw new Error('Fact.match needs to receive a valid userid!');
-    }
-
-    if (factQuery.predicate && !factQuery.predicate.includes(this.predicate)) {
-      return false;
-    }
-
-    const concreteSubjectSpec = factQuery.subject?.filter((x) => typeof x === 'string');
-    const concreteObjectSpec = factQuery.object?.filter((x) => typeof x === 'string');
-
-    if (concreteSubjectSpec && concreteSubjectSpec.length) {
-      if (concreteSubjectSpec.length > 1) {
-        return false;
-      }
-
-      if (this.subject !== concreteSubjectSpec[0]) {
-        return false;
-      }
-
-      concreteSubjectSpecMatch = true;
-    }
-
-    if (concreteObjectSpec && concreteObjectSpec.length) {
-      if (concreteObjectSpec.length > 1) {
-        return false;
-      }
-
-      if (this.object !== concreteObjectSpec[0]) {
-        return false;
-      }
-
-      concreteObjectSpecMatch = true;
-    }
-
-    if (!concreteSubjectSpecMatch) {
-      subjectMatch = !factQuery.subject ? [] : Fact.findAll({
-        subject: [this.subject, ...factQuery.subject],
-      }, userid, logger);
-    }
-
-    if (!concreteObjectSpecMatch) {
-      objectMatch = !factQuery.object ? [] : Fact.findAll({
-        subject: [this.object, ...factQuery.object],
-      }, userid, logger);
-    }
-
-    return (!factQuery.subject || concreteSubjectSpecMatch || (await subjectMatch).length !== 0)
-      && (!factQuery.object || concreteObjectSpecMatch || (await objectMatch).length !== 0);
-  }
-
-  async matchAny(factQueries: FactQuery[], userid: string): Promise<boolean> {
-    const allResults = await Promise.all(
-      factQueries.map((fq) => this.match(fq, userid, this.logger)),
-    );
-
-    return !!allResults.find((x) => x);
+    this.ensureValidSyntax();
   }
 
   toJSON() {
@@ -382,7 +365,35 @@ export default class Fact {
     };
   }
 
+  ensureValidSyntax() {
+    if (!this.hasValidSubject()
+      || !this.hasValidPredicate()
+      || !this.hasValidObject()) {
+      throw new Error(`Invalid Fact, it contains invalid charters: ${this.subject}, ${this.predicate}, ${this.object}`);
+    }
+  }
+
+  hasValidSubject() {
+    return typeof this.subject === 'string'
+      && this.subject.match(/^[a-zA-Z0-9-]+$/)
+      && this.subject.length <= 40;
+  }
+
+  hasValidPredicate() {
+    return typeof this.predicate === 'string'
+      && this.predicate.match(/^\$?[a-zA-Z0-9-]+\*?$/)
+      && this.predicate.length <= 40;
+  }
+
+  hasValidObject() {
+    return typeof this.object === 'string'
+      && this.object.match(/^[a-zA-Z0-9-\s]+$/)
+      && this.object.length <= 500;
+  }
+
   async save(userid: string) {
+    this.ensureValidSyntax();
+
     if (!(await this.isAuthorizedToSave(userid))) {
       throw new AuthorizationError(userid, 'fact', this, this.logger);
     }
@@ -390,21 +401,39 @@ export default class Fact {
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isATermFor') {
-      const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]);
+      const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 OR object=$1 OR subject=$2', [this.subject, this.object]);
 
       if (!dbRows.rows.length) {
         if (!userid) {
           throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
         }
 
-        await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $5), ($1, $4, $5, NULL)', [
+        await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $5), ($5, $4, $1, NULL)', [
           this.subject,
           this.predicate,
           this.object,
-          '$wasCreatedBy',
+          '$isAccountableFor',
           userid,
         ]);
       }
+    } else if (this.predicate === '$isAccountableFor') {
+      const dbRows = await pool.query('SELECT subject, predicate, object FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]);
+
+      if (dbRows.rows.length) {
+        for (let index = 0; index < dbRows.rows.length; index++) {
+          const r = dbRows.rows[index];
+          const oldFact = new Fact(r.subject, r.predicate, r.object, this.logger);
+          // eslint-disable-next-line no-await-in-loop
+          await oldFact.deleteWithoutAuthCheck(userid);
+        }
+      }
+
+      await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
+        this.subject,
+        this.predicate,
+        this.object,
+        userid,
+      ]);
     } else {
       await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
         this.subject,
@@ -420,6 +449,10 @@ export default class Fact {
       throw new AuthorizationError(userid, 'fact', this, this.logger);
     }
 
+    return this.deleteWithoutAuthCheck(userid);
+  }
+
+  private async deleteWithoutAuthCheck(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
 
     await pool.query(`WITH deleted_rows AS (
@@ -436,7 +469,7 @@ export default class Fact {
     ]);
   }
 
-  async isAuthorizedToDelete(userid) {
+  async isAuthorizedToDelete(userid: string) {
     if (this.predicate === '$isATermFor') {
       const pool = new PgPoolWithLog(this.logger);
 
@@ -446,15 +479,31 @@ export default class Fact {
       );
     }
 
+    if (this.predicate === '$isAccountableFor' && userid === this.subject) {
+      return false;
+    }
+
     if (!(await this.isAuthorizedToSave(userid))) {
-      throw new AuthorizationError(userid, 'fact', this, this.logger);
+      return false;
     }
 
     return true;
   }
 
-  async isAuthorizedToSave(userid) {
+  async isAuthorizedToSave(userid: string) {
     if (!userid || !userid.trim()) {
+      return false;
+    }
+
+    if (this.object.startsWith('us-') && userid !== this.object) {
+      return false;
+    }
+
+    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isMemberOf', '$isHostOf'].includes(this.predicate)) {
+      return false;
+    }
+
+    if (this.predicate.startsWith('$') && !Fact.reservedPredicates.includes(this.predicate)) {
       return false;
     }
 
@@ -462,30 +511,76 @@ export default class Fact {
       return true;
     }
 
-    if (await this.isValidCreatedAtFact(userid)) {
-      return true;
+    if (this.predicate === '$isAccountableFor') {
+      return await this.isValidCreatedAtFact(userid)
+        || await this.isValidAccountabilityTransfer(userid);
+    }
+
+    if (Object.values(rolePredicateMap).includes(this.predicate) && this.subject.trim().startsWith('us-')) {
+      return this.isValidInvitation(userid);
     }
 
     const pool = new PgPoolWithLog(this.logger);
 
-    return pool.findAny(`
-      SELECT *
-      FROM facts
-      WHERE subject IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator'], this.subject)}
-      AND object IN ${SQL.selectSubjectsInAnyGroup(userid, ['creator', 'term', 'selfAccess'], this.subject)}
-    `);
-  }
-
-  async isValidCreatedAtFact(userid: string) {
-    if (this.predicate === '$wasCreatedBy') {
-      if (this.object !== userid) {
+    if (this.predicate === '$isMemberOf') {
+      if (await pool.findAny('SELECT * FROM facts WHERE predicate=$1 AND subject=$2', ['$isATermFor', this.subject])) {
         return false;
       }
-
-      const pool = new PgPoolWithLog(this.logger);
-      return !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2', [this.subject, this.predicate]));
     }
 
-    return false;
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
+    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'selfAccess'], this.object));
+
+    return hasSubjectAccess && hasObjectAccess;
+  }
+
+  private async isValidInvitation(userid: string) {
+    const pool = new PgPoolWithLog(this.logger);
+
+    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object));
+
+    const subjectIsKnownUserPromise = pool.findAny(`
+      SELECT *
+      FROM users
+      WHERE id=$1
+    `, [this.subject]);
+
+    return await hasObjectAccessPromise && await subjectIsKnownUserPromise;
+  }
+
+  private async isValidCreatedAtFact(userid: string) {
+    if (this.subject !== userid) {
+      return false;
+    }
+
+    const pool = new PgPoolWithLog(this.logger);
+    return !(await pool.findAny('SELECT subject FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]));
+  }
+
+  private async isValidAccountabilityTransfer(userid: string) {
+    const pool = new PgPoolWithLog(this.logger);
+
+    if (this.subject === this.object) {
+      return false;
+    }
+
+    if (!await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+      userid,
+      this.predicate,
+      this.object,
+    ])) {
+      return false;
+    }
+
+    if (await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [
+      this.subject,
+    ])) {
+      return false;
+    }
+
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member'], this.subject));
+    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
+
+    return hasSubjectAccess && hasObjectAccess;
   }
 }

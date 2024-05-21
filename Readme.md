@@ -24,10 +24,8 @@ LinkedRecords is configured via environment variables. See table below.
 docker run --name linkedrecords-db -e POSTGRES_PASSWORD=lrdbpass -p 5432:5432 -d postgres
 ```
 
-## Next Improvement
-- Exception Handler Middleware
-- Implicit auth for tests
-- Attribute.get function should cache current values when changes has been applied via changeset
-- Attribute.get function should use a distributed semaphore when processing a changeset for a given variable
-- When the session expires, redirect the user to the same path he was before the login flow. Currently the user just comes back to the main page
-- In ClientServerBus implement a joinCluster method dispatch changes to other server instances so they can inform their clients
+# FAQ
+
+## You use PostgreSQL as a triblestore, will it scale?
+
+If you do not use joins you do NO SQL.

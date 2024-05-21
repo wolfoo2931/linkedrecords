@@ -60,7 +60,31 @@ export default class AttributesRepository {
     return attr;
   }
 
-  async create(attributeType: string, value: any, facts?: [ string?, string? ][])
+  async createKeyValue(
+    value?: object,
+    facts?: [ string?, string?, string?][],
+  ): Promise<KeyValueAttribute> {
+    const attr = await this.create('keyValue', value || {}, facts);
+    return attr as KeyValueAttribute;
+  }
+
+  async createLongText(
+    value?: string,
+    facts?: [ string?, string? ][],
+  ): Promise<LongTextAttribute> {
+    const attr = await this.create('longText', value || '', facts);
+    return attr as LongTextAttribute;
+  }
+
+  async createBlob(
+    value?: Blob,
+    facts?: [ string?, string? ][],
+  ): Promise<BlobAttribute> {
+    const attr = await this.create('blob', value || '', facts);
+    return attr as BlobAttribute;
+  }
+
+  async create(attributeType: string, value: any, facts?: [ string?, string?, string? ][])
     :Promise<AbstractAttributeClient<any, IsSerializable>> {
     const AttributeClass = AttributesRepository
       .attributeTypes

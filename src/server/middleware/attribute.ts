@@ -1,4 +1,5 @@
 import md5 from 'md5';
+import { uuidv7 as uuid } from 'uuidv7';
 import QueryExecutor from '../../attributes/attribute_query';
 import { PsqlStorage } from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
@@ -15,6 +16,10 @@ function getAttributeIdByRequest(req) {
 
   if (urlMatch && urlMatch[1]) {
     return urlMatch[1];
+  }
+
+  if (req.originalUrl.match(/\/attributes/) && req.query?.dtp?.length >= 1) {
+    return `${req.query?.dtp}-${uuid()}`;
   }
 
   return req.query?.attributeId || req.params.attributeId;

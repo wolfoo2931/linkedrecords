@@ -1,7 +1,6 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 
-import { uuidv7 as uuid } from 'uuidv7';
 import LinkedRecords from '../../browser_sdk/index';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
@@ -24,8 +23,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   serverURL: URL;
 
-  loginURL?: URL;
-
   observers: Function[];
 
   isInitialized: boolean;
@@ -41,7 +38,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.linkedRecords = linkedRecords;
     this.clientServerBus = clientServerBus;
     this.serverURL = linkedRecords.serverURL;
-    this.loginURL = linkedRecords.loginURL;
     this.createdAt = undefined;
     this.updatedAt = undefined;
     this.observers = [];
@@ -73,12 +69,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   protected abstract onServerMessage(payload: SerializedChangeWithMetadata<TypedChange>);
   protected abstract onLoad();
 
-  public async create(value: Type, facts?: [ string?, string? ][]) {
+  public async create(value: Type, facts?: [ string?, string?, string? ][]) {
     if (this.id) {
       throw new Error(`Cannot create attribute because it has an id assigned (${this.id})`);
     }
-
-    this.id = `${this.getDataTypePrefix()}-${uuid()}`;
 
     const requestConfig: any = {
       method: 'POST',
@@ -89,7 +83,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       requestConfig.isJSON = false;
     }
 
-    const url = `/attributes/${this.id}?clientId=${this.clientId}`;
+    const url = `/attributes?dtp=${this.getDataTypePrefix()}&clientId=${this.clientId}`;
     const response = await this.linkedRecords.fetch(url, requestConfig);
 
     if (!response) {
@@ -101,6 +95,13 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     }
 
     const responseBody = await response.json();
+
+    this.id = responseBody.id;
+
+    if (!this.id || !this.id.trim()) {
+      throw new Error('Unknown error occurred: The attribute was not assigned an ID by the server');
+    }
+
     await this.load(responseBody);
   }
 
@@ -132,7 +133,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
   }
 
-  protected getCreatePayload(value: Type, facts: [ string?, string? ][] = []): string | FormData {
+  protected getCreatePayload(
+    value: Type,
+    facts: [ string?, string?, string? ][] = [],
+  ): string | FormData {
     return JSON.stringify({
       clientId: this.clientId,
       actorId: this.actorId,

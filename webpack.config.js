@@ -38,7 +38,7 @@ const client = {
     extensions: [".tsx", ".ts", ".js"],
   },
   optimization: {
-    minimize: false,
+    minimize: true,
   },
 };
 

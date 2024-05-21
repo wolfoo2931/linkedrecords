@@ -34,7 +34,7 @@ function factQueryWithOptionalSubjectPlaceholderToFactQuery(
     return [x[0], x[1]];
   }
 
-  throw new Error('factQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input');
+  throw new Error(`factQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input: ${JSON.stringify(x)}`);
 }
 
 function filterUndefinedSubjectQueries(

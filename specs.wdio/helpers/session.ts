@@ -7,6 +7,7 @@ import AttributesRepository from '../../src/browser_sdk/attributes_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
 
 const pgPool = new pg.Pool({ max: 2 });
+const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
 const capabilities = {
   browserName: 'chrome',
@@ -15,17 +16,59 @@ const capabilities = {
   },
 };
 
+const allSessionsToBeTerminated: InitializedSession[] = [];
+let theCachedSessions;
 export default class Session {
   browser: WebdriverIO.Browser;
+
+  email: string;
 
   Attribute?: AttributesRepository;
 
   Fact?: FactsRepository;
 
-  static async getSessions(count: number): Promise<InitilizedSession[]> {
-    const mrConfig = {};
-    const browsers = Array.from({ length: count }, (_, index) => `browser${index + 1}`);
+  getUserIdByEmail?: (email: string) => Promise<string>;
+
+  static async getSession(
+    name: string,
+    browser: WebdriverIO.MultiRemoteBrowser,
+  ): Promise<InitializedSession> {
+    const allUsersPwd = process.env['TEST_USERS_PWD'];
     const frontendBaseURL = process.env['FRONTEND_BASE_URL'];
+    const index = name.replace('browser', '');
+    const session = await browser.getInstance(name);
+
+    await session.url(`${frontendBaseURL}/index.html`);
+    await session.$('a').click();
+
+    if (!allUsersPwd) {
+      throw new Error('You need to provide the TEST_USERS_PWD environment variable which contains the Password for all test users');
+    }
+
+    await (await session.$('input[name=username]')).setValue(`wolfoo2931+${index}@gmail.com`);
+    await (await session.$('input[name=password]')).setValue(allUsersPwd);
+    await (await session.$('form button[type=submit][name=action][data-action-button-primary="true"]')).click();
+
+    const consentBtn = await session.$('form button[type=submit][name=action][data-action-button-primary="true"]');
+
+    if (await consentBtn.isExisting()) {
+      await consentBtn.click();
+    }
+
+    const lrSession = new Session(session, `wolfoo2931+${index}@gmail.com`);
+
+    await lrSession.initLinkedRecord();
+
+    return lrSession as InitializedSession;
+  }
+
+  static async getSessions(count: number): Promise<InitializedSession[]> {
+    if (theCachedSessions && reuseBrowsers) {
+      return theCachedSessions;
+    }
+
+    const mrConfig = {};
+    const browsers = Array.from({ length: reuseBrowsers ? 3 : count }, (_, index) => `browser${index + 1}`);
 
     browsers.forEach((name) => {
       mrConfig[name] = { capabilities };
@@ -33,36 +76,12 @@ export default class Session {
 
     const browser = await multiremote(mrConfig);
 
-    await browser.url(`${frontendBaseURL}/index.html`);
-    await browser.$('a').click();
-
-    const sessions = await Promise.all(browsers.map((name) => browser.getInstance(name)));
-
-    if (!process.env['TEST_USERS_PWD']) {
-      throw new Error('You need to provide the TEST_USERS_PWD environment variable which contains the Password for all test users');
-    }
-
-    const allUsersPwd = process.env['TEST_USERS_PWD'];
-
-    await Promise.all(sessions.map(async (session, index) => {
-      await (await session.$('input[name=username]')).setValue(`wolfoo2931+${index + 1}@gmail.com`);
-      await (await session.$('input[name=password]')).setValue(allUsersPwd);
-      await (await session.$('form button[type=submit][name=action][data-action-button-primary="true"]')).click();
-
-      const consetBtn = await session.$('form button[type=submit][name=action][data-action-button-primary="true"]');
-
-      if (await consetBtn.isExisting()) {
-        await consetBtn.click();
-      }
-    }));
-
-    const result = sessions.map((s) => new Session(s));
-    await Promise.all(result.map((s) => s.initLinkedRecord()));
-
-    return result as InitilizedSession[];
+    theCachedSessions = await Promise.all(browsers.map((name) => this.getSession(name, browser)));
+    allSessionsToBeTerminated.push(...theCachedSessions);
+    return theCachedSessions;
   }
 
-  static async getOneSession(): Promise<InitilizedSession> {
+  static async getOneSession(): Promise<InitializedSession> {
     const session = await this.getSessions(1);
 
     if (!session[0]) {
@@ -72,7 +91,7 @@ export default class Session {
     return session[0];
   }
 
-  static async getTwoSessions(): Promise<[InitilizedSession, InitilizedSession]> {
+  static async getTwoSessions(): Promise<[InitializedSession, InitializedSession]> {
     const session = await this.getSessions(2);
 
     if (!session[0] || !session[1]) {
@@ -86,8 +105,8 @@ export default class Session {
   }
 
   static async getThreeSessions()
-  : Promise<[InitilizedSession, InitilizedSession, InitilizedSession]> {
-    const session = await this.getSessions(2);
+  : Promise<[InitializedSession, InitializedSession, InitializedSession]> {
+    const session = await this.getSessions(3);
 
     if (!session[0] || !session[1] || !session[2]) {
       throw new Error('Unknown error when initializing LinkedRecord test session');
@@ -104,8 +123,27 @@ export default class Session {
     await pgPool.query('TRUNCATE facts;');
   }
 
-  constructor(browser) {
+  static async afterEach() {
+    if (reuseBrowsers) {
+      return;
+    }
+
+    await Session.deleteBrowsers();
+  }
+
+  static async deleteBrowsers() {
+    while (allSessionsToBeTerminated.length) {
+      const s = allSessionsToBeTerminated.pop();
+
+      if (s) {
+        s.browser.deleteSession();
+      }
+    }
+  }
+
+  constructor(browser, email) {
     this.browser = browser;
+    this.email = email;
   }
 
   async initLinkedRecord() {
@@ -117,6 +155,11 @@ export default class Session {
     this.Fact = (await remote.execute(
       () => (window as any).lr.Fact,
     )) as FactsRepository;
+
+    this.getUserIdByEmail = (email: string) => remote.execute(
+      (m) => (window as any).lr.getUserIdByEmail(m),
+      [email],
+    );
   }
 
   async getActorId() {
@@ -138,14 +181,17 @@ export default class Session {
   }
 }
 
-class InitilizedSession extends Session {
+class InitializedSession extends Session {
   Attribute: AttributesRepository;
 
   Fact: FactsRepository;
 
-  constructor(browser, attr, fact) {
-    super(browser);
+  getUserIdByEmail: (email: string) => Promise<string>;
+
+  constructor(browser, attr, fact, getUserIdByEmail, email) {
+    super(browser, email);
     this.Attribute = attr;
     this.Fact = fact;
+    this.getUserIdByEmail = getUserIdByEmail;
   }
 }

@@ -20,13 +20,24 @@ export default {
   async create(req, res) {
     const rawFacts = req.body.facts || [];
     const facts = rawFacts
-      .filter((rawFact) => rawFact.length === 2)
-      .map((rawFact) => new Fact(
-        req.attribute.id,
-        rawFact[0],
-        rawFact[1],
-        req.log,
-      ));
+      .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it'))
+      .map((rawFact) => {
+        if (rawFact.length === 2) {
+          return new Fact(
+            req.attribute.id,
+            rawFact[0],
+            rawFact[1],
+            req.log,
+          );
+        }
+
+        return new Fact(
+          rawFact[0],
+          rawFact[1],
+          req.attribute.id,
+          req.log,
+        );
+      });
 
     const unauthorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
     const containsUnauthorizedFacts = (await Promise.all(unauthorizedChecks))
@@ -39,7 +50,10 @@ export default {
     }
 
     await req.attribute.create(req.body.value);
-    const result = await req.attribute.get();
+    const result = {
+      ...await req.attribute.get(),
+      id: req.attribute.id,
+    };
 
     await Promise.all(facts.map((fact) => fact.save(req.hashedUserID)));
 
@@ -81,7 +95,7 @@ export default {
     res.send(result);
   },
 
-  async update(req, res) { // TODO: auth
+  async update(req, res) {
     const parsedChange: SerializedChangeWithMetadata<any> = req.body;
     const committedChange: SerializedChangeWithMetadata<any> = await req.attribute.change(
       parsedChange,

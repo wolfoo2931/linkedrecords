@@ -4,7 +4,7 @@ import { expect } from 'chai';
 import { createClient, cleanupClients, truncateDB } from '../helpers';
 
 function filterAutoCreatedFacts(facts) {
-  return facts.filter((fact) => !['$wasCreatedBy'].includes(fact.predicate));
+  return facts.filter((fact) => !['$isAccountableFor'].includes(fact.predicate));
 }
 
 describe('Fact', () => {
@@ -54,7 +54,7 @@ describe('Fact', () => {
 
     // describe('"*" predicate suffix');
     // describe('$isATermFor predicate');
-    // describe('$wasCreatedBy predicate');
+    // describe('$isAccountableFor predicate');
   });
 
   describe('Facts.deleteAll', () => {

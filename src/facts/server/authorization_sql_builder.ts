@@ -1,52 +1,65 @@
-type Role = 'term' | 'creator' | 'selfAccess';
-type AnyOrAllGroups = 'any' | 'all';
+export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member';
 
-const rolePredicateMap = {
+export const rolePredicateMap = {
   member: '$isMemberOf',
-};
-
-const anyOrAllGroupsMap = {
-  any: ' UNION ',
-  all: ' INTERSECT ',
+  host: '$isHostOf',
+  creator: '$isAccountableFor',
 };
 
 export default class AuthorizationSqlBuilder {
-  public static selectSubjectsInAnyGroup(userid: string, roles: Role[], attributeId?: string) {
-    return this.getSqlToSeeSubjectsInGroups(userid, roles, 'any', attributeId);
+  public static selectSubjectsInAnyGroup(userid: string, roles: Role[]) {
+    return this.getSqlToSeeSubjectsInGroups(userid, roles);
   }
 
-  public static selectSubjectsInAllGroup(userid: string, roles: Role[], attributeId?: string) {
-    return this.getSqlToSeeSubjectsInGroups(userid, roles, 'all', attributeId);
+  public static getSQLToCheckAccess(userid: string, roles: Role[], attributeId: string) {
+    return `(SELECT *
+      FROM (${this.getSqlToSeeSubjectsInGroups(userid, roles)}) as facts
+      WHERE subject='${attributeId}')`;
   }
 
-  public static getSqlToSeeSubjectsInGroups(userid: string, roles: Role[], anyOrAllGroups: AnyOrAllGroups = 'all', attributeId?: string) {
-    const creatorSubSelect = roles
-      .filter((role) => role === 'creator')
-      .map(() => `SELECT facts.subject FROM facts WHERE facts.predicate = '$wasCreatedBy' AND facts.object = '${userid}' ${attributeId ? `AND facts.subject = '${attributeId}'` : ''}`);
-
+  public static getSqlToSeeSubjectsInGroups(userid: string, roles: Role[]) {
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
-      .map(() => `SELECT '${userid}'`);
+      .map(() => `SELECT '${userid}' as subject`);
 
     const termsSubSelect = roles
       .filter((role) => role === 'term')
       .map(() => "SELECT facts.subject FROM facts WHERE facts.predicate='$isATermFor'");
 
-    const groupSubSelect = roles
-      .filter((role) => role !== 'selfAccess' && role !== 'creator' && role !== 'term')
-      .map((role) => `
-        SELECT facts.subject
-        FROM facts
-        WHERE facts.subject IN (SELECT subject FROM facts WHERE facts.predicate='$isMemberOf')
-        AND '${userid}' IN (SELECT subject FROM facts WHERE facts.predicate='${rolePredicateMap[role]}')'
-        ${attributeId ? `AND facts.subject = '${attributeId}'` : ''}
-      `);
+    const groupRoles = roles
+      .filter((role) => Object.keys(rolePredicateMap).includes(role))
+      .map((r) => `'${rolePredicateMap[r]}'`);
+
+    const groupSubSelect: string[] = [];
+
+    if (groupRoles.length) {
+      // TODO: we can cache this and include the list
+      // of groups in the sub query instead of the select??
+      const allGroupsOfTheUser = `SELECT object FROM facts as f WHERE f.subject = '${userid}' AND f.predicate IN (${groupRoles.join(',')})`;
+
+      groupSubSelect.push(
+        `SELECT subject
+          FROM facts
+          WHERE facts.predicate='$isMemberOf'
+          AND facts.object in (${allGroupsOfTheUser})`,
+      );
+      groupSubSelect.push(
+        `SELECT object
+          FROM facts
+          WHERE facts.predicate='$isAccountableFor'
+          AND facts.subject in (${allGroupsOfTheUser})`,
+      );
+      groupSubSelect.push(
+        `SELECT object
+          FROM facts
+          WHERE facts.object in (${allGroupsOfTheUser})`,
+      );
+    }
 
     return `(${[
-      ...creatorSubSelect,
       ...selfSubSelect,
       ...termsSubSelect,
       ...groupSubSelect,
-    ].join(anyOrAllGroupsMap[anyOrAllGroups])})`;
+    ].join(' UNION ')})`;
   }
 }

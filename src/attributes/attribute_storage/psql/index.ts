@@ -22,6 +22,11 @@ export default class PsqlStorage implements IsAttributeStorage {
     value: string,
   ) : Promise<{ id: string }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
+
+    if (await this.pgPool.findAny('SELECT * FROM facts WHERE subject=$1', [attributeId])) {
+      throw new Error('attributeId is invalid');
+    }
+
     const createQuery = `CREATE TABLE ${pgTableName} (actor_id varchar(36), time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
     await this.pgPool.query(createQuery);
     await this.insertAttributeSnapshot(attributeId, actorId, value);
