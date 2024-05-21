@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "start": "npm run build && node dist/server.js --enable-source-maps | node bin/plogs.js",
+    "start": "npm run build && node --enable-source-maps dist/server.js | node bin/plogs.js",
     "test": "bin/test.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
