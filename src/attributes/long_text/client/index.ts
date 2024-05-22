@@ -65,6 +65,8 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     } else {
       this.transmitChange(new LongTextChange(changeset.changeset, this.version));
     }
+
+    this.notifySubscribers(changeset);
   }
 
   protected getLastChangeTransmittedMillisecondsAgo(): number {
