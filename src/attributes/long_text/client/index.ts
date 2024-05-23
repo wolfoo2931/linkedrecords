@@ -57,7 +57,6 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       if (
         this.getLastChangeTransmittedMillisecondsAgo() > LongTextAttribute.serverApprovalTimeoutInMS
       ) {
-        console.log(`No approval received from server after ${LongTextAttribute.serverApprovalTimeoutInMS} ms`);
         this.linkedRecords.handleConnectionError(new Error(`No approval received from server after ${LongTextAttribute.serverApprovalTimeoutInMS} ms`));
       }
 
@@ -108,9 +107,11 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       this.version = foreignChangeWithMetadata.change.changeId;
       this.notifySubscribers(transformedForeignChange, foreignChangeWithMetadata);
     } catch (ex) {
+      // eslint-disable-next-line no-console
       console.log(this.value);
+      // eslint-disable-next-line no-console
       console.log(transformedForeignChange.changeset.inspect());
-
+      // eslint-disable-next-line no-console
       console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
       this.load();
     }
