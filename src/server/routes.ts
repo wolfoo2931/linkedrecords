@@ -51,7 +51,7 @@ async function withAuth(req, res, controllerAction) {
     } catch (ex) {
       if (ex instanceof AuthorizationError) {
         res.sendStatus(401);
-      } else {
+      } else { // TODO: this should be moved into the error handler
         req.log.error(ex);
         res.sendStatus(500);
       }

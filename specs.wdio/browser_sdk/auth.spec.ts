@@ -1700,6 +1700,146 @@ describe('authorization', () => {
       });
     });
 
+    it('allows to read an attribute without allowing to use it as subject or object, or change payload', async () => {
+      const [admin, writer, ontologist] = await Session.getThreeSessions();
+      const randomUser = [admin, writer, ontologist][Math.floor(Math.random() * 3)];
+      const ontologistId = await randomUser!.getUserIdByEmail(ontologist.email);
+      const writerId = await randomUser!.getUserIdByEmail(writer.email);
+
+      // a user can see categories
+      // he cannot create categories himself
+
+      await randomUser!.Fact.createAll([
+        ['Team', '$isATermFor', 'a term for a concept'],
+        ['BlogPost', '$isATermFor', 'a term for a concept'],
+        ['documentCategory', '$isATermFor', 'a term for a concept'],
+        ['document', '$isATermFor', 'a term for a concept'],
+      ]);
+
+      const createTeam = async (lrClient, name) => {
+        const uId = await lrClient.getUserIdByEmail(lrClient.email);
+
+        const team = await lrClient.Attribute.createKeyValue({ name }, [
+          ['isA', 'Team'],
+        ]);
+
+        const writerGroup = await lrClient.Attribute.createKeyValue({}, [
+          ['isWriterGroupOf', team.id],
+          [uId, '$isMemberOf', '$it'],
+          [team.id, '$isAccountableFor', '$it'],
+        ]);
+
+        const ontologistGroup = await lrClient.Attribute.createKeyValue({}, [
+          ['isOntologistGroupOf', team.id],
+          [uId, '$isMemberOf', '$it'],
+          [team.id, '$isAccountableFor', '$it'],
+        ]);
+
+        return {
+          team,
+          writerGroup,
+          ontologistGroup,
+          addOntologist: (c, userId) => c.Fact.createAll([
+            [userId, '$isMemberOf', ontologistGroup.id],
+            [userId, '$isMemberOf', writerGroup.id],
+          ]),
+          getCategories: async (c) => {
+            const { categories } = await c.Attribute.findAll({
+              categories: [
+                ['isA', 'documentCategory'],
+              ],
+            });
+
+            return categories;
+          },
+          addWriter: (c, userId) => c.Fact.createAll([
+            [userId, '$canRead', ontologistGroup.id],
+            [userId, '$isMemberOf', writerGroup.id],
+          ]),
+          createCategory: (c, cname, superCat) => c.Attribute.createKeyValue({ name: cname }, [
+            ['isA', 'documentCategory'],
+            [ontologistGroup.id, '$isAccountableFor', '$it'],
+            [writerGroup.id, '$canReferTo', '$it'],
+            [writerGroup.id, '$canRead', '$it'], // TODO: does it make sense that we need this?
+            ...(superCat.map((sc) => ['isCategorizedAs*', sc.id])),
+          ]),
+        };
+      };
+
+      // Any user can setup a team
+      const t = await createTeam(admin, 'super team');
+
+      // The team creator can add team members
+      await t.addOntologist(admin, ontologistId);
+      await t.addWriter(admin, writerId);
+
+      // As Ontologist, I can create categories
+      const c1 = await t.createCategory(ontologist, 'superCat', []);
+      const c2 = await t.createCategory(ontologist, 'supCat', [c1]);
+      const c3 = await t.createCategory(ontologist, 'c3', []);
+
+      // As a writer, I can query categories with composed query
+      const categories = await t.getCategories(writer);
+      expect(categories.map((c) => c.id)).to.be.an('array').that.contains.members([c1.id, c2.id]);
+
+      expect(categories).to.be.an('array').of.length(3);
+
+      // As a writer, I can query categories by id
+      const idLookup = await writer.Attribute.find(c2.id);
+      expect(idLookup!.id).to.be.eql(c2.id);
+
+      // As a writer, I can read the category name
+      expect(await idLookup?.getValue()).to.be.eql({ name: 'supCat' });
+
+      // As a Writer, I can not create categories
+      const unauthorizedCategory = await t.createCategory(writer, 'unauthorizedCategory', []);
+
+      expect(unauthorizedCategory.id).to.eql(null);
+      expect(await t.getCategories(admin)).to.be.an('array').of.length(3);
+      expect(await t.getCategories(writer)).to.be.an('array').of.length(3);
+      expect(await t.getCategories(ontologist)).to.be.an('array').of.length(3);
+
+      // As a Writer, I can not link categories (x, 'isCategorizedAs*', y)
+      // -> cannot change the hierarchy
+      await writer.Fact.createAll([
+        [c3.id, 'isCategorizedAs*', c2.id],
+      ]);
+
+      await expectFactToNotExists([c3.id, 'isCategorizedAs*', c2.id]);
+
+      // As a Writer, I can create documents and categorize them
+      const document = await writer.Attribute.createLongText('the doc', [
+        ['isA', 'document'],
+        ['isCategorizedAs*', c3.id],
+      ]);
+
+      await expectFactToExists([document.id!, 'isCategorizedAs*', c3.id]);
+
+      // As a Writer, I can see all documents of the group
+      // a user can query all categories and their hierarchy
+      const { docs, cats } = await writer.Attribute.findAll({
+        docs: [
+          ['isCategorizedAs*', c3.id],
+        ],
+        cats: [
+          ['isA', 'documentCategory'],
+        ],
+      });
+
+      const catHierarchy = await writer.Fact.findAll({
+        subject: [['isA', 'documentCategory']],
+        predicate: ['isCategorizedAs*'],
+        object: [['isA', 'documentCategory']],
+      });
+
+      expect(catHierarchy).to.be.an('array').of.length(1);
+
+      expect(docs).to.be.an('array').of.length(1);
+      expect(docs[0]!.id).to.be.eql(document.id!);
+      expect(cats).to.be.an('array').of.length(3);
+    });
+
+    // TODO:
     // a user can read an attribute but can not use it as object (or subject)
     // because only admin users can refer to the attribute 'published'
     // still it should be possible for other users to read this attribute.

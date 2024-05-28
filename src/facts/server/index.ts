@@ -95,6 +95,8 @@ export default class Fact {
     '$isAccountableFor',
     '$isMemberOf',
     '$isHostOf',
+    '$canRead',
+    '$canReferTo',
   ];
 
   subject: string;
@@ -184,7 +186,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const res = await pool.findAny(SQL.getSQLToCheckAccess(
       userid,
-      ['creator', 'host', 'member'], // TODO: add role attributeReader
+      ['creator', 'host', 'member', 'reader'],
       nodeId,
     ));
 
@@ -196,16 +198,14 @@ export default class Fact {
       throw new Error(`userId is invalid: "${userid}"`);
     }
 
-    // TODO: we can also add term into this, then authorizedSubjects and authorizedObjects
-    // are the same and we could probably optimize the query.
     const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'creator', 'host', 'member'],
+      ['selfAccess', 'creator', 'host', 'member', 'reader'],
     );
 
     const authorizedObjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'term', 'creator', 'host', 'member'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
+      ['selfAccess', 'term', 'creator', 'host', 'member', 'reader'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
     );
 
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
@@ -490,7 +490,7 @@ export default class Fact {
     return true;
   }
 
-  async isAuthorizedToSave(userid: string) {
+  async isAuthorizedToSave(userid: string, args?: { attributeInCreation?: string }) {
     if (!userid || !userid.trim()) {
       return false;
     }
@@ -499,7 +499,7 @@ export default class Fact {
       return false;
     }
 
-    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isMemberOf', '$isHostOf'].includes(this.predicate)) {
+    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isMemberOf', '$isHostOf', '$canRead', '$canReferTo'].includes(this.predicate)) {
       return false;
     }
 
@@ -513,11 +513,11 @@ export default class Fact {
 
     if (this.predicate === '$isAccountableFor') {
       return await this.isValidCreatedAtFact(userid)
-        || await this.isValidAccountabilityTransfer(userid);
+        || await this.isValidAccountabilityTransfer(userid, args);
     }
 
     if (Object.values(rolePredicateMap).includes(this.predicate) && this.subject.trim().startsWith('us-')) {
-      return this.isValidInvitation(userid);
+      return this.isValidInvitation(userid, args);
     }
 
     const pool = new PgPoolWithLog(this.logger);
@@ -528,13 +528,20 @@ export default class Fact {
       }
     }
 
-    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
-    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'selfAccess'], this.object));
+    // FIXME, sometimes '$it' is the subject, sometimes '$it' is the object
+    const hasSubjectAccess = args?.attributeInCreation === this.subject
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
+    const hasObjectAccess = args?.attributeInCreation === this.object
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'referer', 'selfAccess'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
 
-  private async isValidInvitation(userid: string) {
+  private async isValidInvitation(userid: string, args?: { attributeInCreation?: string }) {
+    if (this.object === args?.attributeInCreation) {
+      return true;
+    }
+
     const pool = new PgPoolWithLog(this.logger);
 
     const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object));
@@ -557,18 +564,24 @@ export default class Fact {
     return !(await pool.findAny('SELECT subject FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]));
   }
 
-  private async isValidAccountabilityTransfer(userid: string) {
-    const pool = new PgPoolWithLog(this.logger);
+  private async isValidAccountabilityTransfer(userid: string, args?: {
+    attributeInCreation?: string,
+  }) {
+    if (this.predicate !== '$isAccountableFor') {
+      return false;
+    }
 
     if (this.subject === this.object) {
       return false;
     }
 
-    if (!await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+    const pool = new PgPoolWithLog(this.logger);
+
+    if (args?.attributeInCreation !== this.object && !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
       userid,
       this.predicate,
       this.object,
-    ])) {
+    ]))) {
       return false;
     }
 
@@ -579,7 +592,7 @@ export default class Fact {
     }
 
     const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member'], this.subject));
-    const hasObjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
+    const hasObjectAccess = args?.attributeInCreation === this.object || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
