@@ -199,17 +199,14 @@ export default class Fact {
       throw new Error(`userId is invalid: "${userid}"`);
     }
 
-    const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
+    const authorizedNodes = SQL.selectSubjectsInAnyGroup(
       userid,
       ['selfAccess', 'creator', 'host', 'member', 'access', 'reader'],
     );
 
-    const authorizedObjects = SQL.selectSubjectsInAnyGroup(
-      userid,
-      ['selfAccess', 'term', 'creator', 'host', 'member', 'access', 'reader'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
-    );
+    const authorizedTerms = SQL.selectSubjectsInAnyGroup(userid, ['term']);
 
-    return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
+    return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedNodes} AND (object IN (${authorizedNodes}) OR object IN (${authorizedTerms}))))`;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
