@@ -1,3 +1,5 @@
+/* eslint-disable no-await-in-loop */
+/* eslint-disable no-plusplus */
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
 import Fact from '../../facts/server';
@@ -18,13 +20,14 @@ export default {
   },
 
   async create(req, res) {
+    const attributeInCreation = req.attribute.id;
     const rawFacts = req.body.facts || [];
     const facts = rawFacts
       .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it'))
       .map((rawFact) => {
         if (rawFact.length === 2) {
           return new Fact(
-            req.attribute.id,
+            attributeInCreation,
             rawFact[0],
             rawFact[1],
             req.log,
@@ -34,18 +37,25 @@ export default {
         return new Fact(
           rawFact[0],
           rawFact[1],
-          req.attribute.id,
+          attributeInCreation,
           req.log,
         );
       });
 
-    const unauthorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
-    const containsUnauthorizedFacts = (await Promise.all(unauthorizedChecks))
-      .includes((isAuthorized) => !isAuthorized);
+    const unauthorizedFacts: Fact[] = [];
 
-    if (containsUnauthorizedFacts) {
+    for (let index = 0; index < facts.length; index++) {
+      const fact = facts[index];
+      if (!(await fact.isAuthorizedToSave(req.hashedUserID, { attributeInCreation }))) {
+        unauthorizedFacts.push(fact);
+      }
+    }
+
+    if (unauthorizedFacts.length) {
+      req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(unauthorizedFacts)}`);
+
       res.status(401);
-      res.send({});
+      res.send({ unauthorizedFacts });
       return;
     }
 
@@ -58,7 +68,7 @@ export default {
     await Promise.all(facts.map((fact) => fact.save(req.hashedUserID)));
 
     if (result instanceof Error) {
-      req.log(`error in POST /attributes/${req.params.attributeId}`, result.message);
+      req.log.error(`error in POST /attributes/${req.params.attributeId}`, result.message);
       res.status(404).send({ error: result.message });
     } else {
       res.send(result);
@@ -71,7 +81,7 @@ export default {
     const isBlob = result.value instanceof Blob;
 
     if (result instanceof Error) {
-      req.log(`error in GET /attributes/${req.params.attributeId}`, result.message);
+      req.log.error(`error in GET /attributes/${req.params.attributeId}`, result.message);
       res.status(404).send({ error: result.message });
       return;
     }

@@ -94,6 +94,7 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     }
 
     this.transmitChange(new KeyValueChange(actualChanges, this.version));
+    this.notifySubscribers(change);
     this.value = change.apply(this.value);
   }
 
