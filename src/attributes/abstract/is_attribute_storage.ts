@@ -20,7 +20,7 @@ export default interface IsAttributeStorage {
   getAttributeChanges(
     attributeId: string,
     actorId: string,
-    criteria: { minChangeId?: string, maxChangeId?: string }
+    criteria: { inAuthorizedContext?: boolean, minChangeId?: string, maxChangeId?: string }
   ) : Promise<Array<any>>;
 
   insertAttributeChange(

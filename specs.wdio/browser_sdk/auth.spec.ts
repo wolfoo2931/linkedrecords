@@ -1845,7 +1845,7 @@ describe('authorization', () => {
     // because only admin users can refer to the attribute 'published'
     // still it should be possible for other users to read this attribute.
 
-    // using $isMemberOF and the subject is an attribute id, then having referer permissions for the object is not engouth, it needs to be member permissions
+    // using $isMemberOF and the subject is an attribute id, then having referer permissions for the object is not enough, it needs to be member permissions
     // using $isMemberOF and the subject is an user id, then the user needs to be host of the object
   });
 

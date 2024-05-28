@@ -22,14 +22,14 @@ IsAttributeStorage
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
   }
 
-  async get() : Promise<{
+  async get(args?: { inAuthorizedContext?: boolean }) : Promise<{
     value: object,
     changeId: string,
     actorId: string,
     createdAt: number,
     updatedAt: number
   }> {
-    return this.getByChangeId('2147483647');
+    return this.getByChangeId('2147483647', args);
   }
 
   async set(value: object) : Promise<{ id: string }> {
@@ -56,6 +56,7 @@ IsAttributeStorage
 
   private async getByChangeId(
     changeId: string,
+    args?: { inAuthorizedContext?: boolean },
   ) : Promise<{
       value: object,
       changeId: string,
@@ -63,7 +64,7 @@ IsAttributeStorage
       createdAt: number,
       updatedAt: number
     }> {
-    const queryOptions = { maxChangeId: changeId };
+    const queryOptions = { maxChangeId: changeId, inAuthorizedContext: args?.inAuthorizedContext };
     const result = await this.storage.getAttributeLatestSnapshot(
       this.id,
       this.actorId,

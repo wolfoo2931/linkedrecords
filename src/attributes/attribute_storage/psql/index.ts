@@ -34,9 +34,13 @@ export default class PsqlStorage implements IsAttributeStorage {
     return { id: attributeId };
   }
 
-  async getAttributeLatestSnapshot(attributeId: string, actorId: string, { maxChangeId = '2147483647' }) : Promise<{ value: string, changeId: string, actorId: string, createdAt: number, updatedAt: number }> {
-    if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
-      throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+  async getAttributeLatestSnapshot(attributeId: string, actorId: string, { maxChangeId = '2147483647', inAuthorizedContext = false }) : Promise<{ value: string, changeId: string, actorId: string, createdAt: number, updatedAt: number }> {
+    if (!inAuthorizedContext) {
+      if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
+        // TODO: when this is thrown, it is not visible in the logs probably??
+        // And the status code is 500
+        throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+      }
     }
 
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
@@ -57,9 +61,11 @@ export default class PsqlStorage implements IsAttributeStorage {
     };
   }
 
-  async getAttributeChanges(attributeId: string, actorId: string, { minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
-    if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
-      throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+  async getAttributeChanges(attributeId: string, actorId: string, { inAuthorizedContext = false, minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
+    if (!inAuthorizedContext) {
+      if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
+        throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+      }
     }
 
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);

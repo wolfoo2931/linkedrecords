@@ -121,7 +121,7 @@ export default class QueryExecutor {
         attributes[id] = null;
       } else {
         attributes[id] = new AttributeClass(id, clientId, actorId, storage);
-        attributes[id] = await attributes[id].get();
+        attributes[id] = await attributes[id].get({ inAuthorizedContext: true });
         attributes[id].id = id;
       }
     }));
