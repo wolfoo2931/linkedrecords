@@ -407,12 +407,12 @@ describe('authorization', () => {
 
     await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     await aquaman.Attribute.createKeyValue({ name: ' Eywa' }, [
       ['isA', 'Tree'],
-      ['$isMemberOf', mammalTeam.id],
+      [mammalTeam.id, '$canAccess', '$it'],
     ]);
 
     const aquamansTridents = await getTridents(aquaman);
@@ -474,7 +474,7 @@ describe('authorization', () => {
 
     await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     // Aquaman invites nemo (makes him host)
@@ -506,7 +506,7 @@ describe('authorization', () => {
 
     await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     // Nemo should not be allowed to invite manni as nemo is not part of the fish team
@@ -531,7 +531,7 @@ describe('authorization', () => {
 
     await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     // Aquaman invites nemo
@@ -561,7 +561,7 @@ describe('authorization', () => {
 
     const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     // Aquaman invites nemo (makes him host)
@@ -688,7 +688,7 @@ describe('authorization', () => {
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
     const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     expect((await getTeams(nemo)).length).to.eq(0);
@@ -744,7 +744,7 @@ describe('authorization', () => {
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
     await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     await nemo.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
@@ -798,7 +798,7 @@ describe('authorization', () => {
     const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
     const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
-      ['$isMemberOf', fishTeam.id],
+      [fishTeam.id, '$canAccess', '$it'],
     ]);
 
     await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
@@ -855,7 +855,7 @@ describe('authorization', () => {
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
@@ -887,7 +887,7 @@ describe('authorization', () => {
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
@@ -920,7 +920,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       const atlantis = await nemo.Attribute.createKeyValue({ name: 'The City' });
@@ -946,6 +946,7 @@ describe('authorization', () => {
       expect(mannisHomeMatches.homes.length).to.eql(0);
 
       await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
+      await nemo.Fact.createAll([[fishTeam.id, '$canAccess', atlantis.id]]);
 
       nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(nemosHomeMatches.homes.length).to.eql(1);
@@ -970,7 +971,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
@@ -1014,7 +1015,7 @@ describe('authorization', () => {
       let mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(mannisHomeMatches.homes.length).to.eql(0);
 
-      await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
+      await nemo.Fact.createAll([[fishTeam.id, '$canAccess', atlantis.id]]);
 
       await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, manni);
 
@@ -1046,7 +1047,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
@@ -1055,7 +1056,7 @@ describe('authorization', () => {
       expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
       expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
 
-      await aquaman.Fact.createAll([[trident.id, '$isMemberOf', fishTeam.id]]);
+      await aquaman.Fact.createAll([[fishTeam.id, '$canAccess', trident.id]]);
       await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
       await aquaman.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
 
@@ -1115,7 +1116,7 @@ describe('authorization', () => {
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await nemo.Fact.createAll([
@@ -1143,7 +1144,7 @@ describe('authorization', () => {
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await nemo.Fact.createAll([
@@ -1180,7 +1181,7 @@ describe('authorization', () => {
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
@@ -1198,7 +1199,7 @@ describe('authorization', () => {
       const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await expectNotToBeAbleToWriteAttribute(trident.id, nemo);
@@ -1221,7 +1222,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id!]]);
@@ -1301,7 +1302,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       let facts = await aquaman.Fact.findAll({
@@ -1346,7 +1347,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       let facts = await aquaman.Fact.findAll({
@@ -1445,7 +1446,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
       ]);
 
       await aquaman.Fact.createAll([
@@ -1501,7 +1502,7 @@ describe('authorization', () => {
 
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
-        ['$isMemberOf', fishTeam.id],
+        [fishTeam.id, '$canAccess', '$it'],
         [fishTeam.id, '$isAccountableFor', '$it'],
       ]);
 
@@ -1571,7 +1572,7 @@ describe('authorization', () => {
 
         const trident = await nemo.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
-          ['$isMemberOf', fishTeam.id],
+          [fishTeam.id, '$canAccess', '$it'],
         ]);
 
         await nemo.Fact.createAll([
@@ -1690,8 +1691,8 @@ describe('authorization', () => {
 
         await aquaman.Fact.createAll([
           [nemoId, '$isMemberOf', attr1.id],
-          [attr2.id, '$isMemberOf', attr1.id],
-          [attr1.id, '$isMemberOf', attr3.id],
+          [attr1.id, '$canAccess', attr2.id],
+          [attr3.id, '$canAccess', attr1.id],
         ]);
 
         await expectNotToBeAbleToReadOrWriteAttribute(attr3.id, nemo);
@@ -1863,7 +1864,7 @@ describe('authorization', () => {
 
     await aquaman.Attribute.createKeyValue({}, [
       ['isA', 'Trident'],
-      ['$isMemberOf', group.id!],
+      [group.id, '$canAccess', '$it'],
     ]);
 
     const nemosTridents = await getTridents(nemo);
@@ -1887,7 +1888,7 @@ describe('authorization', () => {
 
     await aquaman.Attribute.createKeyValue({}, [
       ['isA', 'Trident'],
-      ['$isMemberOf', group.id!],
+      [group.id, '$canAccess', '$it'],
     ]);
 
     await nemo.Fact.createAll([
@@ -1923,7 +1924,7 @@ describe('authorization', () => {
     ]);
 
     await nemo.Fact.createAll([
-      [trident.id, '$isMemberOf', group.id],
+      [group.id, '$canAccess', trident.id],
     ]);
 
     const nemosTridents = await getTridents(nemo);
@@ -1934,7 +1935,7 @@ describe('authorization', () => {
     expect(nemosTridents.length).to.eq(0);
     expect(manniesTridents.length).to.eq(0);
 
-    await expectFactToNotExists([trident.id!, '$isMemberOf', group.id!]);
+    await expectFactToNotExists([group.id!, '$canAccess', trident.id!]);
   });
 
   it('does not allow a member of a group to assign a random string to the group', async () => {

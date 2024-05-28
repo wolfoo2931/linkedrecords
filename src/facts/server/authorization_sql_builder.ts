@@ -1,4 +1,4 @@
-export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'reader' | 'referer';
+export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer';
 
 export const rolePredicateMap = {
   member: '$isMemberOf',
@@ -6,6 +6,7 @@ export const rolePredicateMap = {
   creator: '$isAccountableFor',
   reader: '$canRead',
   referer: '$canReferTo',
+  access: '$canAccess',
 };
 
 export default class AuthorizationSqlBuilder {
@@ -32,7 +33,6 @@ export default class AuthorizationSqlBuilder {
       .filter((role) => Object.keys(rolePredicateMap).includes(role))
       .map((r) => `'${rolePredicateMap[r]}'`);
 
-    const groupRolesWithoutMemberNodes = groupRoles.filter((c) => c !== "'$isMemberOf'");
     const groupSubSelect: string[] = [];
 
     // TODO: the access relations are ordinal:
@@ -41,22 +41,8 @@ export default class AuthorizationSqlBuilder {
     // as an mapped integer and use a B-Tree index.
     if (groupRoles.length) {
       // TODO: we can cache this and include the list
-      const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`; // FIXME: all roles here ??
-      const allNodesInGroups = `SELECT subject as node FROM facts WHERE predicate IN (${groupRoles.join(',')}) AND object IN (${allGroupsOfTheUser})`;
-
-      // TODO: replace '$isMemberOf' with '$canAccess' to add attributes to a group
-      // and only use $isMemberOf to add users to a group
-      if (groupRoles.includes('$isMemberOf')) {
-        groupSubSelect.push(`SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (${allGroupsOfTheUser})`);
-      }
-
-      if (groupRolesWithoutMemberNodes.length) {
-        groupSubSelect.push(`SELECT object as node FROM facts WHERE predicate IN (${groupRolesWithoutMemberNodes.join(',')}) AND subject IN (${allGroupsOfTheUser})`);
-      }
-
-      groupSubSelect.push(`SELECT object as node FROM facts WHERE subject='${userid}' AND predicate IN (${groupRoles.join(',')})`);
-
-      groupSubSelect.push(allNodesInGroups);
+      const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
+      groupSubSelect.push(`SELECT object as node FROM facts WHERE predicate IN (${groupRoles.join(',')}) AND (subject='${userid}' OR subject IN (${allGroupsOfTheUser}))`);
     }
 
     return `(${[

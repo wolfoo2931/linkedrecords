@@ -97,6 +97,7 @@ export default class Fact {
     '$isHostOf',
     '$canRead',
     '$canReferTo',
+    '$canAccess',
   ];
 
   subject: string;
@@ -173,7 +174,7 @@ export default class Fact {
 
     return pool.findAny(SQL.getSQLToCheckAccess(
       userid,
-      ['creator', 'host', 'member'], // TODO: add role attributeWriter
+      ['creator', 'host', 'member', 'access'],
       nodeId,
     ));
   }
@@ -186,7 +187,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const res = await pool.findAny(SQL.getSQLToCheckAccess(
       userid,
-      ['creator', 'host', 'member', 'reader'],
+      ['creator', 'host', 'member', 'access', 'reader'],
       nodeId,
     ));
 
@@ -200,12 +201,12 @@ export default class Fact {
 
     const authorizedSubjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'creator', 'host', 'member', 'reader'],
+      ['selfAccess', 'creator', 'host', 'member', 'access', 'reader'],
     );
 
     const authorizedObjects = SQL.selectSubjectsInAnyGroup(
       userid,
-      ['selfAccess', 'term', 'creator', 'host', 'member', 'reader'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
+      ['selfAccess', 'term', 'creator', 'host', 'member', 'access', 'reader'], // TODO: we actually do not need the term thing here because it is already covered below (${factTable}.predicate='$isATermFor')
     );
 
     return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedSubjects} AND object IN ${authorizedObjects}))`;
@@ -499,7 +500,7 @@ export default class Fact {
       return false;
     }
 
-    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isMemberOf', '$isHostOf', '$canRead', '$canReferTo'].includes(this.predicate)) {
+    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isHostOf', '$isMemberOf', '$canAccess', '$canRead', '$canReferTo'].includes(this.predicate)) {
       return false;
     }
 
@@ -528,11 +529,10 @@ export default class Fact {
       }
     }
 
-    // FIXME, sometimes '$it' is the subject, sometimes '$it' is the object
     const hasSubjectAccess = args?.attributeInCreation === this.subject
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member'], this.subject));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access'], this.subject));
     const hasObjectAccess = args?.attributeInCreation === this.object
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'referer', 'selfAccess'], this.object));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'access', 'referer', 'selfAccess'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
@@ -591,7 +591,7 @@ export default class Fact {
       return false;
     }
 
-    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member'], this.subject));
+    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access'], this.subject));
     const hasObjectAccess = args?.attributeInCreation === this.object || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
