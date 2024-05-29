@@ -153,7 +153,7 @@ export default class AttributesRepository {
       if (Array.isArray(records[key])) {
         attributeResult[key] = records[key].map((attr) => this.idToAttribute(attr.id, attr));
       } else if (records[key]) {
-        attributeResult[key] = this.idToAttribute(records[key].id);
+        attributeResult[key] = this.idToAttribute(records[key].id, records[key]);
       } else {
         attributeResult[key] = null;
       }
