@@ -21,7 +21,7 @@ function logAggregate(agg) {
     return;
   }
 
-  const requestDoneLog = agg.logs.find((l) => l.msg === 'request completed')
+  const requestDoneLog = agg.logs.find((l) => l.msg === 'request completed' || l.msg === 'request errored')
 
   console.log('')
   console.log('')
@@ -32,7 +32,14 @@ function logAggregate(agg) {
     agg.logs.forEach(log => {
       if(log.queryTemplate) {
         console.log(`${timeOutput(log?.timeInMS, 13)} (Results ${log.results}): ${log.queryTemplate}`);
-      } else if(log.msg !== 'request completed') {
+      } else if (log.err) {
+        if (log.err.stack) {
+          console.log(colors.red(log.err.stack.split('\n').map((l) => `    ${l}`).join('\n')));
+        } else {
+          console.log(colors.red(`${log.err.type}: ${log.err.message}`.split('\n').map((l) => `    ${l}`).join('\n')));
+        }
+
+      } else if(log.msg !== 'request completed' && log.msg !== 'request errored') {
         console.log(log)
       }
     })
@@ -43,12 +50,11 @@ function logAggregate(agg) {
 }
 
 function processJSONLog(json) {
-
   if(json?.req?.id && !json?.req?.url?.startsWith('/ws/')) {
     req[json?.req?.id] =  req[json?.req?.id] || { logs: [] };
     req[json?.req?.id].logs.push(json);
 
-    if(json.msg === 'request completed') {
+    if(json.msg === 'request completed' || json.msg === 'request errored') {
       logAggregate(req[json?.req?.id]);
       delete req[json?.req?.id];
     }
