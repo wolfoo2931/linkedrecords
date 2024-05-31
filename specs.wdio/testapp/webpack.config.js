@@ -7,6 +7,7 @@ const client = {
   target: 'web',
   mode: 'production',
   watch: false,
+  devtool: 'source-map',
   output: {
     filename: 'client.packaged.js',
     path: __dirname

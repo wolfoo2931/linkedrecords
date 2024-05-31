@@ -25,7 +25,7 @@ function logAggregate(agg) {
 
   console.log('')
   console.log('')
-  console.log(`Response Time: ${timeOutput(requestDoneLog?.responseTime)} Status: ${requestDoneLog?.res?.statusCode} - ${colors.bold(agg.logs[0]?.req?.method)} ${agg.logs[0]?.req?.url?.split('?')[0]}`);
+  console.log(`${agg.logs[0]?.req?.id} Response Time: ${timeOutput(requestDoneLog?.responseTime)} Status: ${requestDoneLog?.res?.statusCode} - ${colors.bold(agg.logs[0]?.req?.method)} ${agg.logs[0]?.req?.url?.split('?')[0]}`);
   console.log(`${'url query'.padStart(13, ' ')}: ${JSON.stringify(agg.logs[0].req?.query).replaceAll(/\\"/g, '"')}`);
 
   if(process.env.LOG_LEVEL !== 'summary') {
