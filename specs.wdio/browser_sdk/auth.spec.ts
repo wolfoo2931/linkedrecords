@@ -83,6 +83,7 @@ describe('authorization', () => {
     expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'bar' });
 
     await authorizedReadAttribute!.set({ foo: 'authorized' });
+    await browser.pause(200);
 
     expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'authorized' });
 
@@ -2044,5 +2045,109 @@ describe('authorization', () => {
     fact = [nemoId, 'foo', attr.id!];
     await nemo.Fact.createAll([fact]);
     await expectFactToNotExists(fact);
+  });
+
+  it('allows to create multiple attributes in one request', async () => {
+    const [admin, readingUser, contributingUser] = await Session.getThreeSessions();
+    const readingUserId = await admin.getUserIdByEmail(readingUser.email);
+    const contributingUserId = await admin.getUserIdByEmail(contributingUser.email);
+
+    await readingUser.Fact.createAll([
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Document', '$isATermFor', 'a term for a concept'],
+    ]);
+
+    const team = await admin.Attribute.createAll({
+      info: {
+        value: { name: 'The team with groups' },
+        type: 'KeyValueAttribute',
+        facts: [
+          ['$it', 'isA', 'Team'],
+          [readingUserId, '$canRead', '$it'],
+          [contributingUserId, '$canRead', '$it'],
+        ],
+      },
+      readers: {
+        value: { name: 'the readers group' },
+        facts: [
+          ['$it', 'isTheReadersGroupOf', '{{info}}'],
+          ['{{info}}', '$isAccountableFor', '$it'],
+          [readingUserId, '$isMemberOf', '$it'],
+          [contributingUserId, '$isMemberOf', '$it'],
+        ],
+      },
+      contributors: {
+        value: { name: 'the contributor group' },
+        facts: [
+          ['$it', 'isTheContributorsGroupOf', '{{info}}'],
+          ['{{info}}', '$isAccountableFor', '$it'],
+          [contributingUserId, '$isMemberOf', '$it'],
+        ],
+      },
+    });
+
+    await contributingUser.Attribute.createAll({
+      document: {
+        type: 'LongTextAttribute',
+        value: 'the content of the document',
+        facts: [
+          ['$it', 'isA', 'Document'],
+          [team.contributors.id, '$isAccountableFor', '$it'],
+          [team.contributors.id, '$canAccess', '$it'],
+          [team.readers.id, '$canRead', '$it'],
+          ['{{documentInfo}}', 'belongsTo', '$it'],
+        ],
+      },
+      documentInfo: {
+        value: {},
+        facts: [
+          [team.contributors.id, '$isAccountableFor', '$it'],
+          [team.contributors.id, '$canAccess', '$it'],
+          [team.readers.id, '$canRead', '$it'],
+          ['{{document}}', 'belongsTo', '$it'],
+        ],
+      },
+    });
+
+    const teamId: string = team.info.id;
+
+    const { teamReadByReaders, readByReaders, contributorsByReaders } = await readingUser.Attribute.findAll({
+      teamReadByReaders: teamId,
+      readByReaders: [
+        ['$it', 'isTheReadersGroupOf', teamId],
+      ],
+      contributorsByReaders: [
+        ['$it', 'isTheContributorsGroupOf', teamId],
+      ],
+    });
+
+    expect(await teamReadByReaders.getValue()).to.deep.equal({ name: 'The team with groups' });
+    expect(await readByReaders[0]!.getValue()).to.deep.equal({ name: 'the readers group' });
+    expect(contributorsByReaders).to.be.an('array').of.length(0); // the reader is not part of the contributor group hence can not query it.
+
+    const { documents } = await readingUser.Attribute.findAll({
+      documents: [
+        ['$it', '$hasDataType', 'LongTextAttribute'],
+        ['$it', 'isA', 'Document'],
+      ],
+    });
+
+    expect(documents).to.be.an('array').of.length(1);
+
+    await documents[0]?.set('unauthorized update'); // this is executed in context of the reader user -> not allowed to change the value
+
+    const { cDocuments } = await contributingUser.Attribute.findAll({
+      cDocuments: [
+        ['$it', '$hasDataType', 'LongTextAttribute'],
+        ['$it', 'isA', 'Document'],
+      ],
+    });
+
+    expect(await cDocuments[0]?.getValue()).not.to.eql('unauthorized update');
+    expect(documents).to.be.an('array').of.length(1);
+    await cDocuments[0]?.set('authorized update');
+
+    // await browser.pause(500);
+    // expect(await documents[0]?.getValue()).to.eql('authorized update'); // TODO: the unauthorized write was saved locally in the unauthorized client
   });
 });

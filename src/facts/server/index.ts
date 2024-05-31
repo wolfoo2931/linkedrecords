@@ -488,7 +488,7 @@ export default class Fact {
     return true;
   }
 
-  async isAuthorizedToSave(userid: string, args?: { attributeInCreation?: string }) {
+  async isAuthorizedToSave(userid: string, args?: { attributesInCreation?: string[] }) {
     if (!userid || !userid.trim()) {
       return false;
     }
@@ -526,16 +526,16 @@ export default class Fact {
       }
     }
 
-    const hasSubjectAccess = args?.attributeInCreation === this.subject
+    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access'], this.subject));
-    const hasObjectAccess = args?.attributeInCreation === this.object
+    const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'access', 'referer', 'selfAccess'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
 
-  private async isValidInvitation(userid: string, args?: { attributeInCreation?: string }) {
-    if (this.object === args?.attributeInCreation) {
+  private async isValidInvitation(userid: string, args?: { attributesInCreation?: string[] }) {
+    if (args?.attributesInCreation?.includes(this.object)) {
       return true;
     }
 
@@ -562,7 +562,7 @@ export default class Fact {
   }
 
   private async isValidAccountabilityTransfer(userid: string, args?: {
-    attributeInCreation?: string,
+    attributesInCreation?: string[],
   }) {
     if (this.predicate !== '$isAccountableFor') {
       return false;
@@ -574,7 +574,7 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
 
-    if (args?.attributeInCreation !== this.object && !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
+    if (!args?.attributesInCreation?.includes(this.object) && !(await pool.findAny('SELECT subject FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', [
       userid,
       this.predicate,
       this.object,
@@ -588,8 +588,8 @@ export default class Fact {
       return false;
     }
 
-    const hasSubjectAccess = await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access'], this.subject));
-    const hasObjectAccess = args?.attributeInCreation === this.object || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
+    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access'], this.subject));
+    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }

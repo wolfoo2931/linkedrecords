@@ -1,8 +1,15 @@
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-plusplus */
+import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
 import Fact from '../../facts/server';
+
+const attributePrefixMap = {
+  KeyValueAttribute: 'kv',
+  LongTextAttribute: 'l',
+  BlobAttribute: 'bl',
+};
 
 export default {
   async index(req, res) {
@@ -19,15 +26,137 @@ export default {
     res.send(result);
   },
 
+  async createComposition(req, res) {
+    const nameIdMap: Record<string, string> = {};
+    const resolvedFacts: Fact[] = [];
+    const unauthorizedFacts: Fact[] = [];
+    const composition = req.body;
+
+    const getIdByReferenceName = (node?: string | undefined, rawFact?): string => {
+      if (!node) {
+        throw new Error(`invalid composition creation request: ${rawFact}`);
+      }
+
+      const match = node.match(/^{{(.+)}}$/);
+
+      if (!match) {
+        return node;
+      }
+
+      const id = nameIdMap[match[1]!];
+
+      if (!id) {
+        throw new Error(`attribute reference "${match[0]}" is not an attribute created within this request. Available names are: ${Object.keys(nameIdMap)}`);
+      }
+
+      return id;
+    };
+
+    Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {
+      const attributePrefix = attributePrefixMap[config.type] || 'kv';
+      const attributeId = `${attributePrefix}-${uuid()}`;
+      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
+      const attribute = new AttributeClass(
+        attributeId,
+        req.clientId,
+        req.actorId,
+        req.attributeStorage,
+        req.log,
+      );
+
+      composition[attributeName].attribute = attribute;
+      nameIdMap[attributeName] = attributeId;
+    });
+
+    Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {
+      const facts = (config.facts || [])
+        .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it') || (rawFact.length === 3 && rawFact[0] === '$it'))
+        .map((rawFact) => {
+          if (rawFact.length === 2) {
+            return new Fact(
+              nameIdMap[attributeName]!,
+              rawFact[0],
+              getIdByReferenceName(rawFact[1], rawFact),
+              req.log,
+            );
+          }
+
+          if (rawFact.length === 3 && rawFact[0] === '$it') {
+            return new Fact(
+              nameIdMap[attributeName]!,
+              rawFact[1],
+              getIdByReferenceName(rawFact[2], rawFact),
+              req.log,
+            );
+          }
+
+          return new Fact(
+            getIdByReferenceName(rawFact[0], rawFact),
+            rawFact[1],
+            nameIdMap[attributeName]!,
+            req.log,
+          );
+        });
+
+      resolvedFacts.push(...facts);
+    });
+
+    for (let index = 0; index < resolvedFacts.length; index++) {
+      const fact = resolvedFacts[index];
+      const authCheckArgs = { attributesInCreation: Object.values(nameIdMap) };
+
+      if (!(await fact!.isAuthorizedToSave(req.hashedUserID, authCheckArgs))) {
+        unauthorizedFacts.push(fact!);
+      }
+    }
+
+    if (unauthorizedFacts.length) {
+      req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(unauthorizedFacts)}`);
+
+      res.status(401);
+      res.send({ unauthorizedFacts });
+      return;
+    }
+
+    const attributeSavePromises: Promise<any>[] = [];
+
+    Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {
+      if (!config.value) {
+        throw new Error(`invalid composition creation request: a value was not provided for ${attributeName}`);
+      }
+
+      if (composition[attributeName].attribute) {
+        attributeSavePromises.push(composition[attributeName].attribute.create(config.value));
+      }
+    });
+
+    await Promise.all(attributeSavePromises);
+    await Promise.all(resolvedFacts.map((fact) => fact.save(req.hashedUserID)));
+
+    const result = {};
+
+    const fp = Object.entries(composition).map(([attributeName, config]: [string, any]) => config
+      .attribute.get().then((attrData) => {
+        result[attributeName] = {
+          ...attrData,
+          id: nameIdMap[attributeName],
+        };
+      }));
+
+    await Promise.all(fp);
+
+    res.send(result);
+  },
+
   async create(req, res) {
-    const attributeInCreation = req.attribute.id;
+    const attributesInCreation = req.attribute.id;
     const rawFacts = req.body.facts || [];
     const facts = rawFacts
-      .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it'))
+      .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it')) // TODO: what is with: '$it', 'isA', 'Team' ?? this will be fileted out
       .map((rawFact) => {
         if (rawFact.length === 2) {
           return new Fact(
-            attributeInCreation,
+            attributesInCreation,
             rawFact[0],
             rawFact[1],
             req.log,
@@ -37,7 +166,7 @@ export default {
         return new Fact(
           rawFact[0],
           rawFact[1],
-          attributeInCreation,
+          attributesInCreation,
           req.log,
         );
       });
@@ -46,7 +175,7 @@ export default {
 
     for (let index = 0; index < facts.length; index++) {
       const fact = facts[index];
-      if (!(await fact.isAuthorizedToSave(req.hashedUserID, { attributeInCreation }))) {
+      if (!(await fact.isAuthorizedToSave(req.hashedUserID, { attributesInCreation }))) {
         unauthorizedFacts.push(fact);
       }
     }
