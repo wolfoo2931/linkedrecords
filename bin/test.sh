@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 export DISABLE_AUTHENTICATION=true
 export NODE_ENV=production

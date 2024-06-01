@@ -128,6 +128,10 @@ export default class AttributesRepository {
       body: stringify(attr),
     });
 
+    if (!rawResult) {
+      return undefined;
+    }
+
     const resultBody = await rawResult.json();
 
     const result = {};
