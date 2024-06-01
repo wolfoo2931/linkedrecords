@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 export NODE_ENV=production
 export SERVER_BASE_URL=http://localhost:3000
