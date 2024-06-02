@@ -73,11 +73,13 @@ async function createApp(httpServer: https.Server) {
   app.use(cors({ origin: process.env['FRONTEND_BASE_URL'], credentials: true, maxAge: 86400 }));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
+  app.use('/attribute-compositions', attributeMiddleware());
   app.use('/', factMiddleware());
 
   app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
   app.get('/attributes', errorHandler((req, res) => attributesController.index(req, res)));
   app.post('/attributes', errorHandler((req, res) => withAuth(req, res, attributesController.create)));
+  app.post('/attribute-compositions', errorHandler((req, res) => withAuth(req, res, attributesController.createComposition)));
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get)));
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update)));
   app.get('/facts', errorHandler((req, res) => withAuth(req, res, factsController.index)));

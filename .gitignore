@@ -14,5 +14,6 @@ example/server/index.packaged.js
 .env
 .DS_Store
 specs.wdio/testapp/client.packaged.js
+specs.wdio/testapp/client.packaged.js.map
 specs.wdio/testapp/testserver.js
 specs.wdio/testapp/testserver.js.map

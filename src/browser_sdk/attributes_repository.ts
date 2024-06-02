@@ -22,8 +22,38 @@ type ConcreteTypedArray<X> =
         Array<AbstractAttributeClient<any, any>>;
 
 type TransformQueryRecord<X>
-  = (X extends Array<FactQueryWithOptionalSubjectPlaceholder>
-    ? ConcreteTypedArray<X> : AbstractAttributeClient<any, any>);
+  = X extends Array<FactQueryWithOptionalSubjectPlaceholder> ? ConcreteTypedArray<X> : AbstractAttributeClient<any, any>;
+
+type TransformCompositionCreationResult<X extends { type?: typeof AbstractAttributeClient<any, IsSerializable> | string }> =
+  X['type'] extends typeof KeyValueAttribute ? KeyValueAttribute :
+    X['type'] extends typeof LongTextAttribute ? LongTextAttribute :
+      X['type'] extends typeof BlobAttribute ? BlobAttribute :
+        X['type'] extends string ? AbstractAttributeClient<any, IsSerializable> :
+          KeyValueAttribute;
+
+type CompositionCreationRequest = {
+  [k: string]: {
+    type?: typeof AbstractAttributeClient<any, IsSerializable> | string,
+    facts?: [string, string, string?][] | undefined,
+    value?: any,
+  }
+};
+
+const stringify = (query) => JSON.stringify(query, (_, v) => {
+  if (v === KeyValueAttribute) {
+    return 'KeyValueAttribute';
+  }
+
+  if (v === LongTextAttribute) {
+    return 'LongTextAttribute';
+  }
+
+  if (v === BlobAttribute) {
+    return 'BlobAttribute';
+  }
+
+  return v;
+});
 
 export default class AttributesRepository {
   private linkedRecords: LinkedRecords;
@@ -62,7 +92,7 @@ export default class AttributesRepository {
 
   async createKeyValue(
     value?: object,
-    facts?: [ string?, string?, string?][],
+    facts?: [ string, string, string?][],
   ): Promise<KeyValueAttribute> {
     const attr = await this.create('keyValue', value || {}, facts);
     return attr as KeyValueAttribute;
@@ -70,7 +100,7 @@ export default class AttributesRepository {
 
   async createLongText(
     value?: string,
-    facts?: [ string?, string? ][],
+    facts?: [ string, string, string? ][],
   ): Promise<LongTextAttribute> {
     const attr = await this.create('longText', value || '', facts);
     return attr as LongTextAttribute;
@@ -78,13 +108,13 @@ export default class AttributesRepository {
 
   async createBlob(
     value?: Blob,
-    facts?: [ string?, string? ][],
+    facts?: [ string, string, string? ][],
   ): Promise<BlobAttribute> {
     const attr = await this.create('blob', value || '', facts);
     return attr as BlobAttribute;
   }
 
-  async create(attributeType: string, value: any, facts?: [ string?, string?, string? ][])
+  async create(attributeType: string, value: any, facts?: [ string, string, string? ][])
     :Promise<AbstractAttributeClient<any, IsSerializable>> {
     const AttributeClass = AttributesRepository
       .attributeTypes
@@ -102,6 +132,41 @@ export default class AttributesRepository {
     await attribute.create(value, facts);
 
     return attribute;
+  }
+
+  async createAll<CCR extends CompositionCreationRequest>(attr: CCR)
+    : Promise<{
+      [K in keyof CCR]: TransformCompositionCreationResult<CCR[K]>
+    }> {
+    const url = `/attribute-compositions?clientId=${this.linkedRecords.clientId}`;
+
+    const rawResult = await this.linkedRecords.fetch(url, {
+      method: 'POST',
+      body: stringify(attr),
+    });
+
+    if (!rawResult) {
+      throw new Error('error creating attribute composition');
+    }
+
+    const resultBody = await rawResult.json();
+
+    const result: { [key: string]: AbstractAttributeClient<any, any> } = {};
+
+    Object.entries(resultBody).forEach(([attrName, config]: [string, any]) => {
+      if (config.id) {
+        const tmpResult = this.idToAttribute(config.id!, config);
+
+        if (!tmpResult) {
+          throw new Error(`Error transforming id to attribute: ${config.id}`);
+        }
+
+        result[attrName] = tmpResult;
+      }
+    });
+
+    // @ts-ignore I don't know how to make him happy here.
+    return result;
   }
 
   async find(attributeId: string)
@@ -128,21 +193,7 @@ export default class AttributesRepository {
     > {
     const params = new URLSearchParams();
 
-    params.append('query', JSON.stringify(query, (_, v) => {
-      if (v === KeyValueAttribute) {
-        return 'KeyValueAttribute';
-      }
-
-      if (v === LongTextAttribute) {
-        return 'LongTextAttribute';
-      }
-
-      if (v === BlobAttribute) {
-        return 'BlobAttribute';
-      }
-
-      return v;
-    }));
+    params.append('query', stringify(query));
 
     const result = await this.linkedRecords.fetch(`/attributes?${params.toString()}`);
     const records = await result.json();

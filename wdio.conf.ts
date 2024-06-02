@@ -20,7 +20,7 @@ exports.config = {
   capabilities: [{
     browserName: 'chrome',
     'goog:chromeOptions': {
-      args: ['headless'],
+      args: ['headless'], // this will not change the headless mode of the different user sessions.
     },
   }],
 
