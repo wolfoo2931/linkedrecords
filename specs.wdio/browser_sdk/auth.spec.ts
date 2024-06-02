@@ -2060,7 +2060,6 @@ describe('authorization', () => {
     const team = await admin.Attribute.createAll({
       info: {
         value: { name: 'The team with groups' },
-        type: 'LongTextAttribute',
         facts: [
           ['$it', 'isA', 'Team'],
           [readingUserId, '$canRead', '$it'],
