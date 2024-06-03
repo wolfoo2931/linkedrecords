@@ -88,6 +88,17 @@ export default class LinkedRecords {
     return parsed.id;
   }
 
+  public async getMembersOf(nodeId: string): Promise<{ id: string, username: string }[]> {
+    const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`);
+
+    if (!response) {
+      // TODO: remove this check once the this.fetch throws an exception
+      throw new Error(`Unauthorized member query for ${nodeId}`);
+    }
+
+    return response.json();
+  }
+
   public async fetch(url: string, fetchOpt?: FetchOptions) {
     const {
       headers = undefined,

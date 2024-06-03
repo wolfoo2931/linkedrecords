@@ -3,7 +3,8 @@
 /* eslint-disable no-return-assign */
 /* eslint-disable max-len */
 /* eslint-disable no-await-in-loop */
-import { expect } from 'chai';
+import chai, { expect } from 'chai';
+import chaiAsPromised from 'chai-as-promised';
 import Session from '../helpers/session';
 import {
   expectFactToExists,
@@ -13,6 +14,8 @@ import {
   expectNotToBeAbleToUseAsSubject,
   expectNotToBeAbleToUseAsObject,
 } from '../helpers/lr_expects';
+
+chai.use(chaiAsPromised);
 
 async function filterAutoCreatedFacts(facts) {
   const result: any[] = [];
@@ -1592,9 +1595,43 @@ describe('authorization', () => {
   });
 
   describe('group member discovery', () => {
-    it('allows to list all users of a group when the user is member of this group');
-    it('does not allow to list all users of a group when the user is not member of this group');
-    it('is not possible to find out which groups a user is member in');
+    it('does not allow to query members of a node when the user is not host of the node', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const aquamanId = await aquaman.getUserIdByEmail(aquaman.email);
+      const nemoId = await aquaman.getUserIdByEmail(nemo.email);
+      const manniId = await aquaman.getUserIdByEmail(manni.email);
+
+      const attr = await aquaman.Attribute.createKeyValue({});
+
+      if (!nemo) {
+        return;
+      }
+
+      await aquaman.Fact.createAll([
+        [nemoId, '$isMemberOf', attr.id],
+      ]);
+
+      const authorizedMemberResult = await aquaman.getMembersOf(attr.id!);
+      expect(authorizedMemberResult).to.be.an('array').of.length(2);
+      expect(authorizedMemberResult.find((u) => u.id === aquamanId)).to.be.an('object');
+      expect(authorizedMemberResult.find((u) => u.id === nemoId)).to.be.an('object');
+      expect(authorizedMemberResult.find((u) => u.id === manniId)).to.not.be.an('object');
+
+      await expect(nemo.getMembersOf(attr.id!)).to.eventually.be.rejectedWith();
+      await expect(manni.getMembersOf(attr.id!)).to.eventually.be.rejectedWith();
+
+      await aquaman.Fact.createAll([
+        [nemoId, '$isHostOf', attr.id],
+      ]);
+
+      const nemosAuthorizedMemberResult = await nemo.getMembersOf(attr.id!);
+      expect(nemosAuthorizedMemberResult).to.be.an('array').of.length(2);
+      expect(nemosAuthorizedMemberResult.find((u) => u.id === aquamanId)).to.be.an('object');
+      expect(nemosAuthorizedMemberResult.find((u) => u.id === nemoId)).to.be.an('object');
+      expect(nemosAuthorizedMemberResult.find((u) => u.id === manniId)).to.not.be.an('object');
+
+      await expect(manni.getMembersOf(attr.id!)).to.eventually.be.rejectedWith();
+    });
   });
 
   describe('when used with transitive teams', async () => {

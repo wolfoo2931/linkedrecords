@@ -4,6 +4,8 @@ import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
 import Fact from '../../facts/server';
+import SQL from '../../facts/server/authorization_sql_builder';
+import PgPoolWithLog from '../../../lib/pg-log';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -24,6 +26,36 @@ export default {
     );
 
     res.send(result);
+  },
+
+  async getMembers(req, res) {
+    if (!req.attribute) {
+      throw new Error('Attribute is not initialized');
+    }
+
+    const pool = new PgPoolWithLog(req.log);
+
+    const hasAccess = await pool.findAny(SQL.getSQLToCheckAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id));
+
+    if (!hasAccess) {
+      res.status(401);
+      res.send({ message: `user ${req.hashedUserID} needs to be accountable or host of ${req.attribute.id} in order to see its members` });
+      return;
+    }
+
+    const users = await pool.query(`SELECT * FROM users WHERE id IN
+      (SELECT subject
+      FROM facts
+      WHERE subject LIKE 'us-%'
+      AND predicate IN ('$isMemberOf', '$isHostOf', '$isAccountableFor')
+      AND object=$1)`, [req.attribute.id]);
+
+    res.send(
+      users.rows.map((row) => ({
+        id: row.id.trim(),
+        username: row.username.trim(),
+      })),
+    );
   },
 
   async createComposition(req, res) {
