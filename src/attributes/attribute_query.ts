@@ -197,10 +197,9 @@ export default class QueryExecutor {
       return true;
     }) as [string, string, string?][];
 
-    const negativeObjectFactsQuerySQLClause = queryWithoutDataTypeFilter
+    const nodeBlacklist: [string, string][] = queryWithoutDataTypeFilter
       .filter((q) => q.length === 3 && q[2] === '$not($it)')
-      .map(([subject, predicate]) => (`SELECT object FROM facts where subject='${subject}' AND predicate='${predicate}'`))
-      .join(' UNION ');
+      .map(([subject, predicate]) => [subject, predicate]);
 
     const subjectFactsQuery: FactQuery = {
       subject: filterUndefinedSubjectQueries(
@@ -209,9 +208,11 @@ export default class QueryExecutor {
           .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
           .filter((x) => x && x.length === 2),
       ),
+
+      subjectBlacklist: nodeBlacklist,
     };
 
-    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger, negativeObjectFactsQuerySQLClause && `subject NOT IN (${negativeObjectFactsQuerySQLClause})`);
+    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
 
     let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
 
@@ -232,7 +233,7 @@ export default class QueryExecutor {
 
     if (objectFactsQuery.length !== 0) {
       const factsWhereItIsTheObject = await Promise.all(
-        objectFactsQuery.map((q) => Fact.findAll(q, userid, this.logger, negativeObjectFactsQuerySQLClause && `object NOT IN (${negativeObjectFactsQuerySQLClause})`)),
+        objectFactsQuery.map((q) => Fact.findAll(q, userid, this.logger)),
       );
 
       const mapped: string[][] = [];
