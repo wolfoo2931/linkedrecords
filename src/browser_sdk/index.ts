@@ -10,7 +10,6 @@ import LongTextChange from '../attributes/long_text/long_text_change';
 import ClientServerBus from '../../lib/client-server-bus/client';
 import FactsRepository from './facts_repository';
 import AttributesRepository from './attributes_repository';
-import { AttributeQuery, CompoundAttributeQuery } from '../attributes/attribute_query';
 
 type FetchOptions = {
   headers?: object | undefined,
@@ -24,8 +23,6 @@ export {
   KeyValueAttribute,
   KeyValueChange,
   LongTextChange,
-  AttributeQuery,
-  CompoundAttributeQuery,
 };
 
 export default class LinkedRecords {
