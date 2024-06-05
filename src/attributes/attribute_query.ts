@@ -197,10 +197,19 @@ export default class QueryExecutor {
       return true;
     }) as [string, string, string?][];
 
+    const nodeBlacklist: [string, string][] = queryWithoutDataTypeFilter
+      .filter((q) => q.length === 3 && q[2] === '$not($it)')
+      .map(([subject, predicate]) => [subject, predicate]);
+
     const subjectFactsQuery: FactQuery = {
-      subject: filterUndefinedSubjectQueries(queryWithoutDataTypeFilter
-        .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
-        .filter((x) => x && x.length === 2)),
+      subject: filterUndefinedSubjectQueries(
+        queryWithoutDataTypeFilter
+          .filter((q) => q.length < 3 || q[2] !== '$not($it)')
+          .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
+          .filter((x) => x && x.length === 2),
+      ),
+
+      subjectBlacklist: nodeBlacklist,
     };
 
     const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
@@ -220,6 +229,7 @@ export default class QueryExecutor {
       .map(([subject, predicate]) => ({
         subject: [subject as string],
         predicate: [predicate as string],
+        objectBlacklist: nodeBlacklist,
       }));
 
     if (objectFactsQuery.length !== 0) {

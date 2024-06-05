@@ -500,7 +500,7 @@ describe('Attribute', () => {
       expect(books[1].value.title).to.eq('Moby Dick Volume 3');
     });
 
-    it('supports the $latest and $not modifier for predicates', async () => {
+    it('supports the $latest and $not modifier for object', async () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
@@ -589,6 +589,9 @@ describe('Attribute', () => {
         expect(booksNotInTrasbin.find((b) => b.id === book.id).id).to.eql(book.id);
       });
     });
+
+    // Already implemented
+    it('supports the $not modifier when object is $it');
 
     it('can be executed in parallel', async () => {
       const [client] = await createClient();

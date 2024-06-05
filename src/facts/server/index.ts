@@ -271,7 +271,7 @@ export default class Fact {
       if (!hasNotModifier(query) && !hasLatestModifier(query)) {
         transitiveQueries.push(query);
       } else if (hasNotModifier(query) && !hasLatestModifier(query)) {
-        const object = query[1].match(/^\$not\(([a-zA-Z]+)\)$/)![1];
+        const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (object) {
           sqlConditions.push(['subject', 'NOT IN', `(SELECT subject from facts WHERE predicate='${query[0]}' AND object='${object}')`]);
@@ -311,7 +311,9 @@ export default class Fact {
   }
 
   static async findAll(
-    { subject, predicate, object }: FactQuery,
+    {
+      subject, predicate, object, subjectBlacklist, objectBlacklist,
+    }: FactQuery,
     userid: string,
     logger: IsLogger,
   ): Promise<Fact[]> {
@@ -334,6 +336,20 @@ export default class Fact {
 
     if (object) {
       sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
+    }
+
+    if (subjectBlacklist && subjectBlacklist.length) {
+      const bl = subjectBlacklist
+        .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
+        .join(' UNION ');
+      sqlQuery += ` ${and()} subject NOT IN (${bl})`;
+    }
+
+    if (objectBlacklist && objectBlacklist.length) {
+      const bl = objectBlacklist
+        .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
+        .join(' UNION ');
+      sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
 
     const result = await pool.query(sqlQuery);
