@@ -1,4 +1,4 @@
-export type SubjectQuery = string | [string, string, '$it'?];
+export type SubjectQuery = string | [string, string, ('$it' | '$not($it)')?];
 
 export type SubjectQueries = SubjectQuery[];
 

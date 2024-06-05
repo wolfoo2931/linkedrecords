@@ -271,7 +271,7 @@ export default class Fact {
       if (!hasNotModifier(query) && !hasLatestModifier(query)) {
         transitiveQueries.push(query);
       } else if (hasNotModifier(query) && !hasLatestModifier(query)) {
-        const object = query[1].match(/^\$not\(([a-zA-Z]+)\)$/)![1];
+        const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (object) {
           sqlConditions.push(['subject', 'NOT IN', `(SELECT subject from facts WHERE predicate='${query[0]}' AND object='${object}')`]);
@@ -314,6 +314,7 @@ export default class Fact {
     { subject, predicate, object }: FactQuery,
     userid: string,
     logger: IsLogger,
+    whereSQLClause?: string,
   ): Promise<Fact[]> {
     ensureValidFactQuery({ subject, predicate, object });
 
@@ -334,6 +335,10 @@ export default class Fact {
 
     if (object) {
       sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
+    }
+
+    if (whereSQLClause) {
+      sqlQuery += ` ${and()} ${whereSQLClause}`;
     }
 
     const result = await pool.query(sqlQuery);
