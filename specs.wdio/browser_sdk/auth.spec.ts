@@ -860,6 +860,7 @@ describe('authorization', () => {
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
+        [fishTeam.id!, '$canRefine', '$it'],
       ]);
 
       await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);
@@ -892,6 +893,7 @@ describe('authorization', () => {
       const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
+        [fishTeam.id!, '$canRefine', '$it'],
       ]);
 
       await nemo.Fact.createAll([[trident.id, 'isA', 'Weapon']]);

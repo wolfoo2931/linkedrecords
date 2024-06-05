@@ -1,4 +1,4 @@
-export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer';
+export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer' | 'conceptor';
 
 export const rolePredicateMap = {
   member: '$isMemberOf',
@@ -7,6 +7,7 @@ export const rolePredicateMap = {
   reader: '$canRead',
   referer: '$canReferTo',
   access: '$canAccess',
+  conceptor: '$canRefine',
 };
 
 export default class AuthorizationSqlBuilder {
@@ -35,10 +36,6 @@ export default class AuthorizationSqlBuilder {
 
     const groupSubSelect: string[] = [];
 
-    // TODO: the access relations are ordinal:
-    // '$isAccountableFor' > '$isHostOf' > '$isMemberOf' > '$canReferTo' > '$canRead'
-    // we can make use of this by creating an access table where we save the strongest relation
-    // as an mapped integer and use a B-Tree index.
     if (groupRoles.length) {
       // TODO: we can cache this and include the list
       const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;

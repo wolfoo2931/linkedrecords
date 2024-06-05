@@ -98,6 +98,7 @@ export default class Fact {
     '$canRead',
     '$canReferTo',
     '$canAccess',
+    '$canRefine',
   ];
 
   subject: string;
@@ -543,7 +544,7 @@ export default class Fact {
     }
 
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access'], this.subject));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'access', 'referer', 'selfAccess'], this.object));
 
