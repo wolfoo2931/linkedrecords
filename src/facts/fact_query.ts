@@ -4,7 +4,8 @@ export type SubjectQueries = SubjectQuery[];
 
 export type FactQuery = {
   subject?: SubjectQueries,
-  subjectBlacklist?: [string, string][]
+  subjectBlacklist?: [string, string][],
   predicate?: string[],
   object?: SubjectQueries
+  objectBlacklist?: [string, string][],
 };

@@ -311,7 +311,9 @@ export default class Fact {
   }
 
   static async findAll(
-    { subject, predicate, object, subjectBlacklist }: FactQuery,
+    {
+      subject, predicate, object, subjectBlacklist, objectBlacklist,
+    }: FactQuery,
     userid: string,
     logger: IsLogger,
   ): Promise<Fact[]> {
@@ -337,9 +339,17 @@ export default class Fact {
     }
 
     if (subjectBlacklist && subjectBlacklist.length) {
-      const bl = subjectBlacklist.map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
+      const bl = subjectBlacklist
+        .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
         .join(' UNION ');
       sqlQuery += ` ${and()} subject NOT IN (${bl})`;
+    }
+
+    if (objectBlacklist && objectBlacklist.length) {
+      const bl = objectBlacklist
+        .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
+        .join(' UNION ');
+      sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
 
     const result = await pool.query(sqlQuery);

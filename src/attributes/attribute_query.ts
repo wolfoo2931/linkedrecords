@@ -229,6 +229,7 @@ export default class QueryExecutor {
       .map(([subject, predicate]) => ({
         subject: [subject as string],
         predicate: [predicate as string],
+        objectBlacklist: nodeBlacklist,
       }));
 
     if (objectFactsQuery.length !== 0) {
