@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set +e
+pkill -f '.*node.*testserver.js.*'
 set -e
 
 export NODE_ENV=production
