@@ -16,6 +16,7 @@ type FetchOptions = {
   method?: string,
   body?: any,
   isJSON?: boolean,
+  doNotHandleExpiredSessions?: boolean,
 };
 
 export {
@@ -85,6 +86,11 @@ export default class LinkedRecords {
     return parsed.id;
   }
 
+  public async isAuthorizedToSeeMemberOf(nodeId: string):Promise<boolean> {
+    const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`);
+    return !!response;
+  }
+
   public async getMembersOf(nodeId: string): Promise<{ id: string, username: string }[]> {
     const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`);
 
@@ -102,6 +108,7 @@ export default class LinkedRecords {
       method = 'GET',
       body = undefined,
       isJSON = true,
+      doNotHandleExpiredSessions = false,
     } = fetchOpt || {};
 
     const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
@@ -134,7 +141,10 @@ export default class LinkedRecords {
 
       // TODO: Throw an error here so the program code does not just move on as nothing happened.
 
-      this.handleExpiredLoginSession();
+      if (!doNotHandleExpiredSessions) {
+        this.handleExpiredLoginSession();
+      }
+
       return false;
     }
 
