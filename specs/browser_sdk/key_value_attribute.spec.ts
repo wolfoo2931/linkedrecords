@@ -217,13 +217,6 @@ describe('Key Value Attributes', () => {
 
       const value = await attributeClientA.getValue();
 
-      console.log('desired result', JSON.stringify({
-        foo: 'bar',
-        todos: {
-          id1: { title: 'todo1', checked: false },
-        },
-      }));
-
       expect(value).to.deep.equal({
         foo: 'bar',
         todos: {
