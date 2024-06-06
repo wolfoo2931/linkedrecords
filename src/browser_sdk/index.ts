@@ -87,7 +87,7 @@ export default class LinkedRecords {
   }
 
   public async isAuthorizedToSeeMemberOf(nodeId: string):Promise<boolean> {
-    const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`);
+    const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`, { doNotHandleExpiredSessions: true });
     return !!response;
   }
 
