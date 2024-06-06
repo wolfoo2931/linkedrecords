@@ -1,4 +1,4 @@
-name: WDIO Tests
+name: Karma Tests
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  wdio-tests:
+  karma-tests:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -32,7 +32,7 @@ jobs:
             package-lock.json
       - name: Install dependencies
         run: npm install
-      - name: WDIO Tests
+      - name: Karma Tests
         env:
           PGHOST: localhost
           PGUSER: postgres
@@ -48,4 +48,4 @@ jobs:
           AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
         run: |
-          npm run wdio
+          npm test
