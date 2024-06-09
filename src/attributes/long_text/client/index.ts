@@ -44,6 +44,10 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     const response = await this.linkedRecords.fetch(url);
     const body = await response.json();
 
+    if (!body.changeset) {
+      return new LongTextChange(null);
+    }
+
     const ltc = LongTextChange.fromString(body.changeset);
     ltc.changeId = body.version;
 

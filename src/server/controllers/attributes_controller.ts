@@ -286,7 +286,9 @@ export default {
 
     const change = await req.attribute.getDelta(req.query.startVersion, req.query.endVersion);
 
-    res.send(change.toJSON());
+    res.send(change
+      ? change.toJSON()
+      : { changeset: null, changeId: 'combined' });
   },
 
   async update(req, res) {
