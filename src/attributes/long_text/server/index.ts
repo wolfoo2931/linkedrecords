@@ -71,46 +71,11 @@ IsAttributeStorage
       });
   }
 
-  private async getByChangeId(
-    changeId: string,
-    args?: { inAuthorizedContext?: boolean },
-  ) : Promise<{
-      value: string,
-      changeId: string,
-      actorId: string,
-      createdAt: number,
-      updatedAt: number,
-    }> {
-    const queryOptions = { maxChangeId: changeId, inAuthorizedContext: args?.inAuthorizedContext };
-    const result = await this.storage.getAttributeLatestSnapshot(
-      this.id,
-      this.actorId,
-      queryOptions,
-    );
-
-    // TODO: query options should be something
-    // like { minChangeId: result.changeId, maxChangeId: changeId }
+  async getDelta(startChange: string, endChange: string = '2147483647') : Promise<LongTextChange | null> {
     const changes = await this.storage.getAttributeChanges(
       this.id,
       this.actorId,
-      queryOptions,
-    );
-
-    changes.forEach((change) => {
-      result.value = LongTextChange.fromString(change.value).apply(result.value);
-      result.changeId = change.changeId;
-      result.actorId = change.actorId;
-      result.updatedAt = change.time;
-    });
-
-    return result;
-  }
-
-  private async getChangeSince(changeId: string) : Promise<LongTextChange | null> {
-    const changes = await this.storage.getAttributeChanges(
-      this.id,
-      this.actorId,
-      { minChangeId: changeId },
+      { minChangeId: startChange, maxChangeId: endChange },
     );
 
     if (!changes.length) {
@@ -129,7 +94,45 @@ IsAttributeStorage
       }
     });
 
+    if (merged !== null) {
+      // @ts-ignore
+      merged.changeId = 'combined';
+    }
+
     return merged;
+  }
+
+  private async getByChangeId(
+    changeId: string,
+    args?: { inAuthorizedContext?: boolean },
+  ) : Promise<{
+      value: string,
+      changeId: string,
+      actorId: string,
+      createdAt: number,
+      updatedAt: number,
+    }> {
+    const queryOptions = { maxChangeId: changeId, inAuthorizedContext: args?.inAuthorizedContext };
+    const result = await this.storage.getAttributeLatestSnapshot(
+      this.id,
+      this.actorId,
+      queryOptions,
+    );
+
+    const changes = await this.storage.getAttributeChanges(
+      this.id,
+      this.actorId,
+      queryOptions,
+    );
+
+    changes.forEach((change) => {
+      result.value = LongTextChange.fromString(change.value).apply(result.value);
+      result.changeId = change.changeId;
+      result.actorId = change.actorId;
+      result.updatedAt = change.time;
+    });
+
+    return result;
   }
 
   // Applies the changeset which can be based on
@@ -158,7 +161,7 @@ IsAttributeStorage
     // the compound changes on the server side which
     // are missing on the client site (the changeset
     // from the client site does not consider this changes)
-    const serverChange = await this.getChangeSince(parentVersion);
+    const serverChange = await this.getDelta(parentVersion);
 
     // the a' in the simple one-step diamond problem
     // this changeset will be applied to the current server sate and send to all clients

@@ -2188,4 +2188,6 @@ describe('authorization', () => {
     // await browser.pause(500);
     // expect(await documents[0]?.getValue()).to.eql('authorized update'); // TODO: the unauthorized write was saved locally in the unauthorized client
   });
+
+  // TODO: make sure GET /attribute/:id/delta is secured
 });

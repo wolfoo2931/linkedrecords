@@ -58,6 +58,7 @@ export default {
     );
   },
 
+  // TODO: refactor this, the code is a lot identical to the create method
   async createComposition(req, res) {
     const nameIdMap: Record<string, string> = {};
     const resolvedFacts: Fact[] = [];
@@ -264,6 +265,28 @@ export default {
     }
 
     res.send(result);
+  },
+
+  async getDelta(req, res) {
+    if (!req.attribute) {
+      throw new Error('Attribute is not initialized');
+    }
+
+    if (!req.attribute.id.startsWith('l-')) {
+      req.log.error(`error in GET /attributes/${req.params.attributeId}/delta - getDelta is only implemented for long text attributes`);
+      res.status(501).send({ error: 'getDelta is only implemented for long text attributes' });
+      return;
+    }
+
+    if (!req.query.startVersion || !req.query.endVersion) {
+      req.log.error(`error in GET /attributes/${req.params.attributeId}/delta - startVersion and endVersion need to be provided as query parameter`);
+      res.status(422).send({ error: 'startVersion and endVersion need to be provided as query parameter' });
+      return;
+    }
+
+    const change = await req.attribute.getDelta(req.query.startVersion, req.query.endVersion);
+
+    res.send(change.toJSON());
   },
 
   async update(req, res) {

@@ -39,6 +39,17 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     return Promise.resolve(serializedValue);
   }
 
+  public async getDelta(startVersion, endVersion = '2147483647') : Promise<LongTextChange> {
+    const url = `/attributes/${this.id}/delta?clientId=${this.clientId}&startVersion=${startVersion}&endVersion=${endVersion}`;
+    const response = await this.linkedRecords.fetch(url);
+    const body = await response.json();
+
+    const ltc = LongTextChange.fromString(body.changeset);
+    ltc.changeId = body.version;
+
+    return ltc;
+  }
+
   protected async rawSet(newValue: string) {
     const changeset = LongTextChange.fromDiff(this.value, newValue);
 

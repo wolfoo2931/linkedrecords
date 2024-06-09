@@ -82,6 +82,7 @@ async function createApp(httpServer: https.Server) {
   app.post('/attribute-compositions', errorHandler((req, res) => withAuth(req, res, attributesController.createComposition)));
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get)));
   app.get('/attributes/:attributeId/members', errorHandler((req, res) => withAuth(req, res, attributesController.getMembers)));
+  app.get('/attributes/:attributeId/delta', errorHandler((req, res) => withAuth(req, res, attributesController.getDelta)));
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update)));
   app.get('/facts', errorHandler((req, res) => withAuth(req, res, factsController.index)));
   app.post('/facts', errorHandler((req, res) => withAuth(req, res, factsController.create)));
