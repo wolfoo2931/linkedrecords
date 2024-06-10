@@ -238,7 +238,7 @@ export default {
   },
 
   async get(req, res) {
-    let result = await req.attribute.get();
+    let result = await req.attribute.get({ changeId: req?.query?.changeId });
     const mimetype = result?.value?.type;
     const isBlob = result.value instanceof Blob;
 

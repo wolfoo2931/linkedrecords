@@ -23,14 +23,14 @@ IsAttributeStorage
     return this.storage.createAttribute(this.id, this.actorId, value);
   }
 
-  async get(args?: { inAuthorizedContext?: boolean }) : Promise<{
+  async get(args?: { inAuthorizedContext?: boolean, changeId?: string }) : Promise<{
     value: string,
     changeId: string,
     actorId: string,
     createdAt: number,
     updatedAt: number,
   }> {
-    return this.getByChangeId('2147483647', args);
+    return this.getByChangeId(args?.changeId || '2147483647', args);
   }
 
   async set(value: string) : Promise<{ id: string }> {

@@ -169,6 +169,26 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return this.value;
   }
 
+  public async getValueByChangeId(changeId: string): Promise<Type | undefined> {
+    const url = `/attributes/${this.id}?clientId=${this.clientId}&changeId=${changeId}`;
+    const response = await this.linkedRecords.fetch(url);
+
+    if (!response) {
+      throw new Error(`Error fetching attribute ${this.id} by version ${changeId}`);
+    }
+
+    const jsonBody = await response.json();
+
+    const result = {
+      changeId: jsonBody.changeId,
+      value: jsonBody.value,
+      createdAt: new Date(jsonBody.createdAt),
+      updatedAt: new Date(jsonBody.updatedAt),
+    };
+
+    return result.value;
+  }
+
   public async set(newValue: Type) : Promise<void> {
     await this.load();
 
