@@ -71,7 +71,10 @@ export default class AttributesRepository {
     this.clientServerBus = clientServerBus;
   }
 
+  // TODO: we should cache this
   private idToAttribute(id, serverState?): AbstractAttributeClient<any, any> | undefined {
+    console.debug('get attribute by ID', id);
+
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = AttributesRepository
       .attributeTypes
