@@ -39,6 +39,8 @@ export default class LinkedRecords {
 
   unknownServerErrorHandler?: (response) => void;
 
+  attributeClientIdSuffix: number = 0;
+
   clientId: string;
 
   actorId: string;
@@ -74,6 +76,11 @@ export default class LinkedRecords {
         this.connectionLostHandler();
       }
     });
+  }
+
+  public getAttributeClientId(): string {
+    this.attributeClientIdSuffix += 1;
+    return `${this.clientId}-${this.attributeClientIdSuffix}`;
   }
 
   public getClientServerBus(): ClientServerBus {
