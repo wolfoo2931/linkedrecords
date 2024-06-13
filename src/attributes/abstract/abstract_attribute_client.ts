@@ -200,10 +200,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     value: string,
     createdAt: Date,
     updatedAt: Date,
-  }): Promise<boolean> {
+  }, forceReload: boolean = false): Promise<boolean> {
     let result = serverState;
 
-    if (this.isInitialized) {
+    if (this.isInitialized && !forceReload) {
       return true;
     }
 

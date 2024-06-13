@@ -113,7 +113,8 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       console.log(transformedForeignChange.changeset.inspect());
       // eslint-disable-next-line no-console
       console.log('ERROR: processing foreign change failed (probably because of a previous message loss). Reload server state to recover.', ex);
-      this.load();
+      this.buffer.clear();
+      this.load(undefined, true);
     }
   }
 
