@@ -146,7 +146,6 @@ IsAttributeStorage
       clientId: string,
       actorId: string,
       updatedAt: Date,
-      transformedServerChange?: string,
       transformedClientChange: string
     }> {
     // the a in the simple one-step diamond problem
@@ -166,13 +165,6 @@ IsAttributeStorage
     // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
     const transformedClientChange = clientChange.transformAgainst(serverChange, false).toString();
 
-    // the b' in the simple one-step diamond problem
-    // this changeset will be applied on the client who
-    // made the change that does not respect the serverChange
-    // This works because of the TP1 property of the
-    // transformAgainst function. see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
-    const transformedServerChange = serverChange?.transformAgainst(clientChange, true).toString();
-
     // TODO: we do not know yet for sure if this changeset will be applicable
     // to the already inserted changesets.
     const insertResult = await this.storage.insertAttributeChange(
@@ -186,7 +178,6 @@ IsAttributeStorage
       updatedAt: insertResult.updatedAt,
       clientId: this.clientId,
       actorId: this.actorId,
-      transformedServerChange,
       transformedClientChange,
     };
   }

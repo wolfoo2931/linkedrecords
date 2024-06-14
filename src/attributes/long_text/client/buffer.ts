@@ -32,7 +32,7 @@ export default class ChangeBuffer {
     if (!this.value) return c2;
 
     // transform the foreignChange (change from server) into the client state.
-    const c1 = foreignChange.transformAgainst(this.bridge!, true);
+    const c1 = c2.transformAgainst(this.value, true);
 
     // "Once we have this inferred operation, c2, we can use it
     // to transform the buffer (b) "down" one step"
@@ -41,6 +41,7 @@ export default class ChangeBuffer {
     return c1;
   }
 
+  // TODO: Why does it not work to use the bridge to transform server changes?
   get bridge(): LongTextChange | undefined {
     if (!this.inFlightOp) {
       return undefined;
