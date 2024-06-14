@@ -19,9 +19,10 @@ export default class InMemoryQueuedTasks {
         try {
           const r = await fn();
           resolve(r);
-          cb();
         } catch (ex) {
           reject(ex);
+        } finally {
+          cb();
         }
       });
     });
