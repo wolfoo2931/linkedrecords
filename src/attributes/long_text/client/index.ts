@@ -100,7 +100,6 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
 
       transformedForeignChange = this.buffer.transformAgainst(
         foreignChangeset,
-        this.changeInTransmission?.change,
       );
 
       this.value = transformedForeignChange.apply(this.value);
@@ -142,6 +141,8 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       this.clientId,
       changeset,
     );
+
+    this.buffer.init(changeset);
 
     this.sendToServer(this.changeInTransmission);
   }

@@ -3,7 +3,12 @@ import LongTextChange from '../long_text_change';
 export default class ChangeBuffer {
   value?: LongTextChange;
 
+  // this is the a2
   inFlightOp?: LongTextChange;
+
+  init(inFlightOp: LongTextChange) {
+    this.inFlightOp = inFlightOp;
+  }
 
   add(changeset: LongTextChange): void {
     this.value = this.value ? this.value.merge(changeset) : changeset;
@@ -16,28 +21,36 @@ export default class ChangeBuffer {
   // would not fit into the client state.
   transformAgainst(
     foreignChange: LongTextChange,
-    changeInTransmission?: LongTextChange,
   ) : LongTextChange {
-    if (!changeInTransmission) {
+    if (!this.inFlightOp) {
       return foreignChange;
     }
-
-    this.inFlightOp = this.inFlightOp || changeInTransmission;
 
     const c2 = foreignChange.transformAgainst(this.inFlightOp, true);
     this.inFlightOp = this.inFlightOp?.transformAgainst(foreignChange, false);
 
     if (!this.value) return c2;
 
-    // instead of using a bridge we use c2 to transform the
-    // foreignChange (change from server) into the client state.
-    const c1 = c2.transformAgainst(this.value, true);
+    // transform the foreignChange (change from server) into the client state.
+    const c1 = foreignChange.transformAgainst(this.bridge!, true);
 
     // "Once we have this inferred operation, c2, we can use it
     // to transform the buffer (b) "down" one step"
     this.value = this.value?.transformAgainst(c2, false);
 
     return c1;
+  }
+
+  get bridge(): LongTextChange | undefined {
+    if (!this.inFlightOp) {
+      return undefined;
+    }
+
+    if (!this.value) {
+      return this.inFlightOp;
+    }
+
+    return this.inFlightOp.merge(this.value);
   }
 
   clear() {
