@@ -7,7 +7,7 @@ export default class InMemoryQueuedTasks {
   async ensureReady() {
   }
 
-  async do(queueName, fn) {
+  do(queueName, fn) {
     if (!this.queues[queueName]) {
       this.queues[queueName] = new Queue({ concurrency: 1, autostart: true });
     }
