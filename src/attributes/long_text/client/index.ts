@@ -92,9 +92,10 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     foreignChangeWithMetadata: SerializedChangeWithMetadata<LongTextChange>,
   ) {
     let transformedForeignChange;
+    let foreignChangeset;
 
     try {
-      const foreignChangeset = LongTextChange.fromString(
+      foreignChangeset = LongTextChange.fromString(
         foreignChangeWithMetadata.change.changeset,
       );
 
