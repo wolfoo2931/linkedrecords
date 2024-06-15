@@ -57,9 +57,9 @@ const getTeams = async (c) => {
 const canReadTheAttribute = async (client, attributeId) => {
   const { attr1 } = await client.Attribute.findAll({
     attr1: attributeId,
-  });
+  }, true);
 
-  const attr2 = await client.Attribute.find(attributeId);
+  const attr2 = await client.Attribute.find(attributeId, true);
 
   if (attr1 && !attr2) {
     throw new Error('could read the attribute with findAll but not with find (or the other way around)');

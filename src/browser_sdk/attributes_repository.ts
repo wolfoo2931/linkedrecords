@@ -60,6 +60,8 @@ export default class AttributesRepository {
 
   private clientServerBus: ClientServerBus;
 
+  private attributeCache: Record<string, AbstractAttributeClient<any, any>>;
+
   static attributeTypes = [
     LongTextAttribute,
     KeyValueAttribute,
@@ -69,12 +71,11 @@ export default class AttributesRepository {
   constructor(linkedRecords: LinkedRecords, clientServerBus: ClientServerBus) {
     this.linkedRecords = linkedRecords;
     this.clientServerBus = clientServerBus;
+    this.attributeCache = {};
   }
 
   // TODO: we should cache this
-  private idToAttribute(id, serverState?): AbstractAttributeClient<any, any> | undefined {
-    console.debug('get attribute by ID', id);
-
+  private idToAttribute(id, ignoreCache: boolean = false, serverState?): AbstractAttributeClient<any, any> | undefined {
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = AttributesRepository
       .attributeTypes
@@ -84,11 +85,18 @@ export default class AttributesRepository {
       return undefined;
     }
 
+    if (this.attributeCache[id] && !ignoreCache) {
+      console.log('cache hit for attribute', id);
+      return this.attributeCache[id];
+    }
+
     const attr = new AttributeClass(this.linkedRecords, this.clientServerBus, id);
 
     if (serverState) {
       attr.load(serverState);
     }
+
+    this.attributeCache[id] = attr;
 
     return attr;
   }
@@ -158,7 +166,7 @@ export default class AttributesRepository {
 
     Object.entries(resultBody).forEach(([attrName, config]: [string, any]) => {
       if (config.id) {
-        const tmpResult = this.idToAttribute(config.id!, config);
+        const tmpResult = this.idToAttribute(config.id!, false, config);
 
         if (!tmpResult) {
           throw new Error(`Error transforming id to attribute: ${config.id}`);
@@ -172,9 +180,9 @@ export default class AttributesRepository {
     return result;
   }
 
-  async find(attributeId: string)
+  async find(attributeId: string, ignoreCache: boolean = false)
     :Promise<AbstractAttributeClient<any, IsSerializable> | undefined> {
-    const attribute = await this.idToAttribute(attributeId);
+    const attribute = await this.idToAttribute(attributeId, ignoreCache);
 
     if (!attribute) {
       throw new Error(`Attribute ID ${attributeId} is unknown`);
@@ -190,7 +198,7 @@ export default class AttributesRepository {
   }
 
   // TODO: check for null values in the query
-  async findAll<T extends CompoundAttributeQuery>(query: T)
+  async findAll<T extends CompoundAttributeQuery>(query: T, ignoreCache: boolean = false)
     : Promise<
     { [K in keyof T]: TransformQueryRecord<T[K]> }
     > {
@@ -205,9 +213,9 @@ export default class AttributesRepository {
 
     Object.keys(records).forEach((key) => {
       if (Array.isArray(records[key])) {
-        attributeResult[key] = records[key].map((attr) => this.idToAttribute(attr.id, attr));
+        attributeResult[key] = records[key].map((attr) => this.idToAttribute(attr.id, ignoreCache, attr));
       } else if (records[key]) {
-        attributeResult[key] = this.idToAttribute(records[key].id, records[key]);
+        attributeResult[key] = this.idToAttribute(records[key].id, ignoreCache, records[key]);
       } else {
         attributeResult[key] = null;
       }

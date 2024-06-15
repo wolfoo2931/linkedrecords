@@ -189,6 +189,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.observers.push(observer);
   }
 
+  // TODO: when an attribute is unloaded it should be removed from the attribute cache
   public unload() {
     if (this.attrSubscription) {
       this.clientServerBus.unsubscribe(this.attrSubscription);
