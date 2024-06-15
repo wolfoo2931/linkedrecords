@@ -243,16 +243,18 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
-    const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
-    this.attrSubscription = await this.clientServerBus.subscribe(url, this.id, (parsedData) => {
-      if (parsedData.attributeId !== this.id) {
-        return;
-      }
+    if (!this.attrSubscription) {
+      const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
+      this.attrSubscription = await this.clientServerBus.subscribe(url, this.id, (parsedData) => {
+        if (parsedData.attributeId !== this.id) {
+          return;
+        }
 
-      this.updatedAt = new Date(parsedData.updatedAt);
+        this.updatedAt = new Date(parsedData.updatedAt);
 
-      this.onServerMessage(parsedData);
-    });
+        this.onServerMessage(parsedData);
+      });
+    }
 
     return true;
   }
