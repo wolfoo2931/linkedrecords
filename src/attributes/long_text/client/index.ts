@@ -77,6 +77,8 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
   }
 
   protected onLoad() {
+    this.changeInTransmission = undefined;
+    this.changeInTransmissionSendAt = undefined;
     this.buffer.clear();
   }
 

@@ -165,6 +165,8 @@ IsAttributeStorage
     // see: https://en.wikipedia.org/wiki/Operational_transformation#Convergence_properties
     const transformedClientChange = clientChange.transformAgainst(serverChange, false).toString();
 
+    await this.ensureChangeCanBeApplied(transformedClientChange, clientChange);
+
     // TODO: we do not know yet for sure if this changeset will be applicable
     // to the already inserted changesets.
     const insertResult = await this.storage.insertAttributeChange(
@@ -180,5 +182,27 @@ IsAttributeStorage
       actorId: this.actorId,
       transformedClientChange,
     };
+  }
+
+  async ensureChangeCanBeApplied(
+    transformedClientChange: string,
+    clientChange: LongTextChange,
+  ) {
+    const latestStateInDb = await this.getByChangeId('2147483647');
+
+    try {
+      const tcc = LongTextChange.fromString(transformedClientChange);
+      const applyTestResult = tcc.apply(latestStateInDb.value);
+
+      console.log(`New Change successfully inserted into the database, new state for ${this.id} is ${applyTestResult}`);
+    } catch (ex) {
+      console.log('Error: New change could not be applied to the database state');
+      console.log('      server state:            ', latestStateInDb.value);
+      console.log('      server version:          ', latestStateInDb.changeId);
+      console.log('      clientChange:            ', clientChange?.changeset?.inspect());
+      console.log('      transformedClientChange: ', LongTextChange.fromString(transformedClientChange)?.changeset?.inspect());
+
+      throw new Error('The new change could not be merged into the server state');
+    }
   }
 }
