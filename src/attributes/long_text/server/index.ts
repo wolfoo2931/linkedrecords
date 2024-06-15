@@ -192,9 +192,7 @@ IsAttributeStorage
 
     try {
       const tcc = LongTextChange.fromString(transformedClientChange);
-      const applyTestResult = tcc.apply(latestStateInDb.value);
-
-      console.log(`New Change successfully inserted into the database, new state for ${this.id} is ${applyTestResult}`);
+      tcc.apply(latestStateInDb.value);
     } catch (ex) {
       console.log('Error: New change could not be applied to the database state');
       console.log('      server state:            ', latestStateInDb.value);
