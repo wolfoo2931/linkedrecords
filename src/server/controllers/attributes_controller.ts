@@ -38,7 +38,9 @@ export default {
     const hasAccess = await pool.findAny(SQL.getSQLToCheckAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id));
 
     if (!hasAccess) {
-      res.send([]);
+      res.send({
+        notVisibleToUser: true,
+      });
       return;
     }
 

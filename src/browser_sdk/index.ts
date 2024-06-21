@@ -106,7 +106,13 @@ export default class LinkedRecords {
       throw new Error(`Unauthorized member query for ${nodeId}`);
     }
 
-    return response.json();
+    const data = await response.json();
+
+    if (data.notVisibleToUser) {
+      throw new Error(`Unauthorized member query for ${nodeId}`);
+    }
+
+    return data;
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
