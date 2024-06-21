@@ -38,8 +38,7 @@ export default {
     const hasAccess = await pool.findAny(SQL.getSQLToCheckAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id));
 
     if (!hasAccess) {
-      res.status(401);
-      res.send({ message: `user ${req.hashedUserID} needs to be accountable or host of ${req.attribute.id} in order to see its members` });
+      res.send([]);
       return;
     }
 
