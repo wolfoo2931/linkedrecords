@@ -86,7 +86,6 @@ export default class AttributesRepository {
     }
 
     if (this.attributeCache[id] && !ignoreCache) {
-      console.log('cache hit for attribute', id);
       return this.attributeCache[id];
     }
 
