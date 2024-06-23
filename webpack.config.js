@@ -1,5 +1,6 @@
 const path = require("path");
 const nodeExternals = require("webpack-node-externals");
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 const NODE_ENV = "development";
 
 const client = {
@@ -9,6 +10,9 @@ const client = {
   mode: NODE_ENV,
   devtool: "source-map",
   watch: false,
+  plugins: [
+    new BundleAnalyzerPlugin()
+  ],
   output: {
     path: path.resolve(__dirname, "dist"),
     filename: "browser_sdk.js",
