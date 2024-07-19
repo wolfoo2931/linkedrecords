@@ -1,6 +1,6 @@
 const path = require("path");
 const nodeExternals = require("webpack-node-externals");
-const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+// const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 const NODE_ENV = "development";
 
 const client = {
@@ -11,7 +11,7 @@ const client = {
   devtool: "source-map",
   watch: false,
   plugins: [
-    new BundleAnalyzerPlugin()
+    // new BundleAnalyzerPlugin({ analyzerMode: 'static' })
   ],
   output: {
     path: path.resolve(__dirname, "dist"),
