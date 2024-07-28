@@ -134,6 +134,10 @@ export default function authentication() {
           Fact.recordUserEmail(email, hashUserId(sub), req.log);
         }
 
+        if (!email_verified || email_verified === 'false') {
+          res.redirect('/?email-not-verified');
+        }
+
         return session;
       },
       authorizationParams: {
