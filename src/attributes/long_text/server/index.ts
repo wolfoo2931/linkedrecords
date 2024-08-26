@@ -88,13 +88,24 @@ IsAttributeStorage
       queryOptions,
     );
 
+    if (result.changeId === changeId) {
+      return result;
+    }
+
     // TODO: query options should be something
     // like { minChangeId: result.changeId, maxChangeId: changeId }
     const changes = await this.storage.getAttributeChanges(
       this.id,
       this.actorId,
-      queryOptions,
+      {
+        ...queryOptions,
+        minChangeId: result.changeId,
+      },
     );
+
+    if (changes.length && changes[0].changeId === result.changeId) {
+      changes.shift();
+    }
 
     changes.forEach((change) => {
       result.value = LongTextChange.fromString(change.value).apply(result.value);
@@ -102,6 +113,15 @@ IsAttributeStorage
       result.actorId = change.actorId;
       result.updatedAt = change.time;
     });
+
+    if (changes.length >= 100) {
+      await this.storage.insertAttributeSnapshot(
+        this.id,
+        this.actorId,
+        result.value,
+        result.changeId,
+      );
+    }
 
     return result;
   }

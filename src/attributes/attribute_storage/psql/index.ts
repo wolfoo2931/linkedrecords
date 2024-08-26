@@ -98,13 +98,17 @@ export default class PsqlStorage implements IsAttributeStorage {
     attributeId: string,
     actorId: string,
     value: string,
+    changeId?: string,
   ) : Promise<{ id: string }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
 
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-    const result = await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id`, [actorId, new Date(), value]);
+
+    const result = changeId
+      ? await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta, change_id) VALUES ($1, $2, $3, false, $4) RETURNING change_id`, [actorId, new Date(), value, changeId])
+      : await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id`, [actorId, new Date(), value]);
 
     return { id: result.rows[0].change_id };
   }

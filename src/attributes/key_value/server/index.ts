@@ -79,11 +79,22 @@ IsAttributeStorage
       updatedAt: result.updatedAt,
     };
 
+    if (accumulatedResult.changeId === changeId) {
+      return accumulatedResult;
+    }
+
     const changes = await this.storage.getAttributeChanges(
       this.id,
       this.actorId,
-      queryOptions,
+      {
+        ...queryOptions,
+        minChangeId: result.changeId,
+      },
     );
+
+    if (changes.length && changes[0].changeId === result.changeId) {
+      changes.shift();
+    }
 
     changes.forEach((change) => {
       const tmpChange = KeyValueChange.fromString(change.value);
@@ -92,6 +103,15 @@ IsAttributeStorage
       accumulatedResult.actorId = change.actorId;
       accumulatedResult.updatedAt = change.time;
     });
+
+    if (changes.length >= 100) {
+      await this.storage.insertAttributeSnapshot(
+        this.id,
+        this.actorId,
+        JSON.stringify(accumulatedResult.value),
+        accumulatedResult.changeId,
+      );
+    }
 
     return accumulatedResult;
   }

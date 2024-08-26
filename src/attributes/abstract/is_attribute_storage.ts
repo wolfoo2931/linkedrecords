@@ -32,6 +32,7 @@ export default interface IsAttributeStorage {
   insertAttributeSnapshot(
     attributeId: string,
     actorId: string,
-    value: string
+    value: string,
+    changeId?: string,
   ) : Promise<{ id: string }>;
 }
