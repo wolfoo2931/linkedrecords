@@ -311,6 +311,38 @@ export default class Fact {
       .join(' INTERSECT ');
   }
 
+  static async saveAllWithoutAuthCheck(facts: Fact[], userid: string, logger: IsLogger) {
+    if (facts.length === 0) return;
+
+    const pool = new PgPoolWithLog(logger);
+
+    const specialFacts = facts.filter((fact) => fact.hasSpecialCreationLogic());
+    const nonSpecialFacts = facts.filter((fact) => !fact.hasSpecialCreationLogic());
+
+    for (let i = 0; i < specialFacts.length; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await specialFacts[i]?.save(userid);
+    }
+
+    const values = nonSpecialFacts
+      .map((_, i) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`)
+      .join(', ');
+
+    const flatParams = nonSpecialFacts.flatMap((fact) => [
+      fact.subject,
+      fact.predicate,
+      fact.object,
+      userid,
+    ]);
+
+    if (values.length) {
+      await pool.query(
+        `INSERT INTO facts (subject, predicate, object, created_by) VALUES ${values}`,
+        flatParams,
+      );
+    }
+  }
+
   static async findAll(
     {
       subject, predicate, object, subjectBlacklist, objectBlacklist,
@@ -465,6 +497,10 @@ export default class Fact {
     }
 
     return this.deleteWithoutAuthCheck(userid);
+  }
+
+  private hasSpecialCreationLogic() {
+    return this.predicate === '$isATermFor' || this.predicate === '$isAccountableFor';
   }
 
   private async deleteWithoutAuthCheck(userid: string) {

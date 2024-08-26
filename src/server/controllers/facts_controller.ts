@@ -25,24 +25,20 @@ export default {
       req.log,
     ));
 
-    const authorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
+    const authorizedChecks = await Promise.all(
+      facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID)),
+    );
 
-    const containsUnauthorizedFacts = (await Promise.all(authorizedChecks))
-      .includes((isAuthorized) => !isAuthorized);
+    const containsUnauthorizedFacts = authorizedChecks.some((x) => !x);
 
     if (containsUnauthorizedFacts) {
       res.status(401);
       res.send({});
     } else {
-      const savedRawFacts: Fact[] = [];
-
-      for (let i = 0; i < facts.length; i += 1) {
-        await facts[i].save(req.hashedUserID);
-        savedRawFacts.push(facts[i]);
-      }
+      await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, req.log);
 
       res.status(200);
-      res.send(await Promise.all(savedRawFacts));
+      res.send(facts);
     }
   },
 
@@ -54,10 +50,11 @@ export default {
       req.log,
     ));
 
-    const authorizedChecks = facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID));
+    const authorizedChecks = await Promise.all(
+      facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID)),
+    );
 
-    const containsUnauthorizedFacts = (await Promise.all(authorizedChecks))
-      .includes((isAuthorized) => !isAuthorized);
+    const containsUnauthorizedFacts = authorizedChecks.some((x) => !x);
 
     if (containsUnauthorizedFacts) {
       res.status(401);

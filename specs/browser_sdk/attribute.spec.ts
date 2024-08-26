@@ -30,6 +30,9 @@ describe('Attribute', () => {
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['referenceSourceStore', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      await client.Fact.createAll([
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -93,6 +96,9 @@ describe('Attribute', () => {
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['referenceSourceStore', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      await client.Fact.createAll([
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],
@@ -209,6 +215,9 @@ describe('Attribute', () => {
       await client.Fact.createAll([
         ['team', '$isATermFor', 'a group of people'],
         ['club', '$isATermFor', 'a group of people'],
+      ]);
+
+      await client.Fact.createAll([
         [teamA.id, 'isA', 'team'],
         [teamB.id, 'isA', 'team'],
         [clubA.id, 'isA', 'club'],
@@ -255,6 +264,9 @@ describe('Attribute', () => {
 
       await client.Fact.createAll([
         ['team', '$isATermFor', 'a group of people'],
+      ]);
+
+      await client.Fact.createAll([
         [teamA.id, 'isA', 'team'],
         [teamB.id, 'isA', 'team'],
         [teamC.id, 'isA', 'team'],
@@ -399,7 +411,9 @@ describe('Attribute', () => {
         ['Book', '$isATermFor', 'some concept'],
         ['Biography', '$isATermFor', 'some concept'],
         ['Autobiography', '$isATermFor', 'some concept'],
+      ]);
 
+      await client.Fact.createAll([
         ['Biography', 'isA*', 'Book'],
         ['Autobiography', 'isA*', 'Biography'],
 
@@ -442,7 +456,9 @@ describe('Attribute', () => {
         ['Book', '$isATermFor', 'some concept'],
         ['Biography', '$isATermFor', 'is a book about a persons life'],
         ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
+      ]);
 
+      await client.Fact.createAll([
         ['Biography', 'isA*', 'Book'],
         ['Autobiography', 'isA*', 'Biography'],
 
@@ -526,7 +542,9 @@ describe('Attribute', () => {
         ['Book', '$isATermFor', 'some concept'],
         ['Biography', '$isATermFor', 'is a book about a persons life'],
         ['Autobiography', '$isATermFor', 'is a biography written by the same person the book is about'],
+      ]);
 
+      await client.Fact.createAll([
         ['Biography', 'isA*', 'Book'],
         ['Autobiography', 'isA*', 'Biography'],
 
@@ -610,6 +628,9 @@ describe('Attribute', () => {
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['referenceSourceStore', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      await client.Fact.createAll([
         [references.id, 'belongsTo', content.id],
         [references.id, 'isA', 'referenceStore'],
         [referenceSources1.id, 'isA', 'referenceSourceStore'],

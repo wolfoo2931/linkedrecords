@@ -24,6 +24,9 @@ describe('Fact', () => {
       await client.Fact.createAll([
         ['Author', '$isATermFor', 'somebody who writes a book'],
         ['Book', '$isATermFor', 'a book'],
+      ]);
+
+      await client.Fact.createAll([
         [hermanMelville.id, 'isA', 'Author'],
         [mobyDick.id, 'isA', 'Book'],
         [hermanMelville.id, 'relatesTo', mobyDick.id],
@@ -68,6 +71,9 @@ describe('Fact', () => {
       await client.Fact.createAll([
         ['Author', '$isATermFor', 'somebody who writes a book'],
         ['Book', '$isATermFor', 'a book'],
+      ]);
+
+      await client.Fact.createAll([
         [hermanMelville.id, 'isA', 'Book'],
         [mobyDick.id, 'isA', 'Book'],
       ]);
@@ -110,6 +116,9 @@ describe('Fact', () => {
 
       await client.Fact.createAll([
         ['ContentType', '$isATermFor', 'some concept'],
+      ]);
+
+      await client.Fact.createAll([
         [todo.id, 'isA*', 'ContentType'],
         [openTodo.id, 'isA*', todo.id],
         [importantOpenTodo.id, 'isA*', openTodo.id],
@@ -134,6 +143,9 @@ describe('Fact', () => {
       await client.Fact.createAll([
         ['Author', '$isATermFor', 'some concept'],
         ['Book', '$isATermFor', 'some concept'],
+      ]);
+
+      await client.Fact.createAll([
         [hermanMelville.id, 'isA', 'Author'],
         [mobyDick.id, 'isA', 'Book'],
         [hermanMelville.id, 'relatesTo', mobyDick.id],
@@ -189,7 +201,9 @@ describe('Fact', () => {
         ['Author', '$isATermFor', 'some concept'],
         ['ContentType', '$isATermFor', 'some concept'],
         ['User', '$isATermFor', 'some concept'],
+      ]);
 
+      await client.Fact.createAll([
         ['AuthorizedUser', 'isNarrowConceptOf', 'User'],
         ['Book', 'isNarrowConceptOf', 'ContentType'],
         ['Author', 'isNarrowConceptOf', 'ContentType'],

@@ -164,7 +164,7 @@ export default {
     });
 
     await Promise.all(attributeSavePromises);
-    await Promise.all(resolvedFacts.map((fact) => fact.save(req.hashedUserID)));
+    await Fact.saveAllWithoutAuthCheck(resolvedFacts, req.hashedUserID, req.log);
 
     const result = {};
 
@@ -227,7 +227,7 @@ export default {
       id: req.attribute.id,
     };
 
-    await Promise.all(facts.map((fact) => fact.save(req.hashedUserID)));
+    await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, req.log);
 
     if (result instanceof Error) {
       req.log.error(`error in POST /attributes/${req.params.attributeId}`, result.message);
