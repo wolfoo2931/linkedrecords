@@ -44,7 +44,7 @@ export default {
       return;
     }
 
-    const users = await pool.query(`SELECT * FROM users WHERE id IN
+    const users = await pool.query(`SELECT id, username FROM users WHERE id IN
       (SELECT subject
       FROM facts
       WHERE subject LIKE 'us-%'

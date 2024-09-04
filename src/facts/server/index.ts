@@ -232,24 +232,24 @@ export default class Fact {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     }
 
-    let table = `(SELECT facts.* FROM facts
+    let table = `(SELECT facts.subject, facts.predicate, facts.object FROM facts
                   WHERE object = '${query[1]}'
                   AND predicate = '${query[0]}') as f`;
 
     if (query[0].endsWith('*')) {
       table = `(WITH RECURSIVE rfacts AS (
-        SELECT facts.* FROM facts
+        SELECT facts.subject, facts.predicate, facts.object FROM facts
                         WHERE object = '${query[1]}'
                         AND predicate = '${query[0]}'
         UNION ALL
-          SELECT facts.* FROM facts, rfacts
+          SELECT facts.subject, facts.predicate, facts.object FROM facts, rfacts
                           WHERE facts.object = rfacts.subject
                           AND facts.predicate = '${query[0]}'
         )
         CYCLE subject
           SET cycl TO 'Y' DEFAULT 'N'
         USING path_array
-        SELECT *
+        SELECT rfacts.subject, rfacts.predicate, rfacts.object
           FROM rfacts
           WHERE cycl = 'N') as f`;
     }
@@ -355,7 +355,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = 'SELECT * FROM facts';
+    let sqlQuery = 'SELECT subject, predicate, object FROM facts';
 
     sqlQuery += ` ${and()} ${Fact.authorizedWhereClause(userid)}`;
 
@@ -525,7 +525,7 @@ export default class Fact {
       const pool = new PgPoolWithLog(this.logger);
 
       return pool.findAny(
-        'SELECT * FROM facts where subject = $1 AND predicate = $2 AND created_by = $3',
+        'SELECT id FROM facts where subject = $1 AND predicate = $2 AND created_by = $3',
         [this.subject, '$isATermFor', userid],
       );
     }
@@ -574,7 +574,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isMemberOf') {
-      if (await pool.findAny('SELECT * FROM facts WHERE predicate=$1 AND subject=$2', ['$isATermFor', this.subject])) {
+      if (await pool.findAny('SELECT id FROM facts WHERE predicate=$1 AND subject=$2', ['$isATermFor', this.subject])) {
         return false;
       }
     }
@@ -597,7 +597,7 @@ export default class Fact {
     const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object));
 
     const subjectIsKnownUserPromise = pool.findAny(`
-      SELECT *
+      SELECT id
       FROM users
       WHERE id=$1
     `, [this.subject]);

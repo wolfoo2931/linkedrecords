@@ -23,7 +23,7 @@ export default class PsqlStorage implements IsAttributeStorage {
   ) : Promise<{ id: string }> {
     const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
 
-    if (await this.pgPool.findAny('SELECT * FROM facts WHERE subject=$1', [attributeId])) {
+    if (await this.pgPool.findAny('SELECT id FROM facts WHERE subject=$1', [attributeId])) {
       throw new Error('attributeId is invalid');
     }
 
