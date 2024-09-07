@@ -6,7 +6,6 @@ import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
 import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
-import AbstractAttributeChange from '../../abstract/abstract_attribute_change';
 
 function getUuidByAttributeId(attributeId: string) {
   const parts = attributeId.split('-');
@@ -116,42 +115,26 @@ export default class AttributeStorage implements IsAttributeStorage {
     return [];
   }
 
-  async insertAttributeChange(
-    attributeId: string,
-    actorId: string,
-    change: AbstractAttributeChange<any>,
-  ) : Promise<{ id: string, updatedAt: Date }> {
-    if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
-      throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
-    }
-
-    const latestValue = await this.getAttributeLatestSnapshot(attributeId, actorId);
-    const newValue = change.applyToSerializedValue(latestValue.value);
-
-    await this.insertAttributeSnapshot(attributeId, actorId, newValue);
-
-    return {
-      id: '2147483647',
-      updatedAt: new Date(),
-    };
+  async insertAttributeChange() : Promise<{ id: string, updatedAt: Date }> {
+    throw new Error('insertAttributeChange is not implemented for psql storage, use psql_with_history instead');
   }
 
   async insertAttributeSnapshot(
     attributeId: string,
     actorId: string,
     value: string,
-  ) : Promise<{ id: string }> {
+  ) : Promise<{ id: string, updatedAt: Date }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
     const pgTableName = await this.getAttributeTableName(attributeId);
-    await this.pgPool.query(`UPDATE ${pgTableName} SET actor_id=$1, updated_at=$2, value=$3 WHERE id=$4`, [
+    const result = await this.pgPool.query(`UPDATE ${pgTableName} SET actor_id=$1, updated_at=$2, value=$3 WHERE id=$4 RETURNING updated_at`, [
       actorId,
       new Date(),
       value,
       getUuidByAttributeId(attributeId),
     ]);
 
-    return { id: '2147483647' };
+    return { id: '2147483647', updatedAt: new Date(result.rows[0].updated_at) };
   }
 }

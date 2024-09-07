@@ -108,7 +108,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
     changeId?: string,
-  ) : Promise<{ id: string }> {
+  ) : Promise<{ id: string, updatedAt: Date }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
@@ -116,10 +116,10 @@ export default class AttributeStorage implements IsAttributeStorage {
     const pgTableName = AttributeStorage.getAttributeTableName(attributeId);
 
     const result = changeId
-      ? await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta, change_id) VALUES ($1, $2, $3, false, $4) RETURNING change_id`, [actorId, new Date(), value, changeId])
-      : await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id`, [actorId, new Date(), value]);
+      ? await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta, change_id) VALUES ($1, $2, $3, false, $4) RETURNING change_id, time`, [actorId, new Date(), value, changeId])
+      : await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id, time`, [actorId, new Date(), value]);
 
-    return { id: result.rows[0].change_id };
+    return { id: result.rows[0].change_id, updatedAt: new Date(result.rows[0].time) };
   }
 
   private static getAttributeTableName(attributeId: string): string {

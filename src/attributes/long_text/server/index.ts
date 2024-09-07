@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // eslint-disable-next-line max-classes-per-file
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';

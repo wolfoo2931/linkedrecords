@@ -29,90 +29,42 @@ IsAttributeStorage
     createdAt: number,
     updatedAt: number
   }> {
-    return this.getByChangeId('2147483647', args);
-  }
+    const queryOptions = { maxChangeId: '2147483647', inAuthorizedContext: args?.inAuthorizedContext };
 
-  async set(value: object) : Promise<{ id: string }> {
-    return this.storage.insertAttributeSnapshot(this.id, this.actorId, JSON.stringify(value));
-  }
-
-  async change(
-    changeWithMetadata: SerializedChangeWithMetadata<KeyValueChange>,
-  ) : Promise<SerializedChangeWithMetadata<KeyValueChange>> {
-    const insertResult = await this.storage.insertAttributeChange(
-      this.id,
-      this.actorId,
-      JSON.stringify(changeWithMetadata.change),
-    );
-
-    return new SerializedChangeWithMetadata(
-      changeWithMetadata.attributeId,
-      changeWithMetadata.actorId,
-      changeWithMetadata.clientId,
-      KeyValueChange.fromJSON(changeWithMetadata.change, insertResult.id),
-      insertResult.updatedAt,
-    );
-  }
-
-  private async getByChangeId(
-    changeId: string,
-    args?: { inAuthorizedContext?: boolean },
-  ) : Promise<{
-      value: object,
-      changeId: string,
-      actorId: string,
-      createdAt: number,
-      updatedAt: number
-    }> {
-    const queryOptions = { maxChangeId: changeId, inAuthorizedContext: args?.inAuthorizedContext };
     const result = await this.storage.getAttributeLatestSnapshot(
       this.id,
       this.actorId,
       queryOptions,
     );
 
-    const accumulatedResult = {
+    return {
       value: JSON.parse(result.value),
       changeId: result.changeId,
       actorId: result.actorId,
       createdAt: result.createdAt,
       updatedAt: result.updatedAt,
     };
+  }
 
-    if (accumulatedResult.changeId === changeId) {
-      return accumulatedResult;
-    }
+  async set(value: object) : Promise<{ id: string, updatedAt: Date }> {
+    return this.storage.insertAttributeSnapshot(this.id, this.actorId, JSON.stringify(value));
+  }
 
-    const changes = await this.storage.getAttributeChanges(
-      this.id,
-      this.actorId,
-      {
-        ...queryOptions,
-        minChangeId: result.changeId,
-      },
+  async change(
+    changeWithMetadata: SerializedChangeWithMetadata<KeyValueChange>,
+  ) : Promise<SerializedChangeWithMetadata<KeyValueChange>> {
+    const currentValue = await this.get();
+    const change = KeyValueChange.fromJSON(changeWithMetadata.change);
+    const newValue = change.apply(currentValue.value);
+
+    const updateResult = await this.set(newValue);
+
+    return new SerializedChangeWithMetadata(
+      changeWithMetadata.attributeId,
+      changeWithMetadata.actorId,
+      changeWithMetadata.clientId,
+      KeyValueChange.fromJSON(changeWithMetadata.change, '2147483647'),
+      updateResult.updatedAt,
     );
-
-    if (changes.length && changes[0].changeId === result.changeId) {
-      changes.shift();
-    }
-
-    changes.forEach((change) => {
-      const tmpChange = KeyValueChange.fromString(change.value);
-      accumulatedResult.value = tmpChange.apply(accumulatedResult.value);
-      accumulatedResult.changeId = change.changeId;
-      accumulatedResult.actorId = change.actorId;
-      accumulatedResult.updatedAt = change.time;
-    });
-
-    if (changes.length >= 100) {
-      await this.storage.insertAttributeSnapshot(
-        this.id,
-        this.actorId,
-        JSON.stringify(accumulatedResult.value),
-        accumulatedResult.changeId,
-      );
-    }
-
-    return accumulatedResult;
   }
 }

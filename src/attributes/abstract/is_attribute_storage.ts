@@ -34,5 +34,5 @@ export default interface IsAttributeStorage {
     actorId: string,
     value: string,
     changeId?: string,
-  ) : Promise<{ id: string }>;
+  ) : Promise<{ id: string, updatedAt: Date }>;
 }

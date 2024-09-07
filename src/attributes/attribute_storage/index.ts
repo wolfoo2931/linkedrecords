@@ -4,12 +4,26 @@ import { AttributeSnapshot, AttributeChange, AttributeChangeCriteria } from './t
 
 /* eslint-disable import/prefer-default-export */
 import PsqlStorageWithHistory from './psql_with_history';
+import PsqlStorage from './psql';
 
 export default class AttributeStorage implements IsAttributeStorage {
   pgStorageWithHistory: IsAttributeStorage;
 
+  pgStorage: PsqlStorage;
+
   constructor(logger: IsLogger) {
     this.pgStorageWithHistory = new PsqlStorageWithHistory(logger);
+    this.pgStorage = new PsqlStorage(logger);
+  }
+
+  private getStorage(attributeId): IsAttributeStorage {
+    const [type] = attributeId.split('-');
+
+    if (type === 'kv' || type === 'bl') {
+      return this.pgStorage;
+    }
+
+    return this.pgStorageWithHistory;
   }
 
   insertAttributeSnapshot(
@@ -17,8 +31,10 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
     changeId?: string,
-  ): Promise<{ id: string; }> {
-    return this.pgStorageWithHistory.insertAttributeSnapshot(attributeId, actorId, value, changeId);
+  ): Promise<{ id: string, updatedAt: Date }> {
+    return this
+      .getStorage(attributeId)
+      .insertAttributeSnapshot(attributeId, actorId, value, changeId);
   }
 
   createAttribute(
@@ -26,7 +42,9 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    return this.pgStorageWithHistory.createAttribute(attributeId, actorId, value);
+    return this
+      .getStorage(attributeId)
+      .createAttribute(attributeId, actorId, value);
   }
 
   getAttributeLatestSnapshot(
@@ -34,7 +52,9 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     criteria: AttributeChangeCriteria,
   ) : Promise<AttributeSnapshot> {
-    return this.pgStorageWithHistory.getAttributeLatestSnapshot(attributeId, actorId, criteria);
+    return this
+      .getStorage(attributeId)
+      .getAttributeLatestSnapshot(attributeId, actorId, criteria);
   }
 
   getAttributeChanges(
@@ -42,7 +62,9 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     criteria: AttributeChangeCriteria,
   ) : Promise<Array<any>> {
-    return this.pgStorageWithHistory.getAttributeChanges(attributeId, actorId, criteria);
+    return this
+      .getStorage(attributeId)
+      .getAttributeChanges(attributeId, actorId, criteria);
   }
 
   insertAttributeChange(
@@ -50,6 +72,8 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     change: string,
   ) : Promise<AttributeChange> {
-    return this.pgStorageWithHistory.insertAttributeChange(attributeId, actorId, change);
+    return this
+      .getStorage(attributeId)
+      .insertAttributeChange(attributeId, actorId, change);
   }
 }
