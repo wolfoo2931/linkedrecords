@@ -8,7 +8,7 @@ export default interface IsAttributeStorage {
   getAttributeLatestSnapshot(
     attributeId: string,
     actorId: string,
-    criteria: { maxChangeId?: string }
+    criteria: { maxChangeId?: string, inAuthorizedContext?: boolean }
   ) : Promise<{
     value: string,
     changeId: string,

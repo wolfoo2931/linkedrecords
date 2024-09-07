@@ -1,7 +1,7 @@
 import md5 from 'md5';
 import { uuidv7 as uuid } from 'uuidv7';
 import QueryExecutor from '../../attributes/attribute_query';
-import { PsqlStorage } from '../../attributes/attribute_storage';
+import AttributeStorage from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 import IsLogger from '../../../lib/is_logger';
 
@@ -62,7 +62,7 @@ export function getAttributeByMessage(attributeId, message, logger: IsLogger) {
     attributeId,
     message.clientId,
     message.actorId,
-    new PsqlStorage(logger),
+    new AttributeStorage(logger),
     logger,
   );
 }
@@ -71,7 +71,7 @@ export default function attributeMiddleware() {
   return (req, res, next) => {
     const id = getAttributeIdByRequest(req);
 
-    req.attributeStorage = new PsqlStorage(req.log);
+    req.attributeStorage = new AttributeStorage(req.log);
     req.clientId = req.query?.clientId || req.body?.clientId;
     req.actorId = req?.oidc?.user?.sub;
 
