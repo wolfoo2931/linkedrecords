@@ -7,6 +7,10 @@ import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_
 import KeyValueChange from '../key_value_change';
 import Fact from '../../../facts/server';
 
+import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
+
+const queue: IsQueue = QueuedTasks.create();
+
 export default class KeyValueAttribute extends AbstractAttributeServer<
 object,
 KeyValueChange,
@@ -53,18 +57,21 @@ IsAttributeStorage
   async change(
     changeWithMetadata: SerializedChangeWithMetadata<KeyValueChange>,
   ) : Promise<SerializedChangeWithMetadata<KeyValueChange>> {
-    const currentValue = await this.get();
-    const change = KeyValueChange.fromJSON(changeWithMetadata.change);
-    const newValue = change.apply(currentValue.value);
+    return queue
+      .do(this.id, async () => {
+        const currentValue = await this.get();
+        const change = KeyValueChange.fromJSON(changeWithMetadata.change);
+        const newValue = change.apply(currentValue.value);
 
-    const updateResult = await this.set(newValue);
+        const updateResult = await this.set(newValue);
 
-    return new SerializedChangeWithMetadata(
-      changeWithMetadata.attributeId,
-      changeWithMetadata.actorId,
-      changeWithMetadata.clientId,
-      KeyValueChange.fromJSON(changeWithMetadata.change, '2147483647'),
-      updateResult.updatedAt,
-    );
+        return new SerializedChangeWithMetadata(
+          changeWithMetadata.attributeId,
+          changeWithMetadata.actorId,
+          changeWithMetadata.clientId,
+          KeyValueChange.fromJSON(changeWithMetadata.change, '2147483647'),
+          updateResult.updatedAt,
+        );
+      });
   }
 }

@@ -92,7 +92,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     const pgTableName = await this.getAttributeTableName(attributeId);
-    const snapshots = await this.pgPool.query(`SELECT value, actor_id, created_at, updated_at from ${pgTableName} WHERE id=$1`, [
+    const snapshots = await this.pgPool.query(`SELECT value, actor_id, created_at, updated_at from ${pgTableName} WHERE id=$1 LIMIT 1`, [
       getUuidByAttributeId(attributeId),
     ]);
 
