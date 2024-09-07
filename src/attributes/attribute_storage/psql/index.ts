@@ -65,6 +65,18 @@ export default class AttributeStorage implements IsAttributeStorage {
       throw new Error('attributeId is invalid');
     }
 
+    return this.createAttributeWithoutFactsCheck(
+      attributeId,
+      actorId,
+      value,
+    );
+  }
+
+  async createAttributeWithoutFactsCheck(
+    attributeId: string,
+    actorId: string,
+    value: string,
+  ) : Promise<{ id: string }> {
     const pgTableName = await this.getAttributeTableName(attributeId);
     const createQuery = `INSERT INTO ${pgTableName} (id, actor_id, updated_at, created_at, value) VALUES ($1, $2, $3, $4, $5)`;
     await this.pgPool.query(createQuery, [

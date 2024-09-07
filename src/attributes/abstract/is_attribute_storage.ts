@@ -1,4 +1,10 @@
 export default interface IsAttributeStorage {
+  createAttributeWithoutFactsCheck(
+    attributeId: string,
+    actorId: string,
+    value: string
+  ) : Promise<{ id: string }>;
+
   createAttribute(
     attributeId: string,
     actorId: string,

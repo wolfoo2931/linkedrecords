@@ -96,7 +96,11 @@ IsAttributeStorage
 
   private async migrateFromHistoryAttribute(): Promise<void> {
     const value = await this.getLatestValueFromHistoryStorage();
-    await this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
+    await this.storage.createAttributeWithoutFactsCheck(
+      this.id,
+      this.actorId,
+      JSON.stringify(value.value),
+    );
   }
 
   private async getLatestValueFromHistoryStorage() : Promise<{

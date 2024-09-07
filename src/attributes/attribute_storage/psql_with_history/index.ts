@@ -22,11 +22,19 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    const pgTableName = AttributeStorage.getAttributeTableName(attributeId);
-
     if (await this.pgPool.findAny('SELECT id FROM facts WHERE subject=$1', [attributeId])) {
       throw new Error('attributeId is invalid');
     }
+
+    return this.createAttributeWithoutFactsCheck(attributeId, actorId, value);
+  }
+
+  async createAttributeWithoutFactsCheck(
+    attributeId: string,
+    actorId: string,
+    value: string,
+  ) : Promise<{ id: string }> {
+    const pgTableName = AttributeStorage.getAttributeTableName(attributeId);
 
     const createQuery = `CREATE TABLE ${pgTableName} (actor_id varchar(36), time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
     await this.pgPool.query(createQuery);

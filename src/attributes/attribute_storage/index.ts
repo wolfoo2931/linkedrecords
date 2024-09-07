@@ -37,6 +37,16 @@ export default class AttributeStorage implements IsAttributeStorage {
       .insertAttributeSnapshot(attributeId, actorId, value, changeId);
   }
 
+  createAttributeWithoutFactsCheck(
+    attributeId: string,
+    actorId: string,
+    value: string,
+  ) : Promise<{ id: string }> {
+    return this
+      .getStorage(attributeId)
+      .createAttributeWithoutFactsCheck(attributeId, actorId, value);
+  }
+
   createAttribute(
     attributeId: string,
     actorId: string,
