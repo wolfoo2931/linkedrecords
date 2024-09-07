@@ -96,6 +96,10 @@ export default class AttributeStorage implements IsAttributeStorage {
       getUuidByAttributeId(attributeId),
     ]);
 
+    if (!snapshots.rows.length) {
+      throw new Error(`Attribute not found (id: ${attributeId})`);
+    }
+
     const snapshot = snapshots.rows[0];
 
     if (!snapshot) {
@@ -134,6 +138,10 @@ export default class AttributeStorage implements IsAttributeStorage {
       value,
       getUuidByAttributeId(attributeId),
     ]);
+
+    if (!result.rows.length) {
+      throw new Error(`Attribute not found (id: ${attributeId})`);
+    }
 
     return { id: '2147483647', updatedAt: new Date(result.rows[0].updated_at) };
   }

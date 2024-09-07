@@ -16,6 +16,7 @@
         "oidc",
         "pino",
         "plusplus",
+        "psql",
         "rfacts",
         "triadan",
         "userid",
