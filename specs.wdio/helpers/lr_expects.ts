@@ -28,11 +28,14 @@ export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
   const update = (lr, sURL, cId, actId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, {
     credentials: 'include',
     method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({
       clientId: cId,
       actorId: actId,
       facts: [],
-      body: { UPDATED: 'VALUE' },
+      change: [{ UPDATED: 'VALUE' }],
     }),
   }).then((r) => r.status);
 
