@@ -116,30 +116,8 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
       CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
-    `);
-
-    const rawFactTableColumns = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
-    const factTableColumns = rawFactTableColumns.rows.map((c) => c.column_name);
-
-    if (!factTableColumns.includes('created_at')) {
-      await pg.query(`
-        ALTER TABLE facts ADD COLUMN created_at timestamp DEFAULT NOW();
-        ALTER TABLE facts ADD COLUMN created_by CHAR(40);
-        ALTER TABLE facts ADD COLUMN id SERIAL;
-      `);
-    }
-
-    // migrate all facts from the old (x, '$wasCreatedBy', u)
-    // to the new (u, '$isAccountableFor', x) format
-    await pg.query(`
-      INSERT INTO facts (subject, predicate, object, created_at)
-      SELECT object as subject,
-          '$isAccountableFor' as predicate,
-          subject as object,
-          created_at
-      FROM facts as fSrc
-      WHERE fSrc.predicate='$wasCreatedBy'
-      AND fSrc.object NOT IN (SELECT subject from facts as f where f.predicate ='$isAccountableFor');
+      CREATE TABLE IF NOT EXISTS kv_attributes_shard_1 (id UUID PRIMARY KEY, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE TABLE IF NOT EXISTS bl_attributes_shard_1 (id UUID PRIMARY KEY, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
     `);
   }
 

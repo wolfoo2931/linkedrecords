@@ -34,26 +34,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       throw new Error(`invalid attribute Id: ${attributeId}`);
     }
 
-    const tableName = `${prefix}_attributes_shard_1`;
-
-    if (!this.tablesKnownAsCreated.has(tableName)) {
-      await this.pgPool.query(`CREATE TABLE IF NOT EXISTS ${tableName} (
-        id UUID PRIMARY KEY,
-        actor_id varchar(36),
-        updated_at TIMESTAMP,
-        created_at TIMESTAMP,
-        value TEXT
-      )`);
-
-      // TODO: check if there is a dedicated table for the attribute
-      // and migrate the data to the shared table.
-
-      this.tablesKnownAsCreated.set(tableName, true);
-    }
-
-    // We can do even more sharding here as the attribute id is uuid v7
-    // We can use the time part of the uuid to shard the attributes.
-    return tableName;
+    return `${prefix}_attributes_shard_1`;
   }
 
   async createAttribute(
