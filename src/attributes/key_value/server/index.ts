@@ -6,7 +6,6 @@ import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import PsqlStorageWithHistory from '../../attribute_storage/psql_with_history';
 import KeyValueChange from '../key_value_change';
-import Fact from '../../../facts/server';
 
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
 
@@ -21,9 +20,22 @@ IsAttributeStorage
     return 'kv';
   }
 
+  public static async createAll(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    attr: [AbstractAttributeServer<any, any, any>, any][],
+    storage: IsAttributeStorage,
+  ): Promise<void> {
+    await Promise.all(attr.map(([a]) => a.createAccountableFact()));
+
+    await storage.createAllAttributes(attr.map((a) => ({
+      attributeId: a[0].id,
+      actorId: a[0].actorId,
+      value: a[1],
+    })));
+  }
+
   async create(value: object) : Promise<{ id: string }> {
-    const createdByFact = new Fact(this.actorId, '$isAccountableFor', this.id, this.logger);
-    await createdByFact.save(this.actorId);
+    await this.createAccountableFact();
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
   }
 

@@ -47,6 +47,28 @@ export default class AttributeStorage implements IsAttributeStorage {
       .createAttributeWithoutFactsCheck(attributeId, actorId, value);
   }
 
+  async createAllAttributes(
+    attr: { attributeId: string, actorId: string, value: string }[],
+  ) : Promise<{ id: string }[]> {
+    const attributesWithHistory: { attributeId: string, actorId: string, value: string }[] = [];
+    const attributesWithoutHistory: { attributeId: string, actorId: string, value: string }[] = [];
+
+    attr.forEach((a) => {
+      const storage = this.getStorage(a.attributeId);
+
+      if (storage === this.pgStorageWithHistory) {
+        attributesWithHistory.push(a);
+      } else {
+        attributesWithoutHistory.push(a);
+      }
+    });
+
+    return Promise.all([
+      ...(await this.pgStorageWithHistory.createAllAttributes(attributesWithHistory)),
+      ...(await this.pgStorage.createAllAttributes(attributesWithoutHistory)),
+    ]);
+  }
+
   createAttribute(
     attributeId: string,
     actorId: string,

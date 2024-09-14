@@ -6,7 +6,6 @@ import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
-import Fact from '../../../facts/server';
 
 export default class BlobAttribute extends AbstractAttributeServer<
 Blob,
@@ -18,8 +17,7 @@ IsAttributeStorage
   }
 
   async create(value: Blob) : Promise<{ id: string }> {
-    const createdByFact = new Fact(this.actorId, '$isAccountableFor', this.id, this.logger);
-    await createdByFact.save(this.actorId);
+    await this.createAccountableFact();
 
     const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
     return this.storage.createAttribute(this.id, this.actorId, content);

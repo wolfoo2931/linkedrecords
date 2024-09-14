@@ -11,6 +11,10 @@ export default interface IsAttributeStorage {
     value: string
   ) : Promise<{ id: string }>;
 
+  createAllAttributes(
+    attr: { attributeId: string, actorId: string, value: string }[]
+  ) : Promise<{ id: string }[]>;
+
   getAttributeLatestSnapshot(
     attributeId: string,
     actorId: string,

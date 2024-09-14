@@ -37,6 +37,49 @@ export default class AttributeStorage implements IsAttributeStorage {
     return `${prefix}_attributes_shard_1`;
   }
 
+  async createAllAttributes(
+    attr: { attributeId: string, actorId: string, value: string }[],
+  ) : Promise<{ id: string }[]> {
+    if (!attr.length) {
+      return [];
+    }
+
+    const idCheckCondition = attr.map((a, i) => `subject=$${i + 1}`).join(' OR ');
+
+    if (await this.pgPool.findAny(`SELECT id FROM facts WHERE ${idCheckCondition}`, attr.map((a) => a.attributeId))) {
+      throw new Error('attribute list contains invalid attributeId');
+    }
+
+    const tableNames = await Promise.all(
+      attr.map((a) => this.getAttributeTableName(a.attributeId)),
+    );
+
+    if (!tableNames[0]) {
+      return [];
+    }
+
+    if (!tableNames.every((n) => n === tableNames[0])) {
+      throw new Error('createAllAttributes can only be used with attributes of the same type');
+    }
+
+    const values = attr
+      .map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`)
+      .join(', ');
+
+    const flatParams = attr.flatMap((a) => [
+      a.actorId,
+      new Date(),
+      new Date(),
+      getUuidByAttributeId(a.attributeId),
+      a.value,
+    ]);
+
+    const createQuery = `INSERT INTO ${tableNames[0]} (actor_id, updated_at, created_at, id, value) VALUES ${values}`;
+    await this.pgPool.query(createQuery, flatParams);
+
+    return attr.map((a) => ({ id: a.attributeId }));
+  }
+
   async createAttribute(
     attributeId: string,
     actorId: string,

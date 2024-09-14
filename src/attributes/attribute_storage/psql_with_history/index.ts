@@ -17,6 +17,12 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgPool = new PgPoolWithLog(this.logger);
   }
 
+  async createAllAttributes(
+    attr: { attributeId: string, actorId: string, value: string }[],
+  ) : Promise<{ id: string }[]> {
+    return Promise.all(attr.map((a) => this.createAttribute(a.attributeId, a.actorId, a.value)));
+  }
+
   async createAttribute(
     attributeId: string,
     actorId: string,
