@@ -292,21 +292,33 @@ export default class Fact {
   static async saveAllWithoutAuthCheck(facts: Fact[], userid: string, logger: IsLogger) {
     if (facts.length === 0) return;
 
-    const pool = new PgPoolWithLog(logger);
-
     const specialFacts = facts.filter((fact) => fact.hasSpecialCreationLogic());
     const nonSpecialFacts = facts.filter((fact) => !fact.hasSpecialCreationLogic());
 
     for (let i = 0; i < specialFacts.length; i += 1) {
+      // we need to create this one by one to make sure no
+      // duplicates gets inserted and other checks pass.
       // eslint-disable-next-line no-await-in-loop
       await specialFacts[i]?.save(userid);
     }
 
-    const values = nonSpecialFacts
+    await this.saveAllWithoutAuthCheckAndSpecialTreatment(nonSpecialFacts, userid, logger);
+  }
+
+  static async saveAllWithoutAuthCheckAndSpecialTreatment(
+    facts: Fact[],
+    userid: string,
+    logger: IsLogger,
+  ) {
+    if (facts.length === 0) return;
+
+    const pool = new PgPoolWithLog(logger);
+
+    const values = facts
       .map((_, i) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`)
       .join(', ');
 
-    const flatParams = nonSpecialFacts.flatMap((fact) => [
+    const flatParams = facts.flatMap((fact) => [
       fact.subject,
       fact.predicate,
       fact.object,

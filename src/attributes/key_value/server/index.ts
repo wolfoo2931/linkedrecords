@@ -8,6 +8,7 @@ import PsqlStorageWithHistory from '../../attribute_storage/psql_with_history';
 import KeyValueChange from '../key_value_change';
 
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
+import Fact from '../../../facts/server';
 
 const queue: IsQueue = QueuedTasks.create();
 
@@ -25,7 +26,15 @@ IsAttributeStorage
     attr: [AbstractAttributeServer<any, any, any>, any][],
     storage: IsAttributeStorage,
   ): Promise<void> {
-    await Promise.all(attr.map(([a]) => a.createAccountableFact()));
+    if (!attr[0]) {
+      throw new Error('invalid attribute data found when creating all attributes');
+    }
+
+    await Fact.saveAllWithoutAuthCheckAndSpecialTreatment(
+      attr.map(([a]) => new Fact(a.actorId, '$isAccountableFor', a.id, a.logger)),
+      attr[0][0].actorId,
+      attr[0][0].logger,
+    );
 
     await storage.createAllAttributes(attr.map((a) => ({
       attributeId: a[0].id,
