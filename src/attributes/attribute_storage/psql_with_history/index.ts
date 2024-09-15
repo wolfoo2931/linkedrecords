@@ -94,7 +94,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     const pgTableName = AttributeStorage.getAttributeTableName(attributeId);
     const changes = await this.pgPool.query(`SELECT value, change_id, actor_id, time FROM ${pgTableName} WHERE change_id > $1 AND change_id <= $2 AND delta = true ORDER BY change_id ASC`, [minChangeId, maxChangeId]);
 
-    return changes.rows.map((row) => ({
+    return changes.rows.filter((row) => row.value !== null).map((row) => ({
       value: row.value,
       changeId: row.change_id,
       actorId: row.actor_id,

@@ -116,8 +116,8 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
       CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
-      CREATE TABLE IF NOT EXISTS kv_attributes_shard_1 (id UUID PRIMARY KEY, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
-      CREATE TABLE IF NOT EXISTS bl_attributes_shard_1 (id UUID PRIMARY KEY, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE TABLE IF NOT EXISTS kv_attributes_shard_1 (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE TABLE IF NOT EXISTS bl_attributes_shard_1 (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
     `);
   }
 
