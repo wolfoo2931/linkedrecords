@@ -115,7 +115,7 @@ IsAttributeStorage
       const attributeGUID = attributeId.replace('kv-', '');
 
       // eslint-disable-next-line no-await-in-loop
-      if (!await noHistoryStorage.pgPool.findAny(`SELECT * FROM kv_attributes_shard_1 WHERE id='${attributeGUID}'`)) {
+      if (!await noHistoryStorage.pgPool.findAny(`SELECT * FROM kv_attributes WHERE id='${attributeGUID}'`)) {
         logger.info(`start migrating history attribute ${attributeId}`);
         // eslint-disable-next-line no-await-in-loop
         await this.migrateFromHistoryAttribute(attributeId, logger);

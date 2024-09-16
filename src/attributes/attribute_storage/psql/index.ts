@@ -34,7 +34,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       throw new Error(`invalid attribute Id: ${attributeId}`);
     }
 
-    return `${prefix}_attributes_shard_1`;
+    return `${prefix}_attributes`;
   }
 
   async createAllAttributes(
