@@ -232,14 +232,13 @@ describe('Key Value Attributes', () => {
       const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+      const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
 
       await attributeClientA.change(new KeyValueChange([
         { key: 'foo2', value: { nested: 'values', more: undefined } },
       ]));
 
-      await new Promise((r) => { setTimeout(r, 500); });
-
-      const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
+      // await new Promise((r) => { setTimeout(r, 500); });
 
       await waitFor(async () => {
         const val = await reloadedAttribute!.getValue();
