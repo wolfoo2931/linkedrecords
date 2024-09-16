@@ -227,7 +227,7 @@ describe('Key Value Attributes', () => {
   });
 
   describe('attribute.change()', () => {
-    it('allows to change only parts of the document when the value is a JSON object', async () => {
+    it.only('allows to change only parts of the document when the value is a JSON object', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 

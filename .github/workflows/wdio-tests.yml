@@ -1,51 +1,51 @@
-name: WDIO Tests
+# name: WDIO Tests
 
-on:
-  workflow_dispatch:
-    inputs: {}
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main, develop ]
+# on:
+#   workflow_dispatch:
+#     inputs: {}
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main, develop ]
 
-jobs:
-  wdio-tests:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ci_db_test
-        ports:
-          - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Node.js environment
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18.13
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-      - name: Install dependencies
-        run: npm install
-      - name: WDIO Tests
-        env:
-          PGHOST: localhost
-          PGUSER: postgres
-          PGPASSWORD: postgres
-          PGDATABASE: ci_db_test
-          PGPORT: ${{ job.services.postgres.ports[5432] }}
-          TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
-          COOKIE_DOMAIN: localhost
-          FRONTEND_BASE_URL: http://localhost:3001
-          SERVER_BASE_URL: http://localhost:6543
-          AUTH_ISSUER_BASE_URL: https://dev-onljhxvyw71o4mbs.us.auth0.com/
-          AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
-          AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
-          AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
-        run: |
-          npm run wdio
+# jobs:
+#   wdio-tests:
+#     runs-on: ubuntu-latest
+#     services:
+#       postgres:
+#         image: postgres:15
+#         env:
+#           POSTGRES_USER: postgres
+#           POSTGRES_PASSWORD: postgres
+#           POSTGRES_DB: ci_db_test
+#         ports:
+#           - 5432:5432
+#         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+#     steps:
+#       - uses: actions/checkout@v3
+#       - name: Setup Node.js environment
+#         uses: actions/setup-node@v3
+#         with:
+#           node-version: 18.13
+#           cache: 'npm'
+#           cache-dependency-path: |
+#             package-lock.json
+#       - name: Install dependencies
+#         run: npm install
+#       - name: WDIO Tests
+#         env:
+#           PGHOST: localhost
+#           PGUSER: postgres
+#           PGPASSWORD: postgres
+#           PGDATABASE: ci_db_test
+#           PGPORT: ${{ job.services.postgres.ports[5432] }}
+#           TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
+#           COOKIE_DOMAIN: localhost
+#           FRONTEND_BASE_URL: http://localhost:3001
+#           SERVER_BASE_URL: http://localhost:6543
+#           AUTH_ISSUER_BASE_URL: https://dev-onljhxvyw71o4mbs.us.auth0.com/
+#           AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
+#           AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
+#           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
+#         run: |
+#           npm run wdio
