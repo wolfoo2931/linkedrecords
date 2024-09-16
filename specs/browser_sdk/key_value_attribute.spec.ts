@@ -31,7 +31,7 @@ describe('Key Value Attributes', () => {
   });
 
   describe('attribute.set()', () => {
-    it.only('makes sure the value converges on all clients', async () => {
+    it('makes sure the value converges on all clients', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
@@ -227,7 +227,7 @@ describe('Key Value Attributes', () => {
   });
 
   describe('attribute.change()', () => {
-    it.only('allows to change only parts of the document when the value is a JSON object', async () => {
+    it('allows to change only parts of the document when the value is a JSON object', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
@@ -237,8 +237,6 @@ describe('Key Value Attributes', () => {
       await attributeClientA.change(new KeyValueChange([
         { key: 'foo2', value: { nested: 'values', more: undefined } },
       ]));
-
-      // await new Promise((r) => { setTimeout(r, 500); });
 
       await waitFor(async () => {
         const val = await reloadedAttribute!.getValue();
