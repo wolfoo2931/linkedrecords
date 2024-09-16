@@ -241,8 +241,6 @@ describe('Key Value Attributes', () => {
 
       const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
 
-      await new Promise((r) => { setTimeout(r, 500); });
-
       await waitFor(async () => {
         const val = await reloadedAttribute!.getValue();
         console.log('waiting for this value to have to keys:', JSON.stringify(val));
