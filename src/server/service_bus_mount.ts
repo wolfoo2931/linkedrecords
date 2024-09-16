@@ -66,6 +66,7 @@ export default async function mountServiceBus(httpServer, app) {
       change,
     );
 
+    console.log('----------->', attributeId, committedChange);
     sendMessage(attributeId, committedChange);
   });
 }
