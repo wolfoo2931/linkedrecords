@@ -84,15 +84,8 @@ IsAttributeStorage
     return queue
       .do(this.id, async () => {
         const currentValue = await this.get();
-
-        console.log('current value....', currentValue);
         const change = KeyValueChange.fromJSON(changeWithMetadata.change);
-
-        console.log('change....', changeWithMetadata.change);
         const newValue = change.apply(currentValue.value);
-
-        console.log('newValue....', newValue);
-
         const updateResult = await this.set(newValue);
 
         return new SerializedChangeWithMetadata(

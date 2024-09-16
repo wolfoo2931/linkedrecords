@@ -233,8 +233,6 @@ describe('Key Value Attributes', () => {
 
       const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
 
-      await new Promise((r) => { setTimeout(r, 500); });
-
       await attributeClientA.change(new KeyValueChange([
         { key: 'foo2', value: { nested: 'values', more: undefined } },
       ]));
