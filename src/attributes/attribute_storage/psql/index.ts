@@ -5,15 +5,79 @@ import PgPoolWithLog from '../../../../lib/pg-log';
 import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
+import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
 
-export default class PsqlStorage implements IsAttributeStorage {
+function getUuidByAttributeId(attributeId: string) {
+  const parts = attributeId.split('-');
+
+  parts.shift();
+
+  return parts.join('-');
+}
+
+export default class AttributeStorage implements IsAttributeStorage {
   logger: IsLogger;
 
   pgPool: PgPoolWithLog;
 
+  tablesKnownAsCreated: Map<string, boolean> = new Map();
+
   constructor(logger: IsLogger) {
     this.logger = logger;
     this.pgPool = new PgPoolWithLog(this.logger);
+  }
+
+  async getAttributeTableName(attributeId: string) {
+    const [prefix] = attributeId.split('-');
+
+    if (!prefix) {
+      throw new Error(`invalid attribute Id: ${attributeId}`);
+    }
+
+    return `${prefix}_attributes`;
+  }
+
+  async createAllAttributes(
+    attr: { attributeId: string, actorId: string, value: string }[],
+  ) : Promise<{ id: string }[]> {
+    if (!attr.length) {
+      return [];
+    }
+
+    const idCheckCondition = attr.map((a, i) => `subject=$${i + 1}`).join(' OR ');
+
+    if (await this.pgPool.findAny(`SELECT id FROM facts WHERE ${idCheckCondition}`, attr.map((a) => a.attributeId))) {
+      throw new Error('attribute list contains invalid attributeId');
+    }
+
+    const tableNames = await Promise.all(
+      attr.map((a) => this.getAttributeTableName(a.attributeId)),
+    );
+
+    if (!tableNames[0]) {
+      return [];
+    }
+
+    if (!tableNames.every((n) => n === tableNames[0])) {
+      throw new Error('createAllAttributes can only be used with attributes of the same type');
+    }
+
+    const values = attr
+      .map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`)
+      .join(', ');
+
+    const flatParams = attr.flatMap((a) => [
+      a.actorId,
+      new Date(),
+      new Date(),
+      getUuidByAttributeId(a.attributeId),
+      a.value,
+    ]);
+
+    const createQuery = `INSERT INTO ${tableNames[0]} (actor_id, updated_at, created_at, id, value) VALUES ${values}`;
+    await this.pgPool.query(createQuery, flatParams);
+
+    return attr.map((a) => ({ id: a.attributeId }));
   }
 
   async createAttribute(
@@ -21,20 +85,40 @@ export default class PsqlStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-
-    if (await this.pgPool.findAny('SELECT * FROM facts WHERE subject=$1', [attributeId])) {
+    if (await this.pgPool.findAny('SELECT id FROM facts WHERE subject=$1', [attributeId])) {
       throw new Error('attributeId is invalid');
     }
 
-    const createQuery = `CREATE TABLE ${pgTableName} (actor_id varchar(36), time timestamp, change_id SERIAL, value TEXT, delta boolean, meta_info boolean);`;
-    await this.pgPool.query(createQuery);
-    await this.insertAttributeSnapshot(attributeId, actorId, value);
+    return this.createAttributeWithoutFactsCheck(
+      attributeId,
+      actorId,
+      value,
+    );
+  }
+
+  async createAttributeWithoutFactsCheck(
+    attributeId: string,
+    actorId: string,
+    value: string,
+  ) : Promise<{ id: string }> {
+    const pgTableName = await this.getAttributeTableName(attributeId);
+    const createQuery = `INSERT INTO ${pgTableName} (id, actor_id, updated_at, created_at, value) VALUES ($1, $2, $3, $4, $5)`;
+    await this.pgPool.query(createQuery, [
+      getUuidByAttributeId(attributeId),
+      actorId,
+      new Date(),
+      new Date(),
+      value,
+    ]);
 
     return { id: attributeId };
   }
 
-  async getAttributeLatestSnapshot(attributeId: string, actorId: string, { maxChangeId = '2147483647', inAuthorizedContext = false }) : Promise<{ value: string, changeId: string, actorId: string, createdAt: number, updatedAt: number }> {
+  async getAttributeLatestSnapshot(
+    attributeId: string,
+    actorId: string,
+    { maxChangeId = '2147483647', inAuthorizedContext = false }: AttributeChangeCriteria = {},
+  ) : Promise<AttributeSnapshot> {
     if (!inAuthorizedContext) {
       if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
         // TODO: when this is thrown, it is not visible in the logs probably??
@@ -43,8 +127,14 @@ export default class PsqlStorage implements IsAttributeStorage {
       }
     }
 
-    const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-    const snapshots = await this.pgPool.query(`SELECT value, change_id, actor_id, time as updated_at, (SELECT MIN(time) FROM ${pgTableName} LIMIT 1) as created_at FROM ${pgTableName} WHERE delta=false AND change_id <= $1 ORDER BY change_id DESC LIMIT 1`, [maxChangeId]);
+    const pgTableName = await this.getAttributeTableName(attributeId);
+    const snapshots = await this.pgPool.query(`SELECT value, actor_id, created_at, updated_at from ${pgTableName} WHERE id=$1 LIMIT 1`, [
+      getUuidByAttributeId(attributeId),
+    ]);
+
+    if (!snapshots.rows.length) {
+      throw new Error(`Attribute not found (id: ${attributeId})`);
+    }
 
     const snapshot = snapshots.rows[0];
 
@@ -61,63 +151,34 @@ export default class PsqlStorage implements IsAttributeStorage {
     };
   }
 
-  async getAttributeChanges(attributeId: string, actorId: string, { inAuthorizedContext = false, minChangeId = '0', maxChangeId = '2147483647' } = {}) : Promise<Array<any>> {
-    if (!inAuthorizedContext) {
-      if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
-        throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
-      }
-    }
-
-    const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-    const changes = await this.pgPool.query(`SELECT value, change_id, actor_id, time FROM ${pgTableName} WHERE change_id > $1 AND change_id <= $2 AND delta = true ORDER BY change_id ASC`, [minChangeId, maxChangeId]);
-
-    return changes.rows.map((row) => ({
-      value: row.value,
-      changeId: row.change_id,
-      actorId: row.actor_id,
-      time: row.time,
-    }));
+  async getAttributeChanges() : Promise<Array<any>> {
+    return [];
   }
 
-  async insertAttributeChange(
-    attributeId: string,
-    actorId: string,
-    change: string,
-  ) : Promise<{ id: string, updatedAt: Date }> {
-    if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
-      throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
-    }
-
-    const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-    const result = await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, true) RETURNING change_id, time`, [actorId, new Date(), change]);
-
-    return { id: result.rows[0].change_id, updatedAt: new Date(result.rows[0].time) };
+  async insertAttributeChange() : Promise<{ id: string, updatedAt: Date }> {
+    throw new Error('insertAttributeChange is not implemented for psql storage, use psql_with_history instead');
   }
 
   async insertAttributeSnapshot(
     attributeId: string,
     actorId: string,
     value: string,
-    changeId?: string,
-  ) : Promise<{ id: string }> {
+  ) : Promise<{ id: string, updatedAt: Date }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
+    const pgTableName = await this.getAttributeTableName(attributeId);
+    const result = await this.pgPool.query(`UPDATE ${pgTableName} SET actor_id=$1, updated_at=$2, value=$3 WHERE id=$4 RETURNING updated_at`, [
+      actorId,
+      new Date(),
+      value,
+      getUuidByAttributeId(attributeId),
+    ]);
 
-    const pgTableName = PsqlStorage.getAttributeTableName(attributeId);
-
-    const result = changeId
-      ? await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta, change_id) VALUES ($1, $2, $3, false, $4) RETURNING change_id`, [actorId, new Date(), value, changeId])
-      : await this.pgPool.query(`INSERT INTO ${pgTableName} (actor_id, time, value, delta) VALUES ($1, $2, $3, false) RETURNING change_id`, [actorId, new Date(), value]);
-
-    return { id: result.rows[0].change_id };
-  }
-
-  private static getAttributeTableName(attributeId: string): string {
-    if (!(typeof attributeId === 'string' && attributeId.length >= 3)) {
-      throw new Error(`invalide atttributeId: ${attributeId}`);
+    if (!result.rows.length) {
+      throw new Error(`Attribute not found (id: ${attributeId})`);
     }
 
-    return `var_${attributeId.replace(/-/g, '_').toLowerCase()}`;
+    return { id: '2147483647', updatedAt: new Date(result.rows[0].updated_at) };
   }
 }

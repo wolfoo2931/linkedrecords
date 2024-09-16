@@ -44,7 +44,7 @@ export default {
       return;
     }
 
-    const users = await pool.query(`SELECT * FROM users WHERE id IN
+    const users = await pool.query(`SELECT id, username FROM users WHERE id IN
       (SELECT subject
       FROM facts
       WHERE subject LIKE 'us-%'
@@ -152,6 +152,7 @@ export default {
     }
 
     const attributeSavePromises: Promise<any>[] = [];
+    const attributesByAttributeClass = new Map();
 
     Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {
       if (!config.value) {
@@ -159,9 +160,28 @@ export default {
       }
 
       if (composition[attributeName].attribute) {
-        attributeSavePromises.push(composition[attributeName].attribute.create(config.value));
+        const AC = QueryExecutor
+          .getAttributeClassByAttributeId(composition[attributeName].attribute.id);
+
+        attributesByAttributeClass[AC] = attributesByAttributeClass[AC] || [];
+
+        let classArray = attributesByAttributeClass.get(AC);
+
+        if (!classArray) {
+          classArray = [];
+          attributesByAttributeClass.set(AC, classArray);
+        }
+
+        classArray.push([composition[attributeName].attribute, config.value]);
       }
     });
+
+    const attributesToSaveEntries = attributesByAttributeClass.entries();
+
+    // eslint-disable-next-line no-restricted-syntax
+    for (const [AC, attributesAndValues] of attributesToSaveEntries) {
+      attributeSavePromises.push(AC.createAll(attributesAndValues, req.attributeStorage));
+    }
 
     await Promise.all(attributeSavePromises);
     await Fact.saveAllWithoutAuthCheck(resolvedFacts, req.hashedUserID, req.log);

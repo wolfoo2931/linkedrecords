@@ -1,14 +1,24 @@
 export default interface IsAttributeStorage {
+  createAttributeWithoutFactsCheck(
+    attributeId: string,
+    actorId: string,
+    value: string
+  ) : Promise<{ id: string }>;
+
   createAttribute(
     attributeId: string,
     actorId: string,
     value: string
   ) : Promise<{ id: string }>;
 
+  createAllAttributes(
+    attr: { attributeId: string, actorId: string, value: string }[]
+  ) : Promise<{ id: string }[]>;
+
   getAttributeLatestSnapshot(
     attributeId: string,
     actorId: string,
-    criteria: { maxChangeId?: string }
+    criteria: { maxChangeId?: string, inAuthorizedContext?: boolean }
   ) : Promise<{
     value: string,
     changeId: string,
@@ -34,5 +44,5 @@ export default interface IsAttributeStorage {
     actorId: string,
     value: string,
     changeId?: string,
-  ) : Promise<{ id: string }>;
+  ) : Promise<{ id: string, updatedAt: Date }>;
 }

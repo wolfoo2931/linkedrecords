@@ -1,6 +1,8 @@
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
 import IsLogger from '../../../lib/is_logger';
+import Fact from '../../facts/server';
+import StorageDriverInterface from './is_attribute_storage';
 
 export default abstract class AbstractAttributeServer <
   Type,
@@ -32,6 +34,20 @@ export default abstract class AbstractAttributeServer <
 
   public static getDataTypePrefix(): string {
     throw new Error('getDataTypePrefix needs to be implemented in child class');
+  }
+
+  public static async createAll(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    attr: [AbstractAttributeServer<any, any, any>, any][],
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    storage: StorageDriverInterface,
+  ): Promise<void> {
+    await Promise.all(attr.map(([a, v]) => a.create(v)));
+  }
+
+  async createAccountableFact() : Promise<void> {
+    const createdByFact = new Fact(this.actorId, '$isAccountableFor', this.id, this.logger);
+    await createdByFact.save(this.actorId);
   }
 
   abstract create(
