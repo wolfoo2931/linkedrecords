@@ -118,6 +118,8 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
       CREATE TABLE IF NOT EXISTS kv_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
       CREATE TABLE IF NOT EXISTS bl_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE UNIQUE INDEX unique_kv_attribute ON kv_attributes (id);
+      CREATE UNIQUE INDEX unique_bl_attributes ON bl_attributes (id);
     `);
   }
 
