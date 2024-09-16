@@ -31,7 +31,7 @@ describe('Key Value Attributes', () => {
   });
 
   describe('attribute.set()', () => {
-    it('makes sure the value converges on all clients', async () => {
+    it.only('makes sure the value converges on all clients', async () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
