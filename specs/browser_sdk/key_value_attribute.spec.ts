@@ -232,14 +232,18 @@ describe('Key Value Attributes', () => {
       const [clientB] = await createClient();
 
       const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+      const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
 
       await attributeClientA.change(new KeyValueChange([
         { key: 'foo2', value: { nested: 'values', more: undefined } },
       ]));
 
-      const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
+      await waitFor(async () => {
+        const val = await reloadedAttribute!.getValue();
+        console.log('waiting for this value to have to keys:', JSON.stringify(val));
 
-      await waitFor(async () => Object.keys((await reloadedAttribute!.getValue())).length === 2);
+        return Object.keys(val).length === 2;
+      });
 
       expect(await reloadedAttribute!.getValue()).to.eqls({
         foo: 'bar',

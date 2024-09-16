@@ -113,33 +113,11 @@ export default class Fact {
     const pg = new PgPoolWithLog(console as unknown as IsLogger);
 
     await pg.query(`
-      CREATE TABLE IF NOT EXISTS facts (subject CHAR(40), predicate CHAR(40), object TEXT);
+      CREATE TABLE IF NOT EXISTS facts (id SERIAL, subject CHAR(40), predicate CHAR(40), object TEXT, created_at timestamp DEFAULT NOW(), created_by CHAR(40));
       CREATE TABLE IF NOT EXISTS deleted_facts (subject CHAR(40), predicate CHAR(40), object TEXT, deleted_at timestamp DEFAULT NOW(), deleted_by CHAR(40));
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
-    `);
-
-    const rawFactTableColumns = await pg.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'facts';");
-    const factTableColumns = rawFactTableColumns.rows.map((c) => c.column_name);
-
-    if (!factTableColumns.includes('created_at')) {
-      await pg.query(`
-        ALTER TABLE facts ADD COLUMN created_at timestamp DEFAULT NOW();
-        ALTER TABLE facts ADD COLUMN created_by CHAR(40);
-        ALTER TABLE facts ADD COLUMN id SERIAL;
-      `);
-    }
-
-    // migrate all facts from the old (x, '$wasCreatedBy', u)
-    // to the new (u, '$isAccountableFor', x) format
-    await pg.query(`
-      INSERT INTO facts (subject, predicate, object, created_at)
-      SELECT object as subject,
-          '$isAccountableFor' as predicate,
-          subject as object,
-          created_at
-      FROM facts as fSrc
-      WHERE fSrc.predicate='$wasCreatedBy'
-      AND fSrc.object NOT IN (SELECT subject from facts as f where f.predicate ='$isAccountableFor');
+      CREATE TABLE IF NOT EXISTS kv_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE TABLE IF NOT EXISTS bl_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
     `);
   }
 
@@ -314,21 +292,33 @@ export default class Fact {
   static async saveAllWithoutAuthCheck(facts: Fact[], userid: string, logger: IsLogger) {
     if (facts.length === 0) return;
 
-    const pool = new PgPoolWithLog(logger);
-
     const specialFacts = facts.filter((fact) => fact.hasSpecialCreationLogic());
     const nonSpecialFacts = facts.filter((fact) => !fact.hasSpecialCreationLogic());
 
     for (let i = 0; i < specialFacts.length; i += 1) {
+      // we need to create this one by one to make sure no
+      // duplicates gets inserted and other checks pass.
       // eslint-disable-next-line no-await-in-loop
       await specialFacts[i]?.save(userid);
     }
 
-    const values = nonSpecialFacts
+    await this.saveAllWithoutAuthCheckAndSpecialTreatment(nonSpecialFacts, userid, logger);
+  }
+
+  static async saveAllWithoutAuthCheckAndSpecialTreatment(
+    facts: Fact[],
+    userid: string,
+    logger: IsLogger,
+  ) {
+    if (facts.length === 0) return;
+
+    const pool = new PgPoolWithLog(logger);
+
+    const values = facts
       .map((_, i) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`)
       .join(', ');
 
-    const flatParams = nonSpecialFacts.flatMap((fact) => [
+    const flatParams = facts.flatMap((fact) => [
       fact.subject,
       fact.predicate,
       fact.object,

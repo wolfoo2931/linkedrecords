@@ -1,9 +1,9 @@
+/* eslint-disable no-console */
 // eslint-disable-next-line max-classes-per-file
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
-import Fact from '../../../facts/server';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
 
 const queue: IsQueue = QueuedTasks.create();
@@ -18,8 +18,8 @@ IsAttributeStorage
   }
 
   async create(value: string) : Promise<{ id: string }> {
-    const createdByFact = new Fact(this.actorId, '$isAccountableFor', this.id, this.logger);
-    await createdByFact.save(this.actorId);
+    await this.createAccountableFact();
+
     return this.storage.createAttribute(this.id, this.actorId, value);
   }
 

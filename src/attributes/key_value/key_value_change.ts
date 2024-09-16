@@ -35,6 +35,10 @@ export default class KeyValueChange {
   public apply(input: object): object {
     const result = JSON.parse(JSON.stringify(input));
 
+    if (!this.change.forEach) {
+      return result;
+    }
+
     this.change.forEach((aChange) => {
       if (aChange.value === null) {
         unset(result, aChange.key);

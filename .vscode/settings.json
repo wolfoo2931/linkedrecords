@@ -16,7 +16,10 @@
         "oidc",
         "pino",
         "plusplus",
+        "psql",
         "rfacts",
+        "schemaname",
+        "tablename",
         "triadan",
         "userid",
         "wdio"
