@@ -239,7 +239,12 @@ describe('Key Value Attributes', () => {
 
       const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
 
-      await waitFor(async () => Object.keys((await reloadedAttribute!.getValue())).length === 2);
+      await waitFor(async () => {
+        const val = await reloadedAttribute!.getValue();
+        console.log('waiting for this value to have to keys:', JSON.stringify(val));
+
+        return Object.keys(val).length === 2;
+      });
 
       expect(await reloadedAttribute!.getValue()).to.eqls({
         foo: 'bar',
