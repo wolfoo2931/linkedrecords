@@ -17,22 +17,10 @@ import userinfoController from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
 import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../attributes/errors/authorization_error';
-import KeyValueAttribute from '../attributes/key_value/server';
-import BlobAttribute from '../attributes/blob/server/index';
 
 const blobUpload = multer().single('change');
 
-const migrationLogger = {
-  warn: (m) => { console.log(m); return {}; },
-  info: (m) => { console.log(m); return {}; },
-  debug: (m) => { console.log(m); return {}; },
-};
-
-(async () => {
-  await Fact.initDB();
-  await KeyValueAttribute.migrateAllFromHistoryAttributes(migrationLogger);
-  await BlobAttribute.migrateAllFromHistoryAttributes(migrationLogger);
-})();
+Fact.initDB();
 
 async function withAuth(req, res, controllerAction) {
   const uploadWrappedControllerAction = (request, response) => new Promise((resolve, reject) => {
