@@ -9,12 +9,11 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  node:
+  wdio-tests:
     strategy:
       matrix:
         node: [18, 23]
         psql: [15, 17]
-  wdio-tests:
     runs-on: ubuntu-latest
     services:
       postgres:
