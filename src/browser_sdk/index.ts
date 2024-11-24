@@ -216,6 +216,10 @@ export default class LinkedRecords {
   }
 
   async ensureUserIdIsKnown(): Promise<string | undefined> {
+    if (this.actorId && typeof this.actorId === 'string') {
+      return this.actorId;
+    }
+
     if (LinkedRecords.ensureUserIdIsKnownPromise) {
       await LinkedRecords.ensureUserIdIsKnownPromise;
       return this.actorId;
