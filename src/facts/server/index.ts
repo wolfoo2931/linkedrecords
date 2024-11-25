@@ -572,7 +572,8 @@ export default class Fact {
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'access', 'referer', 'selfAccess'], this.object));
+      || await this.isKnownTerm(this.object)
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
@@ -625,9 +626,7 @@ export default class Fact {
       return false;
     }
 
-    if (await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [
-      this.subject,
-    ])) {
+    if (await this.isKnownTerm(this.subject)) {
       return false;
     }
 
@@ -635,5 +634,11 @@ export default class Fact {
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
+  }
+
+  private async isKnownTerm(node: string) {
+    const pool = new PgPoolWithLog(this.logger);
+
+    return pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
   }
 }
