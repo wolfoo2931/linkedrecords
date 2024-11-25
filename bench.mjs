@@ -100,7 +100,18 @@ const createDocument = async (user) => {
 
 const listDocument = async (user) => {
   const startTime = new Date().getTime();
-  const result = await fetch("http://localhost:6543/attributes?query=%7B%22documents%22%3A%5B%5B%22%24it%22%2C%22%24hasDataType%22%2C%22KeyValueAttribute%22%5D%2C%5B%22%24it%22%2C%22isA%22%2C%22documentConfig%22%5D%2C%5B%22%24it%22%2C%22%24latest%28deletionStateIs%29%22%2C%22%24not%28inTrashbin%29%22%5D%2C%5B%22%24it%22%2C%22%24latest%28deletionStateIs%29%22%2C%22%24not%28deleted%29%22%5D%2C%5B%22" + user.id + "%22%2C%22%24isAccountableFor%22%2C%22%24it%22%5D%5D%7D", {
+
+  const query = {
+    "documents":[
+      ["$it","$hasDataType","KeyValueAttribute"],
+      ["$it","isA","documentConfig"],
+      ["$it","$latest(deletionStateIs)","$not(inTrashbin)"],
+      ["$it","$latest(deletionStateIs)","$not(deleted)"],
+      [user.id,"$isAccountableFor","$it"]
+    ]
+  };
+
+  const result = await fetch("http://localhost:6543/attributes?query=" + encodeURIComponent(JSON.stringify(query)), {
     "headers": {
       "accept": "application/json",
       "accept-language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
