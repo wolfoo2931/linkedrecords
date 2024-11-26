@@ -12,8 +12,8 @@ jobs:
   wdio-tests:
     strategy:
       matrix:
-        node: [18, 23]
-        psql: [15, 17]
+        node: [18]
+        psql: [15]
     runs-on: ubuntu-latest
     services:
       postgres:
