@@ -212,17 +212,8 @@ export default class QueryExecutor {
       subjectBlacklist: nodeBlacklist,
     };
 
-    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
-
-    let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
-
-    if (dataTypeFilter === 'KeyValueAttribute') {
-      matchedIds = matchedIds.filter((id) => id.startsWith('kv-'));
-    } else if (dataTypeFilter === 'LongTextAttribute') {
-      matchedIds = matchedIds.filter((id) => id.startsWith('l-'));
-    } else if (dataTypeFilter === 'BlobAttribute') {
-      matchedIds = matchedIds.filter((id) => id.startsWith('bl-'));
-    }
+    const matchedIdsPromise = this.getMatchedIds(subjectFactsQuery, userid, dataTypeFilter);
+    let matchedIds;
 
     const objectFactsQuery = queryWithoutDataTypeFilter
       .filter((q) => q.length === 3 && q[2] === '$it')
@@ -245,10 +236,30 @@ export default class QueryExecutor {
 
       const matchedObjectIds = intersect(mapped);
 
-      matchedIds = intersect(matchedIds, matchedObjectIds);
+      matchedIds = intersect((await matchedIdsPromise), matchedObjectIds);
+    }
+
+    if (!matchedIds) {
+      matchedIds = await matchedIdsPromise;
     }
 
     return matchedIds.filter((value, index, array) => array.indexOf(value) === index);
+  }
+
+  private async getMatchedIds(subjectFactsQuery, userid, dataTypeFilter) {
+    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
+
+    let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
+
+    if (dataTypeFilter === 'KeyValueAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('kv-'));
+    } else if (dataTypeFilter === 'LongTextAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('l-'));
+    } else if (dataTypeFilter === 'BlobAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('bl-'));
+    }
+
+    return matchedIds;
   }
 
   async resolveCompoundQueryToIds(query: CompoundAttributeQuery, userid: string): Promise<({
