@@ -219,14 +219,14 @@ export default class Fact {
     }
 
     if (query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
-      return `SELECT subject FROM facts WHERE predicate='${query[0]}' ${sqlPrefix ? `AND ${sqlPrefix}` : ''}`;
+      return `SELECT subject FROM auth_facts WHERE predicate='${query[0]}' ${sqlPrefix ? `AND ${sqlPrefix}` : ''}`;
     }
 
     if (query[1] === '$anything') {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     }
 
-    let table = `(SELECT facts.subject, facts.predicate, facts.object FROM facts
+    let table = `(SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts
                   WHERE object = '${query[1]}'
                   AND predicate = '${query[0]}') as f`;
 
@@ -269,12 +269,12 @@ export default class Fact {
         const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (object) {
-          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject from facts WHERE predicate='${query[0]}' AND object='${object}')`]);
+          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject FROM auth_facts WHERE predicate='${query[0]}' AND object='${object}')`]);
         }
       } else if (!hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
         if (predicate) {
-          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM facts WHERE id IN (SELECT max(id) FROM facts WHERE predicate='${predicate}' GROUP BY subject) AND object='${query[1]}')`]);
+          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM auth_facts WHERE id IN (SELECT max(id) FROM auth_facts WHERE predicate='${predicate}' GROUP BY subject) AND object='${query[1]}')`]);
         }
       } else if (hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
