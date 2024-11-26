@@ -180,7 +180,7 @@ export default class Fact {
     return res;
   }
 
-  private static authorizedSelect(userid: string, and: () => 'AND' | 'WHERE') {
+  private static authorizedSelect(userid: string) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
@@ -192,13 +192,16 @@ export default class Fact {
 
     const authorizedTerms = SQL.selectSubjectsInAnyGroup(userid, ['term']);
 
-    return `WITH anodes AS (${authorizedNodes})
-    SELECT subject, predicate, object FROM facts WHERE predicate='$isATermFor'
+    return `WITH auth_nodes AS (${authorizedNodes}),
+    auth_facts AS (
+    SELECT id, subject, predicate, object FROM facts WHERE predicate='$isATermFor'
     UNION ALL
-    SELECT subject, predicate, object
+    SELECT id, subject, predicate, object
     FROM facts
-    ${and()} subject IN (SELECT node FROM anodes)
-    ${and()} object IN (SELECT node FROM anodes UNION ALL ${authorizedTerms})`;
+    WHERE subject IN (SELECT node FROM auth_nodes)
+    AND object IN (SELECT node FROM auth_nodes UNION ALL ${authorizedTerms}))
+    SELECT  subject, predicate, object FROM auth_facts
+    `;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
@@ -280,9 +283,9 @@ export default class Fact {
         if (predicate && object) {
           sqlConditions.push(['subject', 'IN', `(SELECT
             subject
-            FROM facts
-            WHERE (object != '${object}' AND id IN (SELECT max(id) FROM facts WHERE predicate='${predicate}' GROUP BY subject))
-            OR subject NOT IN (SELECT subject FROM facts WHERE predicate='${predicate}'))`]);
+            FROM auth_facts
+            WHERE (object != '${object}' AND id IN (SELECT max(id) FROM auth_facts WHERE predicate='${predicate}' GROUP BY subject))
+            OR subject NOT IN (SELECT subject FROM auth_facts WHERE predicate='${predicate}'))`]);
         }
       }
     });
@@ -358,7 +361,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = Fact.authorizedSelect(userid, and);
+    let sqlQuery = Fact.authorizedSelect(userid);
 
     if (subject) {
       sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
