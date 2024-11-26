@@ -16,10 +16,11 @@ const user1 = {
 
 }
 
+//wolfoo2931+1@gmail.com
 const user2 = {
   id: 'us-0a3f0f0024eeebda95a3413ebf8bb23d',
   clientId: '218c5999-544d-4f42-b97b-214e4f27f8da',
-  cookie: "userId=s%3Aus-0a3f0f0024eeebda95a3413ebf8bb23d.7zU7tB0QW%2FuBqHG2TFWukw31mC1wrwNHbsW5cUQT%2Fhg; appSession=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiaWF0IjoxNzMyNTI1MDk4LCJ1YXQiOjE3MzI1MjUxMDAsImV4cCI6MTczMjYxMTUwMH0..0cacVBuxqT-T67HP.3iiUxYUTDO-pLhqDv9dMc59O0UFqDGtruYhetn0ewnWvlvbmvdfYKf6fZZFuFYBMzJ2y9QlFoXud2oZkz63E5pw0uIh9H3jzhY5yqqaceGlkg3x64oD2xlr9cU4OZePP-UWpWxvjQ7PpT5OrjnvnQDykr9xVZAdIhE0Fhe0Sy9J4kgCz8lnNGq9ibe7QJrCG0TbfLo6FtNYPDDbUj4ArY6VyBNlnaUQRxcWUS_A6N6l319IoaxUjpFsIxbS6gGqjSDnXPuaBoNw8XQkULNLd-0Y3rHGZfRph20pXG45SkUBnrzcGxSA_qrlg0O_c-Wyy-osBgTlSbPyh6PfsZ7kLLaHCbk1UgyQ9NK1BNWq69U5AiBvBM4H45sfYsroGFAafvFNFACCSBrPa4crCcprTXcUz4kaCjEUkfVnR8BrLN2mxSl3WAAK9WHvGdfyd2E5FR0xWtoNs1SmPtlhYRpSt7hnmuQu2gcRde035-gnOlrkNbRu3nt5Eh_r4Tzmhm4FuZaTNViJ-hgmi7HHKzhmDZCNXvqDTs_UUmGReIU34n3XwzLGwNXg9jGAaE2-UIVQg4KKpiXolkSwnDgnqjmRaStbgd6rWKQ_tyYBmeo6dnP4JatlBuGrPG3y2hAvZ60riqbZeisPx34rib1LWGGu3lOvcsDuoOj3MZyrRZC9j1QFPO6IK2iBywpIQkQEiU_WENAsNUDvvLitpdUJq6h4rUuKeUNSLJJcfiWSzhQ2HccVd0aPiwxHSMHhg5XjrAvstfct59bvbVeqpo1Ndxz1PbN75wjIvxcSw5vdnL1kF9hMAlFlPve7t5cncv88KjY7E1c3ErUskIh-CA8ACjyY-lr1QuOWQV6hWdkqDfzjB3XE6tInMzif5OLTgFIHbUMqJonCiPJB7HvxUELLqnt54Qz6JccjTXpLJwtPXhcGCItPXajvNzjUyX6eDNOkjxIoq7blRBvqX6rI-nwjmyd4qDphFkdrTN2euRKoZ4g0GQ3xEaNnfA43cxRQ4_90wxrVtNRdomZ7e6q3sLOEh3_CYmeQlrAHfg47BMUR3OQb4bEfRjgzMnUnkyurUdqlcjmFzCrAyUOQRsq-LTM7np4ejCncMb_MAVfWd6AYEcA9t5nyqx7NkG58TGLIWXIJCvAEmRock5na-1QFw3nR2MFtS4Y1PyM5qUDuTIdzsdEkJ-kFX5Sb_5VrGt1nW-tchLSeYJA7Rkwtcs42Y-fgwWH7K_4xcpGL_x-y7gicIAhxRwgtfk7J-ykxwDzBIKHAPpUiBDbjPBVnj8_sqx8vGyRNiWqZkKI6ZITVUvMApjTn8AEfsIULyBQpJCfEUA-QDxb-GzMHvrMIY_93tJny7Ga7SsaAh774KBYWcO6mg0TEIhbVrzFfNvAXQLBbsFkHbcm9Z5NZoFqIogIonLrSfWjnOMnuriN7fDYs6nQMr1HD7v317b26Fj-RtSuCosTpS5VnGuS4O8S4zRfjRJVyXr9cmfzBzSsIvy9ktgUcVtWsWWHzmjBAJuP5YKZU-WXF_2X7RojUm9lm-IgXyMQB38N9V1k8krn3ESbjvvzb8meWnEFEiaBNZfezRO2aFULvIVD_acHg7NCaUF3p-fmSe17GUuJrEccWl14GYleKnwJ04_8M43369ZLeBbOdNl9BPnWO5bkqokd4lHKxiZ_1s67IcdLEvXI99u48VzzmWQfmqc-RJvvK40lmbo2Nq5-1zm7QilS5eImzcbznecwJ-Boc69B2aTSfQ-Lni6ORncQn5Lv9qGQyDpHAIHHWNBSMNxPKY228R26_JLz5isON2Xm8EGSPgvYHs1fkub44X3TT7l5o3-hhdHfLAffcTX1oIgCrR7Ubbu0hvAZClTLK96B4-VDGGLFuoQUOpJ20i4L6FTXILMIgSs_lV8m-eGY1syTmbbw9Z-kY9tqTJNcQdeEmjXAUcprz7bvfRph0rp1rk0IWSJzh37ARATl2WhBe4io2JvUzkRf4SRspN521seL_EvP58uwzcJe2usC3oey_WFW4u0Mf0b6nXJbhmU9vJ9x5Z5mN-yF1wsasCuvidjj0tRS7Qa-Po5iEKdWeD5X_4uRuAMJzSpFgage_Oobzrr8K6f8wRIIPSKV1kfGZqXcGYmoqdfJ4MVLahHc6PuQ.PA5lS1BjP2v4lvlS4YnUxg",
+  cookie: "userId=s%3Aus-0a3f0f0024eeebda95a3413ebf8bb23d.7zU7tB0QW%2FuBqHG2TFWukw31mC1wrwNHbsW5cUQT%2Fhg; appSession=eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2R0NNIiwiaWF0IjoxNzMyNjExODQ2LCJ1YXQiOjE3MzI2MTE4NDksImV4cCI6MTczMjY5ODI0OX0..nYW5bMAiznwfjnD_.Pj9c_Jc7Z3PfHqmxFYrG3BeLFh_2kUUFv6gcWx3zEf1v4ipiSTuUsGCqMz1H-VVegS-X_Z8po2bpNCBZV_A4kBguWcb3Kg2bCrG6kF92rT_w0A2U-RRdbhZ-5au_BBzJ6iiqpi2Zq8UJdyDNwrDaq0bUIjUwp1YfFexZyBTLZFRu0L1DPsteyIssNppPmrtPbwz8g5g2OU3LrhuRmHVzk1tHiv1A1baWhvB-q5cavZwQ30Kv5WYIBGJun7QMoAEFKNC91DrcaGwUFJqygQP0BuTzZqcOgHJ-S6ADupanNwMku9udvePQkY1gJF643cWHcCgA-VsU9sn0GKgohNo7vg0BkP4IoPbn7PQebPNZY2p3Z7_3tq9Bm93MtvjTq8RQ7LoXTqg4jI8eRjeza5u87Pn_wMcZwQChQ_gsj9UxBx75_G8l4f2LpZ1_UrAya99X9adl0uyL35l301vXQBv87A86JdYjiCd1G9r6mkE-OcQsiG_JPMLWd2YuvCwWWa9j-e9W1PKt5muOllgYYxR15RJqsQsFG8jEb-GSSWddLtFaH1_vUPeq1JxlS_Z9QzUfj1da4KsrqFMnIdVK_x1_mAgFUgi8sVESWLTBphlldJnmgHAKtvpZXGZOMFtbqxCFh7vaiywn52SR1E5w-coq_8gRWplPv6PlQc7L5NTnHpO4x59xyMAEGIFGpvVqnQ_bNqxPLG_yeko7DQGaExHzGqTC2KGwuBfVW0skE0c1v0mn0FuQ7JqQtFPo7y3sFmbS5-THGAq08zkp8i16crvGWSPzx98_KnHViASq8Zmg39C9M4bsafBEkJslsU_lvBdVsW0_JgfdiOXG4oTbQSOokvilAEYQLLAF6ZPg263iKSMwHzLrdWinulnf5O2ts6lt3Chr6wUC_3_RZFHIN_AZfKkYgomcbAgk9Gq7pyv2PNtgwZ_-WxZP3_6jb6BH-oVv2TCbEQYGJlKtwUhf5IIP7-09BSAsIff91yRnMVUQV_uT2Zfkaub0lXMTQnL7tgjM6ActE6kwkKmnXHG78jhpeWRoTlBE-DiC__cd-UMymEa_WEIO6kNmiMUbiYT5BHPsTHN48Gs-NcUpvDlUVt5fey6ar_-VAL37roHgZ7BAtg7NEqr5LVsie8zoFaiN-vlRQ9nlT4s04hPF3s2xe6XL6o86C20_qZIzCMQSPsXUGchc2PFVycqPdal1nPKkweRM5UdtexTtAyWBO33zkiNUfSPgKM1rSJq4se1FA6DejwTRUl99vvgubitL2HVK6EAwvgt_gq5vgeIvhtOC19YeKkzE2ZlUV6rMVCsmBAghq1eqzn42KALmWIw-vJxYc8hhtmrpP2alxBrcG4fEE3jMRb0NGTAp25oQpM_Nxx4oyxsRj79Oz6YfAOWukuolBsRBgtYqiT6CvvVISN2nKj-iSZ81-TiZx-cYimtxee3lnyHCCijJsEzTQwDBHy8u_DZvnERS6RaGnV-33E2jjhROwu6LPmwirOnhrAjDPnbAMFEUkUXlcI92EkbRQqgxVz3kt_Ro8SLL8KuFtsjHZZttKUWTtpXtN1pQXwelWTLky_DYwiExDovrFK33w5Zu9hASFyfBsBfqfA-c21VDf1isNBHYcUvJuDkY2RwlMFinZWxCqh8pg2fei8EbVGvacE97-il-OTAY5P65ofxgDzvvqDQtiWo9rXyQUY2WXTYigToEInX743l5LFeUGWGvVwSkpZV6b4Ya8EsfVUlbb77MB8SGKdR9yfnaefkrnzQGls5c0u46nT5-IXr_2foTvYNrHrWZbbbbFF9Okd14F_FAwDtVku3suu-FfHJoxGyREg9pyjegGnAuy1OKW2PRSkl0l-cWW7rVNmU1nKR9g1lFXWmr14mIJtImBN2kh2eiIKcffPF8vam07_l_TsmyOjxeLiD-t4OTzNsLtajfQzX5fa2SR71YGUjyIoKhJYrgDJ_OKWcaz--yXEi_xRD-fQ_RIXQZzhKqBlGmPsc2r_soMQ3L_vgwgpbDNwWOfYwsVXwXhJqBPlC1DfHtFY2lWVpZedzPO-iJKR5j1I8peBhP2i9luawOTfqHktPqh3rCg7feqssd5_YszWJwpZAi_dojS-7AYtcLNasG3kiOIykA0_1HJjkhz22_aWFCtA.bt5QEMaYBIm2bKP93mb0Jw",
 }
 
 const createDocument = async (user) => {
@@ -111,6 +112,17 @@ const listDocument = async (user) => {
     ]
   };
 
+  // const query = {
+  //   "documents":[
+  //     ["$it","$hasDataType","KeyValueAttribute"],
+  //     ["$it","isA","documentConfig"],
+  //     ["$it","$latest(deletionStateIs)","inTrashbin"],
+  //     ["$it","$latest(deletionStateIs)","deleted"],
+  //     [user.id,"$isAccountableFor","$it"]
+  //   ]
+  // };
+
+
   const result = await fetch("http://localhost:6543/attributes?query=" + encodeURIComponent(JSON.stringify(query)), {
     "headers": {
       "accept": "application/json",
@@ -133,6 +145,8 @@ const listDocument = async (user) => {
 
   const endTime = new Date().getTime();
 
+  console.log('matches', (await result.json()).documents.length)
+
   return endTime - startTime;
 }
 
@@ -147,20 +161,21 @@ const listDocument = async (user) => {
 //   if(index%100 === 0) {
 //     console.log('user 1, last 100 AVG', index, avg(times.createDocuments));
 //     times.createDocuments = [];
-//     const time = await createDocument(user2);
-//     console.log('user 2', index, time);
+//     // const time = await createDocument(user2);
+//     // console.log('user 2', index, time);
 //   }
 // }
 
 // for (let i = 0; i < 10; i++) {
-//   times.createDocuments.push(await createDocument());
+//   times.createDocuments.push(await createDocument(user2));
+// }
+
+// for (let i = 0; i < 10; i++) {
+//   times.listDocuments.push(await listDocument(user2));
 // }
 
 
-for (let i = 0; i < 10; i++) {
-  times.listDocuments.push(await listDocument(user2));
-}
-
+times.listDocuments.push(await listDocument(user2));
 
 console.log('Create Document AVG:', avg(times.createDocuments));
 console.log('List Documents AVG:', avg(times.listDocuments));
