@@ -7,7 +7,7 @@ import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
 
-function andFactory() {
+function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
 
   return () => {
@@ -118,6 +118,13 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
       CREATE TABLE IF NOT EXISTS kv_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
       CREATE TABLE IF NOT EXISTS bl_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts (subject);
+      CREATE INDEX IF NOT EXISTS idx_facts_predicate ON facts (predicate);
+      CREATE INDEX IF NOT EXISTS idx_facts_object ON facts (object);
+      CREATE INDEX IF NOT EXISTS idx_kv_attr_id ON kv_attributes (id);
+      ALTER TABLE facts ALTER COLUMN subject SET NOT NULL;
+      ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
+      ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
     `);
   }
 
@@ -173,7 +180,7 @@ export default class Fact {
     return res;
   }
 
-  private static authorizedWhereClause(userid: string, factTable: string = 'facts') {
+  private static authorizedSelect(userid: string, and: () => 'AND' | 'WHERE') {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
@@ -185,7 +192,13 @@ export default class Fact {
 
     const authorizedTerms = SQL.selectSubjectsInAnyGroup(userid, ['term']);
 
-    return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedNodes} AND (object IN (${authorizedNodes}) OR object IN (${authorizedTerms}))))`;
+    return `WITH anodes AS (${authorizedNodes})
+    SELECT subject, predicate, object FROM facts WHERE predicate='$isATermFor'
+    UNION ALL
+    SELECT subject, predicate, object
+    FROM facts
+    ${and()} subject IN (SELECT node FROM anodes)
+    ${and()} object IN (SELECT node FROM anodes UNION ALL ${authorizedTerms})`;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
@@ -345,9 +358,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = 'SELECT subject, predicate, object FROM facts';
-
-    sqlQuery += ` ${and()} ${Fact.authorizedWhereClause(userid)}`;
+    let sqlQuery = Fact.authorizedSelect(userid, and);
 
     if (subject) {
       sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
