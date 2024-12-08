@@ -232,13 +232,13 @@ export default class Fact {
 
     if (query[0].endsWith('*')) {
       table = `(WITH RECURSIVE rfacts AS (
-        SELECT facts.subject, facts.predicate, facts.object FROM facts
+        SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts
                         WHERE object = '${query[1]}'
                         AND predicate = '${query[0]}'
         UNION ALL
-          SELECT facts.subject, facts.predicate, facts.object FROM facts, rfacts
-                          WHERE facts.object = rfacts.subject
-                          AND facts.predicate = '${query[0]}'
+          SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts, rfacts
+                          WHERE auth_facts.object = rfacts.subject
+                          AND auth_facts.predicate = '${query[0]}'
         )
         CYCLE subject
           SET cycl TO 'Y' DEFAULT 'N'
