@@ -6,12 +6,73 @@ import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query'
 import Fact from '../../facts/server';
 import SQL from '../../facts/server/authorization_sql_builder';
 import PgPoolWithLog from '../../../lib/pg-log';
+import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
+import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
   LongTextAttribute: 'l',
   BlobAttribute: 'bl',
 };
+
+async function getRemainingStorageSize(
+  accounteeId: string,
+  storage: IsAttributeStorage,
+): Promise<number> {
+  const mb = 1048576;
+  const defaultStorageSizeQuota = 10 * mb;
+  const used = await storage.getSizeInBytesForAllAccountableAttributes(accounteeId);
+
+  return defaultStorageSizeQuota - used;
+}
+
+async function ensureStorageSpaceToSave<T>(
+  actorId: string,
+  attributeStorage: IsAttributeStorage,
+  factsToSave: Fact[],
+  attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
+) {
+  const accountableMap: Record<string, string> = factsToSave.reduce((acc, fact) => {
+    if (fact.predicate === '$isAccountableFor') {
+      acc[fact.object] = fact.subject;
+    }
+
+    return acc;
+  }, {});
+
+  const accounteeIds = Array.from(new Set([
+    actorId,
+    ...Object.values(accountableMap),
+  ]));
+
+  const availableSpace: Record<string, number> = {};
+  const storageRequired: Record<string, number> = {};
+
+  const prom1 = Promise.all(accounteeIds.map(async (accounteeId) => {
+    availableSpace[accounteeId] = await getRemainingStorageSize(accounteeId, attributeStorage);
+  }));
+
+  const prom2 = Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
+    const bytesRequired = await attribute.getStorageRequiredForValue(value);
+    storageRequired[attribute.id] = bytesRequired;
+  }));
+
+  await Promise.all([prom1, prom2]);
+
+  Object.entries(storageRequired).forEach(([attributeId, bytesRequired]) => {
+    const accounteeId = accountableMap[attributeId] || actorId;
+
+    if (!availableSpace[accounteeId]) {
+      throw new Error(`Unknown Error determining available storage space for ${accounteeId}`);
+    }
+
+    availableSpace[accounteeId] -= bytesRequired as number;
+  });
+
+  if (!Object.values(availableSpace).find((available: number) => available > 0)) {
+    throw new Error('Not enough storage space available');
+  }
+}
 
 export default {
   async index(req, res) {
@@ -178,6 +239,13 @@ export default {
 
     const attributesToSaveEntries = attributesByAttributeClass.entries();
 
+    await ensureStorageSpaceToSave(
+      req.actorId,
+      req.attributeStorage,
+      resolvedFacts,
+      Array.from(attributesByAttributeClass.values()).flat(),
+    );
+
     // eslint-disable-next-line no-restricted-syntax
     for (const [AC, attributesAndValues] of attributesToSaveEntries) {
       attributeSavePromises.push(AC.createAll(attributesAndValues, req.attributeStorage));
@@ -240,6 +308,13 @@ export default {
       res.send({ unauthorizedFacts });
       return;
     }
+
+    await ensureStorageSpaceToSave(
+      req.actorId,
+      req.attributeStorage,
+      facts,
+      [[req.attribute, req.body.value]],
+    );
 
     await req.attribute.create(req.body.value);
     const result = {

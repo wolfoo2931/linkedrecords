@@ -17,6 +17,36 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgPool = new PgPoolWithLog(this.logger);
   }
 
+  async getSizeInBytesForAllAccountableAttributes(accounteeId: string): Promise<number> {
+    // we need to do this recursively
+    const createQuery = `SELECT SUM(pg_total_relation_size(quote_ident(concat('var_', replace(object, '-', '_')))))
+      FROM facts
+      WHERE predicate='$isAccountableFor'
+      AND subject='${accounteeId}'
+      AND object NOT IN (SELECT subject FROM facts WHERE predicate='$isATermFor')
+      AND concat('var_', replace(object, '-', '_')) IN (SELECT table_name from information_schema.tables);`;
+
+    const result = await this.pgPool.query(createQuery);
+
+    if (!result?.rows[0]) {
+      throw new Error(`There was a problem getting the size of all accountable attributes for ${accounteeId}`);
+    }
+
+    let size: number;
+
+    try {
+      if (result.rows[0].sum === null) {
+        size = 0;
+      } else {
+        size = parseInt(result.rows[0].sum, 10);
+      }
+    } catch (e) {
+      throw new Error(`There was a problem getting the size of all accountable attributes for ${accounteeId}`);
+    }
+
+    return size;
+  }
+
   async createAllAttributes(
     attr: { attributeId: string, actorId: string, value: string }[],
   ) : Promise<{ id: string }[]> {
