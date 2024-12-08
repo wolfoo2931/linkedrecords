@@ -7,7 +7,7 @@ import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
 
-function andFactory() {
+function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
 
   return () => {
@@ -118,6 +118,13 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
       CREATE TABLE IF NOT EXISTS kv_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
       CREATE TABLE IF NOT EXISTS bl_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts (subject);
+      CREATE INDEX IF NOT EXISTS idx_facts_predicate ON facts (predicate);
+      CREATE INDEX IF NOT EXISTS idx_facts_object ON facts (object);
+      CREATE INDEX IF NOT EXISTS idx_kv_attr_id ON kv_attributes (id);
+      ALTER TABLE facts ALTER COLUMN subject SET NOT NULL;
+      ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
+      ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
     `);
   }
 
@@ -173,7 +180,7 @@ export default class Fact {
     return res;
   }
 
-  private static authorizedWhereClause(userid: string, factTable: string = 'facts') {
+  private static authorizedSelect(userid: string) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
@@ -185,7 +192,16 @@ export default class Fact {
 
     const authorizedTerms = SQL.selectSubjectsInAnyGroup(userid, ['term']);
 
-    return `(${factTable}.predicate='$isATermFor' OR (subject IN ${authorizedNodes} AND (object IN (${authorizedNodes}) OR object IN (${authorizedTerms}))))`;
+    return `WITH auth_nodes AS (${authorizedNodes}),
+    auth_facts AS (
+    SELECT id, subject, predicate, object FROM facts WHERE predicate='$isATermFor'
+    UNION ALL
+    SELECT id, subject, predicate, object
+    FROM facts
+    WHERE subject IN (SELECT node FROM auth_nodes)
+    AND object IN (SELECT node FROM auth_nodes UNION ALL ${authorizedTerms}))
+    SELECT  subject, predicate, object FROM auth_facts
+    `;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
@@ -203,26 +219,26 @@ export default class Fact {
     }
 
     if (query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
-      return `SELECT subject FROM facts WHERE predicate='${query[0]}' ${sqlPrefix ? `AND ${sqlPrefix}` : ''}`;
+      return `SELECT subject FROM auth_facts WHERE predicate='${query[0]}' ${sqlPrefix ? `AND ${sqlPrefix}` : ''}`;
     }
 
     if (query[1] === '$anything') {
       throw new Error(`$anything selector is only allowed in context of the following predicates: ${predicatedAllowedToQueryAnyObjects.join(', ')}`);
     }
 
-    let table = `(SELECT facts.subject, facts.predicate, facts.object FROM facts
+    let table = `(SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts
                   WHERE object = '${query[1]}'
                   AND predicate = '${query[0]}') as f`;
 
     if (query[0].endsWith('*')) {
       table = `(WITH RECURSIVE rfacts AS (
-        SELECT facts.subject, facts.predicate, facts.object FROM facts
+        SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts
                         WHERE object = '${query[1]}'
                         AND predicate = '${query[0]}'
         UNION ALL
-          SELECT facts.subject, facts.predicate, facts.object FROM facts, rfacts
-                          WHERE facts.object = rfacts.subject
-                          AND facts.predicate = '${query[0]}'
+          SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts, rfacts
+                          WHERE auth_facts.object = rfacts.subject
+                          AND auth_facts.predicate = '${query[0]}'
         )
         CYCLE subject
           SET cycl TO 'Y' DEFAULT 'N'
@@ -253,12 +269,12 @@ export default class Fact {
         const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (object) {
-          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject from facts WHERE predicate='${query[0]}' AND object='${object}')`]);
+          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject FROM auth_facts WHERE predicate='${query[0]}' AND object='${object}')`]);
         }
       } else if (!hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
         if (predicate) {
-          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM facts WHERE id IN (SELECT max(id) FROM facts WHERE predicate='${predicate}' GROUP BY subject) AND object='${query[1]}')`]);
+          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM auth_facts WHERE id IN (SELECT max(id) FROM auth_facts WHERE predicate='${predicate}' GROUP BY subject) AND object='${query[1]}')`]);
         }
       } else if (hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
@@ -267,9 +283,9 @@ export default class Fact {
         if (predicate && object) {
           sqlConditions.push(['subject', 'IN', `(SELECT
             subject
-            FROM facts
-            WHERE (object != '${object}' AND id IN (SELECT max(id) FROM facts WHERE predicate='${predicate}' GROUP BY subject))
-            OR subject NOT IN (SELECT subject FROM facts WHERE predicate='${predicate}'))`]);
+            FROM auth_facts
+            WHERE (object != '${object}' AND id IN (SELECT max(id) FROM auth_facts WHERE predicate='${predicate}' GROUP BY subject))
+            OR subject NOT IN (SELECT subject FROM auth_facts WHERE predicate='${predicate}'))`]);
         }
       }
     });
@@ -345,9 +361,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = 'SELECT subject, predicate, object FROM facts';
-
-    sqlQuery += ` ${and()} ${Fact.authorizedWhereClause(userid)}`;
+    let sqlQuery = Fact.authorizedSelect(userid);
 
     if (subject) {
       sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
@@ -572,7 +586,8 @@ export default class Fact {
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'term', 'member', 'access', 'referer', 'selfAccess'], this.object));
+      || await this.isKnownTerm(this.object)
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
   }
@@ -625,9 +640,7 @@ export default class Fact {
       return false;
     }
 
-    if (await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [
-      this.subject,
-    ])) {
+    if (await this.isKnownTerm(this.subject)) {
       return false;
     }
 
@@ -635,5 +648,11 @@ export default class Fact {
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
+  }
+
+  private async isKnownTerm(node: string) {
+    const pool = new PgPoolWithLog(this.logger);
+
+    return pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
   }
 }
