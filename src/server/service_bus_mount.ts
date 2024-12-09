@@ -74,7 +74,7 @@ export default async function mountServiceBus(httpServer, app) {
 
     let blockedByQuotaCheck = false;
 
-    if (storageRequired >= 1 * mb || customRequest.lastStorageCheck >= 3) {
+    if (storageRequired >= 1 * mb || customRequest.lastStorageCheck >= 100) {
       customRequest.lastStorageCheck = 1;
 
       if (!customRequest.log) {

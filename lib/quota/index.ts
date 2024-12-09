@@ -8,7 +8,7 @@ export default async function getRemainingStorageSize(
 
   const defaultStorageSizeQuota = process.env['DEFAULT_STORAGE_SIZE_QUOTA']
     ? parseInt(process.env['DEFAULT_STORAGE_SIZE_QUOTA'], 10) * mb
-    : 50 * mb;
+    : 500 * mb;
 
   const used = await storage.getSizeInBytesForAllAccountableAttributes(accounteeId);
 
