@@ -180,6 +180,39 @@ export default class Fact {
     return res;
   }
 
+  public static async getAccountableNodes(
+    accounteeId: string,
+    logger: IsLogger,
+    objectPrefix?: string,
+  ) {
+    const pool = new PgPoolWithLog(logger);
+
+    if (![undefined, 'bl', 'kv', 'l'].includes(objectPrefix)) {
+      throw new Error(`Invalid object prefix: ${objectPrefix}`);
+    }
+
+    const prefixFilter = objectPrefix ? `AND rfacts.object LIKE '${objectPrefix}%'` : '';
+
+    const res = await pool.query(`WITH RECURSIVE rfacts AS (
+      SELECT facts.subject, facts.predicate, facts.object FROM facts
+                      WHERE subject = $1
+                      AND predicate = '$isAccountableFor'
+      UNION ALL
+        SELECT facts.subject, facts.predicate, facts.object FROM facts, rfacts
+                        WHERE facts.subject = rfacts.object
+                        AND facts.predicate = '$isAccountableFor'
+      )
+      CYCLE object
+        SET cycl TO 'Y' DEFAULT 'N'
+      USING path_array
+      SELECT rfacts.object
+        FROM rfacts
+        WHERE cycl = 'N'
+        ${prefixFilter}`, [accounteeId]);
+
+    return res.rows.map((r) => r.object.trim());
+  }
+
   private static authorizedSelect(userid: string) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);

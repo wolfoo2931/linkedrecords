@@ -28,25 +28,24 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async getSizeInBytesForAllAccountableAttributes(accounteeId: string): Promise<number> {
-    // we need to do this recursively
-    const rawAttrTables = await this.pgPool.query(`SELECT SPLIT_PART(object, '-', 1) || '_attributes' as table
-      FROM facts
-      WHERE predicate='$isAccountableFor'
-      AND subject='us-4402b4706ce43763d4a57c6b31bae3fd'
-      GROUP BY SPLIT_PART(object, '-', 1)
-      HAVING SPLIT_PART(object, '-', 1) || '_attributes' IN (SELECT table_name from information_schema.tables)`);
-
-    const attrTables = rawAttrTables.rows.map((r) => r.table);
+    const attrTables = ['bl_attributes', 'kv_attributes'];
 
     const sizes = await Promise.all(attrTables.map(async (tableName) => {
       const [prefix] = tableName.split('_');
 
-      const query = `SELECT SUM(LENGTH(value))
+      // FIXME: we need a pagination / map reduce approach here
+      // We can not combine it in one query because we want to be able to store the facts and
+      // the attributes in different databases
+      const accountableNodes = await Fact.getAccountableNodes(accounteeId, this.logger, prefix);
+
+      if (!accountableNodes.length) {
+        return 0;
+      }
+
+      const result = await this.pgPool.query(`SELECT SUM(LENGTH(value))
         FROM ${tableName}
         WHERE ('${prefix}' || '-' || id)
-        IN (SELECT object FROM facts WHERE predicate='$isAccountableFor' AND subject='${accounteeId}');`;
-
-      const result = await this.pgPool.query(query);
+        IN (${accountableNodes.map((n) => `'${n}'`).join(',')});`);
 
       if (!result?.rows[0]) {
         throw new Error(`There was a problem getting the size of all accountable attributes for ${accounteeId}`);
