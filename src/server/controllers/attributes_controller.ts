@@ -20,7 +20,11 @@ async function getRemainingStorageSize(
   storage: IsAttributeStorage,
 ): Promise<number> {
   const mb = 1048576;
-  const defaultStorageSizeQuota = 10 * mb;
+
+  const defaultStorageSizeQuota = process.env['DEFAULT_STORAGE_SIZE_QUOTA']
+    ? parseInt(process.env['DEFAULT_STORAGE_SIZE_QUOTA'], 10) * mb
+    : 50 * mb;
+
   const used = await storage.getSizeInBytesForAllAccountableAttributes(accounteeId);
 
   return defaultStorageSizeQuota - used;
