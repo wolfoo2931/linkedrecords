@@ -98,12 +98,14 @@ export default class ClientServerBus {
       });
 
       socket.on('error', (error) => {
+        console.log('==> websocket error', error);
         this.connectionInterruptedSubscribers.forEach((sub) => {
           sub(error);
         });
       });
 
       socket.on('disconnect', () => {
+        console.log('==> websocket disconnect');
         this.connectionInterruptedSubscribers.forEach((sub) => {
           sub();
         });

@@ -8,6 +8,8 @@ import SQL from '../../facts/server/authorization_sql_builder';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
+import getRemainingStorageSize from '../../../lib/quota';
+import IsLogger from '../../../lib/is_logger';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -15,34 +17,34 @@ const attributePrefixMap = {
   BlobAttribute: 'bl',
 };
 
-async function getRemainingStorageSize(
-  accounteeId: string,
-  storage: IsAttributeStorage,
-): Promise<number> {
-  const mb = 1048576;
-
-  const defaultStorageSizeQuota = process.env['DEFAULT_STORAGE_SIZE_QUOTA']
-    ? parseInt(process.env['DEFAULT_STORAGE_SIZE_QUOTA'], 10) * mb
-    : 50 * mb;
-
-  const used = await storage.getSizeInBytesForAllAccountableAttributes(accounteeId);
-
-  return defaultStorageSizeQuota - used;
-}
-
 async function ensureStorageSpaceToSave<T>(
   actorId: string,
   attributeStorage: IsAttributeStorage,
   factsToSave: Fact[],
   attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
+  logger: IsLogger,
 ) {
   const accountableMap: Record<string, string> = factsToSave.reduce((acc, fact) => {
     if (fact.predicate === '$isAccountableFor') {
+      // attribute = accountee
       acc[fact.object] = fact.subject;
     }
 
     return acc;
   }, {});
+
+  // we have to trace this back to the node which actually has a storage quota assigned to it
+  await Promise.all(Object.entries(accountableMap).map(async ([attributeId, accounteeId]) => {
+    let nodeWithQuotaAssignment = actorId;
+
+    try {
+      nodeWithQuotaAssignment = await Fact.getAccounteeIdForNode(accounteeId, logger);
+    } catch (error) {
+      logger.info(`Error getting accountee id for node ${accounteeId}, defaulting to actorId ${actorId}`);
+    }
+
+    accountableMap[attributeId] = nodeWithQuotaAssignment;
+  }));
 
   const accounteeIds = Array.from(new Set([
     actorId,
@@ -57,7 +59,7 @@ async function ensureStorageSpaceToSave<T>(
   }));
 
   const prom2 = Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
-    const bytesRequired = await attribute.getStorageRequiredForValue(value);
+    const bytesRequired = await AbstractAttributeServer.getStorageRequiredForValue(value);
     storageRequired[attribute.id] = bytesRequired;
   }));
 
@@ -248,6 +250,7 @@ export default {
       req.attributeStorage,
       resolvedFacts,
       Array.from(attributesByAttributeClass.values()).flat(),
+      req.log,
     );
 
     // eslint-disable-next-line no-restricted-syntax
@@ -318,6 +321,7 @@ export default {
       req.attributeStorage,
       facts,
       [[req.attribute, req.body.value]],
+      req.log,
     );
 
     await req.attribute.create(req.body.value);

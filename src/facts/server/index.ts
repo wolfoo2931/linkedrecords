@@ -180,6 +180,39 @@ export default class Fact {
     return res;
   }
 
+  public static async getAccounteeIdForNode(
+    nodeId: string,
+    logger: IsLogger,
+  ): Promise<string> {
+    const pool = new PgPoolWithLog(logger);
+
+    // TODO: check if the passed nodeId itself is a node with a quota assigned to it
+
+    const res = await pool.query(`WITH RECURSIVE rfacts AS (
+      SELECT facts.subject, facts.predicate, facts.object FROM facts
+                      WHERE object = $1
+                      AND predicate = '$isAccountableFor'
+      UNION ALL
+        SELECT facts.subject, facts.predicate, facts.object FROM facts, rfacts
+                        WHERE facts.object = rfacts.subject
+                        AND facts.predicate = '$isAccountableFor'
+      )
+      CYCLE object
+        SET cycl TO 'Y' DEFAULT 'N'
+      USING path_array
+      SELECT rfacts.subject
+        FROM rfacts
+        WHERE cycl = 'N'`, [nodeId]);
+
+    if (res.rows.length === 0) {
+      throw new Error(`No accountee found for node ${nodeId}`);
+    }
+
+    // we have to find the first node which has a quota assigned to it
+    // for now it is the last one which is always a user node.
+    return res.rows[res.rows.length - 1].subject;
+  }
+
   public static async getAccountableNodes(
     accounteeId: string,
     logger: IsLogger,

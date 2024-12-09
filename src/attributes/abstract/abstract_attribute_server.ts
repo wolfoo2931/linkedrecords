@@ -34,7 +34,7 @@ export default abstract class AbstractAttributeServer <
   }
 
   // eslint-disable-next-line class-methods-use-this
-  public async getStorageRequiredForValue(value: Type): Promise<number> {
+  public static async getStorageRequiredForValue(value): Promise<number> {
     if ((value as Blob).size) {
       return (value as Blob).size;
     }
@@ -48,6 +48,24 @@ export default abstract class AbstractAttributeServer <
     }
 
     throw new Error(`Unknown type for getStorageRequiredForValue: ${typeof value}`);
+  }
+
+  public static async getStorageRequiredForChange(
+    change: SerializedChangeWithMetadata<any>,
+  ): Promise<number> {
+    if ((change.change as Blob).size) {
+      return (change.change as Blob).size;
+    }
+
+    if (typeof change.change === 'string') {
+      return change.change.length;
+    }
+
+    if (typeof change.change === 'object') {
+      return JSON.stringify(change.change).length;
+    }
+
+    throw new Error(`Unknown type for getStorageRequiredForValue: ${typeof change.change}`);
   }
 
   public static getDataTypePrefix(): string {
