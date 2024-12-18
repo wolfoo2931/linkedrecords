@@ -6,10 +6,13 @@ const proxy = httpProxy.createProxyServer();
 
 exports.config = {
   specs: [
-    [
-      './specs.wdio/browser_sdk/**/*.spec.ts',
-    ],
+    './specs.wdio/**/*.spec.ts',
   ],
+
+  suites: {
+    // npm run wdio:fast -- --suite tinytodo
+    tinytodo: ['./specs.wdio/tinytodo/**/*.spec.ts'],
+  },
 
   exclude: [
 

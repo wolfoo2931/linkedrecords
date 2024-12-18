@@ -76,7 +76,7 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     }
   }
 
-  protected async rawChange(change: KeyValueChange) {
+  protected async rawChange(change: KeyValueChange): Promise<boolean> {
     const actualChanges = change.change.filter(({ key, value }) => {
       if (!this.value[key] && value) {
         return true;
@@ -90,12 +90,17 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     });
 
     if (actualChanges.length === 0) {
-      return;
+      return true;
     }
 
-    this.transmitChange(new KeyValueChange(actualChanges, this.version));
-    this.notifySubscribers(change);
-    this.value = change.apply(this.value);
+    const success = await this.transmitChange(new KeyValueChange(actualChanges, this.version));
+
+    if (success) {
+      this.notifySubscribers(change);
+      this.value = change.apply(this.value);
+    }
+
+    return success;
   }
 
   protected onLoad() {
@@ -117,12 +122,12 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     this.notifySubscribers(change, changeWithMetadata);
   }
 
-  protected transmitChange(changeset: KeyValueChange) {
+  protected transmitChange(changeset: KeyValueChange): Promise<boolean> {
     if (!this.id) {
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
 
-    this.sendToServer(new SerializedChangeWithMetadata<KeyValueChange>(
+    return this.sendToServer(new SerializedChangeWithMetadata<KeyValueChange>(
       this.id,
       this.actorId,
       this.clientId,

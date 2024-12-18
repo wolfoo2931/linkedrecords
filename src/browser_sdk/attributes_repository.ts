@@ -31,7 +31,7 @@ type TransformCompositionCreationResult<X extends { type?: typeof AbstractAttrib
         X['type'] extends string ? AbstractAttributeClient<any, IsSerializable> :
           KeyValueAttribute;
 
-type CompositionCreationRequest = {
+export type CompositionCreationRequest = {
   [k: string]: {
     type?: typeof AbstractAttributeClient<any, IsSerializable> | string,
     facts?: [string, string, string?][] | undefined,

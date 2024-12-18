@@ -121,6 +121,22 @@ export default class Session {
     ];
   }
 
+  static async getFourSessions()
+  : Promise<[InitializedSession, InitializedSession, InitializedSession, InitializedSession]> {
+    const session = await this.getSessions(4);
+
+    if (!session[0] || !session[1] || !session[2] || !session[3]) {
+      throw new Error('Unknown error when initializing LinkedRecord test session');
+    }
+
+    return [
+      session[0],
+      session[1],
+      session[2],
+      session[3],
+    ];
+  }
+
   static async truncateDB() {
     await pgPool.query('TRUNCATE facts;');
   }
@@ -188,7 +204,7 @@ export default class Session {
   }
 }
 
-class InitializedSession extends Session {
+export class InitializedSession extends Session {
   Attribute: AttributesRepository;
 
   Fact: FactsRepository;
