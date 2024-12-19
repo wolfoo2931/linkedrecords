@@ -226,7 +226,7 @@ describe('TinyTodo', () => {
       interns: [],
     });
 
-    await TinyTodo.createList(aaron, 'Org list created by Kescha', orgID);
+    await TinyTodo.createList(aaron, 'Org list created by Aaron', orgID);
 
     await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
     await expectNotToBeAbleToSeeListsOfOrg(kescha, orgID);
@@ -237,4 +237,29 @@ describe('TinyTodo', () => {
     await expectToBeAbleToSeeListsOfOrg(aaron, orgID, 1);
     await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 1);
   });
+
+  it('allows only admins delete a list of an organization (even if the user created the list and assigned it to the org then)', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID } = await setUpOrg({
+      admins: [emina, andrew],
+      temps: [kescha],
+      interns: [aaron],
+    });
+
+    const listID = await TinyTodo.createList(kescha, 'Org list created by Aaron', orgID);
+
+    await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 1);
+
+    await expect(TinyTodo.deleteList(kescha, listID))
+      .to.eventually.be.rejectedWith(Error, 'not allowed to delete list');
+
+    await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 1);
+
+    await TinyTodo.deleteList(andrew, listID);
+
+    await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 0);
+  });
+
+  it('allows interns of an app to modify existing lists');
 });

@@ -27,6 +27,7 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
         ['{{org}}', '$isAccountableFor', '$it'],
         ['$it', '$canRead', '{{todoLists}}'],
         ['$it', '$canReferTo', '{{todoLists}}'],
+        ['$it', '$canRefine', '{{todoLists}}'],
         ['$it', '$canRefine', '{{org}}'],
         ['$it', '$canRead', '{{org}}'],
         ['$it', '$isHostOf', '{{tempTeam}}'],
@@ -147,7 +148,7 @@ export default class TinyTodo {
 
       orgFilters = [
         ['$it', '$isMemberOf', todoLists.id!],
-        ['$it', 'latest(stateIs)', '$not(Deleted)'],
+        ['$it', '$latest(stateIs)', '$not(Deleted)'],
       ];
     }
 
@@ -170,9 +171,13 @@ export default class TinyTodo {
   }
 
   public static async deleteList(client: InitializedSession, listId: string) {
-    return client.Fact.createAll([
+    const createdFacts = await client.Fact.createAll([
       [listId, 'stateIs', 'Deleted'],
     ]);
+
+    if (!createdFacts.length) {
+      throw new Error('not allowed to delete list');
+    }
   }
 
   public static async shareList(
