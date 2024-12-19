@@ -45,7 +45,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     await this.change(changeset);
   }
 
-  protected async rawChange(changeset: LongTextChange) {
+  protected async rawChange(changeset: LongTextChange): Promise<boolean> {
     // TODO: Check for version is valid
     // if (this.version === '0') {
     //   throw Error('Cannot change attribute as attributed state is not loaded from server!');
@@ -62,10 +62,18 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
 
       this.buffer.add(changeset);
     } else {
-      this.transmitChange(new LongTextChange(changeset.changeset, this.version));
+      const success = await this.transmitChange(
+        new LongTextChange(changeset.changeset, this.version),
+      );
+
+      if (!success) {
+        return false;
+      }
     }
 
     this.notifySubscribers(changeset);
+
+    return true;
   }
 
   protected getLastChangeTransmittedMillisecondsAgo(): number {
@@ -132,7 +140,7 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     }
   }
 
-  protected transmitChange(changeset: LongTextChange) {
+  protected transmitChange(changeset: LongTextChange): Promise<boolean> {
     if (!this.id) {
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
@@ -147,6 +155,6 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
 
     this.buffer.init(changeset);
 
-    this.sendToServer(this.changeInTransmission);
+    return this.sendToServer(this.changeInTransmission);
   }
 }

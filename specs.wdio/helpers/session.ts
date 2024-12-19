@@ -70,7 +70,7 @@ export default class Session {
     }
 
     const mrConfig = {};
-    const browsers = Array.from({ length: reuseBrowsers ? 3 : count }, (_, index) => `browser${index + 1}`);
+    const browsers = Array.from({ length: reuseBrowsers ? 4 : count }, (_, index) => `browser${index + 1}`);
 
     browsers.forEach((name) => {
       mrConfig[name] = { capabilities };
@@ -118,6 +118,22 @@ export default class Session {
       session[0],
       session[1],
       session[2],
+    ];
+  }
+
+  static async getFourSessions()
+  : Promise<[InitializedSession, InitializedSession, InitializedSession, InitializedSession]> {
+    const session = await this.getSessions(4);
+
+    if (!session[0] || !session[1] || !session[2] || !session[3]) {
+      throw new Error('Unknown error when initializing LinkedRecord test session');
+    }
+
+    return [
+      session[0],
+      session[1],
+      session[2],
+      session[3],
     ];
   }
 
@@ -188,7 +204,7 @@ export default class Session {
   }
 }
 
-class InitializedSession extends Session {
+export class InitializedSession extends Session {
   Attribute: AttributesRepository;
 
   Fact: FactsRepository;

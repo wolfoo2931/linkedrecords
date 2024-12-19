@@ -44,8 +44,9 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
     this.transmitChange(this.value);
   }
 
-  protected async rawChange(change: BlobChange) {
-    this.rawSet(change.value);
+  protected async rawChange(change: BlobChange): Promise<boolean> {
+    this.value = change.value;
+    return this.transmitChange(this.value);
   }
 
   protected onServerMessage(changeWithMetadata: SerializedChangeWithMetadata<BlobChange>) {
@@ -54,7 +55,7 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
     }
   }
 
-  protected async transmitChange(value: Blob) {
+  protected async transmitChange(value: Blob): Promise<boolean> {
     if (!this.id) {
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
@@ -67,11 +68,14 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
     formData.append('actorId', this.actorId);
     formData.append('clientId', this.clientId);
 
-    await this.linkedRecords.fetch(url, {
+    const success = await this.linkedRecords.fetch(url, {
       method: 'PATCH',
       body: formData,
       isJSON: false,
+      doNotHandleExpiredSessions: true,
     });
+
+    return !!success;
   }
 
   protected onLoad() {}

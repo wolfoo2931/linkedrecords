@@ -29,6 +29,8 @@ export {
 export default class LinkedRecords {
   static ensureUserIdIsKnownPromise;
 
+  KeyValueChange: typeof KeyValueChange = KeyValueChange;
+
   clientServerBus: ClientServerBus;
 
   serverURL: URL;
