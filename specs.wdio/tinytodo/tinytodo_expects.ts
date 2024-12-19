@@ -44,6 +44,21 @@ export async function expectNotToBeAbleToSeeList(client, listID: string) {
     .to.eventually.be.rejectedWith(Error, 'list not found');
 }
 
+export async function expectNotToBeAbleToSeeListsOfOrg(client, orgID: string) {
+  await clearCache(client);
+
+  await expect(TinyTodo.getLists(client, orgID))
+    .to.eventually.be.rejectedWith(Error, 'list of list not found');
+}
+
+export async function expectToBeAbleToSeeListsOfOrg(client, orgID: string, listCount: number) {
+  await clearCache(client);
+
+  const lists = await TinyTodo.getLists(client, orgID);
+
+  expect(lists.length).to.eql(listCount);
+}
+
 export async function expectNotToBeAbleToChangeList(
   client: InitializedSession,
   listID: string,

@@ -35,12 +35,18 @@ export default class AuthorizationSqlBuilder {
     if (groupRoles.length) {
       // TODO: we can cache this and include the list
       const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
+      const allDirectAccessibleNode = `SELECT
+      object as node
+      FROM facts
+      WHERE predicate IN (${groupRoles.join(',')})
+      AND (subject='${userid}' OR subject IN (${allGroupsOfTheUser}))`;
 
-      groupSubSelect.push(`SELECT
-        object as node
-        FROM facts
-        WHERE predicate IN (${groupRoles.join(',')})
-        AND (subject='${userid}' OR subject IN (${allGroupsOfTheUser}))`);
+      groupSubSelect.push(`
+        (WITH direct_accessible_nodes AS (${allDirectAccessibleNode})
+          SELECT node FROM direct_accessible_nodes
+        UNION
+          SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (SELECT node FROM direct_accessible_nodes))
+      `);
     }
 
     return `(${[

@@ -12,6 +12,7 @@ exports.config = {
   suites: {
     // npm run wdio:fast -- --suite tinytodo
     tinytodo: ['./specs.wdio/tinytodo/**/*.spec.ts'],
+    browser_sdk: ['./specs.wdio/browser_sdk/**/*.spec.ts'],
   },
 
   exclude: [

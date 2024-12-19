@@ -19,26 +19,19 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
         ['{{org}}', '$isAccountableFor', '$it'],
       ],
     },
-    archivedState: {
-      type: 'KeyValueAttribute',
-      value: { },
-      facts: [
-        ['$it', 'isA', 'ArchivedState'],
-        ['{{org}}', '$isAccountableFor', '$it'],
-      ],
-    },
     adminTeam: {
       type: 'KeyValueAttribute',
       value: { },
       facts: [
         ['$it', 'isA', 'AdminTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
-        ['$it', '$isMemberOf', '{{org}}'],
-        ['$it', '$canReferTo', '{{archivedState}}'],
+        ['$it', '$canRead', '{{todoLists}}'],
         ['$it', '$canReferTo', '{{todoLists}}'],
-        ['$it', '$canAccess', '{{todoLists}}'],
+        ['$it', '$canRefine', '{{org}}'],
+        ['$it', '$canRead', '{{org}}'],
         ['$it', '$isHostOf', '{{tempTeam}}'],
         ['$it', '$isHostOf', '{{internTeam}}'],
+        ['$it', '$isHostOf', '$it'],
       ],
     },
     tempTeam: {
@@ -47,9 +40,10 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
       facts: [
         ['$it', 'isA', 'TempTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
-        ['$it', '$canRefine', '{{org}}'],
-        ['$it', '$canAccess', '{{todoLists}}'],
+        ['$it', '$canRead', '{{todoLists}}'],
         ['$it', '$canReferTo', '{{todoLists}}'],
+        ['$it', '$canRefine', '{{org}}'],
+        ['$it', '$canRead', '{{org}}'],
       ],
     },
     internTeam: {
@@ -58,7 +52,8 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
       facts: [
         ['$it', 'isA', 'InternTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
-        ['$it', '$canAccess', '{{todoLists}}'],
+        ['$it', '$canRead', '{{todoLists}}'],
+        ['$it', '$canRead', '{{org}}'],
       ],
     },
   };
@@ -70,7 +65,7 @@ export default class TinyTodo {
       ['Organization', '$isATermFor', 'xx'],
       ['TodoList', '$isATermFor', 'xx'],
       ['ListOfTodoLists', '$isATermFor', 'xx'],
-      ['ArchivedState', '$isATermFor', 'xx'],
+      ['Deleted', '$isATermFor', 'xx'],
       ['AdminTeam', '$isATermFor', 'xx'],
       ['TempTeam', '$isATermFor', 'xx'],
       ['InternTeam', '$isATermFor', 'xx'],
@@ -81,24 +76,29 @@ export default class TinyTodo {
     return client.Attribute.createAll(getOrgBlueprint(orgName));
   }
 
+  public static async addUserToOrg(client: InitializedSession, otherUserID, orgId, teamId) {
+    const fCreated = await client.Fact.createAll([
+      [otherUserID, '$isMemberOf', teamId],
+    ]);
+
+    if (!fCreated.length) {
+      throw new Error('Not Authorized to assign user to team');
+    }
+  }
+
   public static async loadOrgAttributes(client: InitializedSession, orgID: string) {
-    const { archState, todoLists } = await client.Attribute.findAll({
-      archState: [
-        ['$it', 'isA', 'ArchivedState'],
-        [orgID, '$isAccountableFor', '$it'],
-      ],
+    const { todoLists } = await client.Attribute.findAll({
       todoLists: [
         ['$it', 'isA', 'ListOfTodoLists'],
         [orgID, '$isAccountableFor', '$it'],
       ],
     });
 
-    if (!archState[0] || !todoLists[0]) {
-      throw new Error('org not found');
+    if (!todoLists[0]) {
+      throw new Error('list of list not found');
     }
 
     return {
-      archState: archState[0],
       todoLists: todoLists[0],
     };
   }
@@ -130,10 +130,10 @@ export default class TinyTodo {
           ['$it', 'isA', 'TodoList'],
         ],
       },
-    });
+    }).catch(() => ({ list: undefined }));
 
-    if (!list.id) {
-      throw new Error('List not created');
+    if (!list || !list.id) {
+      throw new Error('list not created');
     }
 
     return list.id;
@@ -143,11 +143,11 @@ export default class TinyTodo {
     let orgFilters: [string, string, string][] = [];
 
     if (orgID) {
-      const { archState, todoLists } = await this.loadOrgAttributes(client, orgID);
+      const { todoLists } = await this.loadOrgAttributes(client, orgID);
 
       orgFilters = [
         ['$it', '$isMemberOf', todoLists.id!],
-        ['$it', 'latest(stateIs)', `$not(${archState.id})`],
+        ['$it', 'latest(stateIs)', '$not(Deleted)'],
       ];
     }
 
@@ -169,11 +169,9 @@ export default class TinyTodo {
     return list.getValue();
   }
 
-  public static async deleteList(client: InitializedSession, listId: string, orgID: string) {
-    const { archState } = await this.loadOrgAttributes(client, orgID);
-
+  public static async deleteList(client: InitializedSession, listId: string) {
     return client.Fact.createAll([
-      [listId, 'latest(stateIs)', archState.id],
+      [listId, 'stateIs', 'Deleted'],
     ]);
   }
 

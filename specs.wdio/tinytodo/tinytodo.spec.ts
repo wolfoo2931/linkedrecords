@@ -5,11 +5,60 @@ import TinyTodo from './tinytodo';
 import {
   expectNotToBeAbleToChangeList,
   expectNotToBeAbleToSeeList,
+  expectNotToBeAbleToSeeListsOfOrg,
   expectToBeAbleToSeeList,
+  expectToBeAbleToSeeListsOfOrg,
   expectToBeAbleToSeeTask,
 } from './tinytodo_expects';
 
 chai.use(chaiAsPromised);
+
+async function setUpOrg({ admins, temps, interns }) {
+  const oneAdmin = admins[0];
+  const allUsers = [...admins, ...temps, ...interns];
+  const randomUser = allUsers[Math.floor(Math.random() * allUsers.length)];
+
+  if (!oneAdmin) {
+    throw new Error('No admin found');
+  }
+
+  await TinyTodo.ensureTerminologyIsDefined(randomUser);
+
+  const {
+    org,
+    adminTeam,
+    tempTeam,
+    internTeam,
+  } = await TinyTodo.createOrg(oneAdmin, 'TinyTodo Org');
+
+  const orgID = org?.id;
+  const adminTeamID = adminTeam?.id;
+  const tempTeamID = tempTeam?.id;
+  const internTeamID = internTeam?.id;
+
+  if (!orgID) {
+    throw new Error('Org not created');
+  }
+
+  await Promise.all(admins.map(async (c) => {
+    const userId = await c.getActorId();
+    await TinyTodo.addUserToOrg(oneAdmin, userId, orgID, adminTeamID);
+  }));
+
+  await Promise.all(temps.map(async (c) => {
+    const userId = await c.getActorId();
+    await TinyTodo.addUserToOrg(oneAdmin, userId, orgID, tempTeamID);
+  }));
+
+  await Promise.all(interns.map(async (c) => {
+    const userId = await c.getActorId();
+    await TinyTodo.addUserToOrg(oneAdmin, userId, orgID, internTeamID);
+  }));
+
+  return {
+    orgID, adminTeamID, tempTeamID, internTeamID,
+  };
+}
 
 describe('TinyTodo', () => {
   beforeEach(Session.truncateDB);
@@ -26,20 +75,6 @@ describe('TinyTodo', () => {
     }
 
     await TinyTodo.ensureTerminologyIsDefined(randomUser);
-    const orgAttributes = await TinyTodo.createOrg(emina, 'TinyTodo Org');
-    const orgID = orgAttributes?.['org']?.id;
-
-    if (!orgID) {
-      throw new Error('Org not created');
-    }
-
-    // Andrew can not get lists because he is not member of the org
-    await expect(TinyTodo.getLists(andrew, orgID))
-      .to.eventually.be.rejectedWith(Error, 'org not found');
-
-    // Andrew can not create a list because he is not member of the org
-    await expect(TinyTodo.createList(andrew, 'Andrews List', orgID))
-      .to.eventually.be.rejectedWith(Error, 'org not found');
 
     // Andrew can query all lists independent of an org
     expect(await TinyTodo.getLists(andrew)).to.have.length(0);
@@ -79,5 +114,127 @@ describe('TinyTodo', () => {
     await expectNotToBeAbleToSeeList(kescha, andrewsListId);
     await expectToBeAbleToSeeTask(andrew, andrewsListId, 'Task created by Emina');
     await expectToBeAbleToSeeTask(emina, andrewsListId, 'Task created by Emina');
+  });
+
+  it('allows to setup permissions for an organization', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID } = await setUpOrg({
+      admins: [emina],
+      temps: [kescha],
+      interns: [aaron],
+    });
+
+    // Emina can create a list because she is a temp
+    const listCreatedByEmina = await TinyTodo.createList(emina, 'Org list created by Emina', orgID);
+
+    await expectToBeAbleToSeeList(emina, listCreatedByEmina);
+    await expectToBeAbleToSeeList(kescha, listCreatedByEmina);
+    await expectToBeAbleToSeeList(aaron, listCreatedByEmina);
+
+    // Kescha can create a list because she is a temp
+    const listCreatedByKescha = await TinyTodo.createList(kescha, 'Org list created by Kescha', orgID);
+
+    await expectToBeAbleToSeeList(emina, listCreatedByKescha);
+    await expectToBeAbleToSeeList(kescha, listCreatedByKescha);
+    await expectToBeAbleToSeeList(aaron, listCreatedByKescha);
+
+    await expect(TinyTodo.createList(aaron, 'Org list created by Aaron', orgID))
+      .to.eventually.be.rejectedWith(Error, 'list not created');
+
+    // Andrew is not part of the org so he can not get lists
+    await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
+
+    // Andrew is not part of the org so he can not create a list
+    await expect(TinyTodo.createList(andrew, 'Andrews List', orgID))
+      .to.eventually.be.rejectedWith(Error, 'list of list not found');
+
+    // Interns should not be allowed to create a list (in context of an organization)
+    await expect(TinyTodo.createList(aaron, 'Aarons List', orgID))
+      .to.eventually.be.rejectedWith(Error, 'list not created');
+  });
+
+  it('allows only admins to add other users to the orgs temp team', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID, tempTeamID } = await setUpOrg({
+      admins: [emina],
+      temps: [kescha],
+      interns: [aaron],
+    });
+
+    const listCreatedByKescha = await TinyTodo.createList(kescha, 'Org list created by Kescha', orgID);
+
+    await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
+    await expectNotToBeAbleToSeeList(andrew, listCreatedByKescha);
+
+    await expect(TinyTodo.addUserToOrg(kescha, await andrew.getActorId(), orgID, tempTeamID))
+      .to.eventually.be.rejectedWith(Error, 'Not Authorized to assign user to team');
+
+    await expect(TinyTodo.addUserToOrg(andrew, await andrew.getActorId(), orgID, tempTeamID))
+      .to.eventually.be.rejectedWith(Error, 'Not Authorized to assign user to team');
+
+    await expect(TinyTodo.addUserToOrg(aaron, await andrew.getActorId(), orgID, tempTeamID))
+      .to.eventually.be.rejectedWith(Error, 'Not Authorized to assign user to team');
+
+    // Just to be sure, Andrew should still not be able to see the lists.
+    await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
+    await expectNotToBeAbleToSeeList(andrew, listCreatedByKescha);
+
+    await TinyTodo.addUserToOrg(emina, await andrew.getActorId(), orgID, tempTeamID);
+
+    await expectToBeAbleToSeeListsOfOrg(andrew, orgID, 1);
+    await expectToBeAbleToSeeList(andrew, listCreatedByKescha);
+  });
+
+  it('allows only admins to add other users to the orgs temp team when the admin is not the creator of the org', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID, tempTeamID } = await setUpOrg({
+      admins: [emina, aaron],
+      temps: [kescha],
+      interns: [],
+    });
+
+    const listCreatedByKescha = await TinyTodo.createList(kescha, 'Org list created by Kescha', orgID);
+
+    await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
+    await expectNotToBeAbleToSeeList(andrew, listCreatedByKescha);
+
+    await expect(TinyTodo.addUserToOrg(kescha, await andrew.getActorId(), orgID, tempTeamID))
+      .to.eventually.be.rejectedWith(Error, 'Not Authorized to assign user to team');
+
+    await expect(TinyTodo.addUserToOrg(andrew, await andrew.getActorId(), orgID, tempTeamID))
+      .to.eventually.be.rejectedWith(Error, 'Not Authorized to assign user to team');
+
+    // Just to be sure, Andrew should still not be able to see the lists.
+    await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
+    await expectNotToBeAbleToSeeList(andrew, listCreatedByKescha);
+
+    await TinyTodo.addUserToOrg(aaron, await andrew.getActorId(), orgID, tempTeamID);
+
+    await expectToBeAbleToSeeListsOfOrg(andrew, orgID, 1);
+    await expectToBeAbleToSeeList(andrew, listCreatedByKescha);
+  });
+
+  it('allows only admin users to add other users to the admin group', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID, adminTeamID, tempTeamID } = await setUpOrg({
+      admins: [emina, aaron],
+      temps: [],
+      interns: [],
+    });
+
+    await TinyTodo.createList(aaron, 'Org list created by Kescha', orgID);
+
+    await expectNotToBeAbleToSeeListsOfOrg(andrew, orgID);
+    await expectNotToBeAbleToSeeListsOfOrg(kescha, orgID);
+
+    await TinyTodo.addUserToOrg(aaron, await andrew.getActorId(), orgID, adminTeamID);
+    await TinyTodo.addUserToOrg(andrew, await kescha.getActorId(), orgID, tempTeamID);
+
+    await expectToBeAbleToSeeListsOfOrg(aaron, orgID, 1);
+    await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 1);
   });
 });

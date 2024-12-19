@@ -70,7 +70,7 @@ export default class Session {
     }
 
     const mrConfig = {};
-    const browsers = Array.from({ length: reuseBrowsers ? 3 : count }, (_, index) => `browser${index + 1}`);
+    const browsers = Array.from({ length: reuseBrowsers ? 4 : count }, (_, index) => `browser${index + 1}`);
 
     browsers.forEach((name) => {
       mrConfig[name] = { capabilities };

@@ -114,6 +114,15 @@ export default {
             );
           }
 
+          if (rawFact.length === 3 && rawFact[0] === '$it' && rawFact[2] === '$it' && rawFact[1] === '$isHostOf') {
+            return new Fact(
+              nameIdMap[attributeName]!,
+              rawFact[1],
+              nameIdMap[attributeName]!,
+              req.log,
+            );
+          }
+
           if (rawFact.length === 3 && rawFact[0] === '$it') {
             return new Fact(
               nameIdMap[attributeName]!,
