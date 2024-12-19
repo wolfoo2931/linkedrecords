@@ -53,6 +53,7 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
         ['{{org}}', '$isAccountableFor', '$it'],
         ['$it', '$canRead', '{{todoLists}}'],
         ['$it', '$canReferTo', '{{todoLists}}'],
+        ['$it', '$canRefine', '{{todoLists}}'],
         ['$it', '$canRefine', '{{org}}'],
         ['$it', '$canRead', '{{org}}'],
         ['$it', '$canRead', '{{archivedState}}'],
@@ -64,6 +65,7 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
       facts: [
         ['$it', 'isA', 'InternTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
+        ['$it', '$canRefine', '{{todoLists}}'],
         ['$it', '$canRead', '{{todoLists}}'],
         ['$it', '$canRead', '{{org}}'],
         ['$it', '$canRead', '{{archivedState}}'],
