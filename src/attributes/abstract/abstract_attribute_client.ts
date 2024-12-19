@@ -65,7 +65,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   public abstract deserializeValue(serializedValue: string) : Promise<Type>;
 
   protected abstract rawSet(newValue: Type): void;
-  protected abstract rawChange(delta: TypedChange): void;
+  protected abstract rawChange(delta: TypedChange): Promise<boolean>;
   protected abstract onServerMessage(payload: SerializedChangeWithMetadata<TypedChange>);
   protected abstract onLoad();
 
@@ -179,9 +179,9 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     await this.rawSet(newValue);
   }
 
-  public async change(change: TypedChange) : Promise<void> {
+  public async change(change: TypedChange) : Promise<boolean> {
     await this.load();
-    await this.rawChange(change);
+    return this.rawChange(change);
   }
 
   public async subscribe(observer: Function) {
@@ -265,19 +265,24 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return true;
   }
 
-  protected async sendToServer(change: SerializedChangeWithMetadata<TypedChange>) {
+  protected async sendToServer(
+    change: SerializedChangeWithMetadata<TypedChange>,
+  ): Promise<boolean> {
     if (!this.id) {
       throw Error('cannot send message to server as attribute does not has an id');
     }
 
     try {
-      this.clientServerBus.send(this.serverURL.toString(), this.id, change);
+      await this.clientServerBus.send(this.serverURL.toString(), this.id, change);
+      return true;
     } catch (ex: any) {
       if (ex.message && ex.message.match && ex.message.match(/unauthorized/)) {
         this.linkedRecords.handleExpiredLoginSession();
       } else {
         this.linkedRecords.handleConnectionError(ex);
       }
+
+      return false;
     }
   }
 

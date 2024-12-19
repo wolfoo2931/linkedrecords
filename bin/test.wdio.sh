@@ -21,7 +21,7 @@ fi
 
 echo "Node server is running on with PID ${SERVER_PID}"
 
-npx wdio run ./wdio.conf.ts
+npx wdio run ./wdio.conf.ts "$@"
 succ=$?
 kill $SERVER_PID
 

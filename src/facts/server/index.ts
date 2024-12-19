@@ -344,7 +344,7 @@ export default class Fact {
         }
       } else if (hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
-        const object = query[1].match(/^\$not\(([a-zA-Z]+)\)$/)![1];
+        const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (predicate && object) {
           sqlConditions.push(['subject', 'IN', `(SELECT
@@ -620,7 +620,7 @@ export default class Fact {
       return false;
     }
 
-    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isHostOf', '$isMemberOf', '$canAccess', '$canRead', '$canReferTo'].includes(this.predicate)) {
+    if (this.subject.startsWith('us-') && !['$isAccountableFor', '$isHostOf', '$isMemberOf', '$canAccess', '$canRead', '$canRefine', '$canReferTo'].includes(this.predicate)) {
       return false;
     }
 
@@ -710,7 +710,7 @@ export default class Fact {
       return false;
     }
 
-    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access'], this.subject));
+    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
 
     return hasSubjectAccess && hasObjectAccess;
