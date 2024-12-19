@@ -261,5 +261,30 @@ describe('TinyTodo', () => {
     await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 0);
   });
 
-  it('allows interns of an app to modify existing lists');
+  it('does not allow interns to add an list to the organization', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID } = await setUpOrg({
+      admins: [emina, andrew],
+      temps: [kescha],
+      interns: [aaron],
+    });
+
+    await expect(TinyTodo.createList(aaron, 'Aarons List', orgID))
+      .to.eventually.be.rejectedWith(Error, 'list not created');
+  });
+
+  it('allows interns of an app to modify existing lists', async () => {
+    const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+    const { orgID } = await setUpOrg({
+      admins: [emina, andrew],
+      temps: [kescha],
+      interns: [aaron],
+    });
+
+    const listID = await TinyTodo.createList(andrew, 'List', orgID);
+
+    await TinyTodo.createTask(aaron, listID, 'Task created the Intern');
+  });
 });

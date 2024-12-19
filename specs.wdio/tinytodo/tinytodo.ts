@@ -66,7 +66,7 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
         ['$it', 'isA', 'InternTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
         ['$it', '$canRefine', '{{todoLists}}'],
-        ['$it', '$canRead', '{{todoLists}}'],
+        ['$it', '$canAccess', '{{todoLists}}'],
         ['$it', '$canRead', '{{org}}'],
         ['$it', '$canRead', '{{archivedState}}'],
       ],
