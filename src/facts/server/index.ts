@@ -278,7 +278,7 @@ export default class Fact {
         }
       } else if (hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
-        const object = query[1].match(/^\$not\(([a-zA-Z]+)\)$/)![1];
+        const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (predicate && object) {
           sqlConditions.push(['subject', 'IN', `(SELECT

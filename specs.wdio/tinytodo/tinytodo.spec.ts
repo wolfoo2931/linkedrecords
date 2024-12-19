@@ -251,12 +251,12 @@ describe('TinyTodo', () => {
 
     await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 1);
 
-    await expect(TinyTodo.deleteList(kescha, listID))
+    await expect(TinyTodo.deleteList(kescha, orgID, listID))
       .to.eventually.be.rejectedWith(Error, 'not allowed to delete list');
 
     await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 1);
 
-    await TinyTodo.deleteList(andrew, listID);
+    await TinyTodo.deleteList(andrew, orgID, listID);
 
     await expectToBeAbleToSeeListsOfOrg(kescha, orgID, 0);
   });
