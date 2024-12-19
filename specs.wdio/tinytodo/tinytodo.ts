@@ -33,16 +33,16 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
       facts: [
         ['$it', 'isA', 'AdminTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
-        ['$it', '$canRead', '{{todoLists}}'],
-        ['$it', '$canReferTo', '{{todoLists}}'],
-        ['$it', '$canRefine', '{{todoLists}}'],
-        ['$it', '$canRefine', '{{org}}'],
-        ['$it', '$canRead', '{{org}}'],
-        ['$it', '$isHostOf', '{{tempTeam}}'],
-        ['$it', '$isHostOf', '{{internTeam}}'],
-        ['$it', '$isHostOf', '$it'],
-        ['$it', '$canRead', '{{archivedState}}'],
-        ['$it', '$canReferTo', '{{archivedState}}'],
+        ['$it', '$canRead', '{{todoLists}}'], // user of this group can read the list of lists and nodes which are members of it (the actual lists are the members)
+        ['$it', '$canReferTo', '{{todoLists}}'], //  ... can assign a todo list to this org (['$it', '$isMemberOf', todoLists.id!],)
+        ['$it', '$canRefine', '{{todoLists}}'], //   ... can assign the archived state to a list ([listId, 'stateIs', archivedState.id])
+        ['$it', '$canRefine', '{{org}}'], //         ... can transfer accountability of something to the org
+        ['$it', '$canRead', '{{org}}'], //           ... can read the payload of the org
+        ['$it', '$isHostOf', '{{tempTeam}}'], //     ... can add other users to the tempTeam
+        ['$it', '$isHostOf', '{{internTeam}}'], //   ... can add other users to the internTeam
+        ['$it', '$isHostOf', '$it'], //              ... can add other users to this team (adminTeam)
+        ['$it', '$canRead', '{{archivedState}}'], // ... can see archivedState so the attribute id can be used in queries to filter out archived lists
+        ['$it', '$canReferTo', '{{archivedState}}'], //  can archive lists ([listId, 'stateIs', archivedState.id])
       ],
     },
     tempTeam: {
@@ -53,7 +53,6 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
         ['{{org}}', '$isAccountableFor', '$it'],
         ['$it', '$canRead', '{{todoLists}}'],
         ['$it', '$canReferTo', '{{todoLists}}'],
-        ['$it', '$canRefine', '{{todoLists}}'],
         ['$it', '$canRefine', '{{org}}'],
         ['$it', '$canRead', '{{org}}'],
         ['$it', '$canRead', '{{archivedState}}'],
@@ -65,7 +64,6 @@ function getOrgBlueprint(orgName: string): CompositionCreationRequest {
       facts: [
         ['$it', 'isA', 'InternTeam'],
         ['{{org}}', '$isAccountableFor', '$it'],
-        ['$it', '$canRefine', '{{todoLists}}'],
         ['$it', '$canAccess', '{{todoLists}}'],
         ['$it', '$canRead', '{{org}}'],
         ['$it', '$canRead', '{{archivedState}}'],
