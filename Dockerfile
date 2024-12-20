@@ -1,8 +1,6 @@
 FROM node:19-alpine as builder
-ARG GITHUB_TOKEN
 WORKDIR /usr/src/app
 RUN apk update && apk add git openssh python3 g++ make libpq-dev
-RUN git config --global url."https://x-oauth-basic:${GITHUB_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
 COPY . .
