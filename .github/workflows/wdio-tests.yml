@@ -52,4 +52,4 @@ jobs:
           AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
         run: |
-          npm run wdio
+          npm run wdio:fast
