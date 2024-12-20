@@ -12,6 +12,7 @@ createServer({ transportDriver: http }).then((server) => {
 http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
     await pgPool.query('TRUNCATE facts;');
+    await pgPool.query('TRUNCATE users;');
     console.log('TRUNCATE facts done');
   }
 
