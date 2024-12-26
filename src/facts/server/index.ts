@@ -190,18 +190,19 @@ export default class Fact {
       ['selfAccess', 'creator', 'host', 'member', 'access', 'reader'],
     );
 
-    const authorizedTerms = SQL.selectSubjectsInAnyGroup(userid, ['term']);
-
-    return `WITH auth_nodes AS (${authorizedNodes}),
-    auth_facts AS (
-    SELECT id, subject, predicate, object FROM facts WHERE predicate='$isATermFor'
-    UNION ALL
-    SELECT id, subject, predicate, object
-    FROM facts
-    WHERE subject IN (SELECT node FROM auth_nodes)
-    AND object IN (SELECT node FROM auth_nodes UNION ALL ${authorizedTerms}))
-    SELECT  subject, predicate, object FROM auth_facts
-    `;
+    return `
+    WITH  auth_nodes AS (${authorizedNodes}),
+          auth_facts AS (
+              SELECT id, subject, predicate, object
+              FROM facts
+              WHERE predicate='$isATermFor'
+            UNION ALL
+              SELECT id, subject, predicate, object
+              FROM facts
+              WHERE subject IN (SELECT node FROM auth_nodes)
+              AND (object IN (SELECT node FROM auth_nodes) OR object IN (SELECT facts.subject as node FROM facts WHERE facts.predicate='$isATermFor'))
+          )
+    SELECT subject, predicate, object FROM auth_facts`;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
