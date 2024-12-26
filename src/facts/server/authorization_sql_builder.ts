@@ -13,11 +13,11 @@ export const rolePredicateMap = {
 export default class AuthorizationSqlBuilder {
   public static getSQLToCheckAccess(userid: string, roles: Role[], attributeId: string) {
     return `(SELECT *
-      FROM (${this.selectSubjectsInAnyGroup(userid, roles)}) as facts
+      FROM (${this.selectSubjectsInAnyGroup(userid, roles, attributeId)}) as facts
       WHERE node='${attributeId}')`;
   }
 
-  public static selectSubjectsInAnyGroup(userid: string, roles: Role[]) {
+  public static selectSubjectsInAnyGroup(userid: string, roles: Role[], attributeId?: string) {
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
       .map(() => `SELECT '${userid}' as node`);
@@ -34,18 +34,31 @@ export default class AuthorizationSqlBuilder {
 
     if (groupRoles.length) {
       // TODO: we can cache this and include the list
+      // OR maybe make it an materialized view
       const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
+
       const allDirectAccessibleNode = `SELECT
       object as node
       FROM facts
+      WHERE predicate IN (${groupRoles.join(',')}) ${attributeId ? `
+      AND object='${attributeId}'
+      ` : ''} AND (subject='${userid}' OR subject IN (SELECT * FROM all_groups_of_the_user))`;
+
+      const allDirectAccessibleNodeMembers = `SELECT
+      object as node
+      FROM facts
       WHERE predicate IN (${groupRoles.join(',')})
-      AND (subject='${userid}' OR subject IN (${allGroupsOfTheUser}))`;
+      AND (subject='${userid}' OR subject IN (SELECT * FROM all_groups_of_the_user))`;
 
       groupSubSelect.push(`
-        (WITH direct_accessible_nodes AS (${allDirectAccessibleNode})
+        (WITH
+          all_groups_of_the_user AS (${allGroupsOfTheUser}),
+          direct_accessible_nodes AS (${allDirectAccessibleNode}),
+          direct_accessible_node_members AS (${allDirectAccessibleNodeMembers})
+
           SELECT node FROM direct_accessible_nodes
-        UNION
-          SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (SELECT node FROM direct_accessible_nodes))
+        UNION ALL
+          SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (SELECT node FROM direct_accessible_node_members))
       `);
     }
 
@@ -53,6 +66,6 @@ export default class AuthorizationSqlBuilder {
       ...selfSubSelect,
       ...termsSubSelect,
       ...groupSubSelect,
-    ].join(' UNION ')})`;
+    ].join(' UNION ALL ')})`;
   }
 }
