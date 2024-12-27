@@ -122,6 +122,7 @@ export default class Fact {
       CREATE INDEX IF NOT EXISTS idx_facts_predicate ON facts (predicate);
       CREATE INDEX IF NOT EXISTS idx_facts_object ON facts (object);
       CREATE INDEX IF NOT EXISTS idx_kv_attr_id ON kv_attributes (id);
+      CREATE INDEX IF NOT EXISTS idx_facts_composite ON facts(subject, predicate, object);
       ALTER TABLE facts ALTER COLUMN subject SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
@@ -200,7 +201,12 @@ export default class Fact {
               SELECT id, subject, predicate, object
               FROM facts
               WHERE subject IN (SELECT node FROM auth_nodes)
-              AND (object IN (SELECT node FROM auth_nodes) OR object IN (SELECT facts.subject as node FROM facts WHERE facts.predicate='$isATermFor'))
+              AND (object IN (SELECT node FROM auth_nodes))
+            UNION ALL
+              SELECT id, subject, predicate, object
+              FROM facts
+              WHERE subject IN (SELECT node FROM auth_nodes)
+              AND (object IN (SELECT facts.subject as node FROM facts WHERE facts.predicate='$isATermFor'))
           )
     SELECT subject, predicate, object FROM auth_facts`;
   }
