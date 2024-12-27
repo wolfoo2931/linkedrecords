@@ -201,12 +201,12 @@ export default class Fact {
               SELECT id, subject, predicate, object
               FROM facts
               WHERE subject IN (SELECT node FROM auth_nodes)
-              AND (object IN (SELECT node FROM auth_nodes))
+              AND object IN (SELECT node FROM auth_nodes)
             UNION ALL
               SELECT id, subject, predicate, object
               FROM facts
               WHERE subject IN (SELECT node FROM auth_nodes)
-              AND (object IN (SELECT facts.subject as node FROM facts WHERE facts.predicate='$isATermFor'))
+              AND object IN (SELECT subject FROM facts WHERE predicate='$isATermFor')
           )
     SELECT subject, predicate, object FROM auth_facts`;
   }
