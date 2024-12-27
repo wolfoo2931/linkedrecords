@@ -424,7 +424,7 @@ describe('Attribute', () => {
         [mobyDickVol2.id, 'is', 'deleted'],
       ]);
 
-      await browser.pause(500);
+      await sleep(1000);
 
       const { books } = await otherClient.Attribute.findAll({
         books: [
@@ -480,7 +480,7 @@ describe('Attribute', () => {
         [RalphsBio.id, 'is', 'deleted'],
       ]);
 
-      await browser.pause(500);
+      await sleep(1000);
 
       const {
         books, bios, autobios, allBooks, allBios, allAutobios,
