@@ -371,7 +371,14 @@ export default class Fact {
     let sqlQuery = Fact.authorizedSelect(userid);
 
     if (subject) {
-      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
+      const subjectFilter = Fact.getSQLToResolveToSubjectIdsWithModifiers(subject);
+      const singleValueMatch = subjectFilter.match(/^SELECT '(.*?)'$/);
+
+      if (singleValueMatch && singleValueMatch[1]) {
+        sqlQuery += ` ${and()} subject='${singleValueMatch[1]}'`;
+      } else {
+        sqlQuery += ` ${and()} subject IN (${subjectFilter})`;
+      }
     }
 
     if (predicate) {
