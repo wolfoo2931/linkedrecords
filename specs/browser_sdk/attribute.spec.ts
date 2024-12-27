@@ -424,8 +424,6 @@ describe('Attribute', () => {
         [mobyDickVol2.id, 'is', 'deleted'],
       ]);
 
-      await sleep(1000);
-
       const { books } = await otherClient.Attribute.findAll({
         books: [
           ['$it', 'isA*', 'Book'],
@@ -479,8 +477,6 @@ describe('Attribute', () => {
         [chrisAutoBio.id, 'is', 'deleted'],
         [RalphsBio.id, 'is', 'deleted'],
       ]);
-
-      await sleep(1000);
 
       const {
         books, bios, autobios, allBooks, allBios, allAutobios,
