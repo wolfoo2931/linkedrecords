@@ -37,18 +37,13 @@ export default class AuthorizationSqlBuilder {
       // OR maybe make it an materialized view
       const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
 
-      const allDirectAccessibleNode = `SELECT
-      object as node
-      FROM facts
-      WHERE predicate IN (${groupRoles.join(',')}) ${attributeId ? `
-      AND object='${attributeId}'
-      ` : ''} AND (subject='${userid}' OR subject IN (SELECT * FROM all_groups_of_the_user))`;
-
       const allDirectAccessibleNodeMembers = `SELECT
-      object as node
-      FROM facts
-      WHERE predicate IN (${groupRoles.join(',')})
-      AND (subject='${userid}' OR subject IN (SELECT * FROM all_groups_of_the_user))`;
+        object as node
+        FROM facts
+        WHERE predicate IN (${groupRoles.join(',')})
+        AND (subject='${userid}' OR subject IN (SELECT * FROM all_groups_of_the_user))`;
+
+      const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
 
       groupSubSelect.push(`
         (WITH
