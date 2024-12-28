@@ -35,7 +35,7 @@ export default {
 
     const pool = new PgPoolWithLog(req.log);
 
-    const hasAccess = await pool.findAny(SQL.getSQLToCheckAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id));
+    const hasAccess = await pool.findAny(SQL.getSQLToCheckAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id, req.log));
 
     if (!hasAccess) {
       res.send({

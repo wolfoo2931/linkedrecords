@@ -163,6 +163,7 @@ export default class Fact {
       userid,
       ['creator', 'host', 'member', 'access'],
       nodeId,
+      logger,
     ));
   }
 
@@ -176,19 +177,22 @@ export default class Fact {
       userid,
       ['creator', 'host', 'member', 'access', 'reader'],
       nodeId,
+      logger,
     ));
 
     return res;
   }
 
-  private static authorizedSelect(userid: string) {
+  private static async authorizedSelect(userid: string, logger: IsLogger) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
 
-    const authorizedNodes = SQL.selectSubjectsInAnyGroup(
+    const authorizedNodes = await SQL.selectSubjectsInAnyGroup(
       userid,
       ['selfAccess', 'creator', 'host', 'member', 'access', 'reader'],
+      undefined,
+      logger,
     );
 
     return `
@@ -368,7 +372,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = Fact.authorizedSelect(userid);
+    let sqlQuery = await Fact.authorizedSelect(userid, logger);
 
     if (subject) {
       const subjectFilter = Fact.getSQLToResolveToSubjectIdsWithModifiers(subject);
@@ -598,10 +602,10 @@ export default class Fact {
     }
 
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject, this.logger));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
       || await this.isKnownTerm(this.object)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger));
 
     return hasSubjectAccess && hasObjectAccess;
   }
@@ -613,7 +617,7 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
 
-    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object));
+    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object, this.logger));
 
     const subjectIsKnownUserPromise = pool.findAny(`
       SELECT id
@@ -658,8 +662,8 @@ export default class Fact {
       return false;
     }
 
-    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject));
-    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
+    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject, this.logger));
+    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object, this.logger));
 
     return hasSubjectAccess && hasObjectAccess;
   }

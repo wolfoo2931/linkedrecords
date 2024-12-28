@@ -67,7 +67,7 @@ export default class PgPoolWithLog {
   }
 
   async findAny(query, ...rest) {
-    const result = await this.query(`SELECT EXISTS(${query})`, ...rest);
+    const result = await this.query(`SELECT EXISTS(${await query})`, ...rest);
 
     if (result.rows.length !== 1) {
       throw new Error('SELECT EXISTS does not return the expected result. Make sure the underlying database supports it.');
