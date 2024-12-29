@@ -54,26 +54,6 @@ function filterUndefinedSubjectQueries(
   return result;
 }
 
-function separateDataTypeFilter(
-  query: FactQueryWithOptionalSubjectPlaceholder[],
-): [string, [string, string, string?][]] {
-  let dataTypeFilter;
-  const queryWithoutDataTypeFilter: [string, string, string?][] = [];
-
-  query.forEach((q) => {
-    if (q[1] === '$hasDataType') {
-      [, , dataTypeFilter] = q;
-    } else if (q[0] === '$hasDataType') {
-      [, dataTypeFilter] = q;
-    } else {
-      // @ts-ignore
-      queryWithoutDataTypeFilter.push(q);
-    }
-  });
-
-  return [dataTypeFilter, queryWithoutDataTypeFilter];
-}
-
 function resolvedIdsToFlatArray(resultWithIds: ResolveToIdsResult): string[] {
   if (!resultWithIds) {
     throw new Error('expected ResolveToIdsResult to not be undefined');
@@ -195,7 +175,21 @@ export default class QueryExecutor {
       return [];
     }
 
-    const [dataTypeFilter, queryWithoutDataTypeFilter] = separateDataTypeFilter(query);
+    let dataTypeFilter;
+
+    const queryWithoutDataTypeFilter = query.filter((q) => {
+      if (q[1] === '$hasDataType') {
+        [, , dataTypeFilter] = q;
+        return false;
+      }
+
+      if (q[0] === '$hasDataType') {
+        [, dataTypeFilter] = q;
+        return false;
+      }
+
+      return true;
+    }) as [string, string, string?][];
 
     const nodeBlacklist: [string, string][] = queryWithoutDataTypeFilter
       .filter((q) => q.length === 3 && q[2] === '$not($it)')

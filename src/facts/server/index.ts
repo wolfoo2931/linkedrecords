@@ -7,6 +7,19 @@ import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
 
+function andFactory(): () => 'WHERE' | 'AND' {
+  let whereUsed = false;
+
+  return () => {
+    if (!whereUsed) {
+      whereUsed = true;
+      return 'WHERE';
+    }
+
+    return 'AND';
+  };
+}
+
 function hasNotModifier(statement: SubjectQuery): boolean {
   if (!Array.isArray(statement) || !statement[1]) {
     return false;
@@ -170,11 +183,7 @@ export default class Fact {
     return res;
   }
 
-  private static async authorizedSelect(
-    userid: string,
-    logger: IsLogger,
-    sqlConditions: string[],
-  ) {
+  private static async authorizedSelect(userid: string, logger: IsLogger) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
@@ -202,19 +211,8 @@ export default class Fact {
               FROM facts
               WHERE subject IN (SELECT node FROM auth_nodes)
               AND object IN (SELECT subject FROM facts WHERE predicate='$isATermFor')
-          ),
-          filtered_auth_facts AS (
-              SELECT id, subject, predicate, object
-              FROM facts
-              WHERE predicate='$isATermFor'
-            UNION
-              SELECT id, subject, predicate, object
-              FROM facts
-              WHERE subject IN (SELECT node FROM auth_nodes)
-              AND object IN (SELECT node FROM auth_nodes UNION SELECT subject FROM facts WHERE predicate='$isATermFor')
-              ${sqlConditions.length ? 'AND' : ''} ${sqlConditions.join(' AND ')}
           )
-    SELECT subject, predicate, object FROM filtered_auth_facts`;
+    SELECT subject, predicate, object FROM auth_facts`;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
@@ -372,42 +370,43 @@ export default class Fact {
     ensureValidFactQuery({ subject, predicate, object });
 
     const pool = new PgPoolWithLog(logger);
-    const sqlConditions: string[] = [];
+    const and = andFactory();
+
+    let sqlQuery = await Fact.authorizedSelect(userid, logger);
 
     if (subject) {
       const subjectFilter = Fact.getSQLToResolveToSubjectIdsWithModifiers(subject);
       const singleValueMatch = subjectFilter.match(/^SELECT '(.*?)'$/);
 
       if (singleValueMatch && singleValueMatch[1]) {
-        sqlConditions.push(`subject='${singleValueMatch[1]}'`);
+        sqlQuery += ` ${and()} subject='${singleValueMatch[1]}'`;
       } else {
-        sqlConditions.push(`subject IN (${subjectFilter})`);
+        sqlQuery += ` ${and()} subject IN (${subjectFilter})`;
       }
     }
 
     if (predicate) {
-      sqlConditions.push(`predicate='${predicate}'`);
+      sqlQuery += ` ${and()} predicate='${predicate}'`;
     }
 
     if (object) {
-      sqlConditions.push(`object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`);
+      sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
     }
 
     if (subjectBlacklist && subjectBlacklist.length) {
       const bl = subjectBlacklist
         .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
         .join(' UNION ');
-      sqlConditions.push(`subject NOT IN (${bl})`);
+      sqlQuery += ` ${and()} subject NOT IN (${bl})`;
     }
 
     if (objectBlacklist && objectBlacklist.length) {
       const bl = objectBlacklist
         .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
         .join(' UNION ');
-      sqlConditions.push(`object NOT IN (${bl})`);
+      sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
 
-    const sqlQuery = await Fact.authorizedSelect(userid, logger, sqlConditions);
     const result = await pool.query(sqlQuery);
 
     return result.rows.map((row) => new Fact(
