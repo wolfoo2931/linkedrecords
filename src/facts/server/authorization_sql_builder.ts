@@ -73,6 +73,9 @@ export default class AuthorizationSqlBuilder {
   }
 
   public static async getGroupsOfTheUser(userid: string, logger: IsLogger) {
+    // TODO: we can cache this and invalidate the cache when a
+    // matching fact is created OR DELETED:
+    // userid ('$isHostOf', '$isMemberOf', '$isAccountableFor') any_object
     const pgPool = new PgPoolWithLog(logger);
     const query = `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
     const result = await pgPool.query(query);
