@@ -6,6 +6,7 @@ import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
+import cache from '../../server/cache';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -669,8 +670,20 @@ export default class Fact {
   }
 
   private async isKnownTerm(node: string) {
+    const hit = cache.get(`isKnownTerm/${node}`);
+
+    if (hit) {
+      return hit;
+    }
+
     const pool = new PgPoolWithLog(this.logger);
 
-    return pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
+    const result = pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
+
+    if (result) {
+      cache.set(`isKnownTerm/${node}`, result);
+    }
+
+    return result;
   }
 }

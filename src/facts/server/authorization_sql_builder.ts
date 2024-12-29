@@ -1,5 +1,6 @@
 import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
+import cache from '../../server/cache';
 
 export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer' | 'conceptor';
 
@@ -73,11 +74,19 @@ export default class AuthorizationSqlBuilder {
   }
 
   public static async getGroupsOfTheUser(userid: string, logger: IsLogger) {
-    const pgPool = new PgPoolWithLog(logger);
     const query = `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
+    const weKnowIsTooMuch = cache.get(`groupOfTheUserAreTooMany/${userid}`);
+
+    if (weKnowIsTooMuch) {
+      return query;
+    }
+
+    const pgPool = new PgPoolWithLog(logger);
+
     const result = await pgPool.query(query);
 
     if (result.rows.length > 50) {
+      cache.set(`groupOfTheUserAreTooMany/${userid}`, true);
       return query;
     }
 
