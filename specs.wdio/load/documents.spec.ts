@@ -120,7 +120,11 @@ describe('Many Many Document', function () {
   afterEach(Session.afterEach);
   after(Session.deleteBrowsers);
 
-  it('allows to insert a lot of documents', async () => {
+  it('allows to insert a lot of documents', async function () {
+    if (process.env['RUN_LOAD_TEST'] !== 'true') {
+      this.skip();
+    }
+
     const [user1, user2, user3] = await Session.getThreeSessions();
 
     await ensureTerminologyIsDefined(user1);

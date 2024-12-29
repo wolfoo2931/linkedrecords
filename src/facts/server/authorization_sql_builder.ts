@@ -77,7 +77,7 @@ export default class AuthorizationSqlBuilder {
     const query = `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
     const result = await pgPool.query(query);
 
-    if (result.rows.length > 300) {
+    if (result.rows.length > 50) {
       return query;
     }
 
