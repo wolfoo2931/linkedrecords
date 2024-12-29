@@ -89,6 +89,11 @@ export default {
       const attributePrefix = attributePrefixMap[config.type] || 'kv';
       const attributeId = `${attributePrefix}-${uuid()}`;
       const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
+
+      if (!AttributeClass) {
+        throw new Error(`could not find Attribute class for attribute id: ${attributeId}`);
+      }
+
       const attribute = new AttributeClass(
         attributeId,
         req.clientId,
@@ -161,7 +166,7 @@ export default {
     }
 
     const attributeSavePromises: Promise<any>[] = [];
-    const attributesByAttributeClass = new Map();
+    const attributesByAttributeClass = new Map<any, any[]>();
 
     Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {
       if (!config.value) {
@@ -172,7 +177,13 @@ export default {
         const AC = QueryExecutor
           .getAttributeClassByAttributeId(composition[attributeName].attribute.id);
 
-        attributesByAttributeClass[AC] = attributesByAttributeClass[AC] || [];
+        if (!AC) {
+          throw new Error(`could not find Attribute class for attribute id: ${composition[attributeName].attribute.id}`);
+        }
+
+        if (!attributesByAttributeClass.get(AC)) {
+          attributesByAttributeClass.set(AC, []);
+        }
 
         let classArray = attributesByAttributeClass.get(AC);
 

@@ -74,14 +74,6 @@ function resolvedIdsToFlatArray(resultWithIds: ResolveToIdsResult): string[] {
     .filter((value, index, array) => array.indexOf(value) === index);
 }
 
-function getAttributeClassByAttributeId(
-  id: string,
-) : typeof LongTextAttribute | typeof KeyValueAttribute | typeof BlobAttribute | undefined {
-  const attributeTypes = [LongTextAttribute, KeyValueAttribute, BlobAttribute];
-  const [attributeTypePrefix] = id.split('-');
-  return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
-}
-
 export default class QueryExecutor {
   logger: IsLogger;
 
@@ -257,7 +249,7 @@ export default class QueryExecutor {
     const attributes = {};
 
     await Promise.all(attributeIDs.map(async (id) => {
-      const AttributeClass = getAttributeClassByAttributeId(id);
+      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
 
       if (!AttributeClass) {
         attributes[id] = null;
@@ -317,5 +309,13 @@ export default class QueryExecutor {
     });
 
     return result;
+  }
+
+  static getAttributeClassByAttributeId(
+    id: string,
+  ) : typeof LongTextAttribute | typeof KeyValueAttribute | typeof BlobAttribute | undefined {
+    const attributeTypes = [LongTextAttribute, KeyValueAttribute, BlobAttribute];
+    const [attributeTypePrefix] = id.split('-');
+    return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
   }
 }
