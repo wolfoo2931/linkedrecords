@@ -114,6 +114,26 @@ async function createDocument(client) {
   });
 }
 
+async function printAverageTime(label, totalFn) {
+  const timings: number[] = [];
+  const timeIt = async (fn: () => void) => {
+    const startTime = new Date().getTime();
+    await fn();
+    const endTime = new Date().getTime();
+
+    timings.push(endTime - startTime);
+  };
+
+  await totalFn(timeIt);
+
+  const sum = timings.reduce((a, b) => a + b, 0);
+  const avg = Math.round((sum / timings.length) || 0);
+
+  console.log(`Average duration (${label}): ${avg}ms`);
+
+  return avg;
+}
+
 describe('Many Many Document', function () {
   this.timeout(1 * hour);
   beforeEach(Session.truncateDB);
@@ -129,18 +149,18 @@ describe('Many Many Document', function () {
 
     await ensureTerminologyIsDefined(user1);
 
-    for (let index = 0; index < 10; index++) {
-      await createDocument(user3);
+    await printAverageTime('create document', async (timeIt) => {
+      for (let index = 0; index < 10000; index++) {
+        await timeIt(() => createDocument(user1));
 
-      // if (index % 200 === 0) {
-      //   await createDocument(user2);
-      // }
+        if (index % 200 === 0) {
+          await timeIt(() => createDocument(user2));
+        }
 
-      // if (index % 1000 === 0) {
-      //   await createDocument(user3);
-      // }
-
-      // await fetchDocuments(user3);
-    }
+        if (index % 1000 === 0) {
+          await timeIt(() => createDocument(user3));
+        }
+      }
+    });
   });
 });
