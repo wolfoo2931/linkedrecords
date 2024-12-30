@@ -18,7 +18,10 @@ function getAttributeIdByRequest(req) {
     return urlMatch[1];
   }
 
-  if (req.originalUrl.match(/\/attributes/) && req.query?.dtp?.length >= 1) {
+  if (req.originalUrl.match(/\/attributes/)
+    && typeof req.query?.dtp === 'string'
+    && req.query.dtp.length >= 1
+  ) {
     return `${req.query?.dtp}-${uuid()}`;
   }
 

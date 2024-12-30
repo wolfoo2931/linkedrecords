@@ -6,6 +6,7 @@ import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
+import cache from '../../server/cache';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -122,6 +123,7 @@ export default class Fact {
       CREATE INDEX IF NOT EXISTS idx_facts_predicate ON facts (predicate);
       CREATE INDEX IF NOT EXISTS idx_facts_object ON facts (object);
       CREATE INDEX IF NOT EXISTS idx_kv_attr_id ON kv_attributes (id);
+      CREATE INDEX IF NOT EXISTS idx_facts_composite ON facts(subject, predicate, object);
       ALTER TABLE facts ALTER COLUMN subject SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
@@ -162,6 +164,7 @@ export default class Fact {
       userid,
       ['creator', 'host', 'member', 'access'],
       nodeId,
+      logger,
     ));
   }
 
@@ -175,6 +178,7 @@ export default class Fact {
       userid,
       ['creator', 'host', 'member', 'access', 'reader'],
       nodeId,
+      logger,
     ));
 
     return res;
@@ -246,28 +250,36 @@ export default class Fact {
     return res.rows.map((r) => r.object.trim());
   }
 
-  private static authorizedSelect(userid: string) {
+  private static async authorizedSelect(userid: string, logger: IsLogger) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
 
-    const authorizedNodes = SQL.selectSubjectsInAnyGroup(
+    const authorizedNodes = await SQL.selectSubjectsInAnyGroup(
       userid,
       ['selfAccess', 'creator', 'host', 'member', 'access', 'reader'],
+      undefined,
+      logger,
     );
 
-    const authorizedTerms = SQL.selectSubjectsInAnyGroup(userid, ['term']);
-
-    return `WITH auth_nodes AS (${authorizedNodes}),
-    auth_facts AS (
-    SELECT id, subject, predicate, object FROM facts WHERE predicate='$isATermFor'
-    UNION ALL
-    SELECT id, subject, predicate, object
-    FROM facts
-    WHERE subject IN (SELECT node FROM auth_nodes)
-    AND object IN (SELECT node FROM auth_nodes UNION ALL ${authorizedTerms}))
-    SELECT  subject, predicate, object FROM auth_facts
-    `;
+    return `
+    WITH  auth_nodes AS (${authorizedNodes}),
+          auth_facts AS (
+              SELECT id, subject, predicate, object
+              FROM facts
+              WHERE predicate='$isATermFor'
+            UNION
+              SELECT id, subject, predicate, object
+              FROM facts
+              WHERE subject IN (SELECT node FROM auth_nodes)
+              AND object IN (SELECT node FROM auth_nodes)
+            UNION
+              SELECT id, subject, predicate, object
+              FROM facts
+              WHERE subject IN (SELECT node FROM auth_nodes)
+              AND object IN (SELECT subject FROM facts WHERE predicate='$isATermFor')
+          )
+    SELECT subject, predicate, object FROM auth_facts`;
   }
 
   private static getSQLToResolvePossibleTransitiveQuery(
@@ -427,10 +439,17 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = Fact.authorizedSelect(userid);
+    let sqlQuery = await Fact.authorizedSelect(userid, logger);
 
     if (subject) {
-      sqlQuery += ` ${and()} subject IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(subject)})`;
+      const subjectFilter = Fact.getSQLToResolveToSubjectIdsWithModifiers(subject);
+      const singleValueMatch = subjectFilter.match(/^SELECT '(.*?)'$/);
+
+      if (singleValueMatch && singleValueMatch[1]) {
+        sqlQuery += ` ${and()} subject='${singleValueMatch[1]}'`;
+      } else {
+        sqlQuery += ` ${and()} subject IN (${subjectFilter})`;
+      }
     }
 
     if (predicate) {
@@ -650,10 +669,10 @@ export default class Fact {
     }
 
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject, this.logger));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
       || await this.isKnownTerm(this.object)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object));
+      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger));
 
     return hasSubjectAccess && hasObjectAccess;
   }
@@ -665,7 +684,7 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
 
-    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object));
+    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object, this.logger));
 
     const subjectIsKnownUserPromise = pool.findAny(`
       SELECT id
@@ -710,15 +729,27 @@ export default class Fact {
       return false;
     }
 
-    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject));
-    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object));
+    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject, this.logger));
+    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object, this.logger));
 
     return hasSubjectAccess && hasObjectAccess;
   }
 
   private async isKnownTerm(node: string) {
+    const hit = cache.get(`isKnownTerm/${node}`);
+
+    if (hit) {
+      return hit;
+    }
+
     const pool = new PgPoolWithLog(this.logger);
 
-    return pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
+    const result = pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
+
+    if (result) {
+      cache.set(`isKnownTerm/${node}`, result);
+    }
+
+    return result;
   }
 }

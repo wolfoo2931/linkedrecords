@@ -7,6 +7,7 @@ import KeyValueAttribute from './key_value/server';
 import BlobAttribute from './blob/server';
 import IsLogger from '../../lib/is_logger';
 import AbstractAttributeClient from './abstract/abstract_attribute_client';
+import IsAttributeStorage from './abstract/is_attribute_storage';
 
 export type FactQueryWithOptionalSubjectPlaceholder =
   [string, string, string?] |
@@ -18,6 +19,8 @@ export type AttributeQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
 export type CompoundAttributeQuery = {
   [key: string]: AttributeQuery
 };
+
+type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
 
 function factQueryWithOptionalSubjectPlaceholderToFactQuery(
   x: [string, string, string?],
@@ -51,14 +54,28 @@ function filterUndefinedSubjectQueries(
   return result;
 }
 
+function resolvedIdsToFlatArray(resultWithIds: ResolveToIdsResult): string[] {
+  if (!resultWithIds) {
+    throw new Error('expected ResolveToIdsResult to not be undefined');
+  }
+
+  let flatIds;
+
+  if (Array.isArray(resultWithIds)) {
+    flatIds = resultWithIds;
+  } else if (typeof resultWithIds === 'string') {
+    flatIds = [resultWithIds];
+  } else {
+    flatIds = Object.values(resultWithIds).flat();
+  }
+
+  return flatIds
+    .filter((id) => id !== undefined)
+    .filter((value, index, array) => array.indexOf(value) === index);
+}
+
 export default class QueryExecutor {
   logger: IsLogger;
-
-  static getAttributeClassByAttributeId(id: string) : any {
-    const attributeTypes = [LongTextAttribute, KeyValueAttribute, BlobAttribute];
-    const [attributeTypePrefix] = id.split('-');
-    return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
-  }
 
   constructor(logger: IsLogger) {
     this.logger = logger;
@@ -70,25 +87,14 @@ export default class QueryExecutor {
     actorId,
     storage,
   ) {
+    // undefined | string | string[] | { [key: string]: string | string[] };
     let resultWithIds = await this.resolveToIds(query, actorId);
 
     if (!resultWithIds) {
       return [];
     }
 
-    let flatIds;
-
-    if (Array.isArray(resultWithIds)) {
-      flatIds = resultWithIds;
-    } else if (typeof resultWithIds === 'string') {
-      flatIds = [resultWithIds];
-    } else {
-      flatIds = Object.values(resultWithIds).flat();
-    }
-
-    flatIds = flatIds
-      .filter((id) => id !== undefined)
-      .filter((value, index, array) => array.indexOf(value) === index);
+    const flatIds = resolvedIdsToFlatArray(resultWithIds);
 
     if (Array.isArray(resultWithIds)) {
       resultWithIds = resultWithIds.filter((id) => flatIds.includes(id));
@@ -97,7 +103,7 @@ export default class QueryExecutor {
     } else {
       Object.keys(resultWithIds).forEach((group) => {
         if (!resultWithIds) {
-          return;
+          throw new Error('resultWithIds is expected to be defined');
         }
 
         if (typeof resultWithIds[group] === 'string') {
@@ -112,19 +118,7 @@ export default class QueryExecutor {
       });
     }
 
-    const attributes = {};
-
-    await Promise.all(flatIds.map(async (id) => {
-      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
-
-      if (!AttributeClass) {
-        attributes[id] = null;
-      } else {
-        attributes[id] = new AttributeClass(id, clientId, actorId, storage);
-        attributes[id] = await attributes[id].get({ inAuthorizedContext: true });
-        attributes[id].id = id;
-      }
-    }));
+    const attributes = await this.loadAttributes(flatIds, clientId, actorId, storage);
 
     if (typeof resultWithIds === 'string') {
       return attributes[resultWithIds];
@@ -156,7 +150,7 @@ export default class QueryExecutor {
   async resolveToIds(
     query: AttributeQuery | CompoundAttributeQuery,
     userid: string,
-  ): Promise<undefined | string | string[] | { [key: string]: string | string[] }> {
+  ): Promise<ResolveToIdsResult> {
     if (!userid) {
       throw new Error('resolveToIds needs to receive a valid userid!');
     }
@@ -246,6 +240,29 @@ export default class QueryExecutor {
     return matchedIds.filter((value, index, array) => array.indexOf(value) === index);
   }
 
+  async loadAttributes(
+    attributeIDs: string[],
+    clientId: string,
+    actorId: string,
+    storage: IsAttributeStorage,
+  ): Promise<Record<string, any>> {
+    const attributes = {};
+
+    await Promise.all(attributeIDs.map(async (id) => {
+      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
+
+      if (!AttributeClass) {
+        attributes[id] = null;
+      } else {
+        attributes[id] = new AttributeClass(id, clientId, actorId, storage, this.logger);
+        attributes[id] = await attributes[id].get({ inAuthorizedContext: true });
+        attributes[id].id = id;
+      }
+    }));
+
+    return attributes;
+  }
+
   private async getMatchedIds(subjectFactsQuery, userid, dataTypeFilter) {
     const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
 
@@ -292,5 +309,13 @@ export default class QueryExecutor {
     });
 
     return result;
+  }
+
+  static getAttributeClassByAttributeId(
+    id: string,
+  ) : typeof LongTextAttribute | typeof KeyValueAttribute | typeof BlobAttribute | undefined {
+    const attributeTypes = [LongTextAttribute, KeyValueAttribute, BlobAttribute];
+    const [attributeTypePrefix] = id.split('-');
+    return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
   }
 }

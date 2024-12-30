@@ -1,3 +1,7 @@
+import IsLogger from '../../../lib/is_logger';
+import PgPoolWithLog from '../../../lib/pg-log';
+import cache from '../../server/cache';
+
 export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer' | 'conceptor';
 
 export const rolePredicateMap = {
@@ -11,13 +15,23 @@ export const rolePredicateMap = {
 };
 
 export default class AuthorizationSqlBuilder {
-  public static getSQLToCheckAccess(userid: string, roles: Role[], attributeId: string) {
+  public static async getSQLToCheckAccess(
+    userid: string,
+    roles: Role[],
+    attributeId: string,
+    logger: IsLogger,
+  ) {
     return `(SELECT *
-      FROM (${this.selectSubjectsInAnyGroup(userid, roles)}) as facts
+      FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger)}) as facts
       WHERE node='${attributeId}')`;
   }
 
-  public static selectSubjectsInAnyGroup(userid: string, roles: Role[]) {
+  public static async selectSubjectsInAnyGroup(
+    userid: string,
+    roles: Role[],
+    attributeId: string | undefined,
+    logger: IsLogger,
+  ) {
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
       .map(() => `SELECT '${userid}' as node`);
@@ -33,19 +47,22 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
-      // TODO: we can cache this and include the list
-      const allGroupsOfTheUser = `SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
-      const allDirectAccessibleNode = `SELECT
-      object as node
-      FROM facts
-      WHERE predicate IN (${groupRoles.join(',')})
-      AND (subject='${userid}' OR subject IN (${allGroupsOfTheUser}))`;
+      const allDirectAccessibleNodeMembers = `SELECT
+        object as node
+        FROM facts
+        WHERE predicate IN (${groupRoles.join(',')})
+        AND subject IN (${await this.getGroupsOfTheUser(userid, logger)})`;
+
+      const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
 
       groupSubSelect.push(`
-        (WITH direct_accessible_nodes AS (${allDirectAccessibleNode})
+        (WITH
+          direct_accessible_nodes AS (${allDirectAccessibleNode}),
+          direct_accessible_node_members AS (${allDirectAccessibleNodeMembers})
+
           SELECT node FROM direct_accessible_nodes
-        UNION
-          SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (SELECT node FROM direct_accessible_nodes))
+        UNION ALL
+          SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (SELECT node FROM direct_accessible_node_members))
       `);
     }
 
@@ -53,6 +70,29 @@ export default class AuthorizationSqlBuilder {
       ...selfSubSelect,
       ...termsSubSelect,
       ...groupSubSelect,
-    ].join(' UNION ')})`;
+    ].join(' UNION ALL ')})`;
+  }
+
+  public static async getGroupsOfTheUser(userid: string, logger: IsLogger) {
+    const query = `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
+    const weKnowIsTooMuch = cache.get(`groupOfTheUserAreTooMany/${userid}`);
+
+    if (weKnowIsTooMuch) {
+      return query;
+    }
+
+    const pgPool = new PgPoolWithLog(logger);
+
+    const result = await pgPool.query(query);
+
+    if (result.rows.length > 50) {
+      cache.set(`groupOfTheUserAreTooMany/${userid}`, true);
+      return query;
+    }
+
+    return result.rows
+      .map((r) => r.object)
+      .map((r) => `'${r}'`)
+      .join(',');
   }
 }
