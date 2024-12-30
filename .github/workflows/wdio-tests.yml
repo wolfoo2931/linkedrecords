@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         node: [18]
-        psql: [15]
+        psql: [15, 17]
     runs-on: ubuntu-latest
     services:
       postgres:
