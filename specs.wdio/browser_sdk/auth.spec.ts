@@ -65,7 +65,7 @@ const canReadTheAttribute = async (client, attributeId) => {
     throw new Error('could read the attribute with findAll but not with find (or the other way around)');
   }
 
-  return attr1 !== undefined || attr2 !== null;
+  return attr1 !== undefined || attr2 !== undefined;
 };
 
 describe('authorization', () => {
@@ -81,7 +81,7 @@ describe('authorization', () => {
 
     const unauthorizedReadAttribute = await client2.Attribute.find(await attribute.getId());
 
-    expect(await unauthorizedReadAttribute).to.eql(null);
+    expect(await unauthorizedReadAttribute).to.eql(undefined);
 
     expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'bar' });
 
@@ -90,7 +90,7 @@ describe('authorization', () => {
 
     expect(await authorizedReadAttribute!.getValue()).to.eql({ foo: 'authorized' });
 
-    expect(unauthorizedReadAttribute).to.eql(null);
+    expect(unauthorizedReadAttribute).to.eql(undefined);
 
     const authorizedCompound = await client1.Attribute.findAll({ doc: await attribute.getId() });
 
@@ -239,7 +239,7 @@ describe('authorization', () => {
 
     const book1UnAuth = await client2.Attribute.find(await atrBook1.getId());
 
-    expect(book1UnAuth).to.equal(null);
+    expect(book1UnAuth).to.equal(undefined);
   });
 
   it('does not allow to use a term as subject if the term was not created by the same user', async () => {
@@ -335,7 +335,7 @@ describe('authorization', () => {
     const updateMessageReceived = await client2.do(() => (window as any).updateMessageReceived);
     const subscriptionResultError = await client2.do(() => (window as any).subscriptionResultError?.message);
 
-    expect(updateMessageReceived).to.eql(null);
+    expect(updateMessageReceived).to.eql(undefined);
     expect(subscriptionResultError).to.eql('unauthorized');
   });
 
@@ -386,7 +386,7 @@ describe('authorization', () => {
 
     expect(termFacts2.length).to.eql(2);
 
-    client.Fact.deleteAll([
+    await client.Fact.deleteAll([
       ['Author', '$isATermFor', 'somebody who writes a book'],
     ]);
 
@@ -820,7 +820,7 @@ describe('authorization', () => {
 
     expect(await aquamansResult!.getValue()).to.eql({ name: 'Trident of Atlan' });
     expect(await nemosResult!.getValue()).to.eql({ name: 'Trident of Atlan' });
-    expect(await mannisResult).to.eql(null);
+    expect(await mannisResult).to.eql(undefined);
   });
 
   it('is not possible to use a custom predicate which starts with "$"', async () => {
@@ -1835,7 +1835,7 @@ describe('authorization', () => {
       // As a Writer, I can not create categories
       const unauthorizedCategory = await t.createCategory(writer, 'unauthorizedCategory', []);
 
-      expect(unauthorizedCategory.id).to.eql(null);
+      expect(unauthorizedCategory.id).to.eql(undefined);
       expect(await t.getCategories(admin)).to.be.an('array').of.length(3);
       expect(await t.getCategories(writer)).to.be.an('array').of.length(3);
       expect(await t.getCategories(ontologist)).to.be.an('array').of.length(3);

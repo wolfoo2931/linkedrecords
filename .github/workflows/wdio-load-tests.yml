@@ -9,8 +9,6 @@ on:
     inputs: {}
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main, develop ]
 
 jobs:
   wdio-load-tests:
