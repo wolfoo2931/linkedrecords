@@ -1,5 +1,9 @@
 name: Karma Tests
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
   workflow_dispatch:
     inputs: {}
