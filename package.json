@@ -1,7 +1,7 @@
 {
   "name": "linkedrecords",
   "version": "0.1.0",
-  "description": "A backend as a service for declarative and functional API development",
+  "description": "A BaaS (Backend-as-a-Service) solution for web applications",
   "exports": {
     "./server": "./dist/server.js",
     "./browser_sdk": {
@@ -22,21 +22,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/specifyio/yabaas.git"
+    "url": "git+https://github.com/wolfoo2931/linkedrecords.git"
   },
   "keywords": [
     "baas",
     "faas",
     "api",
-    "serverless",
-    "functional"
+    "serverless"
   ],
   "author": "Oliver Wolf",
-  "license": "ISC",
+  "license": "AGPL-3.0",
   "bugs": {
-    "url": "https://github.com/specifyio/yabaas/issues"
+    "url": "https://github.com/wolfoo2931/linkedrecords/issues"
   },
-  "homepage": "https://github.com/specifyio/yabaas#readme",
+  "homepage": "https://linkedrecords.com/",
   "dependencies": {
     "@socket.io/redis-streams-adapter": "^0.1.0",
     "@types/chai": "^4.3.3",
