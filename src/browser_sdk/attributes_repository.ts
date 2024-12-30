@@ -55,6 +55,12 @@ const stringify = (query) => JSON.stringify(query, (_, v) => {
   return v;
 });
 
+const byId = (a, b) => {
+  if (a.id < b.id) return -1;
+  if (a.id > b.id) return 1;
+  return 0;
+};
+
 export default class AttributesRepository {
   private linkedRecords: LinkedRecords;
 
@@ -212,7 +218,7 @@ export default class AttributesRepository {
 
     Object.keys(records).forEach((key) => {
       if (Array.isArray(records[key])) {
-        attributeResult[key] = records[key].map((attr) => this.idToAttribute(attr.id, ignoreCache, attr));
+        attributeResult[key] = records[key].map((attr) => this.idToAttribute(attr.id, ignoreCache, attr)).sort(byId);
       } else if (records[key]) {
         attributeResult[key] = this.idToAttribute(records[key].id, ignoreCache, records[key]);
       } else {
