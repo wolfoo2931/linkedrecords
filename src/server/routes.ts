@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
 import pino from 'pino-http';
+import { rateLimit } from 'express-rate-limit'
 import attributeMiddleware from './middleware/attribute';
 import factMiddleware from './middleware/fact';
 import errorHandler from './middleware/error_handler';
@@ -19,6 +20,11 @@ import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../attributes/errors/authorization_error';
 
 const blobUpload = multer().single('change');
+
+const limiter = rateLimit({
+  windowMs: 1000, // 1 second
+  limit: 1000, // Limit each IP to 100 requests per `window` (here, per 1 minute).
+});
 
 Fact.initDB();
 
@@ -69,6 +75,7 @@ async function createApp(httpServer: https.Server) {
   const app = express();
   await mountServiceBus(httpServer, app);
 
+  app.use(limiter);
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());

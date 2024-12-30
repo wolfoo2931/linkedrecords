@@ -78,6 +78,7 @@ export default function authentication() {
           if (!req.signedCookies.userId) {
             res.cookie('userId', uid(req), {
               ...cookieSettings,
+              secure: true,
               signed: true,
               httpOnly: false,
             });
@@ -105,6 +106,7 @@ export default function authentication() {
         if (!req.signedCookies.userId) {
           res.cookie('userId', uid(req), {
             ...cookieSettings,
+            secure: true,
             signed: true,
             httpOnly: false,
           });

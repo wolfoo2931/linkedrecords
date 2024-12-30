@@ -1,7 +1,7 @@
 {
   "name": "linkedrecords",
   "version": "0.1.0",
-  "description": "A backend as a service for declarative and functional API development",
+  "description": "A BaaS (Backend-as-a-Service) solution for web applications",
   "exports": {
     "./server": "./dist/server.js",
     "./browser_sdk": {
@@ -22,21 +22,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/specifyio/yabaas.git"
+    "url": "git+https://github.com/wolfoo2931/linkedrecords.git"
   },
   "keywords": [
     "baas",
     "faas",
     "api",
-    "serverless",
-    "functional"
+    "serverless"
   ],
   "author": "Oliver Wolf",
-  "license": "ISC",
+  "license": "AGPL-3.0",
   "bugs": {
-    "url": "https://github.com/specifyio/yabaas/issues"
+    "url": "https://github.com/wolfoo2931/linkedrecords/issues"
   },
-  "homepage": "https://github.com/specifyio/yabaas#readme",
+  "homepage": "https://linkedrecords.com/",
   "dependencies": {
     "@socket.io/redis-streams-adapter": "^0.1.0",
     "@types/chai": "^4.3.3",
@@ -45,8 +44,8 @@
     "@types/node": "^18.0.0",
     "@typescript-eslint/eslint-plugin": "^5.38.0",
     "@typescript-eslint/parser": "^5.38.0",
-    "@wdio/cli": "^8.33.1",
-    "@wdio/local-runner": "^8.33.1",
+    "@wdio/cli": "^9.4.5",
+    "@wdio/local-runner": "^9.4.5",
     "@wdio/mocha-framework": "^8.29.1",
     "@wdio/spec-reporter": "^8.29.1",
     "@wdio/static-server-service": "8.29.1",
@@ -62,7 +61,8 @@
     "eslint": "^8.23.1",
     "eslint-config-airbnb-typescript": "^17.0.0",
     "express": "^4.19.2",
-    "express-openid-connect": "^2.8.0",
+    "express-openid-connect": "^2.17.1",
+    "express-rate-limit": "^7.5.0",
     "file-type": "^16.5.1",
     "flat": "^5.0.2",
     "get-value": "^3.0.1",
@@ -91,7 +91,7 @@
     "ts-node": "^10.9.1",
     "typescript": "^4.8.3",
     "uuidv7": "^0.6.3",
-    "webdriverio": "^8.33.1",
+    "webdriverio": "^9.4.5",
     "webpack": "^5.73.0",
     "webpack-bundle-analyzer": "^4.8.0",
     "webpack-cli": "^4.10.0",
