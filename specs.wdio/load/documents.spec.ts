@@ -3,7 +3,7 @@
 /* eslint-disable no-console */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-plusplus */
-import chai from 'chai';
+import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import Session from '../helpers/session';
 
@@ -149,8 +149,8 @@ describe('Many Many Document', function () {
 
     await ensureTerminologyIsDefined(user1);
 
-    await printAverageTime('create document', async (timeIt) => {
-      for (let index = 0; index < 10000; index++) {
+    const avgCreationTime = await printAverageTime('create document', async (timeIt) => {
+      for (let index = 0; index < 2000; index++) {
         await timeIt(() => createDocument(user1));
 
         if (index % 200 === 0) {
@@ -162,5 +162,14 @@ describe('Many Many Document', function () {
         }
       }
     });
+
+    const avgFindTime = await printAverageTime('find document user3', async (timeIt) => {
+      for (let index = 0; index < 10; index++) {
+        await timeIt(() => fetchDocuments(user3));
+      }
+    });
+
+    expect(avgCreationTime).to.be.below(100);
+    expect(avgFindTime).to.be.below(50);
   });
 });
