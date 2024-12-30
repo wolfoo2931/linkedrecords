@@ -1,5 +1,6 @@
 import md5 from 'md5';
 import { uuidv7 as uuid } from 'uuidv7';
+import * as he from 'he';
 import QueryExecutor from '../../attributes/attribute_query';
 import AttributeStorage from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
@@ -96,7 +97,7 @@ export default function attributeMiddleware() {
         next();
       } catch (ex: any) {
         if (ex?.message?.startsWith('Server is not aware of Attribute Type Prefix for id')) {
-          res.status(404).send(ex?.message);
+          res.status(404).send(he.encode(ex.message));
         } else {
           req.log.error(ex);
           res.sendStatus(500);
