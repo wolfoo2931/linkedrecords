@@ -19,12 +19,17 @@ export default class Timer {
 
   xAxisSteps = 20;
 
+  constructor(private getCount: () => Promise<number>) {}
+
   async timeIt(label: string, fn: () => void) {
     if (!this.timings[label]) {
       this.timings[label] = [];
     }
 
-    const factCount = await Session.getFactCount();
+    const factCount = this.getCount
+      ? await this.getCount()
+      : await Session.getFactCount();
+
     const startTime = new Date().getTime();
     await fn();
     const endTime = new Date().getTime();

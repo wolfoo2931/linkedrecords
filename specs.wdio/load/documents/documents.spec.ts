@@ -7,12 +7,14 @@ import fs from 'fs';
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import path from 'path';
-import Session from '../helpers/session';
-import Timer from '../helpers/timer';
+import pg from 'pg';
+import Session from '../../helpers/session';
+import Timer from '../../helpers/timer';
 
 chai.use(chaiAsPromised);
 
 const hour = 60 * 60 * 1000;
+const pgPool = new pg.Pool({ max: 2 });
 
 async function ensureTerminologyIsDefined(client) {
   return client.Fact.createAll([
@@ -128,12 +130,17 @@ describe('Many Many Document', function () {
       this.skip();
     }
 
-    const timer = new Timer();
+    const timer = new Timer(async () => {
+      const result = await pgPool.query("SELECT count(*) as count FROM facts WHERE predicate='isA' and object='documentContent';");
+
+      return parseInt(result.rows[0].count, 10);
+    });
+
     const [user1, user2, user3] = await Session.getThreeSessions();
 
     await ensureTerminologyIsDefined(user1);
 
-    for (let index = 0; index < 5000; index++) {
+    for (let index = 0; index < 10000; index++) {
       await timer.timeIt('createDocument', () => createDocument(user1));
 
       if (index % 20 === 0) {
