@@ -138,7 +138,15 @@ export default class Session {
   }
 
   static async truncateDB() {
-    await pgPool.query('TRUNCATE facts;');
+    if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
+      await pgPool.query('TRUNCATE facts;');
+    }
+  }
+
+  static async getFactCount() {
+    const result = await pgPool.query('SELECT count(*) as count FROM facts;');
+
+    return parseInt(result.rows[0].count, 10);
   }
 
   static async afterEach() {
