@@ -45,4 +45,8 @@ export default interface IsAttributeStorage {
     value: string,
     changeId?: string,
   ) : Promise<{ id: string, updatedAt: Date }>;
+
+  getSizeInBytesForAllAccountableAttributes(
+    accounteeId: string,
+  ): Promise<number>;
 }
