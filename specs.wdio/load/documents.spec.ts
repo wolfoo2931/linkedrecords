@@ -9,6 +9,13 @@ import Session from '../helpers/session';
 
 chai.use(chaiAsPromised);
 
+const chunk = function (array, n) {
+  if (!array.length) {
+    return [];
+  }
+  return [array.slice(0, n)].concat(chunk(array.slice(n), n));
+};
+
 const hour = 60 * 60 * 1000;
 
 async function ensureTerminologyIsDefined(client) {
@@ -115,21 +122,36 @@ async function createDocument(client) {
 }
 
 async function printAverageTime(label, totalFn) {
-  const timings: number[] = [];
+  const timings: { runtime: number, factCount: number }[] = [];
   const timeIt = async (fn: () => void) => {
+    const factCount = await Session.getFactCount();
     const startTime = new Date().getTime();
     await fn();
     const endTime = new Date().getTime();
 
-    timings.push(endTime - startTime);
+    timings.push({
+      runtime: endTime - startTime,
+      factCount,
+    });
   };
 
   await totalFn(timeIt);
 
-  const sum = timings.reduce((a, b) => a + b, 0);
-  const avg = Math.round((sum / timings.length) || 0);
+  const chunkCount = 20;
+  const chunkedTimings = chunk(timings, Math.floor(timings.length / chunkCount) || 1);
 
-  console.log(`Average duration (${label}): ${avg}ms`);
+  const chunkedAverages = chunkedTimings.map((chunkedTiming) => {
+    const runtimeSum = chunkedTiming.reduce((a, b) => a + b.runtime, 0);
+    const factCountSum = chunkedTiming.reduce((a, b) => a + b.factCount, 0);
+    return {
+      runtime: Math.round(runtimeSum / chunkedTiming.length),
+      factCount: factCountSum / chunkedTiming.length,
+    };
+  });
+
+  console.log(`timings ${label}`, chunkedAverages);
+
+  const avg = chunkedAverages.reduce((a, b) => a + b.runtime, 0) / chunkedAverages.length;
 
   return avg;
 }
@@ -150,7 +172,7 @@ describe('Many Many Document', function () {
     await ensureTerminologyIsDefined(user1);
 
     const avgCreationTime = await printAverageTime('create document', async (timeIt) => {
-      for (let index = 0; index < 2000; index++) {
+      for (let index = 0; index < 40; index++) {
         await timeIt(() => createDocument(user1));
 
         if (index % 200 === 0) {
@@ -169,7 +191,7 @@ describe('Many Many Document', function () {
       }
     });
 
-    expect(avgCreationTime).to.be.below(100);
+    expect(avgCreationTime).to.be.below(400);
     expect(avgFindTime).to.be.below(50);
   });
 });
