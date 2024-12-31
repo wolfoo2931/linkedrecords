@@ -6,9 +6,9 @@
 import fs from 'fs';
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import path from 'path';
 import Session from '../helpers/session';
 import Timer from '../helpers/timer';
-import path from 'path';
 
 chai.use(chaiAsPromised);
 
@@ -133,7 +133,7 @@ describe('Many Many Document', function () {
 
     await ensureTerminologyIsDefined(user1);
 
-    for (let index = 0; index < 1000; index++) {
+    for (let index = 0; index < 5000; index++) {
       await timer.timeIt('createDocument', () => createDocument(user1));
 
       if (index % 20 === 0) {
