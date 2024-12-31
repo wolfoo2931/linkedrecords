@@ -11,9 +11,11 @@ createServer({ transportDriver: http }).then((server) => {
 // TODO: this is only needed for the karma test, can be removed once all tests are migrated to wdio
 http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
-    await pgPool.query('TRUNCATE facts;');
-    await pgPool.query('TRUNCATE users;');
-    console.log('TRUNCATE facts done');
+    if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
+      await pgPool.query('TRUNCATE facts;');
+      await pgPool.query('TRUNCATE users;');
+      console.log('TRUNCATE facts done');
+    }
   }
 
   res.writeHead(200);
