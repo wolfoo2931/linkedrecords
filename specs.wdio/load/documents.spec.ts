@@ -3,18 +3,14 @@
 /* eslint-disable no-console */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-plusplus */
+import fs from 'fs';
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import Session from '../helpers/session';
+import Timer from '../helpers/timer';
+import path from 'path';
 
 chai.use(chaiAsPromised);
-
-const chunk = function (array, n) {
-  if (!array.length) {
-    return [];
-  }
-  return [array.slice(0, n)].concat(chunk(array.slice(n), n));
-};
 
 const hour = 60 * 60 * 1000;
 
@@ -121,41 +117,6 @@ async function createDocument(client) {
   });
 }
 
-async function printAverageTime(label, totalFn) {
-  const timings: { runtime: number, factCount: number }[] = [];
-  const timeIt = async (fn: () => void) => {
-    const factCount = await Session.getFactCount();
-    const startTime = new Date().getTime();
-    await fn();
-    const endTime = new Date().getTime();
-
-    timings.push({
-      runtime: endTime - startTime,
-      factCount,
-    });
-  };
-
-  await totalFn(timeIt);
-
-  const chunkCount = 20;
-  const chunkedTimings = chunk(timings, Math.floor(timings.length / chunkCount) || 1);
-
-  const chunkedAverages = chunkedTimings.map((chunkedTiming) => {
-    const runtimeSum = chunkedTiming.reduce((a, b) => a + b.runtime, 0);
-    const factCountSum = chunkedTiming.reduce((a, b) => a + b.factCount, 0);
-    return {
-      runtime: Math.round(runtimeSum / chunkedTiming.length),
-      factCount: factCountSum / chunkedTiming.length,
-    };
-  });
-
-  console.log(`timings ${label}`, chunkedAverages);
-
-  const avg = chunkedAverages.reduce((a, b) => a + b.runtime, 0) / chunkedAverages.length;
-
-  return avg;
-}
-
 describe('Many Many Document', function () {
   this.timeout(1 * hour);
   beforeEach(Session.truncateDB);
@@ -167,31 +128,38 @@ describe('Many Many Document', function () {
       this.skip();
     }
 
+    const timer = new Timer();
     const [user1, user2, user3] = await Session.getThreeSessions();
 
     await ensureTerminologyIsDefined(user1);
 
-    const avgCreationTime = await printAverageTime('create document', async (timeIt) => {
-      for (let index = 0; index < 40; index++) {
-        await timeIt(() => createDocument(user1));
+    for (let index = 0; index < 1000; index++) {
+      await timer.timeIt('createDocument', () => createDocument(user1));
 
-        if (index % 200 === 0) {
-          await timeIt(() => createDocument(user2));
-        }
-
-        if (index % 1000 === 0) {
-          await timeIt(() => createDocument(user3));
-        }
+      if (index % 20 === 0) {
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
       }
-    });
 
-    const avgFindTime = await printAverageTime('find document user3', async (timeIt) => {
-      for (let index = 0; index < 10; index++) {
-        await timeIt(() => fetchDocuments(user3));
+      if (index % 200 === 0) {
+        await timer.timeIt('createDocument', () => createDocument(user2));
       }
-    });
 
-    expect(avgCreationTime).to.be.below(400);
-    expect(avgFindTime).to.be.below(50);
+      if (index % 1000 === 0) {
+        await timer.timeIt('createDocument', () => createDocument(user3));
+      }
+    }
+
+    const chartData = await Promise.all([
+      timer.getPlotyTraceForLabel('createDocument'),
+      timer.getPlotyTraceForLabel('fetchDocuments'),
+    ]);
+
+    fs.writeFileSync(path.join(__dirname, '.chart', 'chart_data.js'), `var data = ${JSON.stringify(chartData)}`);
+
+    expect(await timer.getAverageRuntimeForLabel('createDocument')).to.be.below(400);
+    expect(await timer.getAverageRuntimeForLabel('fetchDocuments')).to.be.below(50);
   });
 });

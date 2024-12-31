@@ -1,0 +1,25 @@
+<head>
+	<!-- Load plotly.js into the DOM -->
+	<script src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script>
+  <script src='./chart_data.js'></script>
+</head>
+
+<body>
+	<div id='myDiv'><!-- Plotly chart will be drawn inside this DIV --></div>
+
+  <script>
+    const layout = {
+      xaxis: {
+        title: {
+          text: 'facts'
+        }
+      },
+      yaxis: {
+        title: {
+          text: 'ms'
+        }
+      }
+    }
+    Plotly.newPlot('myDiv', data, layout);
+  </script>
+</body>
