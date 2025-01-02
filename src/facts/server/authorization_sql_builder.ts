@@ -56,22 +56,30 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
-      const allDirectAccessibleNodeMembers = `SELECT
-        object as node
+      groupSubSelect.push(`SELECT object AS node
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
-        AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, logger)})`;
-
-      const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
-
-      groupSubSelect.push(`
-        (WITH
-          direct_accessible_nodes AS (${allDirectAccessibleNode}),
-          direct_accessible_node_members AS (${allDirectAccessibleNodeMembers})
-
-          SELECT node FROM direct_accessible_nodes
+          AND subject = '${userid}'
         UNION ALL
-          SELECT subject as node FROM facts WHERE predicate='$isMemberOf' AND object IN (SELECT node FROM direct_accessible_node_members))
+        SELECT object AS node
+        FROM facts AS member_facts
+        WHERE member_facts.subject = '${userid}'
+          AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')
+        UNION ALL
+        SELECT subject AS node
+        FROM facts
+        WHERE predicate = '$isMemberOf'
+          AND object IN (
+            SELECT object
+            FROM facts
+            WHERE predicate IN (${groupRoles.join(',')})
+              AND subject = '${userid}'
+            UNION ALL
+            SELECT object
+            FROM facts AS member_facts
+            WHERE member_facts.subject = '${userid}'
+              AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')
+          )
       `);
     }
 
