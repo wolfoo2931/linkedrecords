@@ -690,20 +690,20 @@ export default class Fact {
   }
 
   private static async getAllTerms(logger) {
-    const hit = cache.get('terms');
+    // const hit = cache.get('terms');
 
-    if (hit) {
-      return hit;
-    }
+    // if (hit) {
+    //   return hit;
+    // }
 
     const pool = new PgPoolWithLog(logger);
 
     const rawResult = await pool.query("SELECT subject FROM facts WHERE predicate='$isATermFor'");
     const result = rawResult.rows.map((r) => r.subject.trim());
 
-    if (result) {
-      cache.set('terms', result);
-    }
+    // if (result) {
+    //   cache.set('terms', result);
+    // }
 
     return result;
   }
