@@ -196,6 +196,8 @@ export default class Fact {
       logger,
     );
 
+    const allTerms = await Fact.getAllTerms(logger);
+
     return `
     WITH  auth_nodes AS (${authorizedNodes}),
           auth_facts AS (
@@ -211,7 +213,7 @@ export default class Fact {
               SELECT id, subject, predicate, object
               FROM facts
               WHERE subject IN (SELECT node FROM auth_nodes)
-              AND object IN (SELECT subject FROM facts WHERE predicate='$isATermFor')
+              AND object IN (${allTerms.map((t) => `'${t}'`).join(',')})
           )
     SELECT subject, predicate, object FROM auth_facts`;
   }
@@ -682,6 +684,25 @@ export default class Fact {
 
     if (result) {
       cache.set(`isKnownTerm/${node}`, result);
+    }
+
+    return result;
+  }
+
+  private static async getAllTerms(logger) {
+    const hit = cache.get('terms');
+
+    if (hit) {
+      return hit;
+    }
+
+    const pool = new PgPoolWithLog(logger);
+
+    const rawResult = await pool.query("SELECT subject FROM facts WHERE predicate='$isATermFor'");
+    const result = rawResult.rows.map((r) => r.subject.trim());
+
+    if (result) {
+      cache.set('terms', result);
     }
 
     return result;
