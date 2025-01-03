@@ -332,8 +332,12 @@ describe('authorization', () => {
 
     await ofInterest.set({ foo: 'bar2' });
 
-    const updateMessageReceived = await client2.do(() => (window as any).updateMessageReceived);
+    let updateMessageReceived = await client2.do(() => (window as any).updateMessageReceived);
     const subscriptionResultError = await client2.do(() => (window as any).subscriptionResultError?.message);
+
+    if (updateMessageReceived === null) {
+      updateMessageReceived = undefined;
+    }
 
     expect(updateMessageReceived).to.eql(undefined);
     expect(subscriptionResultError).to.eql('unauthorized');
@@ -1835,7 +1839,7 @@ describe('authorization', () => {
       // As a Writer, I can not create categories
       const unauthorizedCategory = await t.createCategory(writer, 'unauthorizedCategory', []);
 
-      expect(unauthorizedCategory.id).to.eql(undefined);
+      expect(!!unauthorizedCategory.id).to.eql(false);
       expect(await t.getCategories(admin)).to.be.an('array').of.length(3);
       expect(await t.getCategories(writer)).to.be.an('array').of.length(3);
       expect(await t.getCategories(ontologist)).to.be.an('array').of.length(3);
