@@ -56,16 +56,17 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
-      groupSubSelect.push(`SELECT object AS node
+      groupSubSelect.push(`
+        SELECT object AS node
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
           AND subject = '${userid}'
-        UNION ALL
+      UNION ALL
         SELECT object AS node
         FROM facts AS member_facts
         WHERE member_facts.subject = '${userid}'
           AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')
-        UNION ALL
+      UNION ALL
         SELECT subject AS node
         FROM facts
         WHERE predicate = '$isMemberOf'
