@@ -196,6 +196,8 @@ export default class Fact {
       logger,
     );
 
+    const allTerms = await Fact.getAllTerms(logger);
+
     return `
     WITH  auth_nodes AS (${authorizedNodes}),
           auth_facts AS (
@@ -211,7 +213,7 @@ export default class Fact {
               SELECT id, subject, predicate, object
               FROM facts
               WHERE subject IN (SELECT node FROM auth_nodes)
-              AND object IN (SELECT subject FROM facts WHERE predicate='$isATermFor')
+              AND object = ANY ('{${allTerms.join(',')}}')
           )
     SELECT subject, predicate, object FROM auth_facts`;
   }
@@ -472,6 +474,7 @@ export default class Fact {
 
     if (this.predicate === '$isATermFor') {
       const dbRows = await pool.query('SELECT subject FROM facts WHERE subject=$1 OR object=$1 OR subject=$2', [this.subject, this.object]);
+      cache.invalidate('terms');
 
       if (!dbRows.rows.length) {
         if (!userid) {
@@ -528,6 +531,11 @@ export default class Fact {
 
   private async deleteWithoutAuthCheck(userid: string) {
     const pool = new PgPoolWithLog(this.logger);
+
+    if (this.predicate === '$isATermFor') {
+      cache.invalidate('terms');
+      cache.invalidate(`isKnownTerm/${this.subject.trim()}`);
+    }
 
     await pool.query(`WITH deleted_rows AS (
         DELETE FROM facts
@@ -670,7 +678,7 @@ export default class Fact {
   }
 
   private async isKnownTerm(node: string) {
-    const hit = cache.get(`isKnownTerm/${node}`);
+    const hit = cache.get(`isKnownTerm/${node.trim()}`);
 
     if (hit) {
       return hit;
@@ -682,6 +690,25 @@ export default class Fact {
 
     if (result) {
       cache.set(`isKnownTerm/${node}`, result);
+    }
+
+    return result;
+  }
+
+  private static async getAllTerms(logger) {
+    const hit = cache.get('terms');
+
+    if (hit) {
+      return hit;
+    }
+
+    const pool = new PgPoolWithLog(logger);
+
+    const rawResult = await pool.query("SELECT subject FROM facts WHERE predicate='$isATermFor'");
+    const result = rawResult.rows.map((r) => r.subject.trim());
+
+    if (result) {
+      cache.set('terms', result);
     }
 
     return result;
