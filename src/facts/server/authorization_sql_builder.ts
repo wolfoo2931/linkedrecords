@@ -14,6 +14,8 @@ export const rolePredicateMap = {
   conceptor: '$canRefine',
 };
 
+type MembershipType = 'all' | 'directUser';
+
 export default class AuthorizationSqlBuilder {
   public static async getSQLToCheckAccess(
     userid: string,
@@ -21,9 +23,15 @@ export default class AuthorizationSqlBuilder {
     attributeId: string,
     logger: IsLogger,
   ) {
-    return `(SELECT *
-      FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger)}) as facts
-      WHERE node='${attributeId}')`;
+    return `(
+        SELECT *
+        FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'directUser')}) as facts
+        WHERE node='${attributeId}'
+      UNION ALL
+        SELECT *
+        FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'all')}) as facts
+        WHERE node='${attributeId}'
+      )`;
   }
 
   public static async selectSubjectsInAnyGroup(
@@ -31,6 +39,7 @@ export default class AuthorizationSqlBuilder {
     roles: Role[],
     attributeId: string | undefined,
     logger: IsLogger,
+    membershipType: MembershipType = 'all',
   ) {
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
@@ -51,7 +60,7 @@ export default class AuthorizationSqlBuilder {
         object as node
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
-        AND subject IN (${await this.getGroupsOfTheUser(userid, logger)})`;
+        AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, logger)})`;
 
       const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
 
@@ -73,7 +82,15 @@ export default class AuthorizationSqlBuilder {
     ].join(' UNION ALL ')})`;
   }
 
-  public static async getGroupsOfTheUser(userid: string, logger: IsLogger) {
+  public static async getGroupsOfTheUser(
+    userid: string,
+    membershipType: MembershipType,
+    logger: IsLogger,
+  ) {
+    if (membershipType === 'directUser') {
+      return `'${userid}'`;
+    }
+
     const query = `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
     const weKnowIsTooMuch = cache.get(`groupOfTheUserAreTooMany/${userid}`);
 
