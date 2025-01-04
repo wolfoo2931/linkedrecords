@@ -184,7 +184,7 @@ export default class Fact {
     return res;
   }
 
-  private static async authorizedSelect(userid: string, logger: IsLogger) {
+  private static async withAuthNodesAndFacts(userid: string, logger: IsLogger) {
     if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
       throw new Error(`userId is invalid: "${userid}"`);
     }
@@ -215,6 +215,12 @@ export default class Fact {
               WHERE subject IN (SELECT node FROM auth_nodes)
               AND object = ANY ('{${allTerms.join(',')}}')
           )
+    `;
+  }
+
+  private static async authorizedSelect(userid: string, logger: IsLogger) {
+    return `
+    ${await this.withAuthNodesAndFacts(userid, logger)}
     SELECT subject, predicate, object FROM auth_facts`;
   }
 
@@ -361,6 +367,32 @@ export default class Fact {
         flatParams,
       );
     }
+  }
+
+  static async findNodes(
+    isSubjectAllOf: SubjectQueries,
+    isObjectAllOf: SubjectQueries,
+    blacklistNodes: [string, string][],
+    userid: string,
+    logger: IsLogger,
+  ) {
+    const pool = new PgPoolWithLog(logger);
+    const and = andFactory();
+    const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger);
+    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
+    const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
+    const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${q[0]}' AND predicate='${q[1]}'`).join(' INTERSECT ').trim();
+
+    const result = await pool.query(`
+      ${baseQuery}
+      SELECT DISTINCT node
+      FROM auth_nodes
+      ${subjectSet ? `${and()} node IN (${subjectSet})` : ''}
+      ${objectSet ? `${and()} node IN (${objectSet})` : ''}
+      ${blacklist ? `${and()} node NOT IN (${blacklist})` : ''}
+    `);
+
+    return result.rows.map((row) => row.node.trim());
   }
 
   static async findAll(
