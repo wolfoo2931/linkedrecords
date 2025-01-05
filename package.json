@@ -16,8 +16,8 @@
     "lint:fix": "eslint . --fix",
     "build": "webpack --config ./webpack.config.js",
     "postinstall": "webpack --config ./webpack.config.js",
-    "wdio:fast": "REUSE_TEST_BROWSERS=true bin/test.wdio.sh",
-    "wdio:load": "RUN_LOAD_TEST=true REUSE_TEST_BROWSERS=true bin/test.wdio.sh --suite load",
+    "wdio:fast": "LOG_LEVEL=summary REUSE_TEST_BROWSERS=true bin/test.wdio.sh",
+    "wdio:load": "LOG_LEVEL=summary RUN_LOAD_TEST=true REUSE_TEST_BROWSERS=true bin/test.wdio.sh --suite load",
     "wdio": "bin/test.wdio.sh"
   },
   "repository": {
