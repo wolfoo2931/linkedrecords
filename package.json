@@ -67,7 +67,6 @@
     "flat": "^5.0.2",
     "get-value": "^3.0.1",
     "http-proxy": "^1.18.1",
-    "intersect": "^1.0.1",
     "ioredis": "^5.3.2",
     "jose": "^5.2.0",
     "js-cookie": "^3.0.1",
