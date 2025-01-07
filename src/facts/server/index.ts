@@ -340,11 +340,24 @@ export default class Fact {
       .join(' INTERSECT ');
   }
 
-  static async saveAllWithoutAuthCheck(facts: Fact[], userid: string, logger: IsLogger) {
+  static async saveAllWithoutAuthCheck(
+    facts: Fact[],
+    userid: string,
+    isNewUserScopedGraph: boolean | undefined,
+    logger: IsLogger,
+  ): Promise<FactBox | undefined> {
     if (facts.length === 0) return;
 
     const specialFacts = facts.filter((fact) => fact.hasSpecialCreationLogic());
     const nonSpecialFacts = facts.filter((fact) => !fact.hasSpecialCreationLogic());
+    let factPlacement: FactBox | undefined;
+
+    if (isNewUserScopedGraph) {
+      const isIsolatedGraphOfUser = await Fact.getInternalUserId(userid, logger);
+      const id = await Fact.getNewFactBoxId(logger);
+
+      factPlacement = { id, isIsolatedGraphOfUser };
+    }
 
     for (let i = 0; i < specialFacts.length; i += 1) {
       // we need to create this one by one to make sure no
@@ -353,25 +366,37 @@ export default class Fact {
       await specialFacts[i]?.save(userid);
     }
 
-    await this.saveAllWithoutAuthCheckAndSpecialTreatment(nonSpecialFacts, userid, logger);
+    await this.saveAllWithoutAuthCheckAndSpecialTreatment(
+      nonSpecialFacts,
+      userid,
+      factPlacement,
+      logger,
+    );
+
+    if (isNewUserScopedGraph) {
+      return factPlacement;
+    }
+
+    return undefined;
   }
 
   static async saveAllWithoutAuthCheckAndSpecialTreatment(
     facts: Fact[],
     userid: string,
+    factBox: FactBox | undefined,
     logger: IsLogger,
   ) {
     if (facts.length === 0) return;
 
     const pool = new PgPoolWithLog(logger);
+    const promises: Promise<any>[] = [];
 
     for (let index = 0; index < facts.length; index++) {
       const fact = facts[index];
 
       if (fact) {
-        // TODO: bring back parallel insertion
-        const factPlacement = await fact.getFactBoxPlacement(userid);
-        await pool.query(
+        const factPlacement = factBox || await fact.getFactBoxPlacement(userid);
+        const insertPromise = pool.query(
           'INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, is_isolated_graph_of_user) VALUES ($1, $2, $3, $4, $5, $6)',
           [
             fact.subject,
@@ -382,8 +407,16 @@ export default class Fact {
             factPlacement.isIsolatedGraphOfUser || null,
           ],
         );
+
+        if (factBox) {
+          promises.push(insertPromise);
+        } else {
+          await insertPromise;
+        }
       }
     }
+
+    await Promise.all(promises);
   }
 
   static async findNodes(
@@ -709,6 +742,55 @@ export default class Fact {
     cache.set(`factScopeByUser/${internalUserId}`, result);
 
     return result;
+  }
+
+  static async isNewUserScopedGraph(
+    facts: Fact[],
+    newAttributeIds: string[],
+    userId: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const allTerms = await Fact.getAllTerms(logger);
+
+    const connectingFact = facts.find((fact) => {
+      const sub = fact.subject;
+      const obj = fact.object;
+
+      if (newAttributeIds.includes(sub) && newAttributeIds.includes(obj)) {
+        // subject and object are attribute ids which did not exists before.
+        // So, we can say this fact does not connect the new graph to an existing graph.
+        return false;
+      }
+
+      if (newAttributeIds.includes(sub) && allTerms.includes(obj)) {
+        // the fact is classifying a new attribute, this does not count as connecting two graphs
+        return false;
+      }
+
+      if (newAttributeIds.includes(sub) && obj === userId) {
+        // The subject is a new attribute and the object is the users who created it
+        // -> Does not count as connecting the graph to an existing graph
+        return false;
+      }
+
+      return true;
+    });
+
+    return !connectingFact;
+  }
+
+  static async moveAllAccountabilityFactsToFactBox(
+    attributeIds: string[],
+    factBox: FactBox,
+    logger: IsLogger,
+  ) {
+    const pool = new PgPoolWithLog(logger);
+    const attributeString = attributeIds.map((id) => `'${id}'`).join(',');
+
+    await pool.query(`UPDATE facts SET fact_box_id=$1, is_isolated_graph_of_user=$2 WHERE predicate='$isAccountableFor' AND object IN (${attributeString})`, [
+      factBox.id,
+      factBox.isIsolatedGraphOfUser || null,
+    ]);
   }
 
   private async isValidInvitation(userid: string, args?: { attributesInCreation?: string[] }) {
@@ -1070,7 +1152,7 @@ export default class Fact {
     return result.rows[0].internal_user_id;
   }
 
-  private static async getNewFactBoxId(logger: IsLogger) {
+  public static async getNewFactBoxId(logger: IsLogger) {
     const pool = new PgPoolWithLog(logger);
     const newFactBoxIdResult = await pool.query("SELECT nextval('fact_box_id') as id");
 

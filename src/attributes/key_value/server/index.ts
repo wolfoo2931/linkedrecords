@@ -27,7 +27,7 @@ IsAttributeStorage
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     attr: [AbstractAttributeServer<any, any, any>, any][],
     storage: IsAttributeStorage,
-  ): Promise<void> {
+  ): Promise<string[]> {
     if (!attr[0]) {
       throw new Error('invalid attribute data found when creating all attributes');
     }
@@ -35,14 +35,17 @@ IsAttributeStorage
     await Fact.saveAllWithoutAuthCheckAndSpecialTreatment(
       attr.map(([a]) => new Fact(a.actorId, '$isAccountableFor', a.id, a.logger)),
       attr[0][0].actorId,
+      undefined,
       attr[0][0].logger,
     );
 
-    await storage.createAllAttributes(attr.map((a) => ({
+    const result = await storage.createAllAttributes(attr.map((a) => ({
       attributeId: a[0].id,
       actorId: a[0].actorId,
       value: a[1],
     })));
+
+    return result.map((r) => r.id);
   }
 
   async create(value: object) : Promise<{ id: string }> {

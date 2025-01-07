@@ -41,8 +41,10 @@ export default abstract class AbstractAttributeServer <
     attr: [AbstractAttributeServer<any, any, any>, any][],
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     storage: StorageDriverInterface,
-  ): Promise<void> {
-    await Promise.all(attr.map(([a, v]) => a.create(v)));
+  ): Promise<string[]> {
+    const result = await Promise.all(attr.map(([a, v]) => a.create(v)));
+
+    return result.map((r) => r.id);
   }
 
   async createAccountableFact() : Promise<void> {
