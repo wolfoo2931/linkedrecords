@@ -140,6 +140,7 @@ export default class Session {
   static async truncateDB() {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
       await pgPool.query('TRUNCATE facts;');
+      await pgPool.query('TRUNCATE users_fact_boxes;');
     }
   }
 
