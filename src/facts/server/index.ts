@@ -783,18 +783,25 @@ export default class Fact {
       // We end up here when e.g. when
       // us-82054609511ad4ead53fceedf9c2f6bb $isHostOf kv-01943bcc-5db6-7386-9d63-246e0d0f3185
       const objectFactPlacement = await Fact.getFactPlacementOf(this.object, userId, this.logger);
+      const internalSubId = await Fact.getInternalUserId(this.subject, this.logger);
       const internalUserId = await Fact.getInternalUserId(userId, this.logger);
 
       if (!objectFactPlacement.isIsolatedGraphOfUser) {
-        await Fact.ensureUserIsAssignedToFactBox(internalUserId, objectFactPlacement, this.logger);
+        await Fact.ensureUserIsAssignedToFactBox(internalSubId, objectFactPlacement, this.logger);
         return objectFactPlacement;
       }
 
-      if (objectFactPlacement.isIsolatedGraphOfUser === internalUserId) {
+      if (objectFactPlacement.isIsolatedGraphOfUser === internalSubId) {
         return objectFactPlacement;
       }
 
-      return Fact.moveUserGraphToNewFactBox(objectFactPlacement, this.logger, [internalUserId]);
+      const newFactBox = await Fact.moveUserGraphToNewFactBox(
+        objectFactPlacement,
+        this.logger,
+        [internalUserId, internalSubId],
+      );
+
+      return newFactBox;
     }
 
     if (this.object.startsWith('us-')) {
@@ -927,8 +934,12 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const factBoxId = await Fact.getNewFactBoxId(logger);
 
+    if (!graphBox.id) {
+      throw new Error('Cannot migration graph to new fact box as graphBox does not has an id');
+    }
+
     await Promise.all([
-      pool.query('UPDATE facts SET fact_box_id=$1 WHERE fact_box_id=$2', [factBoxId, graphBox.isIsolatedGraphOfUser]),
+      pool.query('UPDATE facts SET fact_box_id=$1, is_isolated_graph_of_user=NULL WHERE fact_box_id=$2', [factBoxId, graphBox.id]),
       ...users.map((userId) => pool.query('INSERT INTO users_fact_boxes (fact_box_id, user_id) VALUES ($1, $2);', [factBoxId, userId])),
     ]);
 
