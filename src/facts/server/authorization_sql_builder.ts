@@ -58,7 +58,7 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
-      const factScope = await Fact.getAllFactScopeUser(userid, logger);
+      const factScope = await Fact.getFactScopeByUser(userid, logger);
 
       const allDirectAccessibleNodeMembers = `SELECT
         object as node

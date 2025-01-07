@@ -683,22 +683,32 @@ export default class Fact {
     return hasSubjectAccess && hasObjectAccess;
   }
 
-  static async getAllFactScopeUser(
+  static async getFactScopeByUser(
     userId: string,
     logger: IsLogger,
   ): Promise<{ internalUserId: number, factBoxIds: number[] }> {
     const pool = new PgPoolWithLog(logger);
     const internalUserId = await Fact.getInternalUserId(userId, logger);
 
+    const hit = cache.get(`factScopeByUser/${internalUserId}`);
+
+    if (hit) {
+      return hit;
+    }
+
     const factBoxIdsResult = await pool.query('SELECT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
     const factBoxIds = factBoxIdsResult.rows.map((r) => r.fact_box_id);
 
-    return {
+    const result = {
       internalUserId,
       factBoxIds: [
         0, ...factBoxIds,
       ],
     };
+
+    cache.set(`factScopeByUser/${internalUserId}`, result);
+
+    return result;
   }
 
   private async isValidInvitation(userid: string, args?: { attributesInCreation?: string[] }) {
@@ -961,6 +971,8 @@ export default class Fact {
       ...users.map((userId) => pool.query('INSERT INTO users_fact_boxes (fact_box_id, user_id) VALUES ($1, $2);', [factBoxId, userId])),
     ]);
 
+    users.map((userId) => cache.invalidate(`factScopeByUser/${userId}`));
+
     return {
       id: factBoxId,
     };
@@ -987,6 +999,8 @@ export default class Fact {
       logger.warn(`Unexpected error when merging user graph to fact box, fact box is missing a value: FactBox: ${JSON.stringify(factBox)}, GraphBox: ${JSON.stringify(graphBox)}`);
       throw new Error('Unexpected error when merging user graph to fact box, fact box is missing a value');
     }
+
+    cache.invalidate(`factScopeByUser/${graphBox.isIsolatedGraphOfUser}`);
 
     await Promise.all([
       pool.query('UPDATE facts SET fact_box_id=$1, is_isolated_graph_of_user=NULL WHERE fact_box_id=$2 AND is_isolated_graph_of_user=$3', [factBox.id, graphBox.id, graphBox.isIsolatedGraphOfUser]),
@@ -1016,6 +1030,12 @@ export default class Fact {
     }
 
     const pool = new PgPoolWithLog(logger);
+
+    const usersOfOldFactBox = await pool.query('SELECT user_id FROM users_fact_boxes WHERE fact_box_id=$1', [node1Id]);
+
+    usersOfOldFactBox.rows.forEach((row) => {
+      cache.invalidate(`factScopeByUser/${row.user_id}`);
+    });
 
     await Promise.all([
       pool.query('UPDATE facts SET fact_box_id=$1 WHERE fact_box_id=$2', [node2Id, node1Id]),
@@ -1067,6 +1087,8 @@ export default class Fact {
     if (await pool.findAny('SELECT * FROM users_fact_boxes WHERE fact_box_id=$1 AND fact_box_id=$2', [factBox.id, internalUserId])) {
       return;
     }
+
+    cache.invalidate(`factScopeByUser/${internalUserId}`);
 
     await pool.query('INSERT INTO users_fact_boxes (fact_box_id, user_id) VALUES ($1, $2)', [factBox.id, internalUserId]);
   }
