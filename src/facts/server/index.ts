@@ -683,6 +683,24 @@ export default class Fact {
     return hasSubjectAccess && hasObjectAccess;
   }
 
+  static async getAllFactScopeUser(
+    userId: string,
+    logger: IsLogger,
+  ): Promise<{ internalUserId: number, factBoxIds: number[] }> {
+    const pool = new PgPoolWithLog(logger);
+    const internalUserId = await Fact.getInternalUserId(userId, logger);
+
+    const factBoxIdsResult = await pool.query('SELECT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
+    const factBoxIds = factBoxIdsResult.rows.map((r) => r.fact_box_id);
+
+    return {
+      internalUserId,
+      factBoxIds: [
+        0, ...factBoxIds,
+      ],
+    };
+  }
+
   private async isValidInvitation(userid: string, args?: { attributesInCreation?: string[] }) {
     if (args?.attributesInCreation?.includes(this.object)) {
       return true;

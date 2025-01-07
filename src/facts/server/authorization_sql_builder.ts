@@ -1,3 +1,5 @@
+// eslint-disable-next-line import/no-cycle
+import Fact from '.';
 import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
 import cache from '../../server/cache';
@@ -47,7 +49,7 @@ export default class AuthorizationSqlBuilder {
 
     const termsSubSelect = roles
       .filter((role) => role === 'term')
-      .map(() => "SELECT facts.subject as node FROM facts WHERE facts.predicate='$isATermFor'");
+      .map(() => "SELECT facts.subject as node FROM facts WHERE facts.predicate='$isATermFor' AND facts.fact_box_id=0");
 
     const groupRoles = roles
       .filter((role) => Object.keys(rolePredicateMap).includes(role))
@@ -56,10 +58,13 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
+      const factScope = await Fact.getAllFactScopeUser(userid, logger);
+
       const allDirectAccessibleNodeMembers = `SELECT
         object as node
         FROM facts
-        WHERE predicate IN (${groupRoles.join(',')})
+        WHERE (facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})
+        AND predicate IN (${groupRoles.join(',')})
         AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, logger)})`;
 
       const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
