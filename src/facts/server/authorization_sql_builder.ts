@@ -97,7 +97,7 @@ export default class AuthorizationSqlBuilder {
     }
 
     const factScopeFilter = factScope
-      ? ` AND (member_facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR member_facts.is_isolated_graph_of_user=${factScope.internalUserId})`
+      ? ` AND member_facts.fact_box_id IN (${factScope.factBoxIds.join(',')})`
       : '';
 
     return `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')${factScopeFilter}`;
