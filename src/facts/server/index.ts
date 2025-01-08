@@ -395,34 +395,57 @@ export default class Fact {
     if (facts.length === 0) return;
 
     const pool = new PgPoolWithLog(logger);
-    const promises: Promise<any>[] = [];
 
-    for (let index = 0; index < facts.length; index++) {
-      const fact = facts[index];
+    if (factBox) {
+      const values = facts
+        .map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`)
+        .join(', ');
 
-      if (fact) {
-        const factPlacement = factBox || await fact.getFactBoxPlacement(userid);
-        const insertPromise = pool.query(
-          'INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, is_isolated_graph_of_user) VALUES ($1, $2, $3, $4, $5, $6)',
-          [
-            fact.subject,
-            fact.predicate,
-            fact.object,
-            userid,
-            factPlacement.id === 0 ? 0 : (factPlacement.id || null),
-            factPlacement.isIsolatedGraphOfUser || null,
-          ],
+      const flatParams = facts.flatMap((fact) => [
+        fact.subject,
+        fact.predicate,
+        fact.object,
+        userid,
+        factBox.id === 0 ? 0 : (factBox.id || null),
+        factBox.isIsolatedGraphOfUser || null,
+      ]);
+
+      if (values.length) {
+        await pool.query(
+          `INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, is_isolated_graph_of_user) VALUES ${values}`,
+          flatParams,
         );
+      }
+    } else {
+      const promises: Promise<any>[] = [];
 
-        if (factBox) {
-          promises.push(insertPromise);
-        } else {
-          await insertPromise;
+      for (let index = 0; index < facts.length; index++) {
+        const fact = facts[index];
+
+        if (fact) {
+          const factPlacement = await fact.getFactBoxPlacement(userid);
+          const insertPromise = pool.query(
+            'INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, is_isolated_graph_of_user) VALUES ($1, $2, $3, $4, $5, $6)',
+            [
+              fact.subject,
+              fact.predicate,
+              fact.object,
+              userid,
+              factPlacement.id === 0 ? 0 : (factPlacement.id || null),
+              factPlacement.isIsolatedGraphOfUser || null,
+            ],
+          );
+
+          if (factBox) {
+            promises.push(insertPromise);
+          } else {
+            await insertPromise;
+          }
         }
       }
-    }
 
-    await Promise.all(promises);
+      await Promise.all(promises);
+    }
   }
 
   static async findNodes(
