@@ -232,7 +232,8 @@ export default class Fact {
             UNION
               SELECT id, subject, predicate, object
               FROM facts
-              WHERE subject IN (SELECT node FROM auth_nodes)
+              WHERE (facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})
+              AND subject IN (SELECT node FROM auth_nodes)
               AND object = ANY ('{${allTerms.join(',')}}')
           )
     `;
@@ -408,7 +409,7 @@ export default class Fact {
             fact.predicate,
             fact.object,
             userid,
-            factPlacement.id || null,
+            factPlacement.id === 0 ? 0 : (factPlacement.id || null),
             factPlacement.isIsolatedGraphOfUser || null,
           ],
         );
