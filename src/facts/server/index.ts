@@ -211,7 +211,10 @@ export default class Fact {
       logger,
     );
 
-    const allTerms = await Fact.getAllTerms(logger);
+    const [allTerms, factScope] = await Promise.all([
+      Fact.getAllTerms(logger),
+      Fact.getFactScopeByUser(userid, logger),
+    ]);
 
     return `
     WITH  auth_nodes AS (${authorizedNodes}),
@@ -223,12 +226,14 @@ export default class Fact {
             UNION
               SELECT id, subject, predicate, object
               FROM facts
-              WHERE subject IN (SELECT node FROM auth_nodes)
+              WHERE (facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})
+              AND subject IN (SELECT node FROM auth_nodes)
               AND object IN (SELECT node FROM auth_nodes)
             UNION
               SELECT id, subject, predicate, object
               FROM facts
-              WHERE subject IN (SELECT node FROM auth_nodes)
+              WHERE (facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})
+              AND subject IN (SELECT node FROM auth_nodes)
               AND object = ANY ('{${allTerms.join(',')}}')
           )
     `;
