@@ -222,6 +222,7 @@ export default class Fact {
               SELECT id, subject, predicate, object
               FROM facts
               WHERE predicate='$isATermFor'
+              AND fact_box_id=0
             UNION
               SELECT id, subject, predicate, object
               FROM facts
@@ -231,8 +232,7 @@ export default class Fact {
             UNION
               SELECT id, subject, predicate, object
               FROM facts
-              WHERE (facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})
-              AND subject IN (SELECT node FROM auth_nodes)
+              WHERE subject IN (SELECT node FROM auth_nodes)
               AND object = ANY ('{${allTerms.join(',')}}')
           )
     `;
