@@ -1,8 +1,6 @@
 // eslint-disable-next-line import/no-cycle
 import Fact from '.';
 import IsLogger from '../../../lib/is_logger';
-import PgPoolWithLog from '../../../lib/pg-log';
-import cache from '../../server/cache';
 
 export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer' | 'conceptor';
 
@@ -61,7 +59,7 @@ export default class AuthorizationSqlBuilder {
       const factScope = await Fact.getFactScopeByUser(userid, logger);
 
       const factScopeFilter = !attributeId
-        ? `AND (facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})`
+        ? `AND (fact_box_id IN (${factScope.factBoxIds.join(',')}) OR is_isolated_graph_of_user=${factScope.internalUserId})`
         : '';
 
       const allDirectAccessibleNodeMembers = `SELECT
@@ -69,7 +67,7 @@ export default class AuthorizationSqlBuilder {
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
         ${factScopeFilter}
-        AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, logger)})`;
+        AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, factScope)})`;
 
       const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
 
@@ -98,31 +96,16 @@ export default class AuthorizationSqlBuilder {
   public static async getGroupsOfTheUser(
     userid: string,
     membershipType: MembershipType,
-    logger: IsLogger,
+    factScope: { internalUserId: number, factBoxIds: number[] },
   ) {
     if (membershipType === 'directUser') {
       return `'${userid}'`;
     }
 
-    const query = `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')`;
-    const weKnowIsTooMuch = cache.get(`groupOfTheUserAreTooMany/${userid}`);
+    const factScopeFilter = factScope
+      ? ` AND (member_facts.fact_box_id IN (${factScope.factBoxIds.join(',')}) OR member_facts.is_isolated_graph_of_user=${factScope.internalUserId})`
+      : '';
 
-    if (weKnowIsTooMuch) {
-      return query;
-    }
-
-    const pgPool = new PgPoolWithLog(logger);
-
-    const result = await pgPool.query(query);
-
-    if (result.rows.length > 50) {
-      cache.set(`groupOfTheUserAreTooMany/${userid}`, true);
-      return query;
-    }
-
-    return result.rows
-      .map((r) => r.object)
-      .map((r) => `'${r}'`)
-      .join(',');
+    return `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')${factScopeFilter}`;
   }
 }
