@@ -134,7 +134,7 @@ export default class Fact {
       ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
       CREATE SEQUENCE IF NOT EXISTS graph_id START WITH 1000;
-      ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int;
+      ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int DEFAULT 1;
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS graph_id int;
       CREATE INDEX IF NOT EXISTS idx_facts_fact_box_id ON facts (fact_box_id);
       CREATE INDEX IF NOT EXISTS idx_facts_fact_graph_id ON facts (graph_id);
@@ -761,11 +761,11 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const internalUserId = await Fact.getInternalUserId(userId, logger);
 
-    const hit = cache.get(`factScopeByUser/${internalUserId}`);
+    // const hit = cache.get(`factScopeByUser/${internalUserId}`);
 
-    if (hit) {
-      return hit;
-    }
+    // if (hit) {
+    //   return hit;
+    // }
 
     const factBoxIdsResult = await pool.query('SELECT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
     const factBoxIds = factBoxIdsResult.rows.map((r) => r.fact_box_id);
@@ -773,11 +773,11 @@ export default class Fact {
     const result = {
       internalUserId,
       factBoxIds: [
-        0, internalUserId, ...factBoxIds,
+        0, 1, internalUserId, ...factBoxIds,
       ],
     };
 
-    cache.set(`factScopeByUser/${internalUserId}`, result);
+    // cache.set(`factScopeByUser/${internalUserId}`, result);
 
     return result;
   }
@@ -1001,14 +1001,6 @@ export default class Fact {
         };
       }
 
-      // FIXME: Do we need this?
-      // if (factBoxSubject.id !== factBoxObject.id) {
-      //   return {
-      //     id: await Fact.mergeFactBoxes(factBoxSubject.id, factBoxObject.id, this.logger),
-      //     isIsolatedGraphOfUser: factBoxSubject.isIsolatedGraphOfUser,
-      //   };
-      // }
-
       throw new Error('Unexpected error while trying to determine fact box id');
     }
 
@@ -1153,6 +1145,15 @@ export default class Fact {
 
     if (!node1Id && !node1Id) {
       throw new Error('Cannot merge fact boxes without ids');
+    }
+
+    // fax box with id 1 holds all facts which exists before fact boxes have
+    // been introduced.
+    if (node1Id === 1) {
+      // eslint-disable-next-line no-param-reassign
+      node1Id = node2Id;
+      // eslint-disable-next-line no-param-reassign
+      node2Id = 1;
     }
 
     const pool = new PgPoolWithLog(logger);
