@@ -134,7 +134,7 @@ export default class Fact {
       ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
       CREATE SEQUENCE IF NOT EXISTS graph_id START WITH 1000;
-      ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int DEFAULT 1;
+      ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int DEFAULT 0;
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS graph_id int;
       CREATE INDEX IF NOT EXISTS idx_facts_fact_box_id ON facts (fact_box_id);
       CREATE INDEX IF NOT EXISTS idx_facts_fact_graph_id ON facts (graph_id);
@@ -773,7 +773,7 @@ export default class Fact {
     const result = {
       internalUserId,
       factBoxIds: [
-        0, 1, internalUserId, ...factBoxIds,
+        0, internalUserId, ...factBoxIds,
       ],
     };
 
@@ -1147,13 +1147,11 @@ export default class Fact {
       throw new Error('Cannot merge fact boxes without ids');
     }
 
-    // fax box with id 1 holds all facts which exists before fact boxes have
-    // been introduced.
-    if (node1Id === 1) {
+    if (node1Id === 0) {
       // eslint-disable-next-line no-param-reassign
       node1Id = node2Id;
       // eslint-disable-next-line no-param-reassign
-      node2Id = 1;
+      node2Id = 0;
     }
 
     const pool = new PgPoolWithLog(logger);
