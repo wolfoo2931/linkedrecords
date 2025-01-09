@@ -463,7 +463,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
     const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger);
-    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
+    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
     const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
     const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${q[0]}' AND predicate='${q[1]}'`).join(' INTERSECT ').trim();
 
