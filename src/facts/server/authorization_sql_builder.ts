@@ -62,6 +62,7 @@ export default class AuthorizationSqlBuilder {
         object as node
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
+        AND fact_box_id IN (${factScope.factBoxIds.join(',')})
         AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, factScope)})`;
 
       const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
@@ -76,6 +77,7 @@ export default class AuthorizationSqlBuilder {
           SELECT subject as node
           FROM facts
           WHERE predicate='$isMemberOf'
+          AND fact_box_id IN (${factScope.factBoxIds.join(',')})
           AND object IN (SELECT node FROM direct_accessible_node_members))
       `);
     }

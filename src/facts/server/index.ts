@@ -233,13 +233,7 @@ export default class Fact {
               FROM facts
               WHERE facts.fact_box_id IN (${factScope.factBoxIds.join(',')})
               AND subject IN (SELECT node FROM auth_nodes)
-              AND object IN (SELECT node FROM auth_nodes)
-            UNION
-              SELECT id, subject, predicate, object
-              FROM facts
-              WHERE facts.fact_box_id IN (${factScope.factBoxIds.join(',')})
-              AND subject IN (SELECT node FROM auth_nodes)
-              AND object = ANY ('{${allTerms.join(',')}}')
+              AND (object IN (SELECT node FROM auth_nodes) OR object = ANY ('{${allTerms.join(',')}}'))
           )
     `;
   }
