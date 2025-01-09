@@ -476,7 +476,7 @@ export default class Fact {
 
     const result = await pool.query(`
       ${baseQuery}
-      SELECT node
+      SELECT DISTINCT node
       FROM (${candidateSelects.join(' INTERSECT ')}) as t(node)
       ${blacklist ? `WHERE node NOT IN (${blacklist})` : ''}
     `);
