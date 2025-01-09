@@ -461,19 +461,30 @@ export default class Fact {
     logger: IsLogger,
   ) {
     const pool = new PgPoolWithLog(logger);
-    const and = andFactory();
     const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger);
     const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
     const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
     const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${q[0]}' AND predicate='${q[1]}'`).join(' INTERSECT ').trim();
 
+    const candidateSelects: string[] = [];
+
+    if (subjectSet) {
+      candidateSelects.push(subjectSet);
+    }
+
+    if (objectSet) {
+      candidateSelects.push(objectSet);
+    }
+
+    if (!candidateSelects.length) {
+      candidateSelects.push('SELECT DISTINCT node FROM auth_nodes');
+    }
+
     const result = await pool.query(`
       ${baseQuery}
-      SELECT DISTINCT node
-      FROM auth_nodes
-      ${subjectSet ? `${and()} node IN (${subjectSet})` : ''}
-      ${objectSet ? `${and()} node IN (${objectSet})` : ''}
-      ${blacklist ? `${and()} node NOT IN (${blacklist})` : ''}
+      SELECT node
+      FROM (${candidateSelects.join(' INTERSECT ')}) as t(node)
+      ${blacklist ? `WHERE node NOT IN (${blacklist})` : ''}
     `);
 
     return result.rows.map((row) => row.node.trim());
