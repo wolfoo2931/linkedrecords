@@ -4,13 +4,9 @@
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
-import PsqlStorageWithHistory from '../../attribute_storage/psql_with_history';
-import PsqlStorageWithoutHistory from '../../attribute_storage/psql';
 import KeyValueChange from '../key_value_change';
-
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
 import Fact from '../../../facts/server';
-import IsLogger from '../../../../lib/is_logger';
 
 const queue: IsQueue = QueuedTasks.create();
 
