@@ -17,7 +17,7 @@ jobs:
     name: FIXME check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
     - uses: bbugh/action-fixme-check@master
       with:
       	terms: 'WIP|FIXME|TODO'

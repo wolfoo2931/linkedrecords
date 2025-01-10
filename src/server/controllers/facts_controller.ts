@@ -35,7 +35,7 @@ export default {
       res.status(401);
       res.send({});
     } else {
-      await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, req.log);
+      await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, undefined, req.log);
 
       res.status(200);
       res.send(facts);

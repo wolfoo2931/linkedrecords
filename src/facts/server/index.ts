@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop */
 /* eslint-disable import/no-cycle */
 /* eslint-disable no-plusplus */
 import md5 from 'md5';
@@ -7,6 +8,11 @@ import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
 import cache from '../../server/cache';
+
+type FactBox = {
+  id: number;
+  graphId: number | null;
+};
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -127,6 +133,20 @@ export default class Fact {
       ALTER TABLE facts ALTER COLUMN subject SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN predicate SET NOT NULL;
       ALTER TABLE facts ALTER COLUMN object SET NOT NULL;
+      CREATE SEQUENCE IF NOT EXISTS graph_id START WITH 1000;
+      ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int DEFAULT 0;
+      ALTER TABLE facts ADD COLUMN IF NOT EXISTS graph_id int;
+      CREATE INDEX IF NOT EXISTS idx_facts_fact_box_id ON facts (fact_box_id);
+      CREATE INDEX IF NOT EXISTS idx_facts_fact_graph_id ON facts (graph_id);
+
+      CREATE TABLE IF NOT EXISTS users_fact_boxes (fact_box_id int, user_id int);
+      CREATE INDEX IF NOT EXISTS idx_users_fact_boxes_fact_box_id ON users_fact_boxes (fact_box_id);
+      CREATE INDEX IF NOT EXISTS idx_users_fact_boxes_user_id ON users_fact_boxes (user_id);
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_id_unique;
+      ALTER TABLE users ADD CONSTRAINT users_id_unique UNIQUE (id);
+
+      ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_unique;
+      ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (hashed_email);
     `);
   }
 
@@ -196,7 +216,10 @@ export default class Fact {
       logger,
     );
 
-    const allTerms = await Fact.getAllTerms(logger);
+    const [allTerms, factScope] = await Promise.all([
+      Fact.getAllTerms(logger),
+      Fact.getFactScopeByUser(userid, logger),
+    ]);
 
     return `
     WITH  auth_nodes AS (${authorizedNodes}),
@@ -204,16 +227,13 @@ export default class Fact {
               SELECT id, subject, predicate, object
               FROM facts
               WHERE predicate='$isATermFor'
+              AND fact_box_id=0
             UNION
               SELECT id, subject, predicate, object
               FROM facts
-              WHERE subject IN (SELECT node FROM auth_nodes)
-              AND object IN (SELECT node FROM auth_nodes)
-            UNION
-              SELECT id, subject, predicate, object
-              FROM facts
-              WHERE subject IN (SELECT node FROM auth_nodes)
-              AND object = ANY ('{${allTerms.join(',')}}')
+              WHERE facts.fact_box_id IN (${factScope.factBoxIds.join(',')})
+              AND subject IN (SELECT node FROM auth_nodes)
+              AND (object IN (SELECT node FROM auth_nodes) OR object = ANY ('{${allTerms.join(',')}}'))
           )
     `;
   }
@@ -325,11 +345,24 @@ export default class Fact {
       .join(' INTERSECT ');
   }
 
-  static async saveAllWithoutAuthCheck(facts: Fact[], userid: string, logger: IsLogger) {
-    if (facts.length === 0) return;
+  static async saveAllWithoutAuthCheck(
+    facts: Fact[],
+    userid: string,
+    isNewUserScopedGraph: boolean | undefined,
+    logger: IsLogger,
+  ): Promise<FactBox | undefined> {
+    if (facts.length === 0) return undefined;
 
     const specialFacts = facts.filter((fact) => fact.hasSpecialCreationLogic());
     const nonSpecialFacts = facts.filter((fact) => !fact.hasSpecialCreationLogic());
+    let factPlacement: FactBox | undefined;
+
+    if (isNewUserScopedGraph) {
+      factPlacement = {
+        id: await Fact.getInternalUserId(userid, logger),
+        graphId: await Fact.getNewGraphId(logger),
+      };
+    }
 
     for (let i = 0; i < specialFacts.length; i += 1) {
       // we need to create this one by one to make sure no
@@ -338,34 +371,79 @@ export default class Fact {
       await specialFacts[i]?.save(userid);
     }
 
-    await this.saveAllWithoutAuthCheckAndSpecialTreatment(nonSpecialFacts, userid, logger);
+    await this.saveAllWithoutAuthCheckAndSpecialTreatment(
+      nonSpecialFacts,
+      userid,
+      factPlacement,
+      logger,
+    );
+
+    if (isNewUserScopedGraph) {
+      return factPlacement;
+    }
+
+    return undefined;
   }
 
   static async saveAllWithoutAuthCheckAndSpecialTreatment(
     facts: Fact[],
     userid: string,
+    factBox: FactBox | undefined,
     logger: IsLogger,
   ) {
     if (facts.length === 0) return;
 
     const pool = new PgPoolWithLog(logger);
 
-    const values = facts
-      .map((_, i) => `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`)
-      .join(', ');
+    if (factBox) {
+      const values = facts
+        .map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`)
+        .join(', ');
 
-    const flatParams = facts.flatMap((fact) => [
-      fact.subject,
-      fact.predicate,
-      fact.object,
-      userid,
-    ]);
+      const flatParams = facts.flatMap((fact) => [
+        fact.subject,
+        fact.predicate,
+        fact.object,
+        userid,
+        factBox.id,
+        factBox.graphId,
+      ]);
 
-    if (values.length) {
-      await pool.query(
-        `INSERT INTO facts (subject, predicate, object, created_by) VALUES ${values}`,
-        flatParams,
-      );
+      if (values.length) {
+        await pool.query(
+          `INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ${values}`,
+          flatParams,
+        );
+      }
+    } else {
+      const promises: Promise<any>[] = [];
+
+      for (let index = 0; index < facts.length; index++) {
+        const fact = facts[index];
+
+        if (fact) {
+          const factPlacement = await fact.getFactBoxPlacement(userid);
+          const insertPromise = pool.query(
+            'INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ($1, $2, $3, $4, $5, $6)',
+            [
+              fact.subject,
+              fact.predicate,
+              fact.object,
+              userid,
+              factPlacement.id,
+              factPlacement.graphId,
+            ],
+          );
+
+          if (factBox) {
+            promises.push(insertPromise);
+          } else {
+            await insertPromise;
+          }
+        }
+      }
+
+      await Promise.all(promises);
     }
   }
 
@@ -377,19 +455,30 @@ export default class Fact {
     logger: IsLogger,
   ) {
     const pool = new PgPoolWithLog(logger);
-    const and = andFactory();
     const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger);
-    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
+    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
     const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
     const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${q[0]}' AND predicate='${q[1]}'`).join(' INTERSECT ').trim();
+
+    const candidateSelects: string[] = [];
+
+    if (subjectSet) {
+      candidateSelects.push(subjectSet);
+    }
+
+    if (objectSet) {
+      candidateSelects.push(objectSet);
+    }
+
+    if (!candidateSelects.length) {
+      candidateSelects.push('SELECT DISTINCT node FROM auth_nodes');
+    }
 
     const result = await pool.query(`
       ${baseQuery}
       SELECT DISTINCT node
-      FROM auth_nodes
-      ${subjectSet ? `${and()} node IN (${subjectSet})` : ''}
-      ${objectSet ? `${and()} node IN (${objectSet})` : ''}
-      ${blacklist ? `${and()} node NOT IN (${blacklist})` : ''}
+      FROM (${candidateSelects.join(' INTERSECT ')}) as t(node)
+      ${blacklist ? `WHERE node NOT IN (${blacklist})` : ''}
     `);
 
     return result.rows.map((row) => row.node.trim());
@@ -495,7 +584,7 @@ export default class Fact {
       && this.object.length <= 500;
   }
 
-  async save(userid: string) {
+  async save(userid: string): Promise<void> {
     this.ensureValidSyntax();
 
     if (!(await this.isAuthorizedToSave(userid))) {
@@ -513,7 +602,7 @@ export default class Fact {
           throw new Error('In order to save a $isATermFor fact a userid has to be provided as a parameter of the fact.save method.');
         }
 
-        await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $5), ($5, $4, $1, NULL)', [
+        await pool.query('INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ($1, $2, $3, $5, 0, NULL), ($5, $4, $1, NULL, 0, NULL)', [
           this.subject,
           this.predicate,
           this.object,
@@ -521,7 +610,17 @@ export default class Fact {
           userid,
         ]);
       }
-    } else if (this.predicate === '$isAccountableFor') {
+
+      return;
+    }
+
+    const factPlacement = await this.getFactBoxPlacement(userid);
+
+    if (!factPlacement.id) {
+      throw new Error('Error creating fact box id: fact placement does not have a id');
+    }
+
+    if (this.predicate === '$isAccountableFor') {
       const dbRows = await pool.query('SELECT subject, predicate, object FROM facts WHERE object=$1 AND predicate=$2', [this.object, this.predicate]);
 
       if (dbRows.rows.length) {
@@ -533,18 +632,22 @@ export default class Fact {
         }
       }
 
-      await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
+      await pool.query('INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ($1, $2, $3, $4, $5, $6)', [
         this.subject,
         this.predicate,
         this.object,
         userid,
+        factPlacement.id,
+        factPlacement.graphId,
       ]);
     } else {
-      await pool.query('INSERT INTO facts (subject, predicate, object, created_by) VALUES ($1, $2, $3, $4)', [
+      await pool.query('INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ($1, $2, $3, $4, $5, $6)', [
         this.subject,
         this.predicate,
         this.object,
         userid,
+        factPlacement.id,
+        factPlacement.graphId,
       ]);
     }
   }
@@ -645,10 +748,87 @@ export default class Fact {
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject, this.logger));
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
-      || await this.isKnownTerm(this.object)
+      || await Fact.isKnownTerm(this.object, this.logger)
       || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger));
 
     return hasSubjectAccess && hasObjectAccess;
+  }
+
+  static async getFactScopeByUser(
+    userId: string,
+    logger: IsLogger,
+  ): Promise<{ internalUserId: number, factBoxIds: number[] }> {
+    const pool = new PgPoolWithLog(logger);
+    const internalUserId = await Fact.getInternalUserId(userId, logger);
+
+    // const hit = cache.get(`factScopeByUser/${internalUserId}`);
+
+    // if (hit) {
+    //   return hit;
+    // }
+
+    const factBoxIdsResult = await pool.query('SELECT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
+    const factBoxIds = factBoxIdsResult.rows.map((r) => r.fact_box_id);
+
+    const result = {
+      internalUserId,
+      factBoxIds: [
+        0, internalUserId, ...factBoxIds,
+      ],
+    };
+
+    // cache.set(`factScopeByUser/${internalUserId}`, result);
+
+    return result;
+  }
+
+  static async isNewUserScopedGraph(
+    facts: Fact[],
+    newAttributeIds: string[],
+    userId: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const allTerms = await Fact.getAllTerms(logger);
+
+    const connectingFact = facts.find((fact) => {
+      const sub = fact.subject;
+      const obj = fact.object;
+
+      if (newAttributeIds.includes(sub) && newAttributeIds.includes(obj)) {
+        // subject and object are attribute ids which did not exists before.
+        // So, we can say this fact does not connect the new graph to an existing graph.
+        return false;
+      }
+
+      if (newAttributeIds.includes(sub) && allTerms.includes(obj)) {
+        // the fact is classifying a new attribute, this does not count as connecting two graphs
+        return false;
+      }
+
+      if (newAttributeIds.includes(sub) && obj === userId) {
+        // The subject is a new attribute and the object is the users who created it
+        // -> Does not count as connecting the graph to an existing graph
+        return false;
+      }
+
+      return true;
+    });
+
+    return !connectingFact;
+  }
+
+  static async moveAllAccountabilityFactsToFactBox(
+    attributeIds: string[],
+    factBox: FactBox,
+    logger: IsLogger,
+  ) {
+    const pool = new PgPoolWithLog(logger);
+    const attributeString = attributeIds.map((id) => `'${id}'`).join(',');
+
+    await pool.query(`UPDATE facts SET fact_box_id=$1, graph_id=$2 WHERE predicate='$isAccountableFor' AND object IN (${attributeString})`, [
+      factBox.id,
+      factBox.graphId,
+    ]);
   }
 
   private async isValidInvitation(userid: string, args?: { attributesInCreation?: string[] }) {
@@ -699,7 +879,7 @@ export default class Fact {
       return false;
     }
 
-    if (await this.isKnownTerm(this.subject)) {
+    if (await Fact.isKnownTerm(this.subject, this.logger)) {
       return false;
     }
 
@@ -709,14 +889,14 @@ export default class Fact {
     return hasSubjectAccess && hasObjectAccess;
   }
 
-  private async isKnownTerm(node: string) {
+  private static async isKnownTerm(node: string, logger: IsLogger) {
     const hit = cache.get(`isKnownTerm/${node.trim()}`);
 
     if (hit) {
       return hit;
     }
 
-    const pool = new PgPoolWithLog(this.logger);
+    const pool = new PgPoolWithLog(logger);
 
     const result = pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
 
@@ -744,5 +924,304 @@ export default class Fact {
     }
 
     return result;
+  }
+
+  private async getFactBoxPlacement(userId: string): Promise<FactBox> {
+    const internalUserId = await Fact.getInternalUserId(userId, this.logger);
+
+    if (this.subject.startsWith('us-')) {
+      // We end up here when e.g. when
+      // us-82054609511ad4ead53fceedf9c2f6bb $isHostOf kv-01943bcc-5db6-7386-9d63-246e0d0f3185
+      const objectFactPlacement = await Fact.getFactPlacementOf(this.object, userId, this.logger);
+      const internalSubId = await Fact.getInternalUserId(this.subject, this.logger);
+
+      if (!objectFactPlacement.graphId) {
+        await Fact.ensureUserIsAssignedToFactBox(internalSubId, objectFactPlacement, this.logger);
+        return objectFactPlacement;
+      }
+
+      if (objectFactPlacement.id === internalSubId) {
+        return objectFactPlacement;
+      }
+
+      const newFactBox = await Fact.moveUserGraphToNewFactBox(
+        objectFactPlacement,
+        this.logger,
+        [internalUserId, internalSubId],
+      );
+
+      return newFactBox;
+    }
+
+    if (this.object.startsWith('us-')) {
+      if (userId !== this.object) {
+        throw new Error('User can only use its own id as object');
+      }
+
+      const subjectFactPlacement = await Fact.getFactPlacementOf(this.subject, userId, this.logger);
+
+      if (!subjectFactPlacement.graphId) {
+        await Fact.ensureUserIsAssignedToFactBox(internalUserId, subjectFactPlacement, this.logger);
+        return subjectFactPlacement;
+      }
+
+      return subjectFactPlacement;
+    }
+
+    const [factBoxSubject, factBoxObject] = await Promise.all([
+      Fact.getFactPlacementOf(this.subject, userId, this.logger),
+      Fact.getFactPlacementOf(this.object, userId, this.logger),
+    ]);
+
+    // The object is a term so the fact goes into the fact box of the subject
+    if (factBoxObject.id === 0) {
+      return factBoxSubject;
+    }
+
+    // the subject is a term, so it goes into the term box
+    if (factBoxSubject.id === 0) {
+      return { id: 0, graphId: null };
+    }
+
+    // a) both nodes are from the user space
+    //    -> getFactPlacementOf will make sure that it is the same user
+    if (factBoxSubject.graphId && factBoxObject.graphId) {
+      // Both nodes belong to the same graph of the same user
+      if (factBoxSubject.id === internalUserId
+        && factBoxObject.id === internalUserId
+        && factBoxSubject.graphId === factBoxObject.graphId) {
+        return factBoxObject;
+      }
+
+      // The nodes belong to the same user but different graphs
+      if (factBoxSubject.id === internalUserId && factBoxObject.id === internalUserId) {
+        return {
+          id: internalUserId,
+          graphId: await Fact.getNewGraphId(this.logger),
+        };
+      }
+
+      throw new Error('Unexpected error while trying to determine fact box id');
+    }
+
+    // b) None of the nodes is from a private graph
+    if (!factBoxSubject.graphId && !factBoxObject.graphId) {
+      return {
+        id: await Fact.mergeFactBoxes(factBoxSubject.id, factBoxObject.id, this.logger),
+        graphId: null,
+      };
+    }
+
+    // c) subject is a private graph and object is a fact box
+    if (!factBoxSubject.graphId && factBoxObject.graphId) {
+      return {
+        id: await Fact.mergeUserGraphToFactBox(factBoxObject, factBoxSubject, this.logger),
+        graphId: null,
+      };
+    }
+
+    // d) subject is a fact box and object is a graph box
+    if (factBoxSubject.graphId && !factBoxObject.graphId) {
+      return {
+        id: await Fact.mergeUserGraphToFactBox(factBoxSubject, factBoxObject, this.logger),
+        graphId: null,
+      };
+    }
+
+    throw new Error('Unexpected error while trying to determine fact box id');
+  }
+
+  private static async getFactPlacementOf(
+    nodeId: string,
+    userId: string,
+    logger: IsLogger,
+  ): Promise<FactBox> {
+    const pool = new PgPoolWithLog(logger);
+
+    if (nodeId.startsWith('us-')) {
+      if (nodeId !== userId) {
+        throw new Error('Not allowed to access fact box of another user');
+      }
+
+      return {
+        id: await Fact.getInternalUserId(nodeId, logger),
+        graphId: null, // Maybe we need another value here: like 0, or -1
+      };
+    }
+
+    if (await Fact.isKnownTerm(nodeId, logger)) {
+      return {
+        id: 0,
+        graphId: null,
+      };
+    }
+
+    const result = await pool.query('SELECT fact_box_id, graph_id FROM facts WHERE subject=$1 OR object=$1 LIMIT 1', [nodeId]);
+
+    if (!result.rows[0]) {
+      return {
+        id: await Fact.getInternalUserId(userId, logger),
+        graphId: await Fact.getNewGraphId(logger),
+      };
+    }
+
+    return {
+      id: result.rows[0].fact_box_id,
+      graphId: result.rows[0].graph_id,
+    };
+  }
+
+  private static async moveUserGraphToNewFactBox(
+    graphBox: FactBox,
+    logger: IsLogger,
+    users: number[],
+  ): Promise<FactBox> {
+    const pool = new PgPoolWithLog(logger);
+    const factBoxId = await Fact.getNewFactBoxId(logger);
+
+    if (!graphBox.id || !graphBox.graphId) {
+      throw new Error('Cannot migration graph to new fact box as graphBox does not has an id');
+    }
+
+    await Promise.all([
+      pool.query('UPDATE facts SET fact_box_id=$1, graph_id=NULL WHERE fact_box_id=$2', [factBoxId, graphBox.id]),
+      ...users.map((userId) => pool.query('INSERT INTO users_fact_boxes (fact_box_id, user_id) VALUES ($1, $2);', [factBoxId, userId])),
+    ]);
+
+    users.map((userId) => cache.invalidate(`factScopeByUser/${userId}`));
+
+    return {
+      id: factBoxId,
+      graphId: null,
+    };
+  }
+
+  private static async mergeUserGraphToFactBox(
+    graphBox: FactBox,
+    factBox: FactBox,
+    logger: IsLogger,
+  ): Promise<number> {
+    const pool = new PgPoolWithLog(logger);
+
+    if (!graphBox.graphId && !graphBox.id) {
+      logger.warn(`Cannot merge a user graph without a fact box. Graph box is invalid: ${JSON.stringify(graphBox)}`);
+      throw new Error('Cannot merge a user graph without a fact box. Graph box is invalid');
+    }
+
+    if (factBox.graphId || !factBox.id) {
+      logger.warn(`Cannot merge a user graph without a fact box. Fact box is invalid: ${JSON.stringify(factBox)}`);
+      throw new Error('Cannot merge a user graph without a fact box. Fact box is invalid');
+    }
+
+    if (!graphBox.graphId || !factBox.id || !graphBox.id) {
+      logger.warn(`Unexpected error when merging user graph to fact box, fact box is missing a value: FactBox: ${JSON.stringify(factBox)}, GraphBox: ${JSON.stringify(graphBox)}`);
+      throw new Error('Unexpected error when merging user graph to fact box, fact box is missing a value');
+    }
+
+    cache.invalidate(`factScopeByUser/${graphBox.id}`);
+
+    await Promise.all([
+      pool.query('UPDATE facts SET fact_box_id=$1, graph_id=NULL WHERE fact_box_id=$2 AND graph_id=$3', [factBox.id, graphBox.id, graphBox.graphId]),
+      pool.query('UPDATE users_fact_boxes SET fact_box_id=$1 WHERE fact_box_id=$2', [factBox.id, graphBox.id]),
+      Fact.ensureUserIsAssignedToFactBox(graphBox.id, factBox, logger),
+    ]);
+
+    return factBox.id;
+  }
+
+  // TODO: make sure the smaller fact box is merged into the bigger fact box;
+  private static async mergeFactBoxes(
+    node1Id: number | undefined,
+    node2Id: number | undefined,
+    logger: IsLogger,
+  ): Promise<number> {
+    if (!node1Id && node2Id) {
+      return node2Id;
+    }
+
+    if (!node2Id && node1Id) {
+      return node1Id;
+    }
+
+    if (!node1Id && !node1Id) {
+      throw new Error('Cannot merge fact boxes without ids');
+    }
+
+    if (node1Id === 0) {
+      // eslint-disable-next-line no-param-reassign
+      node1Id = node2Id;
+      // eslint-disable-next-line no-param-reassign
+      node2Id = 0;
+    }
+
+    const pool = new PgPoolWithLog(logger);
+
+    const usersOfOldFactBox = await pool.query('SELECT user_id FROM users_fact_boxes WHERE fact_box_id=$1', [node1Id]);
+
+    usersOfOldFactBox.rows.forEach((row) => {
+      cache.invalidate(`factScopeByUser/${row.user_id}`);
+    });
+
+    await Promise.all([
+      pool.query('UPDATE facts SET fact_box_id=$1 WHERE fact_box_id=$2', [node2Id, node1Id]),
+      pool.query('UPDATE users_fact_boxes SET fact_box_id=$1 WHERE fact_box_id=$2', [node2Id, node1Id]),
+    ]);
+
+    if (!node2Id) {
+      throw new Error('Unexpected error while merging fact boxes');
+    }
+
+    return node2Id;
+  }
+
+  private static async getInternalUserId(userid: string, logger: IsLogger): Promise<number> {
+    const hit = cache.get(`internalUserId/${userid}`);
+
+    if (hit) {
+      return hit;
+    }
+
+    const pool = new PgPoolWithLog(logger);
+    const result = await pool.query('SELECT _id as internal_user_id FROM users WHERE id=$1', [userid]);
+
+    if (!result.rows[0]) {
+      throw new Error(`User with id ${userid} does not exist`);
+    }
+
+    if (result) {
+      cache.set(`internalUserId/${userid}`, result.rows[0].internal_user_id);
+    }
+
+    return result.rows[0].internal_user_id;
+  }
+
+  public static async getNewFactBoxId(logger: IsLogger) {
+    const pool = new PgPoolWithLog(logger);
+    const newFactBoxIdResult = await pool.query("SELECT nextval('users__id_seq') as id");
+
+    return newFactBoxIdResult.rows[0].id;
+  }
+
+  public static async getNewGraphId(logger: IsLogger) {
+    const pool = new PgPoolWithLog(logger);
+    const newFactBoxIdResult = await pool.query("SELECT nextval('graph_id') as id");
+
+    return newFactBoxIdResult.rows[0].id;
+  }
+
+  private static async ensureUserIsAssignedToFactBox(
+    internalUserId: number,
+    factBox: FactBox,
+    logger: IsLogger,
+  ) {
+    const pool = new PgPoolWithLog(logger);
+
+    if (await pool.findAny('SELECT * FROM users_fact_boxes WHERE fact_box_id=$1 AND fact_box_id=$2', [factBox.id, internalUserId])) {
+      return;
+    }
+
+    cache.invalidate(`factScopeByUser/${internalUserId}`);
+
+    await pool.query('INSERT INTO users_fact_boxes (fact_box_id, user_id) VALUES ($1, $2)', [factBox.id, internalUserId]);
   }
 }
