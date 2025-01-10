@@ -118,6 +118,11 @@ async function deactivateFactsFromUnknownUsers() {
   WHERE fact_box_id=0
   AND predicate != '$isATermFor'
   AND created_BY NOT IN (SELECT id FROM users)`);
+
+  await pgPool.query(`UPDATE facts SET fact_box_id=-1
+    WHERE fact_box_id=0
+    AND (subject LIKE 'l-%' OR subject LIKE 'kv-%' OR subject LIKE 'bl-%' or object LIKE 'l-%' OR object LIKE 'kv-%' OR object LIKE 'bl-%')
+  `);
 }
 
 async function main() {
