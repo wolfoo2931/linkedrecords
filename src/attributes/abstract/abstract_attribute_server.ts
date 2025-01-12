@@ -7,7 +7,8 @@ import StorageDriverInterface from './is_attribute_storage';
 export default abstract class AbstractAttributeServer <
   Type,
   TypedChange extends IsSerializable,
-  IsAttributeStorage> {
+  IsAttributeStorage extends StorageDriverInterface,
+> {
   id: string;
 
   actorId: string;
@@ -30,6 +31,41 @@ export default abstract class AbstractAttributeServer <
     this.actorId = actorId;
     this.storage = storage;
     this.logger = logger;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  public static async getStorageRequiredForValue(value): Promise<number> {
+    if ((value as Blob).size) {
+      return (value as Blob).size;
+    }
+
+    if (typeof value === 'string') {
+      return value.length;
+    }
+
+    if (typeof value === 'object') {
+      return JSON.stringify(value).length;
+    }
+
+    throw new Error(`Unknown type for getStorageRequiredForValue: ${typeof value}`);
+  }
+
+  public static async getStorageRequiredForChange(
+    change: SerializedChangeWithMetadata<any>,
+  ): Promise<number> {
+    if ((change.change as Blob).size) {
+      return (change.change as Blob).size;
+    }
+
+    if (typeof change.change === 'string') {
+      return change.change.length;
+    }
+
+    if (typeof change.change === 'object') {
+      return JSON.stringify(change.change).length;
+    }
+
+    throw new Error(`Unknown type for getStorageRequiredForValue: ${typeof change.change}`);
   }
 
   public static getDataTypePrefix(): string {

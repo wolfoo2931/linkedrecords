@@ -17,6 +17,41 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgPool = new PgPoolWithLog(this.logger);
   }
 
+  async getSizeInBytesForAllAccountableAttributes(accounteeId: string): Promise<number> {
+    // FIXME: we need a pagination / map reduce approach here
+    // We can not combine it in one query because we want to be able to store the facts and
+    // the attributes in different databases
+    const accountableNodes = await Fact.getAccountableNodes(accounteeId, this.logger, 'l');
+
+    if (!accountableNodes.length) {
+      return 0;
+    }
+
+    const createQuery = `SELECT SUM(pg_total_relation_size(quote_ident(table_name)))
+      FROM information_schema.tables
+      WHERE replace(replace(table_name, '_', '-'), 'var-', '') IN (${accountableNodes.map((n) => `'${n}'`).join(',')});`;
+
+    const result = await this.pgPool.query(createQuery);
+
+    if (!result?.rows[0]) {
+      throw new Error(`There was a problem getting the size of all accountable attributes for ${accounteeId}`);
+    }
+
+    let size: number;
+
+    try {
+      if (result.rows[0].sum === null) {
+        size = 0;
+      } else {
+        size = parseInt(result.rows[0].sum, 10);
+      }
+    } catch (e) {
+      throw new Error(`There was a problem getting the size of all accountable attributes for ${accounteeId}`);
+    }
+
+    return size;
+  }
+
   async createAllAttributes(
     attr: { attributeId: string, actorId: string, value: string }[],
   ) : Promise<{ id: string }[]> {

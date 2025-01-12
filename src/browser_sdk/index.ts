@@ -41,6 +41,8 @@ export default class LinkedRecords {
 
   unknownServerErrorHandler?: (response) => void;
 
+  quotaViolationErrorHandler?: (response) => void;
+
   attributeClientIdSuffix: number = 0;
 
   clientId: string;
@@ -163,6 +165,11 @@ export default class LinkedRecords {
       return false;
     }
 
+    if (response.status === 403) {
+      this.handleQuotaViolationError(response);
+      return false;
+    }
+
     if (!response.ok) {
       this.handleUnknownServerError(response);
       return false;
@@ -214,6 +221,18 @@ export default class LinkedRecords {
       this.unknownServerErrorHandler(response);
     } else {
       console.log('UnknownServerError', response);
+    }
+  }
+
+  public setQuotaViolationErrorHandler(handler: (response) => void) {
+    this.quotaViolationErrorHandler = handler;
+  }
+
+  public handleQuotaViolationError(response) {
+    if (this.quotaViolationErrorHandler) {
+      this.quotaViolationErrorHandler(response);
+    } else {
+      this.handleUnknownServerError(response);
     }
   }
 
