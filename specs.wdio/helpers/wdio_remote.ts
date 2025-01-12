@@ -10,6 +10,10 @@ export default class WdioRemote {
   replaceProxyInstance(oriObj) {
     let obj = oriObj;
 
+    if (obj === null) {
+      return undefined;
+    }
+
     if (!obj || typeof obj === 'string' || typeof obj === 'number') {
       return obj;
     }

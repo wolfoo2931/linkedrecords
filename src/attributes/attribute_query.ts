@@ -1,7 +1,6 @@
 /* eslint-disable import/no-cycle */
-import intersect from 'intersect';
 import Fact from '../facts/server';
-import { FactQuery, SubjectQuery } from '../facts/fact_query';
+import { SubjectQuery } from '../facts/fact_query';
 import LongTextAttribute from './long_text/server';
 import KeyValueAttribute from './key_value/server';
 import BlobAttribute from './blob/server';
@@ -38,20 +37,6 @@ function factQueryWithOptionalSubjectPlaceholderToFactQuery(
   }
 
   throw new Error(`factQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input: ${JSON.stringify(x)}`);
-}
-
-function filterUndefinedSubjectQueries(
-  array: Array<SubjectQuery | undefined>,
-): Array<SubjectQuery> {
-  const result: Array<SubjectQuery> = [];
-
-  array.forEach((el) => {
-    if (el) {
-      result.push(el);
-    }
-  });
-
-  return result;
 }
 
 function resolvedIdsToFlatArray(resultWithIds: ResolveToIdsResult): string[] {
@@ -176,8 +161,13 @@ export default class QueryExecutor {
     }
 
     let dataTypeFilter;
+    const factQuery = query as FactQueryWithOptionalSubjectPlaceholder[];
 
-    const queryWithoutDataTypeFilter = query.filter((q) => {
+    const queryWithoutDataTypeFilter = factQuery.filter((q) => {
+      if (q[2] && typeof q[2] !== 'string') {
+        return false;
+      }
+
       if (q[1] === '$hasDataType') {
         [, , dataTypeFilter] = q;
         return false;
@@ -191,53 +181,36 @@ export default class QueryExecutor {
       return true;
     }) as [string, string, string?][];
 
+    const subjectQuery = queryWithoutDataTypeFilter
+      .filter((q) => q.length < 3 || q[2] !== '$not($it)')
+      .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
+      .filter((x) => x && x.length === 2);
+
+    const objectQuery = queryWithoutDataTypeFilter
+      .filter((q) => q.length === 3 && q[2] === '$it')
+      .map(([subject, predicate]) => ([subject, predicate])) as [string, string][];
+
     const nodeBlacklist: [string, string][] = queryWithoutDataTypeFilter
       .filter((q) => q.length === 3 && q[2] === '$not($it)')
       .map(([subject, predicate]) => [subject, predicate]);
 
-    const subjectFactsQuery: FactQuery = {
-      subject: filterUndefinedSubjectQueries(
-        queryWithoutDataTypeFilter
-          .filter((q) => q.length < 3 || q[2] !== '$not($it)')
-          .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
-          .filter((x) => x && x.length === 2),
-      ),
+    let matchedIds = await Fact.findNodes(
+      subjectQuery,
+      objectQuery,
+      nodeBlacklist,
+      userid,
+      this.logger,
+    );
 
-      subjectBlacklist: nodeBlacklist,
-    };
-
-    const matchedIdsPromise = this.getMatchedIds(subjectFactsQuery, userid, dataTypeFilter);
-    let matchedIds;
-
-    const objectFactsQuery = queryWithoutDataTypeFilter
-      .filter((q) => q.length === 3 && q[2] === '$it')
-      .map(([subject, predicate]) => ({
-        subject: [subject as string],
-        predicate: [predicate as string],
-        objectBlacklist: nodeBlacklist,
-      }));
-
-    if (objectFactsQuery.length !== 0) {
-      const factsWhereItIsTheObject = await Promise.all(
-        objectFactsQuery.map((q) => Fact.findAll(q, userid, this.logger)),
-      );
-
-      const mapped: string[][] = [];
-
-      factsWhereItIsTheObject.forEach((allResults) => {
-        mapped.push(allResults.map((f) => f.object));
-      });
-
-      const matchedObjectIds = intersect(mapped);
-
-      matchedIds = intersect((await matchedIdsPromise), matchedObjectIds);
+    if (dataTypeFilter === 'KeyValueAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('kv-'));
+    } else if (dataTypeFilter === 'LongTextAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('l-'));
+    } else if (dataTypeFilter === 'BlobAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('bl-'));
     }
 
-    if (!matchedIds) {
-      matchedIds = await matchedIdsPromise;
-    }
-
-    return matchedIds.filter((value, index, array) => array.indexOf(value) === index);
+    return matchedIds;
   }
 
   async loadAttributes(
@@ -261,22 +234,6 @@ export default class QueryExecutor {
     }));
 
     return attributes;
-  }
-
-  private async getMatchedIds(subjectFactsQuery, userid, dataTypeFilter) {
-    const factsWhereItIsTheSubject = await Fact.findAll(subjectFactsQuery, userid, this.logger);
-
-    let matchedIds = factsWhereItIsTheSubject.map((f) => f.subject);
-
-    if (dataTypeFilter === 'KeyValueAttribute') {
-      matchedIds = matchedIds.filter((id) => id.startsWith('kv-'));
-    } else if (dataTypeFilter === 'LongTextAttribute') {
-      matchedIds = matchedIds.filter((id) => id.startsWith('l-'));
-    } else if (dataTypeFilter === 'BlobAttribute') {
-      matchedIds = matchedIds.filter((id) => id.startsWith('bl-'));
-    }
-
-    return matchedIds;
   }
 
   async resolveCompoundQueryToIds(query: CompoundAttributeQuery, userid: string): Promise<({

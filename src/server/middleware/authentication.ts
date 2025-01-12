@@ -71,6 +71,8 @@ export default function authentication() {
         throw new Error(`${toBeUser} is not in the allowed test user whitelist. This is probably a configuration issue. ${req.method} ${req.path}`);
       }
 
+      Fact.recordUserEmail(`${toBeUser}@example.com`, hashUserId(toBeUser), req.log);
+
       req.whenAuthenticated = async (fn) => {
         if (!req?.oidc?.user?.sub || !req.oidc.isAuthenticated()) {
           res.sendStatus(401);

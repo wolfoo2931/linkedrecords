@@ -278,8 +278,25 @@ export default {
       attributeSavePromises.push(AC.createAll(attributesAndValues, req.attributeStorage));
     }
 
-    await Promise.all(attributeSavePromises);
-    await Fact.saveAllWithoutAuthCheck(resolvedFacts, req.hashedUserID, req.log);
+    const isNewUserScopedGraph = await Fact.isNewUserScopedGraph(
+      resolvedFacts,
+      Object.values(nameIdMap),
+      req.hashedUserID,
+      req.log,
+    );
+
+    const savedAttributeIds = await Promise.all(attributeSavePromises).then((r) => r.flat());
+
+    const factBox = await Fact.saveAllWithoutAuthCheck(
+      resolvedFacts,
+      req.hashedUserID,
+      isNewUserScopedGraph,
+      req.log,
+    );
+
+    if (factBox) {
+      await Fact.moveAllAccountabilityFactsToFactBox(savedAttributeIds, factBox, req.logger);
+    }
 
     const result = {};
 
@@ -350,7 +367,7 @@ export default {
       id: req.attribute.id,
     };
 
-    await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, req.log);
+    await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, undefined, req.log);
 
     if (result instanceof Error) {
       req.log.error(`error in POST /attributes/${req.params.attributeId}`, result.message);

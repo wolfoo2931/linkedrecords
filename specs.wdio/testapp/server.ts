@@ -14,6 +14,7 @@ http.createServer(async (req, res) => {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
       await pgPool.query('TRUNCATE facts;');
       await pgPool.query('TRUNCATE users;');
+      await pgPool.query('TRUNCATE users_fact_boxes;');
       console.log('TRUNCATE facts done');
     }
   }
