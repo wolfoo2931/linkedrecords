@@ -104,10 +104,10 @@ export default class ClientServerBus {
         });
       });
 
-      socket.on('disconnect', () => {
-        console.log('==> websocket disconnect');
+      socket.on('disconnect', (reason) => {
+        console.log(`Websocket connection closed because: ${reason}`);
         this.connectionInterruptedSubscribers.forEach((sub) => {
-          sub();
+          sub(new Error(`Websocket connection closed because: ${reason}`));
         });
       });
 
