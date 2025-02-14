@@ -99,6 +99,7 @@ export default class ClientServerBus {
 
       socket.on('error', (error) => {
         this.connectionInterruptedSubscribers.forEach((sub) => {
+          console.log(`Websocket connection error: ${error}`);
           sub(error);
         });
       });
