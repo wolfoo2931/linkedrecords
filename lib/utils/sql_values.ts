@@ -53,7 +53,7 @@ export default class EnsureIsValid {
       return format('%s', subject);
     }
 
-    throw new Error(`Invalid subject. Must contain only letters and be 40 or less chars long: ${subject}`);
+    throw new Error(`Invalid subject. Must contain only letters, digits and '-' and be 40 or less chars long: ${subject}`);
   }
 
   static predicate(predicate: string): string {
@@ -77,7 +77,7 @@ export default class EnsureIsValid {
       return object;
     }
 
-    throw new Error(`Invalid object. Must contain only letters and be 40 or less chars long: ${object}`);
+    throw new Error(`Invalid object. Must contain only letters, digits or '-' and be 40 or less chars long: ${object}`);
   }
 
   static nodeId(nodeId: string): string {
