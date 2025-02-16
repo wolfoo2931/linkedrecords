@@ -8,6 +8,7 @@ import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
 import SQL, { rolePredicateMap } from './authorization_sql_builder';
 import cache from '../../server/cache';
+import EnsureIsValid from '../../../lib/utils/sql_values';
 
 type FactBox = {
   id: number;
@@ -47,9 +48,6 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
   const isSubjectEmpty = !subject || subject.length === 0;
   const isObjectEmpty = !object || object.length === 0;
   const isPredicateEmpty = !predicate || predicate.length === 0;
-  const isValidId = (p) => typeof p === 'string' && p.match(/^[a-zA-Z0-9-]+$/);
-  const isValidPredicate = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+\*?$/);
-  const isValidSubject = (p) => typeof p === 'string' && p.match(/^\$?[a-zA-Z0-9-()]+$/);
 
   if (isSubjectEmpty && isObjectEmpty && isPredicateEmpty) {
     throw new Error('invalid FactQuery, provide at least one of the following conditions: subject, predicate, object');
@@ -59,26 +57,26 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
     throw new Error('invalid FactQuery, predicate must be an array of strings!');
   }
 
-  if (predicate && predicate.find((p) => !isValidPredicate(p))) {
+  if (predicate?.find((p) => !EnsureIsValid.predicate(p))) {
     throw new Error(`invalid predicate in query: ${predicate}`);
   }
 
   [...(subject || []), ...(object || [])].forEach((sq) => {
     if (typeof sq === 'string') {
-      if (!isValidId(sq)) {
+      if (!EnsureIsValid.nodeId(sq)) {
         throw new Error(`invalid Id in subject query: ${sq}`);
       }
     } else if (Array.isArray(sq)) {
-      if (sq.length === 3 && !isValidSubject(sq[0])) {
+      if (sq.length === 3 && !EnsureIsValid.subject(sq[0])) {
         throw new Error(`invalid subject part in fact query detected: ${sq[0]}`);
       }
 
-      if (sq.length === 2 && !isValidPredicate(sq[0])) {
+      if (sq.length === 2 && !EnsureIsValid.predicate(sq[0])) {
         throw new Error(`invalid predicate part in fact query detected: ${sq[0]}`);
       }
 
-      if (!isValidSubject(sq[1])) {
-        throw new Error(`invalid predicate part in fact query detected: ${sq[1]}`);
+      if (!EnsureIsValid.subject(sq[1])) {
+        throw new Error(`invalid subject part in fact query detected: ${sq[1]}`);
       }
 
       if (sq[2] && sq[2] !== '$it') {
@@ -89,7 +87,7 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
         throw new Error('invalid array length in query detected');
       }
     } else {
-      throw new Error('subject query needs to be array or string');
+      throw new Error(`subject query needs to be array or string: ${sq}`);
     }
   });
 
@@ -271,9 +269,7 @@ export default class Fact {
   }
 
   private static async withAuthNodesAndFacts(userid: string, logger: IsLogger) {
-    if (!userid || !userid.match(/^us-[a-f0-9]{32}$/gi)) {
-      throw new Error(`userId is invalid: "${userid}"`);
-    }
+    EnsureIsValid.userId(userid);
 
     const authorizedNodes = await SQL.selectSubjectsInAnyGroup(
       userid,
@@ -297,9 +293,9 @@ export default class Fact {
             UNION
               SELECT id, subject, predicate, object
               FROM facts
-              WHERE facts.fact_box_id IN (${factScope.factBoxIds.join(',')})
+              WHERE facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
               AND subject IN (SELECT node FROM auth_nodes)
-              AND (object IN (SELECT node FROM auth_nodes) OR object = ANY ('{${allTerms.join(',')}}'))
+              AND (object IN (SELECT node FROM auth_nodes) OR object = ANY ('{${allTerms.map(EnsureIsValid.term).join(',')}}'))
           )
     `;
   }
@@ -325,7 +321,7 @@ export default class Fact {
     }
 
     if (query[1] === '$anything' && query[0] && predicatedAllowedToQueryAnyObjects.includes(query[0])) {
-      return `SELECT subject FROM auth_facts WHERE predicate='${query[0]}' ${sqlPrefix ? `AND ${sqlPrefix}` : ''}`;
+      return `SELECT subject FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(query[0])}' ${sqlPrefix ? `AND ${sqlPrefix}` : ''}`;
     }
 
     if (query[1] === '$anything') {
@@ -333,18 +329,18 @@ export default class Fact {
     }
 
     let table = `(SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts
-                  WHERE object = '${query[1]}'
-                  AND predicate = '${query[0]}') as f`;
+                  WHERE object = '${EnsureIsValid.object(query[1])}'
+                  AND predicate = '${EnsureIsValid.predicate(query[0])}') as f`;
 
     if (query[0].endsWith('*')) {
       table = `(WITH RECURSIVE rfacts AS (
         SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts
-                        WHERE object = '${query[1]}'
-                        AND predicate = '${query[0]}'
+                        WHERE object = '${EnsureIsValid.object(query[1])}'
+                        AND predicate = '${EnsureIsValid.predicate(query[0])}'
         UNION ALL
           SELECT auth_facts.subject, auth_facts.predicate, auth_facts.object FROM auth_facts, rfacts
                           WHERE auth_facts.object = rfacts.subject
-                          AND auth_facts.predicate = '${query[0]}'
+                          AND auth_facts.predicate = '${EnsureIsValid.predicate(query[0])}'
         )
         CYCLE subject
           SET cycl TO 'Y' DEFAULT 'N'
@@ -375,12 +371,12 @@ export default class Fact {
         const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (object) {
-          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject FROM auth_facts WHERE predicate='${query[0]}' AND object='${object}')`]);
+          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(query[0])}' AND object='${EnsureIsValid.object(object)}')`]);
         }
       } else if (!hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
         if (predicate) {
-          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM auth_facts WHERE id IN (SELECT max(id) FROM auth_facts WHERE predicate='${predicate}' GROUP BY subject) AND object='${query[1]}')`]);
+          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM auth_facts WHERE id IN (SELECT max(id) FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}' GROUP BY subject) AND object='${EnsureIsValid.object(query[1])}')`]);
         }
       } else if (hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
@@ -390,8 +386,8 @@ export default class Fact {
           sqlConditions.push(['subject', 'IN', `(SELECT
             subject
             FROM auth_facts
-            WHERE (object != '${object}' AND id IN (SELECT max(id) FROM auth_facts WHERE predicate='${predicate}' GROUP BY subject))
-            OR subject NOT IN (SELECT subject FROM auth_facts WHERE predicate='${predicate}'))`]);
+            WHERE (object != '${EnsureIsValid.object(object)}' AND id IN (SELECT max(id) FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}' GROUP BY subject))
+            OR subject NOT IN (SELECT subject FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}'))`]);
         }
       }
     });
@@ -522,9 +518,9 @@ export default class Fact {
   ) {
     const pool = new PgPoolWithLog(logger);
     const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger);
-    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${s}' AND predicate='${p}'`)).join(' UNION ').trim();
+    const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`)).join(' UNION ').trim();
     const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
-    const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${q[0]}' AND predicate='${q[1]}'`).join(' INTERSECT ').trim();
+    const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${EnsureIsValid.subject(q[0])}' AND predicate='${EnsureIsValid.predicate(q[1])}'`).join(' INTERSECT ').trim();
 
     const candidateSelects: string[] = [];
 
@@ -569,14 +565,18 @@ export default class Fact {
       const singleValueMatch = subjectFilter.match(/^SELECT '(.*?)'$/);
 
       if (singleValueMatch && singleValueMatch[1]) {
-        sqlQuery += ` ${and()} subject='${singleValueMatch[1]}'`;
+        sqlQuery += ` ${and()} subject='${EnsureIsValid.subject(singleValueMatch[1])}'`;
       } else {
         sqlQuery += ` ${and()} subject IN (${subjectFilter})`;
       }
     }
 
     if (predicate) {
-      sqlQuery += ` ${and()} predicate='${predicate}'`;
+      if (predicate.length === 1 && predicate[0]) {
+        sqlQuery += ` ${and()} predicate='${EnsureIsValid.predicate(predicate[0])}'`;
+      } else {
+        sqlQuery += ` ${and()} predicate IN (${predicate.map(EnsureIsValid.predicate).map((p) => `'${p}'`).join(',')})`;
+      }
     }
 
     if (object) {
@@ -585,14 +585,14 @@ export default class Fact {
 
     if (subjectBlacklist && subjectBlacklist.length) {
       const bl = subjectBlacklist
-        .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
+        .map(([s, p]) => (`SELECT object FROM facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
         .join(' UNION ');
       sqlQuery += ` ${and()} subject NOT IN (${bl})`;
     }
 
     if (objectBlacklist && objectBlacklist.length) {
       const bl = objectBlacklist
-        .map(([s, p]) => (`SELECT object FROM facts where subject='${s}' AND predicate='${p}'`))
+        .map(([s, p]) => (`SELECT object FROM facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
         .join(' UNION ');
       sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
@@ -889,7 +889,7 @@ export default class Fact {
     logger: IsLogger,
   ) {
     const pool = new PgPoolWithLog(logger);
-    const attributeString = attributeIds.map((id) => `'${id}'`).join(',');
+    const attributeString = attributeIds.map((id) => `'${EnsureIsValid.nodeId(id)}'`).join(',');
 
     await pool.query(`UPDATE facts SET fact_box_id=$1, graph_id=$2 WHERE predicate='$isAccountableFor' AND object IN (${attributeString})`, [
       factBox.id,

@@ -5,6 +5,7 @@ import PgPoolWithLog from '../../../../lib/pg-log';
 import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
+import EnsureIsValid from '../../../../lib/utils/sql_values';
 import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
 
 function getUuidByAttributeId(attributeId: string) {
@@ -116,7 +117,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       a.value,
     ]);
 
-    const createQuery = `INSERT INTO ${tableNames[0]} (actor_id, updated_at, created_at, id, value) VALUES ${values}`;
+    const createQuery = `INSERT INTO ${EnsureIsValid.tableName(tableNames[0])} (actor_id, updated_at, created_at, id, value) VALUES ${values}`;
     await this.pgPool.query(createQuery, flatParams);
 
     return attr.map((a) => ({ id: a.attributeId }));
@@ -144,7 +145,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     value: string,
   ) : Promise<{ id: string }> {
     const pgTableName = await this.getAttributeTableName(attributeId);
-    const createQuery = `INSERT INTO ${pgTableName} (id, actor_id, updated_at, created_at, value) VALUES ($1, $2, $3, $4, $5)`;
+    const createQuery = `INSERT INTO ${EnsureIsValid.tableName(pgTableName)} (id, actor_id, updated_at, created_at, value) VALUES ($1, $2, $3, $4, $5)`;
     await this.pgPool.query(createQuery, [
       getUuidByAttributeId(attributeId),
       actorId,
@@ -170,7 +171,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     const pgTableName = await this.getAttributeTableName(attributeId);
-    const snapshots = await this.pgPool.query(`SELECT value, actor_id, created_at, updated_at from ${pgTableName} WHERE id=$1 LIMIT 1`, [
+    const snapshots = await this.pgPool.query(`SELECT value, actor_id, created_at, updated_at from ${EnsureIsValid.tableName(pgTableName)} WHERE id=$1 LIMIT 1`, [
       getUuidByAttributeId(attributeId),
     ]);
 
@@ -210,7 +211,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
     const pgTableName = await this.getAttributeTableName(attributeId);
-    const result = await this.pgPool.query(`UPDATE ${pgTableName} SET actor_id=$1, updated_at=$2, value=$3 WHERE id=$4 RETURNING updated_at`, [
+    const result = await this.pgPool.query(`UPDATE ${EnsureIsValid.tableName(pgTableName)} SET actor_id=$1, updated_at=$2, value=$3 WHERE id=$4 RETURNING updated_at`, [
       actorId,
       new Date(),
       value,
