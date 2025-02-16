@@ -59,6 +59,10 @@ function processJSONLog(json) {
       delete req[json?.req?.id];
     }
 
+    if(json.err) {
+      console.error(json.err);
+    }
+
   } else {
     if(process.env.LOG_LEVEL !== 'summary') {
       console.log(`WS${timeOutput(json?.timeInMS, 11)}: ${json?.queryTemplate}`);
