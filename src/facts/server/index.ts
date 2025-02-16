@@ -57,7 +57,7 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
     throw new Error('invalid FactQuery, predicate must be an array of strings!');
   }
 
-  if (predicate && predicate.find((p) => !EnsureIsValid.predicate(p))) {
+  if (predicate?.find((p) => !EnsureIsValid.predicate(p))) {
     throw new Error(`invalid predicate in query: ${predicate}`);
   }
 

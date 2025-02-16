@@ -53,7 +53,7 @@ export default class EnsureIsValid {
       return format('%s', subject);
     }
 
-    throw new Error(`Invalid subject. Must contain only letters and be less then 32 chars long: ${subject}`);
+    throw new Error(`Invalid subject. Must contain only letters and be 40 or less chars long: ${subject}`);
   }
 
   static predicate(predicate: string): string {
@@ -65,7 +65,7 @@ export default class EnsureIsValid {
       return format('%s', predicate);
     }
 
-    throw new Error(`Invalid predicate. Must contain only letters and be less then 32 chars long: ${predicate}`);
+    throw new Error(`Invalid predicate. Must contain only letters and be 32 or less chars long: ${predicate}`);
   }
 
   static object(object: string): string {
@@ -77,7 +77,7 @@ export default class EnsureIsValid {
       return object;
     }
 
-    throw new Error(`Invalid object. Must contain only letters and be less then 32 chars long: ${object}`);
+    throw new Error(`Invalid object. Must contain only letters and be 40 or less chars long: ${object}`);
   }
 
   static nodeId(nodeId: string): string {
@@ -97,7 +97,7 @@ export default class EnsureIsValid {
       return format('%s', term);
     }
 
-    throw new Error('Invalid term. Must contain only letters and be less then 32 chars long.');
+    throw new Error('Invalid term. Must contain only letters and be 32 or less chars long.');
   }
 
   static factBoxId(id: string | number): string | number {

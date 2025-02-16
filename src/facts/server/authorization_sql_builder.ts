@@ -26,11 +26,11 @@ export default class AuthorizationSqlBuilder {
   ) {
     return `(
         SELECT *
-        FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'directUser')}) as facts
+        FROM (${await AuthorizationSqlBuilder.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'directUser')}) as facts
         WHERE node='${EnsureIsValid.nodeId(attributeId)}'
       UNION ALL
         SELECT *
-        FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'all')}) as facts
+        FROM (${await AuthorizationSqlBuilder.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'all')}) as facts
         WHERE node='${EnsureIsValid.nodeId(attributeId)}'
       )`;
   }
