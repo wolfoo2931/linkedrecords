@@ -65,7 +65,7 @@ export default class EnsureIsValid {
       return format('%s', predicate);
     }
 
-    throw new Error(`Invalid predicate. Must contain only letters and be 32 or less chars long: ${predicate}`);
+    throw new Error(`Invalid predicate. Must contain only letters and be 32 or less chars long (can start with $ or end with *): ${predicate}`);
   }
 
   static object(object: string): string {
