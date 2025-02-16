@@ -1,6 +1,7 @@
 // eslint-disable-next-line import/no-cycle
 import Fact from '.';
 import IsLogger from '../../../lib/is_logger';
+import EnsureIsValid from '../../../lib/utils/sql_values';
 
 export type Role = 'term' | 'creator' | 'selfAccess' | 'host' | 'member' | 'access' | 'reader' | 'referer' | 'conceptor';
 
@@ -26,11 +27,11 @@ export default class AuthorizationSqlBuilder {
     return `(
         SELECT *
         FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'directUser')}) as facts
-        WHERE node='${attributeId}'
+        WHERE node='${EnsureIsValid.nodeId(attributeId)}'
       UNION ALL
         SELECT *
         FROM (${await this.selectSubjectsInAnyGroup(userid, roles, attributeId, logger, 'all')}) as facts
-        WHERE node='${attributeId}'
+        WHERE node='${EnsureIsValid.nodeId(attributeId)}'
       )`;
   }
 
@@ -43,7 +44,7 @@ export default class AuthorizationSqlBuilder {
   ) {
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
-      .map(() => `SELECT '${userid}' as node`);
+      .map(() => `SELECT '${EnsureIsValid.userId(userid)}' as node`);
 
     const termsSubSelect = roles
       .filter((role) => role === 'term')
@@ -51,6 +52,7 @@ export default class AuthorizationSqlBuilder {
 
     const groupRoles = roles
       .filter((role) => Object.keys(rolePredicateMap).includes(role))
+      .map(EnsureIsValid.predicate)
       .map((r) => `'${rolePredicateMap[r]}'`);
 
     const groupSubSelect: string[] = [];
@@ -62,10 +64,10 @@ export default class AuthorizationSqlBuilder {
         object as node
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
-        AND fact_box_id IN (${factScope.factBoxIds.join(',')})
+        AND fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
         AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, factScope)})`;
 
-      const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${attributeId}'` : '');
+      const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${EnsureIsValid.object(attributeId)}'` : '');
 
       groupSubSelect.push(`
         (WITH
@@ -77,7 +79,7 @@ export default class AuthorizationSqlBuilder {
           SELECT subject as node
           FROM facts
           WHERE predicate='$isMemberOf'
-          AND fact_box_id IN (${factScope.factBoxIds.join(',')})
+          AND fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
           AND object IN (SELECT node FROM direct_accessible_node_members))
       `);
     }
@@ -99,9 +101,9 @@ export default class AuthorizationSqlBuilder {
     }
 
     const factScopeFilter = factScope
-      ? ` AND member_facts.fact_box_id IN (${factScope.factBoxIds.join(',')})`
+      ? ` AND member_facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})`
       : '';
 
-    return `SELECT '${userid}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${userid}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')${factScopeFilter}`;
+    return `SELECT '${EnsureIsValid.userId(userid)}' as object UNION ALL SELECT object FROM facts as member_facts WHERE member_facts.subject = '${EnsureIsValid.userId(userid)}' AND member_facts.predicate IN ('$isHostOf', '$isMemberOf', '$isAccountableFor')${factScopeFilter}`;
   }
 }
