@@ -76,7 +76,7 @@ function ensureValidFactQuery({ subject, predicate, object }: FactQuery) {
       }
 
       if (!EnsureIsValid.subject(sq[1])) {
-        throw new Error(`invalid predicate part in fact query detected: ${sq[1]}`);
+        throw new Error(`invalid subject part in fact query detected: ${sq[1]}`);
       }
 
       if (sq[2] && sq[2] !== '$it') {
