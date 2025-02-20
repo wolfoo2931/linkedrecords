@@ -171,7 +171,7 @@ export default class Quota {
       logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
-    const used = await storage.getSizeInBytesForAllAccountableAttributes(accountableNodes);
+    const used = await storage.getSizeInBytesForAllAttributes(accountableNodes);
 
     return Quota.getDefaultStorageSizeQuota() - used;
   }

@@ -28,7 +28,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgPool = new PgPoolWithLog(this.logger);
   }
 
-  async getSizeInBytesForAllAccountableAttributes(nodes: string[]): Promise<number> {
+  async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
     const attrTables = ['bl_attributes', 'kv_attributes'];
 
     const sizes = await Promise.all(attrTables.map(async (tableName) => {
