@@ -47,25 +47,13 @@ export default abstract class AbstractAttributeServer <
       return JSON.stringify(value).length;
     }
 
-    throw new Error(`Unknown type for getStorageRequiredForValue: ${typeof value}`);
+    throw new Error(`Unknown type to calculate storage requirements: ${typeof value}`);
   }
 
   public static async getStorageRequiredForChange(
     change: SerializedChangeWithMetadata<any>,
   ): Promise<number> {
-    if ((change.change as Blob).size) {
-      return (change.change as Blob).size;
-    }
-
-    if (typeof change.change === 'string') {
-      return change.change.length;
-    }
-
-    if (typeof change.change === 'object') {
-      return JSON.stringify(change.change).length;
-    }
-
-    throw new Error(`Unknown type for getStorageRequiredForValue: ${typeof change.change}`);
+    return this.getStorageRequiredForValue(change.change);
   }
 
   public static getDataTypePrefix(): string {

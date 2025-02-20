@@ -6,79 +6,13 @@ import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query'
 import Fact from '../../facts/server';
 import SQL from '../../facts/server/authorization_sql_builder';
 import PgPoolWithLog from '../../../lib/pg-log';
-import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
-import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
-import getRemainingStorageSize from '../../../lib/quota';
-import IsLogger from '../../../lib/is_logger';
+import Quota from '../../../lib/quota';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
   LongTextAttribute: 'l',
   BlobAttribute: 'bl',
 };
-
-async function ensureStorageSpaceToSave<T>(
-  actorId: string,
-  attributeStorage: IsAttributeStorage,
-  factsToSave: Fact[],
-  attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
-  logger: IsLogger,
-) {
-  const accountableMap: Record<string, string> = factsToSave.reduce((acc, fact) => {
-    if (fact.predicate === '$isAccountableFor') {
-      // attribute = accountee
-      acc[fact.object] = fact.subject;
-    }
-
-    return acc;
-  }, {});
-
-  // we have to trace this back to the node which actually has a storage quota assigned to it
-  await Promise.all(Object.entries(accountableMap).map(async ([attributeId, accounteeId]) => {
-    let nodeWithQuotaAssignment = actorId;
-
-    try {
-      nodeWithQuotaAssignment = await Fact.getAccounteeIdForNode(accounteeId, logger);
-    } catch (error) {
-      logger.info(`Error getting accountee id for node ${accounteeId}, defaulting to actorId ${actorId}`);
-    }
-
-    accountableMap[attributeId] = nodeWithQuotaAssignment;
-  }));
-
-  const accounteeIds = Array.from(new Set([
-    actorId,
-    ...Object.values(accountableMap),
-  ]));
-
-  const availableSpace: Record<string, number> = {};
-  const storageRequired: Record<string, number> = {};
-
-  const prom1 = Promise.all(accounteeIds.map(async (accounteeId) => {
-    availableSpace[accounteeId] = await getRemainingStorageSize(accounteeId, attributeStorage);
-  }));
-
-  const prom2 = Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
-    const bytesRequired = await AbstractAttributeServer.getStorageRequiredForValue(value);
-    storageRequired[attribute.id] = bytesRequired;
-  }));
-
-  await Promise.all([prom1, prom2]);
-
-  Object.entries(storageRequired).forEach(([attributeId, bytesRequired]) => {
-    const accounteeId = accountableMap[attributeId] || actorId;
-
-    if (!availableSpace[accounteeId]) {
-      throw new Error(`Unknown Error determining available storage space for ${accounteeId}`);
-    }
-
-    availableSpace[accounteeId] -= bytesRequired as number;
-  });
-
-  if (!Object.values(availableSpace).find((available: number) => available > 0)) {
-    throw new Error('Not enough storage space available');
-  }
-}
 
 export default {
   async index(req, res) {
@@ -265,12 +199,11 @@ export default {
 
     const attributesToSaveEntries = attributesByAttributeClass.entries();
 
-    await ensureStorageSpaceToSave(
+    await Quota.ensureStorageSpaceToSave(
       req.actorId,
-      req.attributeStorage,
-      resolvedFacts,
       Array.from(attributesByAttributeClass.values()).flat(),
       req.log,
+      resolvedFacts,
     );
 
     // eslint-disable-next-line no-restricted-syntax
@@ -353,12 +286,11 @@ export default {
       return;
     }
 
-    await ensureStorageSpaceToSave(
+    await Quota.ensureStorageSpaceToSave(
       req.actorId,
-      req.attributeStorage,
-      facts,
       [[req.attribute, req.body.value]],
       req.log,
+      facts,
     );
 
     await req.attribute.create(req.body.value);

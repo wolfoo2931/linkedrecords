@@ -29,7 +29,7 @@ export default async function clientServerBus(
   httpServer: https.Server,
   app: any,
   accessControl: AccessControl,
-  onMessage: (channel: string, message: any, request: http.IncomingMessage) => void,
+  onMessage: (channel: string, message: any, request: http.IncomingMessage, userId: string) => void,
 ) {
   const wsOptions: any = {
     path: '/ws',
@@ -95,7 +95,7 @@ export default async function clientServerBus(
         } else if (!message) {
           callback({ status: 'invalid message' });
         } else if (await accessControl.verifyAuthorizedSend(userId, channel, request)) {
-          onMessage(channel, message, request);
+          onMessage(channel, message, request, userId);
           callback({ status: 'delivered' });
         } else {
           callback({ status: 'unauthorized' });

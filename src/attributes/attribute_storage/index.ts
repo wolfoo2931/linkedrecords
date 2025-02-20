@@ -109,14 +109,14 @@ export default class AttributeStorage implements IsAttributeStorage {
       .insertAttributeChange(attributeId, actorId, change);
   }
 
-  async getSizeInBytesForAllAccountableAttributes(accounteeId: string): Promise<number> {
+  async getSizeInBytesForAllAccountableAttributes(nodes: string[]): Promise<number> {
     const storageDrivers = [
       this.pgStorageWithHistory,
       this.pgStorage,
     ];
 
     const sizes = await Promise.all(storageDrivers.map(
-      (s) => s.getSizeInBytesForAllAccountableAttributes(accounteeId),
+      (s) => s.getSizeInBytesForAllAccountableAttributes(nodes),
     ));
 
     return sizes.reduce((acc, curr) => acc + curr, 0);

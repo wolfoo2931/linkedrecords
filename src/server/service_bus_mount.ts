@@ -7,9 +7,7 @@ import SerializedChangeWithMetadata from '../attributes/abstract/serialized_chan
 import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
-import AbstractAttributeServer from '../attributes/abstract/abstract_attribute_server';
-import getRemainingStorageSize from '../../lib/quota';
-import AttributeStorage from '../attributes/attribute_storage';
+import Quota from '../../lib/quota';
 
 class WSAccessControl {
   app: any;
@@ -62,43 +60,24 @@ class WSAccessControl {
 }
 
 export default async function mountServiceBus(httpServer, app) {
-  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request) => {
-    const attribute = getAttributeByMessage(attributeId, change, request.log as unknown as IsLogger);
+  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
+    const logger = request.log as unknown as IsLogger;
+    const attribute = getAttributeByMessage(attributeId, change, logger);
 
-    const customRequest = request as any;
-    const mb = 1024 * 1024;
+    try {
+      await Quota.ensureStorageSpaceToSave(
+        userId,
+        [[attribute, change]],
+        logger,
+      );
 
-    const storageRequired = await AbstractAttributeServer.getStorageRequiredForChange(change);
+      const committedChange: SerializedChangeWithMetadata<any> = await attribute.change(
+        change,
+      );
 
-    customRequest.lastStorageCheck = (customRequest.lastStorageCheck || 1) + 1;
-
-    let blockedByQuotaCheck = false;
-
-    if (storageRequired >= 1 * mb || customRequest.lastStorageCheck >= 100) {
-      customRequest.lastStorageCheck = 1;
-
-      if (!customRequest.log) {
-        throw new Error('logger not available in request');
-      }
-
-      const attributeStorage = new AttributeStorage(customRequest.log);
-      const accounteeId = await Fact.getAccounteeIdForNode(attribute.id, customRequest.log);
-      const storageAvailable = await getRemainingStorageSize(accounteeId, attributeStorage);
-
-      if (storageAvailable < storageRequired) {
-        blockedByQuotaCheck = true;
-      }
-    }
-
-    if (blockedByQuotaCheck) {
+      sendMessage(attributeId, committedChange);
+    } catch {
       sendMessage(attributeId, { error: 'quota_violation' });
-      return;
     }
-
-    const committedChange: SerializedChangeWithMetadata<any> = await attribute.change(
-      change,
-    );
-
-    sendMessage(attributeId, committedChange);
   });
 }
