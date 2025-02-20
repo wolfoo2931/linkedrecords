@@ -55,15 +55,8 @@ export default class Quota {
   public static async getAccountableNodes(
     accounteeId: string,
     logger: IsLogger,
-    objectPrefix?: string,
   ): Promise<string[]> {
     const pool = new PgPoolWithLog(logger);
-
-    if (![undefined, 'bl', 'kv', 'l'].includes(objectPrefix)) {
-      throw new Error(`Invalid object prefix: ${objectPrefix}`);
-    }
-
-    const prefixFilter = objectPrefix ? `AND rfacts.object LIKE '${objectPrefix}%'` : '';
 
     const res = await pool.query(`WITH RECURSIVE rfacts AS (
       SELECT facts.subject, facts.predicate, facts.object FROM facts
@@ -79,8 +72,7 @@ export default class Quota {
       USING path_array
       SELECT rfacts.object
         FROM rfacts
-        WHERE cycl = 'N'
-        ${prefixFilter}`, [accounteeId]);
+        WHERE cycl = 'N'`, [accounteeId]);
 
     return res.rows.map((r) => r.object.trim());
   }
