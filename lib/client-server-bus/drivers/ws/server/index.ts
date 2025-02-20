@@ -4,8 +4,17 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-streams-adapter';
+import SerializedChangeWithMetadata from '../../../../../src/attributes/abstract/serialized_change_with_metadata';
+import IsSerializable from '../../../../../src/attributes/abstract/is_serializable';
 
 const connections = {};
+
+type MessageHandler<ChangeType extends IsSerializable> = (
+  channel: string,
+  message: SerializedChangeWithMetadata<ChangeType>,
+  request: http.IncomingMessage,
+  userId: string
+) => void;
 
 export interface AccessControl {
   verifyAuthenticated(
@@ -29,7 +38,7 @@ export default async function clientServerBus(
   httpServer: https.Server,
   app: any,
   accessControl: AccessControl,
-  onMessage: (channel: string, message: any, request: http.IncomingMessage, userId: string) => void,
+  onMessage: MessageHandler<any>,
 ) {
   const wsOptions: any = {
     path: '/ws',

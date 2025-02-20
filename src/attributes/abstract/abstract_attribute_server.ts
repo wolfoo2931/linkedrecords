@@ -33,7 +33,6 @@ export default abstract class AbstractAttributeServer <
     this.logger = logger;
   }
 
-  // eslint-disable-next-line class-methods-use-this
   public static async getStorageRequiredForValue(value): Promise<number> {
     if ((value as Blob).size) {
       return (value as Blob).size;
