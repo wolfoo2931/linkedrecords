@@ -76,8 +76,12 @@ export default async function mountServiceBus(httpServer, app) {
       );
 
       sendMessage(attributeId, committedChange);
-    } catch {
-      sendMessage(attributeId, { error: 'quota_violation' });
+    } catch (ex: any) {
+      if (ex.message === 'Not enough storage space available') {
+        sendMessage(attributeId, { error: 'quota_violation' });
+      } else {
+        throw ex;
+      }
     }
   });
 }

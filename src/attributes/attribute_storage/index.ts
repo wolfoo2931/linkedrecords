@@ -16,7 +16,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgStorage = new PsqlStorage(logger);
   }
 
-  private getStorage(attributeId): IsAttributeStorage {
+  getStorage(attributeId): IsAttributeStorage {
     const [type] = attributeId.split('-');
 
     if (type === 'kv' || type === 'bl') {

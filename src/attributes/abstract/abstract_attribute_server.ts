@@ -9,15 +9,15 @@ export default abstract class AbstractAttributeServer <
   TypedChange extends IsSerializable,
   IsAttributeStorage extends StorageDriverInterface,
 > {
-  id: string;
+  readonly storage: IsAttributeStorage;
 
-  actorId: string;
+  readonly id: string;
 
-  clientId: string;
+  readonly actorId: string;
 
-  storage: IsAttributeStorage;
+  readonly clientId: string;
 
-  logger: IsLogger;
+  readonly logger: IsLogger;
 
   constructor(
     id: string,
@@ -33,27 +33,22 @@ export default abstract class AbstractAttributeServer <
     this.logger = logger;
   }
 
-  public static async getStorageRequiredForValue(value): Promise<number> {
-    if ((value as Blob).size) {
-      return (value as Blob).size;
+  public static getChangeIfItMatchesSchema(
+    value: any,
+  ): SerializedChangeWithMetadata<any> | false {
+    if (value
+      && value.attributeId
+      && value.change
+      && value.actorId
+      && value.clientId) {
+      return value;
     }
 
-    if (typeof value === 'string') {
-      return value.length;
-    }
-
-    if (typeof value === 'object') {
-      return JSON.stringify(value).length;
-    }
-
-    throw new Error(`Unknown type to calculate storage requirements: ${typeof value}`);
+    return false;
   }
 
-  public static async getStorageRequiredForChange(
-    change: SerializedChangeWithMetadata<any>,
-  ): Promise<number> {
-    return this.getStorageRequiredForValue(change.change);
-  }
+  abstract getStorageRequiredForValue(value): Promise<number>;
+  abstract getStorageRequiredForChange(change: SerializedChangeWithMetadata<any>): Promise<number>;
 
   public static getDataTypePrefix(): string {
     throw new Error('getDataTypePrefix needs to be implemented in child class');

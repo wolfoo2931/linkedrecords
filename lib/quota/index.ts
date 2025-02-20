@@ -131,7 +131,12 @@ export default class Quota {
     }));
 
     const prom2 = Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
-      const bytesRequired = await AbstractAttributeServer.getStorageRequiredForValue(value);
+      const change = AbstractAttributeServer.getChangeIfItMatchesSchema(value);
+
+      const bytesRequired = change
+        ? await attribute.getStorageRequiredForChange(change)
+        : await attribute.getStorageRequiredForValue(value);
+
       storageRequired[attribute.id] = bytesRequired;
     }));
 
@@ -146,8 +151,6 @@ export default class Quota {
 
       availableSpace[accounteeId] -= bytesRequired as number;
     });
-
-    console.log('availableSpace', availableSpace);
 
     if (!Object.values(availableSpace).find((available: number) => available > 0)) {
       throw new Error('Not enough storage space available');
@@ -167,6 +170,7 @@ export default class Quota {
     if (accountableNodes.length > 5000) {
       logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
+
     const used = await storage.getSizeInBytesForAllAccountableAttributes(accountableNodes);
 
     return Quota.getDefaultStorageSizeQuota() - used;
