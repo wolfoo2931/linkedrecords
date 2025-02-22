@@ -247,6 +247,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     if (!this.attrSubscription) {
       const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
       this.attrSubscription = await this.clientServerBus.subscribe(url, this.id, (parsedData) => {
+        if (parsedData.error === 'quota_violation') {
+          this.linkedRecords.handleQuotaViolationError(parsedData);
+          return;
+        }
+
         if (parsedData.attributeId !== this.id) {
           return;
         }

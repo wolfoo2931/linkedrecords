@@ -28,6 +28,44 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgPool = new PgPoolWithLog(this.logger);
   }
 
+  async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
+    const attrTables = ['bl_attributes', 'kv_attributes'];
+
+    const sizes = await Promise.all(attrTables.map(async (tableName) => {
+      const [prefix] = tableName.split('_');
+      const filteredNodes = nodes.filter((n) => n.startsWith(`${prefix}-`));
+
+      if (!filteredNodes.length) {
+        return 0;
+      }
+
+      const result = await this.pgPool.query(`SELECT SUM(LENGTH(value))
+        FROM ${tableName}
+        WHERE ('${prefix}' || '-' || id)
+        IN (${filteredNodes.filter((n) => n.startsWith(`${prefix}-`)).map((n) => `'${n}'`).join(',')});`);
+
+      if (!result?.rows[0]) {
+        throw new Error('There was a problem getting the size of all accountable attributes');
+      }
+
+      let size: number;
+
+      try {
+        if (result.rows[0].sum === null) {
+          size = 0;
+        } else {
+          size = parseInt(result.rows[0].sum, 10);
+        }
+      } catch (e) {
+        throw new Error('There was a problem getting the size of all accountable attributes');
+      }
+
+      return size;
+    }));
+
+    return sizes.reduce((acc, curr) => acc + curr, 0);
+  }
+
   async getAttributeTableName(attributeId: string) {
     const [prefix] = attributeId.split('-');
 

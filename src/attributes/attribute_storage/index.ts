@@ -16,7 +16,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgStorage = new PsqlStorage(logger);
   }
 
-  private getStorage(attributeId): IsAttributeStorage {
+  getStorage(attributeId): IsAttributeStorage {
     const [type] = attributeId.split('-');
 
     if (type === 'kv' || type === 'bl') {
@@ -107,5 +107,18 @@ export default class AttributeStorage implements IsAttributeStorage {
     return this
       .getStorage(attributeId)
       .insertAttributeChange(attributeId, actorId, change);
+  }
+
+  async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
+    const storageDrivers = [
+      this.pgStorageWithHistory,
+      this.pgStorage,
+    ];
+
+    const sizes = await Promise.all(storageDrivers.map(
+      (s) => s.getSizeInBytesForAllAttributes(nodes),
+    ));
+
+    return sizes.reduce((acc, curr) => acc + curr, 0);
   }
 }

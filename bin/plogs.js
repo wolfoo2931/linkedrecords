@@ -51,7 +51,7 @@ function logAggregate(agg) {
 
 function processJSONLog(json) {
   if(json?.req?.id && !json?.req?.url?.startsWith('/ws/')) {
-    req[json?.req?.id] =  req[json?.req?.id] || { logs: [] };
+    req[json?.req?.id] = req[json?.req?.id] || { logs: [] };
     req[json?.req?.id].logs.push(json);
 
     if(json.msg === 'request completed' || json.msg === 'request errored') {
@@ -71,7 +71,7 @@ function processJSONLog(json) {
 }
 
 function processTextLog(text) {
-  console.log('text', text);
+  console.log('text', text.substring(0, 200));
 }
 
 function processLog(log) {
