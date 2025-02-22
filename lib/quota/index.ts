@@ -4,6 +4,7 @@ import AttributeStorage from '../../src/attributes/attribute_storage';
 import Fact from '../../src/facts/server';
 import IsLogger from '../is_logger';
 import PgPoolWithLog from '../pg-log';
+import EnsureIsValid from '../utils/sql_values';
 
 export default class Quota {
   static getDefaultStorageSizeQuota(): number {
@@ -13,19 +14,21 @@ export default class Quota {
       : 500 * mb;
   }
 
+  public static async isNodeWithQuotaAssignment(nodeId: string): Promise<boolean> {
+    return nodeId.startsWith('us-');
+  }
+
   public static async getAccounteeIdForNode(
     nodeId: string,
     logger: IsLogger,
   ): Promise<string> {
     const pool = new PgPoolWithLog(logger);
 
-    // TODO: check if the passed nodeId itself is a node with a quota assigned to it
-
-    if (nodeId.startsWith('us-')) {
+    if (await Quota.isNodeWithQuotaAssignment(nodeId)) {
       return nodeId;
     }
 
-    // const accountableFact = await pool.query(`SELECT * FROM `);
+    // TODO: find out the fact box and limit the query to the fact box
 
     const res = await pool.query(`WITH RECURSIVE rfacts AS (
       SELECT facts.subject, facts.predicate, facts.object FROM facts
@@ -57,15 +60,21 @@ export default class Quota {
     logger: IsLogger,
   ): Promise<string[]> {
     const pool = new PgPoolWithLog(logger);
+    let factScopeFilter = '';
+
+    if (accounteeId.startsWith('us-')) {
+      const factScope = await Fact.getFactScopeByUser(accounteeId, logger);
+      factScopeFilter = `AND facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})`;
+    }
 
     const res = await pool.query(`WITH RECURSIVE rfacts AS (
       SELECT facts.subject, facts.predicate, facts.object FROM facts
                       WHERE subject = $1
-                      AND predicate = '$isAccountableFor'
+                      AND predicate = '$isAccountableFor' ${factScopeFilter}
       UNION ALL
         SELECT facts.subject, facts.predicate, facts.object FROM facts, rfacts
                         WHERE facts.subject = rfacts.object
-                        AND facts.predicate = '$isAccountableFor'
+                        AND facts.predicate = '$isAccountableFor' ${factScopeFilter}
       )
       CYCLE object
         SET cycl TO 'Y' DEFAULT 'N'
@@ -82,7 +91,7 @@ export default class Quota {
     attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
     logger: IsLogger,
     factsToSave: Fact[] = [],
-  ) {
+  ): Promise<void> {
     const attributeStorage = new AttributeStorage(logger);
     const accountableMap: Record<string, string> = factsToSave.reduce((acc, fact) => {
       if (fact.predicate === '$isAccountableFor') {
@@ -160,7 +169,7 @@ export default class Quota {
     // We can not combine it in one query because we want to be able to store the facts and
     // the attributes in different databases
     if (accountableNodes.length > 5000) {
-      logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
+      logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
     const used = await storage.getSizeInBytesForAllAttributes(accountableNodes);
