@@ -92,7 +92,58 @@ export default class Quota {
     logger: IsLogger,
     factsToSave: Fact[] = [],
   ): Promise<void> {
+    const storageViolations: string[] = [];
     const attributeStorage = new AttributeStorage(logger);
+    const accountableMap = await Quota.getAccountableMap(logger, actorId, factsToSave);
+    const storageRequiredByAccountee = await Quota.getStorageRequiredByAccountee(
+      actorId,
+      attributesAndValuesToSave,
+      accountableMap,
+    );
+
+    await Promise.all(
+      Object.entries(storageRequiredByAccountee).map(async ([accounteeId, storageRequired]) => {
+        const available = await Quota.getRemainingStorageSize(
+          accounteeId,
+          attributeStorage,
+          logger,
+        );
+
+        if (available < storageRequired) {
+          storageViolations.push(accounteeId);
+        }
+      }),
+    );
+
+    if (storageViolations.length) {
+      throw new Error('Not enough storage space available');
+    }
+  }
+
+  static async getRemainingStorageSize(
+    accounteeId: string,
+    storage: IsAttributeStorage,
+    logger: IsLogger,
+  ): Promise<number> {
+    const accountableNodes = await Quota.getAccountableNodes(accounteeId, logger);
+
+    // FIXME: we need a pagination / map reduce approach here
+    // We can not combine it in one query because we want to be able to store the facts and
+    // the attributes in different databases
+    if (accountableNodes.length > 5000) {
+      logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
+    }
+
+    const used = await storage.getSizeInBytesForAllAttributes(accountableNodes);
+
+    return Quota.getDefaultStorageSizeQuota() - used;
+  }
+
+  private static async getAccountableMap(
+    logger: IsLogger,
+    actorId: string,
+    factsToSave: Fact[] = [],
+  ): Promise<Record<string, string>> {
     const accountableMap: Record<string, string> = factsToSave.reduce((acc, fact) => {
       if (fact.predicate === '$isAccountableFor') {
         // attribute = accountee
@@ -115,65 +166,28 @@ export default class Quota {
       accountableMap[attributeId] = nodeWithQuotaAssignment;
     }));
 
-    const accounteeIds = Array.from(new Set([
-      actorId,
-      ...Object.values(accountableMap),
-    ]));
+    return accountableMap;
+  }
 
-    const availableSpace: Record<string, number> = {};
-    const storageRequired: Record<string, number> = {};
+  private static async getStorageRequiredByAccountee<T>(
+    actorId: string,
+    attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
+    accountableMap: Record<string, string>,
+  ) {
+    const storageRequiredByAccountee: Record<string, number> = {};
 
-    const prom1 = Promise.all(accounteeIds.map(async (accounteeId) => {
-      availableSpace[accounteeId] = await Quota.getRemainingStorageSize(
-        accounteeId,
-        attributeStorage,
-        logger,
-      );
-    }));
-
-    const prom2 = Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
+    await Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
       const change = AbstractAttributeServer.getChangeIfItMatchesSchema(value);
 
       const bytesRequired = change
         ? await attribute.getStorageRequiredForChange(change)
         : await attribute.getStorageRequiredForValue(value);
 
-      storageRequired[attribute.id] = bytesRequired;
+      const accountee = accountableMap[attribute.id] || actorId;
+      const currently = storageRequiredByAccountee[accountee] || 0;
+      storageRequiredByAccountee[accountee] = currently + bytesRequired;
     }));
 
-    await Promise.all([prom1, prom2]);
-
-    Object.entries(storageRequired).forEach(([attributeId, bytesRequired]) => {
-      const accounteeId = accountableMap[attributeId] || actorId;
-
-      if (!availableSpace[accounteeId]) {
-        throw new Error(`Unknown Error determining available storage space for ${accounteeId}`);
-      }
-
-      availableSpace[accounteeId] -= bytesRequired as number;
-    });
-
-    if (!Object.values(availableSpace).find((available: number) => available > 0)) {
-      throw new Error('Not enough storage space available');
-    }
-  }
-
-  static async getRemainingStorageSize(
-    accounteeId: string,
-    storage: IsAttributeStorage,
-    logger: IsLogger,
-  ): Promise<number> {
-    const accountableNodes = await Quota.getAccountableNodes(accounteeId, logger);
-
-    // FIXME: we need a pagination / map reduce approach here
-    // We can not combine it in one query because we want to be able to store the facts and
-    // the attributes in different databases
-    if (accountableNodes.length > 5000) {
-      logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
-    }
-
-    const used = await storage.getSizeInBytesForAllAttributes(accountableNodes);
-
-    return Quota.getDefaultStorageSizeQuota() - used;
+    return storageRequiredByAccountee;
   }
 }
