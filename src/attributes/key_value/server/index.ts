@@ -45,7 +45,7 @@ IsAttributeStorage
   }
 
   async getStorageRequiredForValue(value: object): Promise<number> {
-    return JSON.stringify(value).length;
+    return Buffer.byteLength(JSON.stringify(value), 'utf8');
   }
 
   async getStorageRequiredForChange(

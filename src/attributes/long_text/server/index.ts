@@ -19,7 +19,7 @@ IsAttributeStorage
 
   // eslint-disable-next-line class-methods-use-this
   async getStorageRequiredForValue(value: string): Promise<number> {
-    return value.length;
+    return Buffer.byteLength(value, 'utf8');
   }
 
   async getStorageRequiredForChange(
