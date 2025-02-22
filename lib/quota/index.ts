@@ -6,6 +6,9 @@ import IsLogger from '../is_logger';
 import PgPoolWithLog from '../pg-log';
 import EnsureIsValid from '../utils/sql_values';
 
+const uncheckedStorageConsumption: Record<string, number> = {};
+const lastKnownStorageAvailable: Record<string, number> = {};
+
 export default class Quota {
   static getDefaultStorageSizeQuota(): number {
     const mb = 1048576;
@@ -103,8 +106,9 @@ export default class Quota {
 
     await Promise.all(
       Object.entries(storageRequiredByAccountee).map(async ([accounteeId, storageRequired]) => {
-        const available = await Quota.getRemainingStorageSize(
+        const available = await Quota.estimateRemainingStorageSize(
           accounteeId,
+          storageRequired,
           attributeStorage,
           logger,
         );
@@ -118,6 +122,32 @@ export default class Quota {
     if (storageViolations.length) {
       throw new Error('Not enough storage space available');
     }
+  }
+
+  static async estimateRemainingStorageSize(
+    accounteeId: string,
+    requiredStorage: number,
+    storage: IsAttributeStorage,
+    logger: IsLogger,
+  ): Promise<number> {
+    const mb = 1048576;
+    const uncheckedConsumption = uncheckedStorageConsumption[accounteeId] || 0;
+
+    if (uncheckedConsumption > (1 * mb)
+      || !lastKnownStorageAvailable[accounteeId]
+      || ((lastKnownStorageAvailable[accounteeId] || 0) <= 0) // wired TypeScript error
+    ) {
+      uncheckedStorageConsumption[accounteeId] = 0;
+      lastKnownStorageAvailable[accounteeId] = await Quota.getRemainingStorageSize(
+        accounteeId,
+        storage,
+        logger,
+      );
+    } else {
+      uncheckedStorageConsumption[accounteeId] = uncheckedConsumption + requiredStorage;
+    }
+
+    return lastKnownStorageAvailable[accounteeId] || 0;
   }
 
   static async getRemainingStorageSize(
