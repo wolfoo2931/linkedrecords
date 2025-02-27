@@ -88,7 +88,7 @@ async function createApp(httpServer: https.Server) {
 
   app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
   app.get('/quota/:nodeId', errorHandler((req, res) => withAuth(req, res, quotaController.get)));
-  app.get('/attributes', errorHandler((req, res) => attributesController.index(req, res)));
+  app.get('/attributes', errorHandler((req, res) => withAuth(req, res, attributesController.index)));
   app.post('/attributes', errorHandler((req, res) => withAuth(req, res, attributesController.create)));
   app.post('/attribute-compositions', errorHandler((req, res) => withAuth(req, res, attributesController.createComposition)));
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get)));
