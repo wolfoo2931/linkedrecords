@@ -145,6 +145,8 @@ export default class Fact {
 
       ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_unique;
       ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (hashed_email);
+
+      CREATE TABLE IF NOT EXISTS quota_events (id SERIAL, node_id CHAR(40), total_storage_available int, created_at timestamp DEFAULT NOW(), payment_provider CHAR(40), payment_provider_payload TEXT);
     `);
   }
 

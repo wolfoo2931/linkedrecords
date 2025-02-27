@@ -7,7 +7,7 @@ import SerializedChangeWithMetadata from '../attributes/abstract/serialized_chan
 import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
-import Quota from '../../lib/quota';
+import Quota from '../quota';
 
 class WSAccessControl {
   app: any;

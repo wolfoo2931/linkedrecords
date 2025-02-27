@@ -31,6 +31,8 @@ export default class Session {
 
   getMembersOf?: (nodeId: string) => Promise<{ id: string, username: string }[]>;
 
+  getQuota?: () => Promise<any>;
+
   static async getSession(
     name: string,
     browser: WebdriverIO.MultiRemoteBrowser,
@@ -192,6 +194,11 @@ export default class Session {
       (n) => (window as any).lr.getMembersOf(n),
       [nodeId],
     );
+
+    this.getQuota = () => remote.execute(
+      () => (window as any).lr.getQuota(),
+      [],
+    );
   }
 
   async getActorId() {
@@ -222,11 +229,14 @@ export class InitializedSession extends Session {
 
   getMembersOf: (nodeId: string) => Promise<{ id: string, username: string }[]>;
 
-  constructor(browser, attr, fact, getUserIdByEmail, getMembersOf, email) {
+  getQuota: () => Promise<any>;
+
+  constructor(browser, attr, fact, getUserIdByEmail, getMembersOf, getQuota, email) {
     super(browser, email);
     this.Attribute = attr;
     this.Fact = fact;
     this.getUserIdByEmail = getUserIdByEmail;
     this.getMembersOf = getMembersOf;
+    this.getQuota = getQuota;
   }
 }

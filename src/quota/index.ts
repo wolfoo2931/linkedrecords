@@ -1,24 +1,34 @@
-import AbstractAttributeServer from '../../src/attributes/abstract/abstract_attribute_server';
-import IsAttributeStorage from '../../src/attributes/abstract/is_attribute_storage';
-import AttributeStorage from '../../src/attributes/attribute_storage';
-import Fact from '../../src/facts/server';
-import IsLogger from '../is_logger';
-import PgPoolWithLog from '../pg-log';
-import EnsureIsValid from '../utils/sql_values';
+import AbstractAttributeServer from '../attributes/abstract/abstract_attribute_server';
+import IsAttributeStorage from '../attributes/abstract/is_attribute_storage';
+import AttributeStorage from '../attributes/attribute_storage';
+import Fact from '../facts/server';
+import IsLogger from '../../lib/is_logger';
+import PgPoolWithLog from '../../lib/pg-log';
+import EnsureIsValid from '../../lib/utils/sql_values';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
 
+type QuotaAsJSON = {
+  nodeId: string,
+  totalStorageAvailable: number,
+  remainingStorageAvailable: number,
+};
+
 export default class Quota {
+  readonly nodeId: string;
+
+  logger: IsLogger;
+
+  attributeStorage: AttributeStorage;
+
+  pool: PgPoolWithLog;
+
   static getDefaultStorageSizeQuota(): number {
     const mb = 1048576;
     return process.env['DEFAULT_STORAGE_SIZE_QUOTA']
       ? parseInt(process.env['DEFAULT_STORAGE_SIZE_QUOTA'], 10) * mb
       : 500 * mb;
-  }
-
-  public static async isNodeWithQuotaAssignment(nodeId: string): Promise<boolean> {
-    return nodeId.startsWith('us-');
   }
 
   public static async getAccounteeIdForNode(
@@ -58,7 +68,42 @@ export default class Quota {
     return res.rows[res.rows.length - 1].subject;
   }
 
-  public static async getAccountableNodes(
+  constructor(nodeId: string, logger: IsLogger) {
+    this.attributeStorage = new AttributeStorage(logger);
+    this.pool = new PgPoolWithLog(logger);
+    this.nodeId = nodeId;
+    this.logger = logger;
+  }
+
+  public async toJSON(): Promise<QuotaAsJSON> {
+    const remainingStorageAvailable = await Quota.getRemainingStorageSize(
+      this.nodeId,
+      this.attributeStorage,
+      this.logger,
+    );
+
+    return {
+      nodeId: this.nodeId,
+      totalStorageAvailable: await this.getTotalStorageAvailable(),
+      remainingStorageAvailable,
+    };
+  }
+
+  public async getTotalStorageAvailable(): Promise<number> {
+    const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [this.nodeId]);
+
+    if (data.rows.length) {
+      return data.rows[0].total_storage_available;
+    }
+
+    return Quota.getDefaultStorageSizeQuota();
+  }
+
+  private static async isNodeWithQuotaAssignment(nodeId: string): Promise<boolean> {
+    return nodeId.startsWith('us-');
+  }
+
+  private static async getAccountableNodes(
     accounteeId: string,
     logger: IsLogger,
   ): Promise<string[]> {
@@ -124,7 +169,7 @@ export default class Quota {
     }
   }
 
-  static async estimateRemainingStorageSize(
+  private static async estimateRemainingStorageSize(
     accounteeId: string,
     requiredStorage: number,
     storage: IsAttributeStorage,
@@ -150,7 +195,7 @@ export default class Quota {
     return lastKnownStorageAvailable[accounteeId] || 0;
   }
 
-  static async getRemainingStorageSize(
+  private static async getRemainingStorageSize(
     accounteeId: string,
     storage: IsAttributeStorage,
     logger: IsLogger,
