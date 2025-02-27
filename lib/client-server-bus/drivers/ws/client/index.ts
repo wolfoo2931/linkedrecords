@@ -105,9 +105,30 @@ export default class ClientServerBus {
       });
 
       socket.on('disconnect', (reason) => {
+        const willTryToReconnectReasons = ['ping timeout', 'transport close', 'transport error'];
+
+        if (willTryToReconnectReasons.includes(reason)) {
+          console.log('Connection disconnected. Socket.io will try to reconnect...');
+          return;
+        }
+
         this.connectionInterruptedSubscribers.forEach((sub) => {
           console.log(`Websocket connection closed because: ${reason}`);
           sub(new Error(`Websocket connection closed because: ${reason}`));
+        });
+      });
+
+      socket.io.on('reconnect_error', (error) => {
+        this.connectionInterruptedSubscribers.forEach((sub) => {
+          console.log(`Websocket reconnect error: ${error}`);
+          sub(new Error(`Websocket reconnect error: ${error}`));
+        });
+      });
+
+      socket.io.on('reconnect_failed', () => {
+        this.connectionInterruptedSubscribers.forEach((sub) => {
+          console.log('Websocket reconnect failed!');
+          sub(new Error('Websocket reconnect failed!'));
         });
       });
 
