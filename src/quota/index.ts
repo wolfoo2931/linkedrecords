@@ -103,19 +103,15 @@ export default class Quota {
     return nodeId.startsWith('us-');
   }
 
-  private static async getAccountableNodes(
-    accounteeId: string,
-    logger: IsLogger,
-  ): Promise<string[]> {
-    const pool = new PgPoolWithLog(logger);
+  private async getAccountableNodes(): Promise<string[]> {
     let factScopeFilter = '';
 
-    if (accounteeId.startsWith('us-')) {
-      const factScope = await Fact.getFactScopeByUser(accounteeId, logger);
+    if (this.nodeId.startsWith('us-')) {
+      const factScope = await Fact.getFactScopeByUser(this.nodeId, this.logger);
       factScopeFilter = `AND facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})`;
     }
 
-    const res = await pool.query(`WITH RECURSIVE rfacts AS (
+    const res = await this.pool.query(`WITH RECURSIVE rfacts AS (
       SELECT facts.subject, facts.predicate, facts.object FROM facts
                       WHERE subject = $1
                       AND predicate = '$isAccountableFor' ${factScopeFilter}
@@ -129,7 +125,7 @@ export default class Quota {
       USING path_array
       SELECT rfacts.object
         FROM rfacts
-        WHERE cycl = 'N'`, [accounteeId]);
+        WHERE cycl = 'N'`, [this.nodeId]);
 
     return res.rows.map((r) => r.object.trim());
   }
@@ -176,20 +172,18 @@ export default class Quota {
     logger: IsLogger,
   ): Promise<number> {
     const mb = 1048576;
-    const uncheckedConsumption = uncheckedStorageConsumption[accounteeId] || 0;
+    const uncheckedConsumption = (uncheckedStorageConsumption[accounteeId] || 0) + requiredStorage;
+    const lastKnownStorageAvailableForAccountee = lastKnownStorageAvailable[accounteeId] || 0;
 
-    if (uncheckedConsumption > (1 * mb)
-      || !lastKnownStorageAvailable[accounteeId]
-      || ((lastKnownStorageAvailable[accounteeId] || 0) <= 0) // wired TypeScript error
-    ) {
+    uncheckedStorageConsumption[accounteeId] = uncheckedConsumption;
+
+    if (uncheckedConsumption > (0.05 * mb) || lastKnownStorageAvailableForAccountee <= 0) {
       uncheckedStorageConsumption[accounteeId] = 0;
       lastKnownStorageAvailable[accounteeId] = await Quota.getRemainingStorageSize(
         accounteeId,
         storage,
         logger,
       );
-    } else {
-      uncheckedStorageConsumption[accounteeId] = uncheckedConsumption + requiredStorage;
     }
 
     return lastKnownStorageAvailable[accounteeId] || 0;
@@ -200,7 +194,9 @@ export default class Quota {
     storage: IsAttributeStorage,
     logger: IsLogger,
   ): Promise<number> {
-    const accountableNodes = await Quota.getAccountableNodes(accounteeId, logger);
+    const quota = new Quota(accounteeId, logger);
+    const totalStoragePromise = quota.getTotalStorageAvailable();
+    const accountableNodes = await quota.getAccountableNodes();
 
     // FIXME: we need a pagination / map reduce approach here
     // We can not combine it in one query because we want to be able to store the facts and
@@ -211,7 +207,7 @@ export default class Quota {
 
     const used = await storage.getSizeInBytesForAllAttributes(accountableNodes);
 
-    return Quota.getDefaultStorageSizeQuota() - used;
+    return (await totalStoragePromise) - used;
   }
 
   private static async getAccountableMap(
