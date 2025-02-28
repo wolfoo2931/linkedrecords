@@ -32,7 +32,7 @@ describe('quota', () => {
     expect(quota.remainingStorageAvailable).to.be.at.most(quota.totalStorageAvailable);
   });
 
-  it('will block creation/update of attributes when no storage left', async () => {
+  it('will block creation of attributes when no storage left', async () => {
     const client = await Session.getOneSession();
     await client.Fact.createAll([
       ['Thing', '$isATermFor', 'something'],
@@ -59,6 +59,38 @@ describe('quota', () => {
     });
 
     expect(things).to.be.an('array').with.lengthOf(1);
+
+    expect(beforeQuotaViolation.remainingStorageAvailable)
+      .to.be.eq(afterQuotaViolation.remainingStorageAvailable);
+  });
+
+  it('will block change of attributes when no storage left', async () => {
+    const client = await Session.getOneSession();
+    await setQuota(await client.getActorId(), Math.ceil(0.1 * mb));
+
+    const attribute = await client.Attribute.createKeyValue({ x: 'x'.repeat(90 * 1024) }, []);
+
+    await attribute.patch({ y: 'y' });
+
+    await browser.pause(500);
+
+    let readFromDb = await client.Attribute.find(attribute.id!);
+    let value = await readFromDb?.getValue();
+
+    expect(Object.keys(value)).to.be.an('array').of.length(2);
+
+    const beforeQuotaViolation = await client.getQuota();
+
+    await attribute.patch({ z: 'z'.repeat(90 * 1024) });
+
+    await browser.pause(500);
+
+    const afterQuotaViolation = await client.getQuota();
+
+    readFromDb = await client.Attribute.find(attribute.id!);
+    value = await readFromDb?.getValue();
+
+    expect(Object.keys(value)).to.be.an('array').of.length(2);
 
     expect(beforeQuotaViolation.remainingStorageAvailable)
       .to.be.eq(afterQuotaViolation.remainingStorageAvailable);
