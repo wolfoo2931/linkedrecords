@@ -5,6 +5,7 @@ import Fact from '../facts/server';
 import IsLogger from '../../lib/is_logger';
 import PgPoolWithLog from '../../lib/pg-log';
 import EnsureIsValid from '../../lib/utils/sql_values';
+import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
@@ -264,10 +265,12 @@ export default class Quota {
     const storageRequiredByAccountee: Record<string, number> = {};
 
     await Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
-      const change = AbstractAttributeServer.getChangeIfItMatchesSchema(value);
+      const change = AbstractAttributeServer.isValidChange(value) ? value : false;
 
       const bytesRequired = change
-        ? await attribute.getStorageRequiredForChange(change)
+        ? await attribute.getStorageRequiredForChange(
+          change as unknown as SerializedChangeWithMetadata<any>,
+        )
         : await attribute.getStorageRequiredForValue(value);
 
       const accountee = accountableMap[attribute.id] || actorId;

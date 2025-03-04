@@ -33,21 +33,17 @@ export default abstract class AbstractAttributeServer <
     this.logger = logger;
   }
 
-  public static getChangeIfItMatchesSchema(
+  public static isValidChange(
     value: any,
-  ): SerializedChangeWithMetadata<any> | false {
-    if (value
+  ): boolean {
+    return value
       && value.attributeId
       && value.change
       && value.actorId
-      && value.clientId) {
-      return value;
-    }
-
-    return false;
+      && value.clientId;
   }
 
-  abstract getStorageRequiredForValue(value): Promise<number>;
+  abstract getStorageRequiredForValue(value: Type): Promise<number>;
   abstract getStorageRequiredForChange(change: SerializedChangeWithMetadata<any>): Promise<number>;
 
   public static getDataTypePrefix(): string {
