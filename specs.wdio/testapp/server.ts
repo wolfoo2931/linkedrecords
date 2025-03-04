@@ -15,6 +15,7 @@ http.createServer(async (req, res) => {
       await pgPool.query('TRUNCATE facts;');
       await pgPool.query('TRUNCATE users;');
       await pgPool.query('TRUNCATE users_fact_boxes;');
+      await pgPool.query('TRUNCATE quota_events;');
       console.log('TRUNCATE facts done');
     }
   }

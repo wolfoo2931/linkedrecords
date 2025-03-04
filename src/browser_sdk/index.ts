@@ -119,8 +119,8 @@ export default class LinkedRecords {
     return data;
   }
 
-  public async getQuota() {
-    const response = await this.fetch(`/quota/${this.actorId}`);
+  public async getQuota(nodeId?: string) {
+    const response = await this.fetch(`/quota/${nodeId || this.actorId}`);
 
     return response.json();
   }

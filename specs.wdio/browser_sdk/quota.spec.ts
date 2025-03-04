@@ -32,6 +32,56 @@ describe('quota', () => {
     expect(quota.remainingStorageAvailable).to.be.at.most(quota.totalStorageAvailable);
   });
 
+  it('is possible to assign a quota to a non user node', async () => {
+    const client = await Session.getOneSession();
+    await client.Fact.createAll([
+      ['Thing', '$isATermFor', 'something'],
+    ]);
+
+    const org = await client.Attribute.createKeyValue({ x: 'x'.repeat(90 * 1024) });
+    let quota = await client.getQuota(org.id);
+
+    expect(quota.totalStorageAvailable).to.eql(0);
+    expect(quota.remainingStorageAvailable).to.eql(0);
+
+    await setQuota(org.id, 1 * mb);
+
+    quota = await client.getQuota(org.id);
+
+    expect(quota.totalStorageAvailable).to.eql(1 * mb);
+    expect(quota.remainingStorageAvailable).to.eql(1 * mb);
+
+    await client.Attribute.createKeyValue({ x: 'x'.repeat(90 * 1024) }, [
+      [org.id!, '$isAccountableFor', '$it'],
+      ['isA', 'Thing'],
+    ]);
+
+    quota = await client.getQuota(org.id);
+
+    expect(quota.totalStorageAvailable).to.eql(1 * mb);
+    expect(quota.remainingStorageAvailable).to.be.at.most(quota.totalStorageAvailable - 1);
+
+    const smallerQuota = Math.ceil(0.05 * mb);
+    await setQuota(org.id, smallerQuota);
+
+    quota = await client.getQuota(org.id);
+    expect(quota.totalStorageAvailable).to.eql(smallerQuota);
+
+    // We should not be able anymore to create any more data
+    await client.Attribute.createKeyValue({ y: 'y'.repeat(90 * 1024) }, [
+      [org.id!, '$isAccountableFor', '$it'],
+      ['isA', 'Thing'],
+    ]);
+
+    const { things } = await client.Attribute.findAll({
+      things: [
+        ['$it', 'isA', 'Thing'],
+      ],
+    });
+
+    expect(things).to.be.an('array').with.lengthOf(1);
+  });
+
   it('will block creation of attributes when no storage left', async () => {
     const client = await Session.getOneSession();
     await client.Fact.createAll([
@@ -95,15 +145,4 @@ describe('quota', () => {
     expect(beforeQuotaViolation.remainingStorageAvailable)
       .to.be.eq(afterQuotaViolation.remainingStorageAvailable);
   });
-
-  // it.only('will ... when there is no quota assigned to the nodeId', async () => {
-  //   const client = await Session.getOneSession();
-  //   const attribute = await client.Attribute.create('keyValue', { });
-
-  //   console.log(attribute.id);
-  // });
-
-  // it('is possible to update the quota via admin API', () => {
-
-  // });
 });

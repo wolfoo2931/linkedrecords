@@ -37,7 +37,7 @@ export default class Quota {
   ): Promise<string> {
     const pool = new PgPoolWithLog(logger);
 
-    if (await Quota.isNodeWithQuotaAssignment(nodeId)) {
+    if (await Quota.isNodeWithQuotaAssignment(nodeId, logger)) {
       return nodeId;
     }
 
@@ -96,11 +96,26 @@ export default class Quota {
       return data.rows[0].total_storage_available;
     }
 
-    return Quota.getDefaultStorageSizeQuota();
+    if (this.nodeId.startsWith('us-')) {
+      return Quota.getDefaultStorageSizeQuota();
+    }
+
+    return 0;
   }
 
-  private static async isNodeWithQuotaAssignment(nodeId: string): Promise<boolean> {
-    return nodeId.startsWith('us-');
+  private static async isNodeWithQuotaAssignment(
+    nodeId: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const pool = new PgPoolWithLog(logger);
+
+    if (nodeId.startsWith('us-')) {
+      return true;
+    }
+
+    const data = await pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [nodeId]);
+
+    return data.rows.length === 1;
   }
 
   private async getAccountableNodes(): Promise<string[]> {
@@ -139,6 +154,7 @@ export default class Quota {
     const storageViolations: string[] = [];
     const attributeStorage = new AttributeStorage(logger);
     const accountableMap = await Quota.getAccountableMap(logger, actorId, factsToSave);
+
     const storageRequiredByAccountee = await Quota.getStorageRequiredByAccountee(
       actorId,
       attributesAndValuesToSave,
@@ -234,7 +250,7 @@ export default class Quota {
         logger.info(`Error getting accountee id for node ${accounteeId}, defaulting to actorId ${actorId}`);
       }
 
-      accountableMap[attributeId] = nodeWithQuotaAssignment;
+      accountableMap[attributeId] = nodeWithQuotaAssignment.trim();
     }));
 
     return accountableMap;
