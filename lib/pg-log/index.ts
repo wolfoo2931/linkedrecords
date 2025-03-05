@@ -9,8 +9,6 @@ const pool = new Pool({
 export default class PgPoolWithLog {
   logger?: IsLogger;
 
-  pool: Pool;
-
   constructor(logger: IsLogger) {
     this.logger = logger;
   }

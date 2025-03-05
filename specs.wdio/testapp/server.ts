@@ -13,7 +13,9 @@ http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
       await pgPool.query('TRUNCATE facts;');
+      await pgPool.query('TRUNCATE users;');
       await pgPool.query('TRUNCATE users_fact_boxes;');
+      await pgPool.query('TRUNCATE quota_events;');
       console.log('TRUNCATE facts done');
     }
   }

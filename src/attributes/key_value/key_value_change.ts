@@ -3,7 +3,7 @@ import unset from '../../../lib/utils/unset';
 
 export type AtomicChange = {
   key: string,
-  value: object | string | boolean | null,
+  value: object | string | boolean | number | null,
 };
 
 export default class KeyValueChange {

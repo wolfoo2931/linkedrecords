@@ -18,6 +18,38 @@ export default class AttributeStorage implements IsAttributeStorage {
     this.pgPool = new PgPoolWithLog(this.logger);
   }
 
+  async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
+    const filteredNodes = nodes.filter((n) => n.startsWith('-'));
+
+    if (!filteredNodes.length) {
+      return 0;
+    }
+
+    const createQuery = `SELECT SUM(pg_total_relation_size(quote_ident(table_name)))
+      FROM information_schema.tables
+      WHERE replace(replace(table_name, '_', '-'), 'var-', '') IN (${filteredNodes.map((n) => `'${n}'`).join(',')});`;
+
+    const result = await this.pgPool.query(createQuery);
+
+    if (!result?.rows[0]) {
+      throw new Error('There was a problem getting the size of all accountable attributes');
+    }
+
+    let size: number;
+
+    try {
+      if (result.rows[0].sum === null) {
+        size = 0;
+      } else {
+        size = parseInt(result.rows[0].sum, 10);
+      }
+    } catch (e) {
+      throw new Error('There was a problem getting the size of all accountable attributes');
+    }
+
+    return size;
+  }
+
   async createAllAttributes(
     attr: { attributeId: string, actorId: string, value: string }[],
   ) : Promise<{ id: string }[]> {

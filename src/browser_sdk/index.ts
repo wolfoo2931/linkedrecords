@@ -41,6 +41,8 @@ export default class LinkedRecords {
 
   unknownServerErrorHandler?: (response) => void;
 
+  quotaViolationErrorHandler?: (response) => void;
+
   attributeClientIdSuffix: number = 0;
 
   clientId: string;
@@ -117,6 +119,12 @@ export default class LinkedRecords {
     return data;
   }
 
+  public async getQuota(nodeId?: string) {
+    const response = await this.fetch(`/quota/${nodeId || this.actorId}`);
+
+    return response.json();
+  }
+
   public async fetch(url: string, fetchOpt?: FetchOptions) {
     const {
       headers = undefined,
@@ -160,6 +168,11 @@ export default class LinkedRecords {
         this.handleExpiredLoginSession();
       }
 
+      return false;
+    }
+
+    if (response.status === 403) {
+      this.handleQuotaViolationError(response);
       return false;
     }
 
@@ -214,6 +227,18 @@ export default class LinkedRecords {
       this.unknownServerErrorHandler(response);
     } else {
       console.log('UnknownServerError', response);
+    }
+  }
+
+  public setQuotaViolationErrorHandler(handler: (response) => void) {
+    this.quotaViolationErrorHandler = handler;
+  }
+
+  public handleQuotaViolationError(response) {
+    if (this.quotaViolationErrorHandler) {
+      this.quotaViolationErrorHandler(response);
+    } else {
+      this.handleUnknownServerError(response);
     }
   }
 

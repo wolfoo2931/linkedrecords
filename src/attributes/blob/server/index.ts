@@ -23,6 +23,16 @@ IsAttributeStorage
     return this.storage.createAttribute(this.id, this.actorId, content);
   }
 
+  async getStorageRequiredForValue(value: Blob): Promise<number> {
+    return value.size;
+  }
+
+  async getStorageRequiredForChange(
+    change: SerializedChangeWithMetadata<BlobChange>,
+  ): Promise<number> {
+    return this.getStorageRequiredForValue(change.change.value);
+  }
+
   async get() : Promise<{
     value: Blob,
     changeId: string,

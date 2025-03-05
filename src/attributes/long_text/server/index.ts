@@ -17,6 +17,17 @@ IsAttributeStorage
     return 'l';
   }
 
+  // eslint-disable-next-line class-methods-use-this
+  async getStorageRequiredForValue(value: string): Promise<number> {
+    return Buffer.byteLength(value, 'utf8');
+  }
+
+  async getStorageRequiredForChange(
+    change: SerializedChangeWithMetadata<LongTextChange>,
+  ): Promise<number> {
+    return this.getStorageRequiredForValue(change.change.changeset);
+  }
+
   async create(value: string) : Promise<{ id: string }> {
     await this.createAccountableFact();
 

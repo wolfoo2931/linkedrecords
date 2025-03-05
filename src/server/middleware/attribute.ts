@@ -1,5 +1,6 @@
 import md5 from 'md5';
 import { uuidv7 as uuid } from 'uuidv7';
+import * as he from 'he';
 import QueryExecutor from '../../attributes/attribute_query';
 import AttributeStorage from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
@@ -32,7 +33,7 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
   const id = getAttributeIdByRequest(req);
 
   if (!AttributeClass) {
-    throw new Error(`Server is unknown of Attribute Type Prefix for id ${id}`);
+    throw new Error(`Server is not aware of Attribute Type Prefix for id ${id}`);
   }
 
   if (!req.actorId || req.actorId === 'undefined') {
@@ -46,11 +47,15 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
   return new AttributeClass(id, req.clientId, req.actorId, req.attributeStorage);
 }
 
-export function getAttributeByMessage(attributeId, message, logger: IsLogger) {
+export function getAttributeByMessage(
+  attributeId,
+  message,
+  logger: IsLogger,
+): AbstractAttributeServer<any, any, any> {
   const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
 
   if (!AttributeClass) {
-    throw new Error(`Server is unknown of Attribute Type Prefix for id ${attributeId}`);
+    throw new Error(`Server is not aware of Attribute Type Prefix for id ${attributeId}`);
   }
 
   if (!message.actorId || message.actorId === 'undefined') {
@@ -81,13 +86,23 @@ export default function attributeMiddleware() {
     if (!req.actorId || !req.actorId.trim()) {
       res.sendStatus(401);
     } else {
-      req.actorId = `us-${md5(req.actorId)}`;
-      if (id) {
-        req.attributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
-        req.attribute = getAttributeByParams(req, req.attributeClass);
-      }
+      try {
+        req.actorId = `us-${md5(req.actorId)}`;
 
-      next();
+        if (id) {
+          req.attributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
+          req.attribute = getAttributeByParams(req, req.attributeClass);
+        }
+
+        next();
+      } catch (ex: any) {
+        if (ex?.message?.startsWith('Server is not aware of Attribute Type Prefix for id')) {
+          res.status(404).send(he.encode(ex.message));
+        } else {
+          req.log.error(ex);
+          res.sendStatus(500);
+        }
+      }
     }
   };
 }

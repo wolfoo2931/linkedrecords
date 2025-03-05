@@ -47,6 +47,12 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     return JSON.parse(JSON.stringify(this.value));
   }
 
+  public async patch(changes: Record<string, object | string | number | boolean | null >) {
+    return this.change(new KeyValueChange(
+      Object.entries(changes).map(([key, value]) => ({ key, value })),
+    ));
+  }
+
   protected async rawSet(newValue: object) {
     let changes: AtomicChange[] = [];
     const flatOldValue = flatten(this.value) as object;

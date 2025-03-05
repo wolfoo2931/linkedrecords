@@ -6,6 +6,7 @@ import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query'
 import Fact from '../../facts/server';
 import SQL from '../../facts/server/authorization_sql_builder';
 import PgPoolWithLog from '../../../lib/pg-log';
+import Quota from '../../quota';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -198,6 +199,13 @@ export default {
 
     const attributesToSaveEntries = attributesByAttributeClass.entries();
 
+    await Quota.ensureStorageSpaceToSave(
+      req.actorId,
+      Array.from(attributesByAttributeClass.values()).flat(),
+      req.log,
+      resolvedFacts,
+    );
+
     // eslint-disable-next-line no-restricted-syntax
     for (const [AC, attributesAndValues] of attributesToSaveEntries) {
       attributeSavePromises.push(AC.createAll(attributesAndValues, req.attributeStorage));
@@ -277,6 +285,13 @@ export default {
       res.send({ unauthorizedFacts });
       return;
     }
+
+    await Quota.ensureStorageSpaceToSave(
+      req.actorId,
+      [[req.attribute, req.body.value]],
+      req.log,
+      facts,
+    );
 
     await req.attribute.create(req.body.value);
     const result = {

@@ -31,6 +31,8 @@ export default class Session {
 
   getMembersOf?: (nodeId: string) => Promise<{ id: string, username: string }[]>;
 
+  getQuota?: (nodeId?: string) => Promise<any>;
+
   static async getSession(
     name: string,
     browser: WebdriverIO.MultiRemoteBrowser,
@@ -141,6 +143,7 @@ export default class Session {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
       await pgPool.query('TRUNCATE facts;');
       await pgPool.query('TRUNCATE users_fact_boxes;');
+      await pgPool.query('TRUNCATE quota_events;');
     }
   }
 
@@ -185,12 +188,17 @@ export default class Session {
 
     this.getUserIdByEmail = (email: string) => remote.execute(
       (m) => (window as any).lr.getUserIdByEmail(m),
-      [email],
+      email,
     );
 
     this.getMembersOf = (nodeId: string) => remote.execute(
       (n) => (window as any).lr.getMembersOf(n),
-      [nodeId],
+      nodeId,
+    );
+
+    this.getQuota = (nodeId?: string) => remote.execute(
+      (x) => (window as any).lr.getQuota(x),
+      nodeId,
     );
   }
 
@@ -222,11 +230,14 @@ export class InitializedSession extends Session {
 
   getMembersOf: (nodeId: string) => Promise<{ id: string, username: string }[]>;
 
-  constructor(browser, attr, fact, getUserIdByEmail, getMembersOf, email) {
+  getQuota: (nodeId?: string) => Promise<any>;
+
+  constructor(browser, attr, fact, getUserIdByEmail, getMembersOf, getQuota, email) {
     super(browser, email);
     this.Attribute = attr;
     this.Fact = fact;
     this.getUserIdByEmail = getUserIdByEmail;
     this.getMembersOf = getMembersOf;
+    this.getQuota = getQuota;
   }
 }

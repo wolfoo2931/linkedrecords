@@ -7,16 +7,17 @@ import StorageDriverInterface from './is_attribute_storage';
 export default abstract class AbstractAttributeServer <
   Type,
   TypedChange extends IsSerializable,
-  IsAttributeStorage> {
-  id: string;
+  IsAttributeStorage extends StorageDriverInterface,
+> {
+  readonly storage: IsAttributeStorage;
 
-  actorId: string;
+  readonly id: string;
 
-  clientId: string;
+  readonly actorId: string;
 
-  storage: IsAttributeStorage;
+  readonly clientId: string;
 
-  logger: IsLogger;
+  readonly logger: IsLogger;
 
   constructor(
     id: string,
@@ -31,6 +32,19 @@ export default abstract class AbstractAttributeServer <
     this.storage = storage;
     this.logger = logger;
   }
+
+  public static isValidChange(
+    value: any,
+  ): boolean {
+    return value
+      && value.attributeId
+      && value.change
+      && value.actorId
+      && value.clientId;
+  }
+
+  abstract getStorageRequiredForValue(value: Type): Promise<number>;
+  abstract getStorageRequiredForChange(change: SerializedChangeWithMetadata<any>): Promise<number>;
 
   public static getDataTypePrefix(): string {
     throw new Error('getDataTypePrefix needs to be implemented in child class');

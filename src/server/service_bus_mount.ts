@@ -7,6 +7,7 @@ import SerializedChangeWithMetadata from '../attributes/abstract/serialized_chan
 import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
+import Quota from '../quota';
 
 class WSAccessControl {
   app: any;
@@ -59,13 +60,28 @@ class WSAccessControl {
 }
 
 export default async function mountServiceBus(httpServer, app) {
-  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request) => {
-    const attribute = getAttributeByMessage(attributeId, change, request.log as unknown as IsLogger);
+  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
+    const logger = request.log as unknown as IsLogger;
+    const attribute = getAttributeByMessage(attributeId, change, logger);
 
-    const committedChange: SerializedChangeWithMetadata<any> = await attribute.change(
-      change,
-    );
+    try {
+      await Quota.ensureStorageSpaceToSave(
+        userId,
+        [[attribute, change]],
+        logger,
+      );
 
-    sendMessage(attributeId, committedChange);
+      const committedChange: SerializedChangeWithMetadata<any> = await attribute.change(
+        change,
+      );
+
+      sendMessage(attributeId, committedChange);
+    } catch (ex: any) {
+      if (ex.message === 'Not enough storage space available') {
+        sendMessage(attributeId, { error: 'quota_violation' });
+      } else {
+        throw ex;
+      }
+    }
   });
 }

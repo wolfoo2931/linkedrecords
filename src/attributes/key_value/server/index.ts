@@ -44,6 +44,16 @@ IsAttributeStorage
     return result.map((r) => r.id);
   }
 
+  async getStorageRequiredForValue(value: object): Promise<number> {
+    return Buffer.byteLength(JSON.stringify(value), 'utf8');
+  }
+
+  async getStorageRequiredForChange(
+    change: SerializedChangeWithMetadata<KeyValueChange>,
+  ): Promise<number> {
+    return this.getStorageRequiredForValue(change.change);
+  }
+
   async create(value: object) : Promise<{ id: string }> {
     await this.createAccountableFact();
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));

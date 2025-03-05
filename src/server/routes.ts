@@ -14,6 +14,7 @@ import errorHandler from './middleware/error_handler';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
+import quotaController from './controllers/quota_controller';
 import userinfoController from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
 import mountServiceBus from './service_bus_mount';
@@ -54,9 +55,11 @@ async function withAuth(req, res, controllerAction) {
   await req.whenAuthenticated(async () => {
     try {
       await uploadWrappedControllerAction(req, res);
-    } catch (ex) {
+    } catch (ex: any) {
       if (ex instanceof AuthorizationError) {
         res.sendStatus(401);
+      } else if (ex?.message?.startsWith('Not enough storage space available')) {
+        res.status(403).send('Not enough storage space available');
       } else { // TODO: this should be moved into the error handler
         req.log.error(ex);
         res.sendStatus(500);
@@ -84,6 +87,7 @@ async function createApp(httpServer: https.Server) {
   app.use('/', factMiddleware());
 
   app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
+  app.get('/quota/:nodeId', errorHandler((req, res) => withAuth(req, res, quotaController.get)));
   app.get('/attributes', errorHandler((req, res) => withAuth(req, res, attributesController.index)));
   app.post('/attributes', errorHandler((req, res) => withAuth(req, res, attributesController.create)));
   app.post('/attribute-compositions', errorHandler((req, res) => withAuth(req, res, attributesController.createComposition)));
