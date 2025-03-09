@@ -44,7 +44,7 @@ exports.config = {
         {
           mount: '/',
           middleware: (req, res, next) => {
-            if (req.url.startsWith('/login') || req.url.startsWith('/callback')) {
+            if (req.url.startsWith('/logout') || req.url.startsWith('/login') || req.url.startsWith('/callback')) {
               proxy.web(req, res, { target: 'http://localhost:3000' });
             } else {
               next();

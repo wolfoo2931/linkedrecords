@@ -27,4 +27,5 @@ LinkedRecords is configured via environment variables. See table below.
 | AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
 | AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
 | AUTH_CLIENT_SECRET |  | The client secret. Can be obtained from the identity provider. |
+| AUTH_IDP_LOGOUT | true | When set to true the user session will be destroyed in the application AND the within the identity provider. |
 | DEFAULT_STORAGE_SIZE_QUOTA | 50 | The default storage size quota in MB. |
