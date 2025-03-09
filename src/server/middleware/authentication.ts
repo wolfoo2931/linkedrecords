@@ -112,6 +112,15 @@ export default function authentication() {
             signed: true,
             httpOnly: false,
           });
+
+          if (req?.oidc?.user?.picture) {
+            res.cookie('userPicture', req?.oidc?.user?.picture, {
+              ...cookieSettings,
+              secure: true,
+              signed: true,
+              httpOnly: false,
+            });
+          }
         }
 
         req.hashedUserID = uid(req);
@@ -147,7 +156,7 @@ export default function authentication() {
       authorizationParams: {
         // We need offline_access because we do XHR call in the background
         // which can not be redirected for refreshing the token.
-        scope: 'openid email offline_access',
+        scope: 'openid email offline_access profile',
         response_type: 'code',
       },
       session: {
