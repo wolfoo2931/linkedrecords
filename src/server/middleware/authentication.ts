@@ -113,13 +113,18 @@ export default function authentication() {
             httpOnly: false,
           });
 
-          if (req?.oidc?.user?.picture) {
-            res.cookie('userPicture', req?.oidc?.user?.picture, {
-              ...cookieSettings,
-              secure: true,
-              signed: true,
-              httpOnly: false,
-            });
+          try {
+            const pictureUrl = new URL(req.oidc.user.picture);
+            if (['http:', 'https:'].includes(pictureUrl.protocol)) {
+              res.cookie('userPicture', req?.oidc?.user?.picture, {
+                ...cookieSettings,
+                secure: true,
+                signed: true,
+                httpOnly: false,
+              });
+            }
+          } catch (error) {
+            req.log?.warn('Invalid user picture URL received from identity provider');
           }
         }
 
