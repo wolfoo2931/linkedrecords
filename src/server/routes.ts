@@ -68,8 +68,12 @@ async function withAuth(req, res, controllerAction) {
   });
 }
 
-function getCorsOriginConfig() {
+function getCorsOriginConfig(): string | string[] {
   if (!process.env['CORS_ORIGIN']) {
+    if (!process.env['FRONTEND_BASE_URL']) {
+      throw new Error('You nee to set the FRONTEND_BASE_URL configuration as environment variable.');
+    }
+
     return process.env['FRONTEND_BASE_URL'];
   }
 
