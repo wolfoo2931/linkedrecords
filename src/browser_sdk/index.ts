@@ -53,11 +53,11 @@ export default class LinkedRecords {
 
   Fact: FactsRepository;
 
-  static readUserIdFromCookies() {
+  static readUserIdFromCookies(): string {
     const cookieValue = Cookies.get('userId');
 
     if (!cookieValue) {
-      return undefined;
+      throw new Error('userId was not find in the cookie storage, reload page and try again.');
     }
 
     const withoutSignature = cookieValue.slice(0, cookieValue.lastIndexOf('.'));
