@@ -31,6 +31,7 @@ export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]
   await changeUserContext('testuser-1-id');
   await client.ensureUserIdIsKnown();
   clients.push(client);
+  await new Promise((r) => { setTimeout(r, 100); });
   return [client, client.getClientServerBus()];
 }
 

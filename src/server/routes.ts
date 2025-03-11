@@ -68,6 +68,30 @@ async function withAuth(req, res, controllerAction) {
   });
 }
 
+function getCorsOriginConfig(): string | string[] {
+  if (!process.env['CORS_ORIGIN']) {
+    if (!process.env['FRONTEND_BASE_URL']) {
+      throw new Error('You nee to set the FRONTEND_BASE_URL configuration as environment variable.');
+    }
+
+    return process.env['FRONTEND_BASE_URL'];
+  }
+
+  let parsed = process.env['CORS_ORIGIN'];
+
+  try {
+    parsed = JSON.parse(parsed);
+  } catch (ex) {
+    // It just URL string, not parsable
+  }
+
+  if (typeof parsed === 'string' || Array.isArray(parsed)) {
+    return parsed;
+  }
+
+  throw new Error(`Invalid value (${process.env['CORS_ORIGIN']}) for CORS_ORIGIN, needs to be string or JSON array. `);
+}
+
 async function createApp(httpServer: https.Server) {
   if (!process.env['FRONTEND_BASE_URL']) {
     throw new Error('You nee to set the FRONTEND_BASE_URL configuration as environment variable.');
@@ -80,7 +104,7 @@ async function createApp(httpServer: https.Server) {
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use(express.json());
-  app.use(cors({ origin: process.env['FRONTEND_BASE_URL'], credentials: true, maxAge: 86400 }));
+  app.use(cors({ origin: getCorsOriginConfig(), credentials: true, maxAge: 86400 }));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/attribute-compositions', attributeMiddleware());

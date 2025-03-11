@@ -14,6 +14,7 @@ type QuotaAsJSON = {
   nodeId: string,
   totalStorageAvailable: number,
   remainingStorageAvailable: number,
+  usedStorage: number,
 };
 
 export default class Quota {
@@ -77,16 +78,16 @@ export default class Quota {
   }
 
   public async toJSON(): Promise<QuotaAsJSON> {
-    const remainingStorageAvailable = await Quota.getRemainingStorageSize(
-      this.nodeId,
-      this.attributeStorage,
-      this.logger,
-    );
+    const [totalStorageAvailable, usedStorage] = await Promise.all([
+      this.getTotalStorageAvailable(),
+      this.getUsedStorageSize(),
+    ]);
 
     return {
       nodeId: this.nodeId,
-      totalStorageAvailable: await this.getTotalStorageAvailable(),
-      remainingStorageAvailable,
+      totalStorageAvailable,
+      usedStorage,
+      remainingStorageAvailable: totalStorageAvailable - usedStorage,
     };
   }
 
@@ -213,18 +214,22 @@ export default class Quota {
   ): Promise<number> {
     const quota = new Quota(accounteeId, logger);
     const totalStoragePromise = quota.getTotalStorageAvailable();
-    const accountableNodes = await quota.getAccountableNodes();
+    const usedStoragePromise = quota.getUsedStorageSize();
+
+    return (await totalStoragePromise) - (await usedStoragePromise);
+  }
+
+  private async getUsedStorageSize(): Promise<number> {
+    const accountableNodes = await this.getAccountableNodes();
 
     // FIXME: we need a pagination / map reduce approach here
     // We can not combine it in one query because we want to be able to store the facts and
     // the attributes in different databases
     if (accountableNodes.length > 5000) {
-      logger.warn(`accountable nodes for accounteeId ${accounteeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
+      this.logger.warn(`accountable nodes for accounteeId ${this.nodeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
-    const used = await storage.getSizeInBytesForAllAttributes(accountableNodes);
-
-    return (await totalStoragePromise) - used;
+    return this.attributeStorage.getSizeInBytesForAllAttributes(accountableNodes);
   }
 
   private static async getAccountableMap(

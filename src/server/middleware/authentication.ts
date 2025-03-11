@@ -112,6 +112,20 @@ export default function authentication() {
             signed: true,
             httpOnly: false,
           });
+
+          try {
+            const pictureUrl = new URL(req.oidc.user.picture);
+            if (['http:', 'https:'].includes(pictureUrl.protocol)) {
+              res.cookie('userPicture', req?.oidc?.user?.picture, {
+                ...cookieSettings,
+                secure: true,
+                signed: true,
+                httpOnly: false,
+              });
+            }
+          } catch (error) {
+            req.log?.warn('Invalid user picture URL received from identity provider');
+          }
         }
 
         req.hashedUserID = uid(req);
@@ -127,6 +141,7 @@ export default function authentication() {
       clientSecret: process.env['AUTH_CLIENT_SECRET'],
       errorOnRequiredAuth: true,
       enableTelemetry: false,
+      idpLogout: process.env['AUTH_IDP_LOGOUT'] === 'true',
       afterCallback: (_, __, session: any) => {
         const { email, email_verified, sub } = decodeJwt(session.id_token);
 
@@ -147,8 +162,9 @@ export default function authentication() {
       authorizationParams: {
         // We need offline_access because we do XHR call in the background
         // which can not be redirected for refreshing the token.
-        scope: 'openid email offline_access',
+        scope: 'openid email offline_access profile',
         response_type: 'code',
+        prompt: req.query.prompt,
       },
       session: {
         cookie: cookieSettings,
