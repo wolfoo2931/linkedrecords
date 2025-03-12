@@ -145,6 +145,10 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
 
+    if (!this.actorId) {
+      throw new Error('actorId is unknown, can not transmit change!');
+    }
+
     this.changeInTransmissionSendAt = new Date();
     this.changeInTransmission = new SerializedChangeWithMetadata<LongTextChange>(
       this.id,

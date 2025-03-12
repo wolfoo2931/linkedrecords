@@ -47,17 +47,17 @@ export default class LinkedRecords {
 
   clientId: string;
 
-  actorId: string;
+  actorId: string | undefined;
 
   Attribute: AttributesRepository;
 
   Fact: FactsRepository;
 
-  static readUserIdFromCookies(): string {
+  static readUserIdFromCookies(): string | undefined {
     const cookieValue = Cookies.get('userId');
 
     if (!cookieValue) {
-      throw new Error('userId was not find in the cookie storage, reload page and try again.');
+      return undefined;
     }
 
     const withoutSignature = cookieValue.slice(0, cookieValue.lastIndexOf('.'));

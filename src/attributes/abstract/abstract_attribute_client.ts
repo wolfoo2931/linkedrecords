@@ -13,7 +13,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   id?: string;
 
-  actorId: string;
+  actorId: string | undefined;
 
   clientId: string;
 
@@ -150,6 +150,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     if (!isOk) {
       return undefined;
+    }
+
+    if (!this.actorId) {
+      throw new Error('actorId is unknown, can not get attribute value!');
     }
 
     return {
