@@ -13,7 +13,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   id?: string;
 
-  actorId: string;
+  actorId: string | undefined;
 
   clientId: string;
 
@@ -137,6 +137,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     value: Type,
     facts: [ string?, string?, string? ][] = [],
   ): string | FormData {
+    if (!this.actorId) {
+      throw new Error('actorId is unknown, can not create blob payload!');
+    }
+
     return JSON.stringify({
       clientId: this.clientId,
       actorId: this.actorId,
@@ -150,6 +154,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     if (!isOk) {
       return undefined;
+    }
+
+    if (!this.actorId) {
+      throw new Error('actorId is unknown, can not get attribute value!');
     }
 
     return {

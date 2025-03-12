@@ -31,6 +31,10 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
   }
 
   protected getCreatePayload(value: Blob) {
+    if (!this.actorId) {
+      throw new Error('actorId is unknown, can not create blob payload!');
+    }
+
     const formData = new FormData();
     formData.append('change', value, 'blob');
     formData.append('actorId', this.actorId);
@@ -58,6 +62,10 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
   protected async transmitChange(value: Blob): Promise<boolean> {
     if (!this.id) {
       throw new Error('change can not be transmitted because attribute does not has an id');
+    }
+
+    if (!this.actorId) {
+      throw new Error('actorId is unknown, can not transmit change!');
     }
 
     const formData = new FormData();

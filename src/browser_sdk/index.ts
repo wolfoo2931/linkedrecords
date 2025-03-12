@@ -47,13 +47,13 @@ export default class LinkedRecords {
 
   clientId: string;
 
-  actorId: string;
+  actorId: string | undefined;
 
   Attribute: AttributesRepository;
 
   Fact: FactsRepository;
 
-  static readUserIdFromCookies() {
+  static readUserIdFromCookies(): string | undefined {
     const cookieValue = Cookies.get('userId');
 
     if (!cookieValue) {
