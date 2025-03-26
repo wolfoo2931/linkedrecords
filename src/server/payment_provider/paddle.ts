@@ -26,6 +26,16 @@ export default class PaddlePaymentProvider {
     this.secretKey = process.env['PADDLE_NOTIFICATION_SECRET'];
   }
 
+  getSignature(payload: string, timestamp?: string): string {
+    const ts = timestamp || Math.round((Date.now() / 1000));
+    const toBeHashed = `${ts}:${payload}`;
+
+    const hmac = crypto.createHmac('sha256', this.secretKey);
+    hmac.update(toBeHashed);
+    const hash = hmac.digest('hex');
+    return `ts=${ts};h1=${hash}`;
+  }
+
   async handlePaddleEvent(req, res) {
     const payload: any = await this.getPaddlePayload(req, res);
 
@@ -62,7 +72,6 @@ export default class PaddlePaymentProvider {
 
     const rawRequestBody = await readBody(req);
     const rawTs = signature.split(';')[0];
-    const rawSig = signature.split(';')[1]?.split('=')[1];
 
     if (!rawTs) {
       req.log.warn('paddle signature header does not contain timestamp');
@@ -78,13 +87,7 @@ export default class PaddlePaymentProvider {
       return undefined;
     }
 
-    const toBeHashed = `${ts}:${rawRequestBody}`;
-
-    const hmac = crypto.createHmac('sha256', this.secretKey);
-    hmac.update(toBeHashed);
-    const toBeSignature = hmac.digest('hex');
-
-    if (!safeCompare(toBeSignature, rawSig)) {
+    if (!safeCompare(this.getSignature(rawRequestBody, ts), signature)) {
       req.log.error('invalid paddle signature detected');
       res.sendStatus(422);
       return undefined;
