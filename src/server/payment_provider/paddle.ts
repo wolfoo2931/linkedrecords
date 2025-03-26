@@ -11,6 +11,10 @@ function readBody(req): Promise<string> {
   });
 }
 
+function safeCompare(str1, str2) {
+  return crypto.timingSafeEqual(new Uint8Array(Buffer.from(str1, 'utf-8')), new Uint8Array(Buffer.from(str2, 'utf-8')));
+}
+
 export default class PaddlePaymentProvider {
   secretKey: string;
 
@@ -80,7 +84,7 @@ export default class PaddlePaymentProvider {
     hmac.update(toBeHashed);
     const toBeSignature = hmac.digest('hex');
 
-    if (toBeSignature !== rawSig) {
+    if (!safeCompare(toBeSignature, rawSig)) {
       req.log.error('invalid paddle signature detected');
       res.sendStatus(422);
       return undefined;
