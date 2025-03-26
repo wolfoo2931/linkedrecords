@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import Quota, { QuotaEvent } from '../../quota';
+import Quota, { QuotaEvent } from '../quota';
 
 function readBody(req): Promise<string> {
   return new Promise((resolve, reject) => {

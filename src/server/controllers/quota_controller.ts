@@ -1,4 +1,4 @@
-import Quota from '../../quota';
+import Quota from '../quota';
 
 export default {
   async get(req, res) {

@@ -1,11 +1,11 @@
-import AbstractAttributeServer from '../attributes/abstract/abstract_attribute_server';
-import IsAttributeStorage from '../attributes/abstract/is_attribute_storage';
-import AttributeStorage from '../attributes/attribute_storage';
-import Fact from '../facts/server';
-import IsLogger from '../../lib/is_logger';
-import PgPoolWithLog from '../../lib/pg-log';
-import EnsureIsValid from '../../lib/utils/sql_values';
-import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
+import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
+import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
+import AttributeStorage from '../../attributes/attribute_storage';
+import Fact from '../../facts/server';
+import IsLogger from '../../../lib/is_logger';
+import PgPoolWithLog from '../../../lib/pg-log';
+import EnsureIsValid from '../../../lib/utils/sql_values';
+import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
