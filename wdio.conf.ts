@@ -12,6 +12,7 @@ exports.config = {
   suites: {
     // npm run wdio:fast -- --suite tinytodo
     tinytodo: ['./specs.wdio/tinytodo/**/*.spec.ts'],
+    quota_upgrade: ['./specs.wdio/quota_upgrade/**/*.spec.ts'],
     browser_sdk: ['./specs.wdio/browser_sdk/**/*.spec.ts'],
     load: ['./specs.wdio/load/**/*.spec.ts'],
   },

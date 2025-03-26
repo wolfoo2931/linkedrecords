@@ -17,6 +17,12 @@ type QuotaAsJSON = {
   usedStorage: number,
 };
 
+export type QuotaEvent = {
+  nodeId: string,
+  totalStorageAvailable: number,
+  paymentProvider: string,
+};
+
 export default class Quota {
   readonly nodeId: string;
 
@@ -75,6 +81,19 @@ export default class Quota {
     this.pool = new PgPoolWithLog(logger);
     this.nodeId = nodeId;
     this.logger = logger;
+  }
+
+  public async set(
+    totalStorageAvailable: number,
+    paymentProvider: string,
+    paymentProviderPayload: string,
+  ) {
+    await this.pool.query('INSERT INTO quota_events (node_id, total_storage_available, payment_provider, payment_provider_payload) VALUES ($1, $2, $3, $4)', [
+      this.nodeId,
+      totalStorageAvailable,
+      paymentProvider,
+      paymentProviderPayload,
+    ]);
   }
 
   public async toJSON(): Promise<QuotaAsJSON> {

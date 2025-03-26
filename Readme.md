@@ -30,3 +30,6 @@ LinkedRecords is configured via environment variables. See table below.
 | AUTH_CLIENT_SECRET |  | The client secret. Can be obtained from the identity provider. |
 | AUTH_IDP_LOGOUT | true | When set to true the user session will be destroyed in the application AND the within the identity provider. |
 | DEFAULT_STORAGE_SIZE_QUOTA | 50 | The default storage size quota in MB. |
+| PADDLE_NOTIFICATION_SECRET | xxxx | If paddle is used for upgrading quotas this needs to be the notification secret to very the signature of the webhook content. |
+
+
