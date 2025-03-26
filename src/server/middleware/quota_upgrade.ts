@@ -6,7 +6,7 @@ export default function quotaUpgrade() {
       const paddleController = new PaddlePaymentProvider();
       paddleController.handlePaddleEvent(req, res);
     } else {
-      req.sendStatus(404);
+      res.sendStatus(404);
     }
   };
 }
