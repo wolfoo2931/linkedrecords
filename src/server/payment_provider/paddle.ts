@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import Quota, { QuotaEvent } from '../quota';
-import safeCompare from '../../../lib/utils/save_compare';
+import safeCompare from '../../../lib/utils/safe_compare';
 import readBody from '../../../lib/utils/read_body';
 
 export default class PaddlePaymentProvider {
