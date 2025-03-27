@@ -19,7 +19,7 @@ type QuotaAsJSON = {
 
 export type QuotaEvent = {
   nodeId: string,
-  totalStorageAvailable: string,
+  totalStorageAvailable: number,
   paymentProvider: string,
 };
 
@@ -114,7 +114,7 @@ export default class Quota {
     const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [this.nodeId]);
 
     if (data.rows.length) {
-      return data.rows[0].total_storage_available;
+      return Number.parseInt(data.rows[0].total_storage_available, 10);
     }
 
     if (this.nodeId.startsWith('us-')) {

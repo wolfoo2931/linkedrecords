@@ -107,7 +107,7 @@ export default class PaddlePaymentProvider {
     let totalStorageAvailable;
 
     try {
-      totalStorageAvailable = BigInt(totalStorageAvailableAsString);
+      totalStorageAvailable = Number.parseInt(totalStorageAvailableAsString, 10);
     } catch (ex) {
       req.log.error('Error parsing totalStorageAvailable');
     }
@@ -120,7 +120,7 @@ export default class PaddlePaymentProvider {
 
     return {
       nodeId,
-      totalStorageAvailable: totalStorageAvailableAsString,
+      totalStorageAvailable,
       paymentProvider: 'paddle',
     };
   }
