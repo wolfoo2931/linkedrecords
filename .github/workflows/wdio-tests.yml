@@ -55,5 +55,6 @@ jobs:
           AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
           AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
+          PADDLE_NOTIFICATION_SECRET: ${{ secrets.PADDLE_NOTIFICATION_SECRET }}
         run: |
           npm run wdio:fast
