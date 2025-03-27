@@ -19,7 +19,7 @@ type QuotaAsJSON = {
 
 export type QuotaEvent = {
   nodeId: string,
-  totalStorageAvailable: number,
+  totalStorageAvailable: string,
   paymentProvider: string,
 };
 

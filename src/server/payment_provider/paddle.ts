@@ -1,19 +1,7 @@
 import crypto from 'crypto';
 import Quota, { QuotaEvent } from '../quota';
-
-function readBody(req): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = '';
-
-    req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => resolve(body));
-    req.on('error', reject);
-  });
-}
-
-function safeCompare(str1, str2) {
-  return crypto.timingSafeEqual(new Uint8Array(Buffer.from(str1, 'utf-8')), new Uint8Array(Buffer.from(str2, 'utf-8')));
-}
+import safeCompare from '../../../lib/utils/save_compare';
+import readBody from '../../../lib/utils/read_body';
 
 export default class PaddlePaymentProvider {
   secretKey: string;
@@ -116,9 +104,15 @@ export default class PaddlePaymentProvider {
       return undefined;
     }
 
-    const totalStorageAvailable = parseInt(totalStorageAvailableAsString, 10);
+    let totalStorageAvailable;
 
-    if (Number.isNaN(totalStorageAvailable)) {
+    try {
+      totalStorageAvailable = BigInt(totalStorageAvailableAsString);
+    } catch (ex) {
+      req.log.error('Error parsing totalStorageAvailable');
+    }
+
+    if (totalStorageAvailable === undefined || Number.isNaN(totalStorageAvailable)) {
       req.log.warn('Error updating quota: totalStorageAvailable is not a valid number. Check Paddle product configuration.');
       res.sendStatus(422);
       return undefined;
@@ -126,7 +120,7 @@ export default class PaddlePaymentProvider {
 
     return {
       nodeId,
-      totalStorageAvailable,
+      totalStorageAvailable: totalStorageAvailableAsString,
       paymentProvider: 'paddle',
     };
   }
