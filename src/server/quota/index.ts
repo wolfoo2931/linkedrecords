@@ -1,3 +1,4 @@
+/* eslint-disable import/no-cycle */
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
 import AttributeStorage from '../../attributes/attribute_storage';
@@ -6,21 +7,26 @@ import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
+import PaymentProvider from '../payment_provider';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
 
-type QuotaAsJSON = {
+export type QuotaAsJSON = {
   nodeId: string,
   totalStorageAvailable: number,
   remainingStorageAvailable: number,
   usedStorage: number,
+  accounteeInformation: object | undefined,
+  userIsAccountable: boolean,
+  isUpgraded: boolean,
 };
 
 export type QuotaEvent = {
   nodeId: string,
   totalStorageAvailable: number,
   paymentProvider: string,
+  providerId: string,
 };
 
 export default class Quota {
@@ -85,29 +91,65 @@ export default class Quota {
 
   public async set(
     totalStorageAvailable: number,
+    providerId: string,
     paymentProvider: string,
     paymentProviderPayload: string,
   ) {
-    await this.pool.query('INSERT INTO quota_events (node_id, total_storage_available, payment_provider, payment_provider_payload) VALUES ($1, $2, $3, $4)', [
+    await this.pool.query('INSERT INTO quota_events (node_id, total_storage_available, payment_provider, provider_id, payment_provider_payload) VALUES ($1, $2, $3, $4, $5)', [
       this.nodeId,
       totalStorageAvailable,
       paymentProvider,
+      providerId,
       paymentProviderPayload,
     ]);
   }
 
-  public async toJSON(): Promise<QuotaAsJSON> {
-    const [totalStorageAvailable, usedStorage] = await Promise.all([
+  public async toJSON(asAccountee: boolean): Promise<QuotaAsJSON> {
+    const [totalStorageAvailable, usedStorage, providerId] = await Promise.all([
       this.getTotalStorageAvailable(),
       this.getUsedStorageSize(),
+      this.getPaymentProviderId().catch(() => false),
     ]);
+
+    let accounteeInformation;
+
+    if (asAccountee) {
+      try {
+        const [provider, providerSubId] = await this.getPaymentProviderId();
+        const paymentProvider = PaymentProvider.getById(provider);
+        accounteeInformation = await paymentProvider.loadDetailsForAccountee(providerSubId);
+      } catch (ex) {
+        this.logger.warn('details for accountee could not be found, skipping');
+      }
+    }
 
     return {
       nodeId: this.nodeId,
+      userIsAccountable: asAccountee,
+      isUpgraded: !!providerId,
       totalStorageAvailable,
       usedStorage,
       remainingStorageAvailable: totalStorageAvailable - usedStorage,
+      accounteeInformation,
     };
+  }
+
+  public async getPaymentProviderId(): Promise<[string, string]> {
+    const data = await this.pool.query('SELECT payment_provider, provider_id FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [this.nodeId]);
+
+    if (!data.rows.length) {
+      throw new Error(`No quota event found for node ${this.nodeId}`);
+    }
+
+    if (!data.rows[0].provider_id?.trim()) {
+      throw new Error(`No provider_id available for quota event with nodeId ${this.nodeId}`);
+    }
+
+    if (!data.rows[0].payment_provider?.trim()) {
+      throw new Error(`No payment_provider available for quota event with nodeId ${this.nodeId}`);
+    }
+
+    return [data.rows[0].payment_provider?.trim(), data.rows[0].provider_id.trim()];
   }
 
   public async getTotalStorageAvailable(): Promise<number> {

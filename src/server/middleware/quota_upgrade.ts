@@ -4,7 +4,7 @@ export default function quotaUpgrade() {
   return (req, res) => {
     if (req.method.toLowerCase() === 'post' && req.path.toLowerCase() === '/paddle') {
       const paddleController = new PaddlePaymentProvider();
-      paddleController.handlePaddleEvent(req, res);
+      paddleController.handleCallback(req, res);
     } else {
       res.sendStatus(404);
     }

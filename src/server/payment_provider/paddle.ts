@@ -1,16 +1,46 @@
+/* eslint-disable import/no-cycle */
 import crypto from 'crypto';
+import assert from 'assert';
 import Quota, { QuotaEvent } from '../quota';
 import safeCompare from '../../../lib/utils/safe_compare';
 import readBody from '../../../lib/utils/read_body';
+import AbstractPaymentProvider from './abstract_provider';
 
-export default class PaddlePaymentProvider {
+export default class PaddlePaymentProvider extends AbstractPaymentProvider {
   secretKey: string;
 
+  apiKey: string;
+
+  paddleURL: string;
+
+  static paymentProviderId: string = 'paddle';
+
   constructor() {
+    super();
+    const missingConfig: string[] = [];
+
     if (!process.env['PADDLE_NOTIFICATION_SECRET']) {
-      throw new Error('this linkedrecords instance is not configured to handle paddle callbacks. PADDLE_NOTIFICATION_SECRET env var needs to be provided.');
+      missingConfig.push('PADDLE_NOTIFICATION_SECRET');
     }
 
+    if (!process.env['PADDLE_API_KEY']) {
+      missingConfig.push('PADDLE_API_KEY');
+    }
+
+    if (!process.env['PADDLE_API_URL']) {
+      missingConfig.push('PADDLE_API_URL');
+    }
+
+    if (missingConfig.length) {
+      throw new Error(`this linkedrecords instance is not configured to handle paddle callbacks. The following configurations are missing: ${missingConfig.join(', ')}`);
+    }
+
+    assert(process.env['PADDLE_API_URL']);
+    assert(process.env['PADDLE_API_KEY']);
+    assert(process.env['PADDLE_NOTIFICATION_SECRET']);
+
+    this.paddleURL = process.env['PADDLE_API_URL'];
+    this.apiKey = process.env['PADDLE_API_KEY'];
     this.secretKey = process.env['PADDLE_NOTIFICATION_SECRET'];
   }
 
@@ -24,7 +54,7 @@ export default class PaddlePaymentProvider {
     return `ts=${ts};h1=${hash}`;
   }
 
-  async handlePaddleEvent(req, res) {
+  async handleCallback(req, res) {
     const payload: any = await this.getPaddlePayload(req, res);
 
     if (!payload) {
@@ -34,7 +64,7 @@ export default class PaddlePaymentProvider {
     let quotaEvent;
 
     if (payload.event_type === 'subscription.created') {
-      quotaEvent = PaddlePaymentProvider.handlePaddleSubscriptionCreated(payload, req, res);
+      quotaEvent = await this.handlePaddleSubscriptionCreated(payload, req, res);
     }
 
     if (!quotaEvent) {
@@ -44,12 +74,22 @@ export default class PaddlePaymentProvider {
     }
 
     const quota = new Quota(quotaEvent.nodeId, req.logger);
-    await quota.set(quotaEvent.totalStorageAvailable, 'paddle', JSON.stringify(payload));
+    await quota.set(quotaEvent.totalStorageAvailable, quotaEvent.providerId, 'paddle', JSON.stringify(payload));
 
     res.send(quotaEvent);
   }
 
-  async getPaddlePayload(req, res): Promise<object | undefined> {
+  async loadDetailsForAccountee(subscriptionId: string): Promise<object> {
+    const response = await fetch(`${this.paddleURL}/subscriptions/${subscriptionId}`, {
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    });
+
+    return response.json();
+  }
+
+  private async getPaddlePayload(req, res): Promise<object | undefined> {
     const signature: string = req.headers['paddle-signature'];
 
     if (!signature) {
@@ -84,11 +124,16 @@ export default class PaddlePaymentProvider {
     return JSON.parse(rawRequestBody);
   }
 
-  static handlePaddleSubscriptionCreated(payload, req, res): QuotaEvent | undefined {
+  // eslint-disable-next-line class-methods-use-this
+  private handlePaddleSubscriptionCreated(payload, req, res): QuotaEvent | undefined {
     const nodeId = payload
       ?.data
       ?.custom_data
       ?.nodeId;
+
+    const providerId = payload
+      ?.data
+      ?.id;
 
     const totalStorageAvailableAsString = payload
       ?.data
@@ -98,8 +143,8 @@ export default class PaddlePaymentProvider {
 
     req.log.info(`handle paddle subscription created (node: ${nodeId}, storage: ${totalStorageAvailableAsString}) - ${JSON.stringify(payload)}`);
 
-    if (!nodeId || !totalStorageAvailableAsString) {
-      req.log.warn('Error updating quota: nodeId or totalStorageAvailableAsString are not available');
+    if (!nodeId || !totalStorageAvailableAsString || !providerId) {
+      req.log.error('Error updating quota: nodeId, subscriptionId and/or totalStorageAvailableAsString are not available');
       res.sendStatus(422);
       return undefined;
     }
@@ -121,7 +166,8 @@ export default class PaddlePaymentProvider {
     return {
       nodeId,
       totalStorageAvailable,
-      paymentProvider: 'paddle',
+      providerId,
+      paymentProvider: PaddlePaymentProvider.paymentProviderId,
     };
   }
 }

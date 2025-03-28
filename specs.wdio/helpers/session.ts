@@ -53,10 +53,14 @@ export default class Session {
     await (await session.$('input[name=password]')).setValue(allUsersPwd);
     await (await session.$('form button[type=submit][name=action][data-action-button-primary="true"]')).click();
 
-    const consentBtn = await session.$('form button[type=submit][name=action][data-action-button-primary="true"]');
+    try {
+      const consentBtn = await session.$('form button[type=submit][name=action][data-action-button-primary="true"]');
 
-    if (await consentBtn.isExisting()) {
-      await consentBtn.click();
+      if (await consentBtn.isExisting()) {
+        await consentBtn.click();
+      }
+    } catch (ex) {
+      // do nothing
     }
 
     const lrSession = new Session(session, `wolfoo2931+${index}@gmail.com`);
