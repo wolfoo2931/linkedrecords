@@ -6,9 +6,10 @@ const pgPool = new pg.Pool({ max: 2 });
 const mb = 1048576;
 
 async function setQuota(nodeId, totalStorageAvailable) {
-  await pgPool.query('INSERT INTO quota_events (node_id, total_storage_available) VALUES ($1, $2)', [
+  await pgPool.query('INSERT INTO quota_events (node_id, total_storage_available, valid_from) VALUES ($1, $2, $3)', [
     nodeId,
     totalStorageAvailable,
+    new Date(),
   ]);
 }
 

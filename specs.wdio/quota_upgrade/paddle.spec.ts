@@ -174,6 +174,6 @@ describe('paddle notification events', () => {
       it('is possible to trigger the upgrade of a subscription');
     });
 
-    describe('when one user creates a subscription to two orgs, the other accountee of the other orgs should only see the subscriptions managed by them')
+    describe('when one user creates a subscription to two orgs, the other accountee of the other orgs should only see the subscriptions managed by them');
   });
 });
