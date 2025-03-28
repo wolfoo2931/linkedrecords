@@ -1,3 +1,4 @@
+/* eslint-disable class-methods-use-this */
 /* eslint-disable import/no-cycle */
 import crypto from 'crypto';
 import assert from 'assert';
@@ -65,6 +66,8 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
 
     if (payload.event_type === 'subscription.created') {
       quotaEvent = await this.handlePaddleSubscriptionCreated(payload, req, res);
+    } else if (payload.event_type === 'subscription.updated' && payload?.data?.scheduled_change?.action === 'cancel') {
+      quotaEvent = await this.handlePaddleSubscriptionCanceled(payload, req, res);
     }
 
     if (!quotaEvent) {
@@ -74,7 +77,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
     }
 
     const quota = new Quota(quotaEvent.nodeId, req.logger);
-    await quota.set(quotaEvent.totalStorageAvailable, quotaEvent.providerId, 'paddle', JSON.stringify(payload));
+    await quota.set(quotaEvent.totalStorageAvailable, quotaEvent.providerId, 'paddle', JSON.stringify(payload), quotaEvent.validFrom);
 
     res.send(quotaEvent);
   }
@@ -124,7 +127,6 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
     return JSON.parse(rawRequestBody);
   }
 
-  // eslint-disable-next-line class-methods-use-this
   private handlePaddleSubscriptionCreated(payload, req, res): QuotaEvent | undefined {
     const nodeId = payload
       ?.data
@@ -167,6 +169,37 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
       nodeId,
       totalStorageAvailable,
       providerId,
+      paymentProvider: PaddlePaymentProvider.paymentProviderId,
+    };
+  }
+
+  private handlePaddleSubscriptionCanceled(payload, req, res): QuotaEvent | undefined {
+    const nodeId = payload
+      ?.data
+      ?.custom_data
+      ?.nodeId;
+
+    const providerId = payload
+      ?.data
+      ?.id;
+
+    const totalStorageAvailable = 0;
+
+    const validFrom = new Date(payload?.data?.scheduled_change?.effective_at);
+
+    req.log.info(`handle paddle subscription canceld (node: ${nodeId}, storage: ${totalStorageAvailable}) - ${JSON.stringify(payload)}`);
+
+    if (!nodeId || !providerId) {
+      req.log.error('Error updating quota: nodeId and/or subscriptionId are not available');
+      res.sendStatus(422);
+      return undefined;
+    }
+
+    return {
+      nodeId,
+      totalStorageAvailable,
+      providerId,
+      validFrom,
       paymentProvider: PaddlePaymentProvider.paymentProviderId,
     };
   }

@@ -27,6 +27,7 @@ export type QuotaEvent = {
   totalStorageAvailable: number,
   paymentProvider: string,
   providerId: string,
+  validFrom?: Date,
 };
 
 export default class Quota {
@@ -94,13 +95,15 @@ export default class Quota {
     providerId: string,
     paymentProvider: string,
     paymentProviderPayload: string,
+    validFrom?: Date,
   ) {
-    await this.pool.query('INSERT INTO quota_events (node_id, total_storage_available, payment_provider, provider_id, payment_provider_payload) VALUES ($1, $2, $3, $4, $5)', [
+    await this.pool.query('INSERT INTO quota_events (node_id, total_storage_available, payment_provider, provider_id, payment_provider_payload, valid_from) VALUES ($1, $2, $3, $4, $5, $6)', [
       this.nodeId,
       totalStorageAvailable,
       paymentProvider,
       providerId,
       paymentProviderPayload,
+      validFrom || new Date(),
     ]);
   }
 
@@ -153,9 +156,9 @@ export default class Quota {
   }
 
   public async getTotalStorageAvailable(): Promise<number> {
-    const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [this.nodeId]);
+    const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 AND valid_from > NOW() ORDER BY id DESC LIMIT 1', [this.nodeId]);
 
-    if (data.rows.length) {
+    if (data.rows.length && Number.parseInt(data.rows[0].total_storage_available, 10)) {
       return Number.parseInt(data.rows[0].total_storage_available, 10);
     }
 
