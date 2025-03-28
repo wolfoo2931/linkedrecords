@@ -187,7 +187,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
 
     const validFrom = new Date(payload?.data?.scheduled_change?.effective_at);
 
-    req.log.info(`handle paddle subscription canceld (node: ${nodeId}, storage: ${totalStorageAvailable}) - ${JSON.stringify(payload)}`);
+    req.log.info(`handle paddle subscription canceled (node: ${nodeId}, storage: ${totalStorageAvailable}) - ${JSON.stringify(payload)}`);
 
     if (!nodeId || !providerId) {
       req.log.error('Error updating quota: nodeId and/or subscriptionId are not available');
