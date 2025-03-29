@@ -159,7 +159,7 @@ export default class Quota {
     const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 AND valid_from > NOW() ORDER BY id DESC LIMIT 1', [this.nodeId]);
 
     console.log('xxxxxxxxxxxx', data);
-    console.log('all', await this.pool.query('SELECT * FROM quota_events WHERE', [this.nodeId]));
+    console.log('all', await this.pool.query('SELECT * FROM quota_events', [this.nodeId]));
 
     if (data.rows.length && Number.parseInt(data.rows[0].total_storage_available, 10)) {
       return Number.parseInt(data.rows[0].total_storage_available, 10);
