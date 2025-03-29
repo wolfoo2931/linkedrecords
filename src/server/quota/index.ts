@@ -156,12 +156,10 @@ export default class Quota {
   }
 
   public async getTotalStorageAvailable(): Promise<number> {
-    const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 AND valid_from < NOW() ORDER BY id DESC LIMIT 1', [
+    const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 AND valid_from < $2 ORDER BY id DESC LIMIT 1', [
       this.nodeId,
+      new Date(),
     ]);
-
-    console.log('xxxxxxxxxxxx', new Date());
-    console.log('all', await this.pool.query('SELECT * FROM quota_events'));
 
     if (data.rows.length && Number.parseInt(data.rows[0].total_storage_available, 10)) {
       return Number.parseInt(data.rows[0].total_storage_available, 10);
