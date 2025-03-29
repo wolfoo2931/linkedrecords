@@ -126,6 +126,16 @@ export default class Quota {
       }
     }
 
+    console.log('xxxxxxxxxxxx', {
+      nodeId: this.nodeId,
+      userIsAccountable: asAccountee,
+      isUpgraded: !!providerId,
+      totalStorageAvailable,
+      usedStorage,
+      remainingStorageAvailable: totalStorageAvailable - usedStorage,
+      accounteeInformation,
+    });
+
     return {
       nodeId: this.nodeId,
       userIsAccountable: asAccountee,
