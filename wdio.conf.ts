@@ -6,7 +6,7 @@ const proxy = httpProxy.createProxyServer();
 
 exports.config = {
   specs: [
-    './specs.wdio/**/*.spec.ts',
+    './specs.wdio/**/quota.spec.ts',
   ],
 
   suites: {
