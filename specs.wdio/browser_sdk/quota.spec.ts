@@ -11,6 +11,8 @@ async function setQuota(nodeId, totalStorageAvailable) {
     totalStorageAvailable,
     new Date(),
   ]);
+
+  await browser.pause(1000);
 }
 
 describe('quota', () => {
