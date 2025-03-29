@@ -139,7 +139,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
 
     const totalStorageAvailableAsString = payload
       ?.data
-      ?.items[0]
+      ?.items?.[0]
       ?.product.custom_data
       ?.total_storage_available;
 
