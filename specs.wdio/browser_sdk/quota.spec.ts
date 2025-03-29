@@ -20,7 +20,7 @@ describe('quota', () => {
   afterEach(Session.afterEach);
   after(Session.deleteBrowsers);
 
-  it.only('is possible to retrieve the quota information of a user', async () => {
+  it('is possible to retrieve the quota information of a user', async () => {
     const client = await Session.getOneSession();
     await setQuota(await client.getActorId(), 1 * mb);
 
