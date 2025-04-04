@@ -5,8 +5,8 @@ import Quota from '../quota';
 export default function quotaUpgrade() {
   return async (req: Request, res: Response) => {
     if (req.method.toLowerCase() === 'post' && req.path.toLowerCase() === '/paddle') {
-      const paddleController = new PaddlePaymentProvider();
       try {
+        const paddleController = new PaddlePaymentProvider();
         const quotaEvent = await paddleController.handleCallback(req, res);
 
         if (!quotaEvent) {
@@ -25,7 +25,7 @@ export default function quotaUpgrade() {
           res.send(quotaEvent);
         }
       } catch (error) {
-        req.log?.error('Error handling payment provider callback callback:', error);
+        req.log?.error(`Error handling payment provider callback callback: ${error}`);
         res.status(500).json({ error: 'Internal server error processing payment notification' });
       }
     } else {
