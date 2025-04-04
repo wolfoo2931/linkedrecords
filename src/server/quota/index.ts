@@ -26,6 +26,7 @@ export type QuotaEvent = {
   nodeId: string,
   totalStorageAvailable: number | null,
   paymentProvider: string,
+  providerPayload: string,
   providerId: string,
   validFrom?: Date,
 };
@@ -103,6 +104,7 @@ export default class Quota {
       nodeId: data.rows[0].node_id,
       totalStorageAvailable: parsedStorageAvailable,
       paymentProvider: data.rows[0].payment_provider,
+      providerPayload: data.rows[0].payment_provider_payload,
       providerId: data.rows[0].provider_id,
       validFrom: data.rows[0].valid_from,
     };
@@ -116,7 +118,7 @@ export default class Quota {
   }
 
   public async set(
-    totalStorageAvailable: number,
+    totalStorageAvailable: number | null,
     providerId: string,
     paymentProvider: string,
     paymentProviderPayload: string,

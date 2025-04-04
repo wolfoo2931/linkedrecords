@@ -2,7 +2,7 @@
 /* eslint-disable import/no-cycle */
 import crypto from 'crypto';
 import assert from 'assert';
-import Quota, { QuotaEvent } from '../quota';
+import { QuotaEvent } from '../quota';
 import safeCompare from '../../../lib/utils/safe_compare';
 import readBody from '../../../lib/utils/read_body';
 import AbstractPaymentProvider from './abstract_provider';
@@ -55,31 +55,22 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
     return `ts=${ts};h1=${hash}`;
   }
 
-  async handleCallback(req, res) {
+  async handleCallback(req, res): Promise<QuotaEvent | undefined> {
     const payload: any = await this.getPaddlePayload(req, res);
 
     if (!payload) {
-      return;
+      return undefined;
     }
-
-    let quotaEvent;
 
     if (payload.event_type === 'subscription.created') {
-      quotaEvent = await this.handlePaddleSubscriptionCreated(payload, req, res);
-    } else if (payload.event_type === 'subscription.updated' && payload?.data?.scheduled_change?.action === 'cancel') {
-      quotaEvent = await this.handlePaddleSubscriptionCanceled(payload, req, res);
+      return this.handlePaddleSubscriptionCreated(payload, req, res);
     }
 
-    if (!quotaEvent) {
-      req.log.warn(`quota event does not match an event handler: ${JSON.stringify(payload)}`);
-      res.sendStatus(422);
-      return;
+    if (payload.event_type === 'subscription.updated' && payload?.data?.scheduled_change?.action === 'cancel') {
+      return this.handlePaddleSubscriptionCanceled(payload, req, res);
     }
 
-    const quota = new Quota(quotaEvent.nodeId, req.logger);
-    await quota.set(quotaEvent.totalStorageAvailable, quotaEvent.providerId, 'paddle', JSON.stringify(payload), quotaEvent.validFrom);
-
-    res.send(quotaEvent);
+    return undefined;
   }
 
   async loadDetailsForAccountee(subscriptionId: string): Promise<object> {
@@ -170,6 +161,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
       totalStorageAvailable,
       providerId,
       paymentProvider: PaddlePaymentProvider.paymentProviderId,
+      providerPayload: payload,
     };
   }
 
@@ -201,6 +193,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
       providerId,
       validFrom,
       paymentProvider: PaddlePaymentProvider.paymentProviderId,
+      providerPayload: payload,
     };
   }
 }
