@@ -10,14 +10,14 @@ export default function quotaUpgrade() {
         const quotaEvent = await paddleController.handleCallback(req, res);
 
         if (!quotaEvent) {
-          req.log.warn('quota event does not match an event handler}');
+          req.log.warn('quota event does not match an event handler');
           res.sendStatus(422);
         } else {
           const quota = new Quota(quotaEvent.nodeId, req.logger);
           await quota.set(
             quotaEvent.totalStorageAvailable,
             quotaEvent.providerId,
-            'paddle',
+            quotaEvent.paymentProvider,
             quotaEvent.providerPayload,
             quotaEvent.validFrom,
           );
@@ -25,7 +25,7 @@ export default function quotaUpgrade() {
           res.send(quotaEvent);
         }
       } catch (error) {
-        req.log?.error(`Error handling payment provider callback callback: ${error}`);
+        req.log?.error(`Error handling payment provider callback: ${error}`);
         res.status(500).json({ error: 'Internal server error processing payment notification' });
       }
     } else {

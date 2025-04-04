@@ -242,7 +242,7 @@ describe('paddle notification events', () => {
       await expectNotToSeeManagementUrls(other, org);
     });
 
-    it('does not allow an user with access right to see the paddle management links', async () => {
+    it('does not allow a user with read right to see the paddle management links', async () => {
       const [accountee, other] = await Session.getTwoSessions();
 
       const otherId = await accountee.getUserIdByEmail(other.email);
