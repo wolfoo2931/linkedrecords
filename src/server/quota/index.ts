@@ -24,7 +24,7 @@ export type QuotaAsJSON = {
 
 export type QuotaEvent = {
   nodeId: string,
-  totalStorageAvailable: number,
+  totalStorageAvailable: number | null,
   paymentProvider: string,
   providerId: string,
   validFrom?: Date,
@@ -83,6 +83,31 @@ export default class Quota {
     return res.rows[res.rows.length - 1].subject;
   }
 
+  public static async getLatestQuotaEvent(
+    nodeId: string,
+    logger: IsLogger,
+  ): Promise<QuotaEvent | undefined> {
+    const pool = new PgPoolWithLog(logger);
+    const data = await pool.query('SELECT * FROM quota_events WHERE node_id=$1 AND valid_from < $2 ORDER BY id DESC', [
+      nodeId,
+      new Date(),
+    ]);
+
+    if (!data.rows.length || !data.rows[0]) {
+      return undefined;
+    }
+
+    const parsedStorageAvailable = Number.parseInt(data.rows[0].total_storage_available, 10);
+
+    return {
+      nodeId: data.rows[0].node_id,
+      totalStorageAvailable: parsedStorageAvailable,
+      paymentProvider: data.rows[0].payment_provider,
+      providerId: data.rows[0].provider_id,
+      validFrom: data.rows[0].valid_from,
+    };
+  }
+
   constructor(nodeId: string, logger: IsLogger) {
     this.attributeStorage = new AttributeStorage(logger);
     this.pool = new PgPoolWithLog(logger);
@@ -108,10 +133,11 @@ export default class Quota {
   }
 
   public async toJSON(asAccountee: boolean): Promise<QuotaAsJSON> {
-    const [totalStorageAvailable, usedStorage, providerId] = await Promise.all([
-      this.getTotalStorageAvailable(),
+    const data = await Quota.getLatestQuotaEvent(this.nodeId, this.logger);
+
+    const [totalStorageAvailable, usedStorage] = await Promise.all([
+      this.getTotalStorageAvailable(data),
       this.getUsedStorageSize(),
-      this.getPaymentProviderId().catch(() => false),
     ]);
 
     let accounteeInformation;
@@ -129,7 +155,7 @@ export default class Quota {
     return {
       nodeId: this.nodeId,
       userIsAccountable: asAccountee,
-      isUpgraded: !!providerId,
+      isUpgraded: !!data?.totalStorageAvailable,
       totalStorageAvailable,
       usedStorage,
       remainingStorageAvailable: totalStorageAvailable - usedStorage,
@@ -138,31 +164,28 @@ export default class Quota {
   }
 
   public async getPaymentProviderId(): Promise<[string, string]> {
-    const data = await this.pool.query('SELECT payment_provider, provider_id FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [this.nodeId]);
+    const data = await Quota.getLatestQuotaEvent(this.nodeId, this.logger);
 
-    if (!data.rows.length) {
+    if (!data) {
       throw new Error(`No quota event found for node ${this.nodeId}`);
     }
 
-    if (!data.rows[0].provider_id?.trim()) {
+    if (!data.providerId?.trim()) {
       throw new Error(`No provider_id available for quota event with nodeId ${this.nodeId}`);
     }
 
-    if (!data.rows[0].payment_provider?.trim()) {
+    if (!data.paymentProvider?.trim()) {
       throw new Error(`No payment_provider available for quota event with nodeId ${this.nodeId}`);
     }
 
-    return [data.rows[0].payment_provider?.trim(), data.rows[0].provider_id.trim()];
+    return [data.paymentProvider?.trim(), data.providerId.trim()];
   }
 
-  public async getTotalStorageAvailable(): Promise<number> {
-    const data = await this.pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 AND valid_from < $2 ORDER BY id DESC LIMIT 1', [
-      this.nodeId,
-      new Date(),
-    ]);
+  public async getTotalStorageAvailable(prefetchedData?: QuotaEvent): Promise<number> {
+    const data = prefetchedData || await Quota.getLatestQuotaEvent(this.nodeId, this.logger);
 
-    if (data.rows.length && Number.parseInt(data.rows[0].total_storage_available, 10)) {
-      return Number.parseInt(data.rows[0].total_storage_available, 10);
+    if (data?.totalStorageAvailable) {
+      return data.totalStorageAvailable;
     }
 
     if (this.nodeId.startsWith('us-')) {
@@ -176,15 +199,12 @@ export default class Quota {
     nodeId: string,
     logger: IsLogger,
   ): Promise<boolean> {
-    const pool = new PgPoolWithLog(logger);
-
     if (nodeId.startsWith('us-')) {
       return true;
     }
 
-    const data = await pool.query('SELECT total_storage_available FROM quota_events WHERE node_id=$1 ORDER BY id DESC LIMIT 1', [nodeId]);
-
-    return data.rows.length === 1;
+    const data = await Quota.getLatestQuotaEvent(nodeId, logger);
+    return !!data;
   }
 
   private async getAccountableNodes(): Promise<string[]> {

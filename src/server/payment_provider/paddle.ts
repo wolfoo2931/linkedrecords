@@ -183,7 +183,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
       ?.data
       ?.id;
 
-    const totalStorageAvailable = 0;
+    const totalStorageAvailable = null;
 
     const validFrom = new Date(payload?.data?.scheduled_change?.effective_at);
 
