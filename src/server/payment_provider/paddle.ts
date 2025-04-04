@@ -73,7 +73,7 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
     return undefined;
   }
 
-  async loadDetailsForAccountee(subscriptionId: string): Promise<object> {
+  async loadDetailsForAccountee(subscriptionId: string): Promise<Record<string, string>> {
     const response = await fetch(`${this.paddleURL}/subscriptions/${subscriptionId}`, {
       headers: {
         Authorization: `Bearer ${this.apiKey}`,

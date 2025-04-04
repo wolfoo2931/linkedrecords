@@ -17,7 +17,7 @@ export type QuotaAsJSON = {
   totalStorageAvailable: number,
   remainingStorageAvailable: number,
   usedStorage: number,
-  accounteeInformation: object | undefined,
+  accounteeInformation: Record<string, string> | undefined,
   userIsAccountable: boolean,
   isUpgraded: boolean,
 };

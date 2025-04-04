@@ -7,5 +7,5 @@ export default abstract class AbstractPaymentProvider {
 
   abstract handleCallback(req: Request, res: Response): Promise<QuotaEvent | undefined>;
 
-  abstract loadDetailsForAccountee(provider_id: string): Promise<object>;
+  abstract loadDetailsForAccountee(provider_id: string): Promise<Record<string, string>>;
 }
