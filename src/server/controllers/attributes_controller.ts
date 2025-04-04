@@ -6,7 +6,7 @@ import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query'
 import Fact from '../../facts/server';
 import SQL from '../../facts/server/authorization_sql_builder';
 import PgPoolWithLog from '../../../lib/pg-log';
-import Quota from '../../quota';
+import Quota from '../quota';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',

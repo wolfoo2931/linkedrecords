@@ -17,6 +17,7 @@ import attributesController from './controllers/attributes_controller';
 import quotaController from './controllers/quota_controller';
 import userinfoController from './controllers/userinfo_controller';
 import authentication from './middleware/authentication';
+import quotaUpgrade from './middleware/quota_upgrade';
 import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../attributes/errors/authorization_error';
 import clearCookies from './middleware/clear_cookies';
@@ -102,10 +103,11 @@ async function createApp(httpServer: https.Server) {
   await mountServiceBus(httpServer, app);
 
   app.use(limiter);
+  app.use(cors({ origin: getCorsOriginConfig(), credentials: true, maxAge: 86400 }));
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
+  app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
-  app.use(cors({ origin: getCorsOriginConfig(), credentials: true, maxAge: 86400 }));
   app.use('/logout', clearCookies());
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());

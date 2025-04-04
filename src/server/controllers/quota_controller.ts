@@ -1,4 +1,5 @@
-import Quota from '../../quota';
+import Fact from '../../facts/server';
+import Quota from '../quota';
 
 export default {
   async get(req, res) {
@@ -8,6 +9,12 @@ export default {
 
     const quota = new Quota(req.params.nodeId, req.log);
 
-    res.send(await quota.toJSON());
+    const asAccountee = await Fact.isAuthorizedToManageQuota(
+      req.params.nodeId,
+      req.hashedUserID,
+      req.logger,
+    );
+
+    res.send(await quota.toJSON(asAccountee));
   },
 };

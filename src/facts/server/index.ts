@@ -2,6 +2,7 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable no-plusplus */
 import md5 from 'md5';
+import assert from 'assert';
 import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
@@ -147,6 +148,9 @@ export default class Fact {
       ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (hashed_email);
 
       CREATE TABLE IF NOT EXISTS quota_events (id SERIAL, node_id CHAR(40), total_storage_available int, created_at timestamp DEFAULT NOW(), payment_provider CHAR(40), payment_provider_payload TEXT);
+      ALTER TABLE quota_events ALTER COLUMN total_storage_available TYPE BIGINT;
+      ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS provider_id CHAR(40);
+      ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS valid_from TIMESTAMP with time zone;
     `);
   }
 
@@ -171,6 +175,28 @@ export default class Fact {
     if (!(await Fact.getUserIdByEmail(email, logger))) {
       await pool.query('INSERT INTO users (id, hashed_email, username) VALUES ($1, $2, $3)', [userid, md5(email), email]);
     }
+  }
+
+  public static async isAuthorizedToManageQuota(
+    nodeId: string,
+    userid: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    assert(nodeId, 'nodeId needs to be provided in isAuthorizedToManageQuota');
+    assert(userid, 'userid needs to be provided in isAuthorizedToManageQuota');
+
+    if (nodeId === userid) {
+      return true;
+    }
+
+    const pool = new PgPoolWithLog(logger);
+
+    return pool.findAny(SQL.getSQLToCheckAccess(
+      userid,
+      ['creator'],
+      nodeId,
+      logger,
+    ));
   }
 
   public static async isAuthorizedToModifyPayload(

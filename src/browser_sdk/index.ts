@@ -10,6 +10,7 @@ import LongTextChange from '../attributes/long_text/long_text_change';
 import ClientServerBus from '../../lib/client-server-bus/client';
 import FactsRepository from './facts_repository';
 import AttributesRepository from './attributes_repository';
+import { QuotaAsJSON } from '../server/quota';
 
 type FetchOptions = {
   headers?: object | undefined,
@@ -119,7 +120,7 @@ export default class LinkedRecords {
     return data;
   }
 
-  public async getQuota(nodeId?: string) {
+  public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
     const response = await this.fetch(`/quota/${nodeId || this.actorId}`);
 
     return response.json();
