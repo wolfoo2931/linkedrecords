@@ -66,16 +66,6 @@ export default class AttributeStorage implements IsAttributeStorage {
     return sizes.reduce((acc, curr) => acc + curr, 0);
   }
 
-  async getAttributeTableName(attributeId: string) {
-    const [prefix] = attributeId.split('-');
-
-    if (!prefix) {
-      throw new Error(`invalid attribute Id: ${attributeId}`);
-    }
-
-    return `${prefix}_attributes`;
-  }
-
   async createAllAttributes(
     attr: { attributeId: string, actorId: string, value: string }[],
   ) : Promise<{ id: string }[]> {
@@ -83,9 +73,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       return [];
     }
 
-    const idCheckCondition = attr.map((a, i) => `subject=$${i + 1}`).join(' OR ');
-
-    if (await this.pgPool.findAny(`SELECT id FROM facts WHERE ${idCheckCondition}`, attr.map((a) => a.attributeId))) {
+    if (await Fact.areKnownSubjects(attr.map((a) => a.attributeId), this.logger)) {
       throw new Error('attribute list contains invalid attributeId');
     }
 
@@ -124,7 +112,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    if (await this.pgPool.findAny('SELECT id FROM facts WHERE subject=$1', [attributeId])) {
+    if (await Fact.areKnownSubjects([attributeId], this.logger)) {
       throw new Error('attributeId is invalid');
     }
 
@@ -219,5 +207,15 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     return { id: '2147483647', updatedAt: new Date(result.rows[0].updated_at) };
+  }
+
+  private async getAttributeTableName(attributeId: string) {
+    const [prefix] = attributeId.split('-');
+
+    if (!prefix) {
+      throw new Error(`invalid attribute Id: ${attributeId}`);
+    }
+
+    return `${prefix}_attributes`;
   }
 }

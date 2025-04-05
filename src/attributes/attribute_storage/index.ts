@@ -5,21 +5,31 @@ import { AttributeSnapshot, AttributeChange, AttributeChangeCriteria } from './t
 /* eslint-disable import/prefer-default-export */
 import PsqlStorageWithHistory from './psql_with_history';
 import PsqlStorage from './psql';
+import S3Storage from './s3';
 
 export default class AttributeStorage implements IsAttributeStorage {
   pgStorageWithHistory: IsAttributeStorage;
 
-  pgStorage: PsqlStorage;
+  pgStorage: IsAttributeStorage;
+
+  s3Storage: IsAttributeStorage;
 
   constructor(logger: IsLogger) {
     this.pgStorageWithHistory = new PsqlStorageWithHistory(logger);
     this.pgStorage = new PsqlStorage(logger);
+    this.s3Storage = process.env['S3_ENDPOINT']
+      ? new S3Storage(logger)
+      : this.pgStorage;
   }
 
   getStorage(attributeId): IsAttributeStorage {
     const [type] = attributeId.split('-');
 
-    if (type === 'kv' || type === 'bl') {
+    if (type === 'bl') {
+      return this.s3Storage;
+    }
+
+    if (type === 'kv') {
       return this.pgStorage;
     }
 

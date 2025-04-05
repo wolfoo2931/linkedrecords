@@ -859,6 +859,13 @@ export default class Fact {
     ]);
   }
 
+  static areKnownSubjects(nodeIds: string[], logger: IsLogger): Promise<boolean> {
+    const pool = new PgPoolWithLog(logger);
+    const idCheckCondition = nodeIds.map((a, i) => `subject=$${i + 1}`).join(' OR ');
+
+    return pool.findAny(`SELECT id FROM facts WHERE ${idCheckCondition}`, nodeIds);
+  }
+
   private async isValidInvitation(userid: string, args?: { attributesInCreation?: string[] }) {
     if (args?.attributesInCreation?.includes(this.object)) {
       return true;
