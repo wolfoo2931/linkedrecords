@@ -179,7 +179,9 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
 
     const totalStorageAvailable = null;
 
-    const validFrom = new Date(payload?.data?.scheduled_change?.effective_at);
+    const validFrom = payload?.data?.scheduled_change?.effective_at
+      ? new Date(payload?.data?.scheduled_change?.effective_at)
+      : new Date();
 
     req.log.info(`handle paddle subscription canceled (node: ${nodeId}, storage: ${totalStorageAvailable}) - ${JSON.stringify(payload)}`);
 
