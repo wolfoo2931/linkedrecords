@@ -66,9 +66,11 @@ export default class PaddlePaymentProvider extends AbstractPaymentProvider {
       return this.handlePaddleSubscriptionCreated(payload, req, res);
     }
 
-    if (payload.event_type === 'subscription.updated' && payload?.data?.scheduled_change?.action === 'cancel') {
+    if (payload.event_type === 'subscription.updated' && (payload?.data?.scheduled_change?.action === 'cancel' || payload?.data?.status === 'canceled')) {
       return this.handlePaddleSubscriptionCanceled(payload, req, res);
     }
+
+    req.log.warn(`no event paddle callback handler found for event type: ${payload.event_type} and action: ${payload?.data?.scheduled_change?.action}`);
 
     return undefined;
   }
