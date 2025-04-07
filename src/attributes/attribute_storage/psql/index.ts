@@ -21,15 +21,16 @@ export default class AttributeStorage implements IsAttributeStorage {
 
   pgPool: PgPoolWithLog;
 
-  tablesKnownAsCreated: Map<string, boolean> = new Map();
+  tablePrefix: string;
 
-  constructor(logger: IsLogger) {
+  constructor(logger: IsLogger, tablePrefix: string) {
     this.logger = logger;
     this.pgPool = new PgPoolWithLog(this.logger);
+    this.tablePrefix = tablePrefix;
   }
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
-    const attrTables = ['bl_attributes', 'kv_attributes'];
+    const attrTables = [`${this.tablePrefix}_attributes`];
 
     const sizes = await Promise.all(attrTables.map(async (tableName) => {
       const [prefix] = tableName.split('_');
@@ -39,7 +40,12 @@ export default class AttributeStorage implements IsAttributeStorage {
         return 0;
       }
 
-      const result = await this.pgPool.query(`SELECT SUM(LENGTH(value))
+      const result = await this.pgPool.query(`SELECT SUM(
+          CASE
+            WHEN size IS NOT NULL THEN size
+            ELSE LENGTH(value)
+          END
+        )
         FROM ${tableName}
         WHERE ('${prefix}' || '-' || id)
         IN (${filteredNodes.filter((n) => n.startsWith(`${prefix}-`)).map((n) => `'${n}'`).join(',')});`);
@@ -67,7 +73,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async createAllAttributes(
-    attr: { attributeId: string, actorId: string, value: string }[],
+    attr: { attributeId: string, actorId: string, value: string, size?: number }[],
   ) : Promise<{ id: string }[]> {
     if (!attr.length) {
       return [];
@@ -90,7 +96,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     const values = attr
-      .map((_, i) => `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}, $${i * 5 + 5})`)
+      .map((_, i) => `($${i * 6 + 1}, $${i * 6 + 2}, $${i * 6 + 3}, $${i * 6 + 4}, $${i * 6 + 5}, $${i * 6 + 6})`)
       .join(', ');
 
     const flatParams = attr.flatMap((a) => [
@@ -99,9 +105,10 @@ export default class AttributeStorage implements IsAttributeStorage {
       new Date(),
       getUuidByAttributeId(a.attributeId),
       a.value,
+      a.size || null,
     ]);
 
-    const createQuery = `INSERT INTO ${EnsureIsValid.tableName(tableNames[0])} (actor_id, updated_at, created_at, id, value) VALUES ${values}`;
+    const createQuery = `INSERT INTO ${EnsureIsValid.tableName(tableNames[0])} (actor_id, updated_at, created_at, id, value, size) VALUES ${values}`;
     await this.pgPool.query(createQuery, flatParams);
 
     return attr.map((a) => ({ id: a.attributeId }));
@@ -111,6 +118,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     attributeId: string,
     actorId: string,
     value: string,
+    size?: number,
   ) : Promise<{ id: string }> {
     if (await Fact.areKnownSubjects([attributeId], this.logger)) {
       throw new Error('attributeId is invalid');
@@ -120,6 +128,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       attributeId,
       actorId,
       value,
+      size,
     );
   }
 
@@ -127,15 +136,17 @@ export default class AttributeStorage implements IsAttributeStorage {
     attributeId: string,
     actorId: string,
     value: string,
+    size?: number,
   ) : Promise<{ id: string }> {
     const pgTableName = await this.getAttributeTableName(attributeId);
-    const createQuery = `INSERT INTO ${EnsureIsValid.tableName(pgTableName)} (id, actor_id, updated_at, created_at, value) VALUES ($1, $2, $3, $4, $5)`;
+    const createQuery = `INSERT INTO ${EnsureIsValid.tableName(pgTableName)} (id, actor_id, updated_at, created_at, value, size) VALUES ($1, $2, $3, $4, $5, $6)`;
     await this.pgPool.query(createQuery, [
       getUuidByAttributeId(attributeId),
       actorId,
       new Date(),
       new Date(),
       value,
+      size || Buffer.byteLength(value, 'utf8'),
     ]);
 
     return { id: attributeId };
@@ -190,15 +201,19 @@ export default class AttributeStorage implements IsAttributeStorage {
     attributeId: string,
     actorId: string,
     value: string,
+    changeId?: string,
+    size?: number,
   ) : Promise<{ id: string, updatedAt: Date }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
+
     const pgTableName = await this.getAttributeTableName(attributeId);
-    const result = await this.pgPool.query(`UPDATE ${EnsureIsValid.tableName(pgTableName)} SET actor_id=$1, updated_at=$2, value=$3 WHERE id=$4 RETURNING updated_at`, [
+    const result = await this.pgPool.query(`UPDATE ${EnsureIsValid.tableName(pgTableName)} SET actor_id=$1, updated_at=$2, value=$3, size=$4 WHERE id=$5 RETURNING updated_at`, [
       actorId,
       new Date(),
       value,
+      size || Buffer.byteLength(value, 'utf8'),
       getUuidByAttributeId(attributeId),
     ]);
 

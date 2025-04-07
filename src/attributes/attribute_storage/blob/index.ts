@@ -2,11 +2,13 @@
 
 import { Client } from 'minio';
 import { Readable } from 'stream';
+import assert from 'assert';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
 import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
+import PsqlAttributeStorage from '../psql';
 
 function streamToString(stream: Readable): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -17,8 +19,14 @@ function streamToString(stream: Readable): Promise<string> {
   });
 }
 
+function isS3Configured() {
+  return !!process.env['S3_ENDPOINT'];
+}
+
 export default class AttributeStorage implements IsAttributeStorage {
   logger: IsLogger;
+
+  psqlStorage: PsqlAttributeStorage;
 
   minioClient: Client;
 
@@ -26,6 +34,8 @@ export default class AttributeStorage implements IsAttributeStorage {
 
   constructor(logger: IsLogger) {
     this.logger = logger;
+
+    this.psqlStorage = new PsqlAttributeStorage(this.logger, 'bl');
 
     ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_USE_SSL'].forEach((envVar) => {
       if (!process.env[envVar]) {
@@ -45,16 +55,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
-    const stats = await Promise.all(
-      nodes.map((nodeId) => this.minioClient.statObject(this.bucketName, nodeId)),
-    );
-
-    return stats.reduce((acc, stat) => {
-      if (stat.size) {
-        return acc + stat.size;
-      }
-      return acc;
-    }, 0);
+    return this.psqlStorage.getSizeInBytesForAllAttributes(nodes);
   }
 
   async createAllAttributes(
@@ -90,14 +91,13 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    await this.minioClient.putObject(
-      this.bucketName,
+    const toBeStored = await this.getRecordValueInDB(attributeId, actorId, value);
+
+    this.psqlStorage.createAttributeWithoutFactsCheck(
       attributeId,
-      value,
-      undefined,
-      {
-        actorId, createdAt: new Date(), updatedAt: new Date(),
-      },
+      actorId,
+      toBeStored,
+      Buffer.byteLength(value, 'utf8'),
     );
 
     return { id: attributeId };
@@ -116,17 +116,30 @@ export default class AttributeStorage implements IsAttributeStorage {
       }
     }
 
-    const [stats, dataStream] = await Promise.all([
-      this.minioClient.statObject(this.bucketName, attributeId),
-      this.minioClient.getObject(this.bucketName, attributeId),
-    ]);
+    let value;
+
+    const dbEntry = await this
+      .psqlStorage
+      .getAttributeLatestSnapshot(attributeId, actorId, { inAuthorizedContext });
+
+    if (dbEntry.value.startsWith('s3://')) {
+      const s3Details = JSON.parse(dbEntry.value.replace(/^s3:\/\//, ''));
+
+      assert(s3Details.bucket, 'Could not find bucket name in s3 reference');
+      assert(s3Details.object, 'Could not find object name in s3 reference');
+
+      const dataStream = await this.minioClient.getObject(s3Details.bucket, s3Details.object);
+      value = await streamToString(dataStream);
+    } else {
+      value = dbEntry.value;
+    }
 
     return {
-      value: await streamToString(dataStream),
+      value,
       changeId: '2147483647',
-      actorId: stats.metaData['actorId'],
-      createdAt: Date.parse(stats.metaData['createdAt']),
-      updatedAt: Date.parse(stats.metaData['updatedAt']),
+      actorId: dbEntry.actorId,
+      createdAt: dbEntry.createdAt,
+      updatedAt: dbEntry.updatedAt,
     };
   }
 
@@ -148,11 +161,12 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     const updatedAt = new Date();
+    const toBeStored = await this.getRecordValueInDB(attributeId, actorId, value);
 
     await this.minioClient.putObject(
       this.bucketName,
       attributeId,
-      value,
+      toBeStored,
       undefined,
       {
         actorId, createdAt: new Date(), updatedAt,
@@ -160,5 +174,29 @@ export default class AttributeStorage implements IsAttributeStorage {
     );
 
     return { id: '2147483647', updatedAt };
+  }
+
+  private async getRecordValueInDB(
+    attributeId: string,
+    actorId: string,
+    value: string,
+  ): Promise<string> {
+    let toBeStored = value;
+
+    if (isS3Configured()) {
+      await this.minioClient.putObject(
+        this.bucketName,
+        attributeId,
+        value,
+        undefined,
+        {
+          actorId, createdAt: new Date(), updatedAt: new Date(),
+        },
+      );
+
+      toBeStored = `s3://${JSON.stringify({ bucket: this.bucketName, object: attributeId })}`;
+    }
+
+    return toBeStored;
   }
 }

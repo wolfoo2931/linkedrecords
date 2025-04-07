@@ -124,6 +124,8 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS users (_id SERIAL, id CHAR(40), hashed_email CHAR(40), username CHAR(40));
       CREATE TABLE IF NOT EXISTS kv_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
       CREATE TABLE IF NOT EXISTS bl_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
+      ALTER TABLE kv_attributes ADD COLUMN IF NOT EXISTS size int DEFAULT NULL;
+      ALTER TABLE bl_attributes ADD COLUMN IF NOT EXISTS size int DEFAULT NULL;
       CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts (subject);
       CREATE INDEX IF NOT EXISTS idx_facts_predicate ON facts (predicate);
       CREATE INDEX IF NOT EXISTS idx_facts_object ON facts (object);

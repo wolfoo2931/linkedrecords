@@ -1,3 +1,4 @@
+import assert from 'assert';
 import IsLogger from '../../../lib/is_logger';
 import IsAttributeStorage from '../abstract/is_attribute_storage';
 import { AttributeSnapshot, AttributeChange, AttributeChangeCriteria } from './types';
@@ -5,32 +6,32 @@ import { AttributeSnapshot, AttributeChange, AttributeChangeCriteria } from './t
 /* eslint-disable import/prefer-default-export */
 import PsqlStorageWithHistory from './psql_with_history';
 import PsqlStorage from './psql';
-import S3Storage from './s3';
+import BlobStorage from './blob';
 
 export default class AttributeStorage implements IsAttributeStorage {
   pgStorageWithHistory: IsAttributeStorage;
 
-  pgStorage: IsAttributeStorage;
+  kvStorage: IsAttributeStorage;
 
-  s3Storage: IsAttributeStorage;
+  blobStorage: IsAttributeStorage;
 
   constructor(logger: IsLogger) {
     this.pgStorageWithHistory = new PsqlStorageWithHistory(logger);
-    this.pgStorage = new PsqlStorage(logger);
-    this.s3Storage = process.env['S3_ENDPOINT']
-      ? new S3Storage(logger)
-      : this.pgStorage;
+    this.kvStorage = new PsqlStorage(logger, 'kv');
+    this.blobStorage = process.env['S3_ENDPOINT']
+      ? new BlobStorage(logger)
+      : new PsqlStorage(logger, 'bl');
   }
 
   getStorage(attributeId): IsAttributeStorage {
     const [type] = attributeId.split('-');
 
     if (type === 'bl') {
-      return this.s3Storage;
+      return this.blobStorage;
     }
 
     if (type === 'kv') {
-      return this.pgStorage;
+      return this.kvStorage;
     }
 
     return this.pgStorageWithHistory;
@@ -75,7 +76,7 @@ export default class AttributeStorage implements IsAttributeStorage {
 
     return Promise.all([
       ...(await this.pgStorageWithHistory.createAllAttributes(attributesWithHistory)),
-      ...(await this.pgStorage.createAllAttributes(attributesWithoutHistory)),
+      ...(await this.kvStorage.createAllAttributes(attributesWithoutHistory)),
     ]);
   }
 
@@ -120,15 +121,34 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
-    const storageDrivers = [
-      this.pgStorageWithHistory,
-      this.pgStorage,
-    ];
+    const nodeStorageMap = this.groupNodesByStorageDriver(nodes);
+    const groupedNodes = Array.from(nodeStorageMap.entries());
+    const sisesPromises = groupedNodes
+      .map(([storageDriver, n]) => storageDriver.getSizeInBytesForAllAttributes(n))
+      .filter((x) => x);
 
-    const sizes = await Promise.all(storageDrivers.map(
-      (s) => s.getSizeInBytesForAllAttributes(nodes),
-    ));
+    const sizes = await Promise.all(sisesPromises);
 
     return sizes.reduce((acc, curr) => acc + curr, 0);
+  }
+
+  private groupNodesByStorageDriver(nodes: string[]): Map<IsAttributeStorage, string[]> {
+    const nodeStorageMap = new Map<IsAttributeStorage, string[]>();
+
+    nodes.forEach((n) => {
+      const storage = this.getStorage(n);
+      let group = nodeStorageMap.get(storage);
+
+      if (!group) {
+        nodeStorageMap.set(storage, []);
+        group = nodeStorageMap.get(storage);
+      }
+
+      assert(group, `could not find storage driver for attribute id: ${n}`);
+
+      group?.push(n);
+    });
+
+    return nodeStorageMap;
   }
 }
