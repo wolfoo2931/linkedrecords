@@ -28,30 +28,32 @@ export default class AttributeStorage implements IsAttributeStorage {
 
   psqlStorage: PsqlAttributeStorage;
 
-  minioClient: Client;
+  minioClient?: Client;
 
-  bucketName: string;
+  bucketName?: string;
 
   constructor(logger: IsLogger) {
     this.logger = logger;
 
     this.psqlStorage = new PsqlAttributeStorage(this.logger, 'bl');
 
-    ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_USE_SSL'].forEach((envVar) => {
-      if (!process.env[envVar]) {
-        throw new Error(`Missing ${envVar} environment variable`);
-      }
-    });
+    if (isS3Configured()) {
+      ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_USE_SSL'].forEach((envVar) => {
+        if (!process.env[envVar]) {
+          throw new Error(`Missing ${envVar} environment variable`);
+        }
+      });
 
-    this.bucketName = process.env['S3_BUCKET']!;
+      this.bucketName = process.env['S3_BUCKET']!;
 
-    this.minioClient = new Client({
-      endPoint: process.env['S3_ENDPOINT']!,
-      port: parseInt(process.env['S3_PORT'] || '9000', 10),
-      useSSL: process.env['S3_USE_SSL'] === 'true',
-      accessKey: process.env['S3_ACCESS_KEY']!,
-      secretKey: process.env['S3_SECRET_KEY']!,
-    });
+      this.minioClient = new Client({
+        endPoint: process.env['S3_ENDPOINT']!,
+        port: parseInt(process.env['S3_PORT'] || '9000', 10),
+        useSSL: process.env['S3_USE_SSL'] === 'true',
+        accessKey: process.env['S3_ACCESS_KEY']!,
+        secretKey: process.env['S3_SECRET_KEY']!,
+      });
+    }
   }
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
@@ -93,7 +95,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   ) : Promise<{ id: string }> {
     const toBeStored = await this.getRecordValueInDB(attributeId, actorId, value);
 
-    this.psqlStorage.createAttributeWithoutFactsCheck(
+    await this.psqlStorage.createAttributeWithoutFactsCheck(
       attributeId,
       actorId,
       toBeStored,
@@ -125,6 +127,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     if (dbEntry.value.startsWith('s3://')) {
       const s3Details = JSON.parse(dbEntry.value.replace(/^s3:\/\//, ''));
 
+      assert(this.minioClient, 'S3 configuration was not found in the environment variables!');
       assert(s3Details.bucket, 'Could not find bucket name in s3 reference');
       assert(s3Details.object, 'Could not find object name in s3 reference');
 
@@ -160,20 +163,15 @@ export default class AttributeStorage implements IsAttributeStorage {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
 
-    const updatedAt = new Date();
     const toBeStored = await this.getRecordValueInDB(attributeId, actorId, value);
 
-    await this.minioClient.putObject(
-      this.bucketName,
+    return this.psqlStorage.insertAttributeSnapshot(
       attributeId,
+      actorId,
       toBeStored,
       undefined,
-      {
-        actorId, createdAt: new Date(), updatedAt,
-      },
+      Buffer.byteLength(value, 'utf8'),
     );
-
-    return { id: '2147483647', updatedAt };
   }
 
   private async getRecordValueInDB(
@@ -181,22 +179,23 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ): Promise<string> {
-    let toBeStored = value;
-
-    if (isS3Configured()) {
-      await this.minioClient.putObject(
-        this.bucketName,
-        attributeId,
-        value,
-        undefined,
-        {
-          actorId, createdAt: new Date(), updatedAt: new Date(),
-        },
-      );
-
-      toBeStored = `s3://${JSON.stringify({ bucket: this.bucketName, object: attributeId })}`;
+    if (!isS3Configured()) {
+      return value;
     }
 
-    return toBeStored;
+    assert(this.minioClient, 'S3 configuration was not found in the environment variables!');
+    assert(this.bucketName, 'S3 configuration was not found in the environment variables!');
+
+    await this.minioClient.putObject(
+      this.bucketName,
+      attributeId,
+      value,
+      undefined,
+      {
+        actorId, createdAt: new Date(), updatedAt: new Date(),
+      },
+    );
+
+    return `s3://${JSON.stringify({ bucket: this.bucketName, object: attributeId })}`;
   }
 }

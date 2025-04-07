@@ -18,9 +18,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   constructor(logger: IsLogger) {
     this.pgStorageWithHistory = new PsqlStorageWithHistory(logger);
     this.kvStorage = new PsqlStorage(logger, 'kv');
-    this.blobStorage = process.env['S3_ENDPOINT']
-      ? new BlobStorage(logger)
-      : new PsqlStorage(logger, 'bl');
+    this.blobStorage = new BlobStorage(logger);
   }
 
   getStorage(attributeId): IsAttributeStorage {
