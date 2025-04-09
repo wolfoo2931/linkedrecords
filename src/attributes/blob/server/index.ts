@@ -1,7 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+/* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import FileType from 'file-type';
+import assert from 'assert';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
@@ -17,9 +17,10 @@ IsAttributeStorage
   }
 
   async create(value: Blob) : Promise<{ id: string }> {
+    const encoding = 'base64';
     await this.createAccountableFact();
 
-    const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
+    const content = `data:${value.type};${encoding},${Buffer.from(await value.arrayBuffer()).toString(encoding)}`;
     return this.storage.createAttribute(this.id, this.actorId, content);
   }
 
@@ -41,14 +42,19 @@ IsAttributeStorage
     updatedAt: number
   }> {
     const content = await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
-    const match = content.value.match(/^data:(.*?);base64,/);
+    const match = content.value.match(/^data:(.*?);(.*?),/);
 
     if (!match) {
       throw new Error('Attribute content seems not to be a blob type');
     }
 
+    const encoding = match[2];
     let mimetype = match[1];
-    const data = Buffer.from(content.value.replace(/^data:(.*?);base64,/, ''), 'base64');
+
+    assert(mimetype, 'No mimetype detected for the given blob attribute');
+    assert(encoding === 'base64' || encoding === 'utf8', 'No valid encoding detected for the given blob attribute');
+
+    const data = Buffer.from(content.value.replace(new RegExp(`^data:(.*?);${encoding},`), ''), encoding);
 
     if (mimetype === 'application/octet-stream') {
       try {
@@ -68,17 +74,18 @@ IsAttributeStorage
   }
 
   async set(value: Blob) : Promise<{ id: string }> {
-    const content = `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
+    const content = `data:${value.type};utf-8,${await value.text()}`;
     return this.storage.insertAttributeSnapshot(this.id, this.actorId, content);
   }
 
   async change(
     changeWithMetadata: SerializedChangeWithMetadata<BlobChange>,
   ) : Promise<SerializedChangeWithMetadata<BlobChange>> {
+    const newValue = changeWithMetadata.change.value;
     const insertResult = await this.storage.insertAttributeSnapshot(
       this.id,
       this.actorId,
-      `data:${changeWithMetadata.change.value.type};base64,${Buffer.from(await changeWithMetadata.change.value.arrayBuffer()).toString('base64')}`,
+      `data:${newValue.type};utf-8,${await newValue.text()}`,
     );
 
     return new SerializedChangeWithMetadata(
