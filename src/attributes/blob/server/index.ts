@@ -6,14 +6,27 @@ import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
+import IsLogger from '../../../../lib/is_logger';
+import AttributeStorage from '../../attribute_storage/psql';
 
 export default class BlobAttribute extends AbstractAttributeServer<
 Blob,
-BlobChange,
-IsAttributeStorage
+BlobChange
 > {
+  storage: IsAttributeStorage;
+
   public static getDataTypePrefix(): string {
     return 'bl';
+  }
+
+  constructor(
+    id: string,
+    clientId: string,
+    actorId: string,
+    logger: IsLogger,
+  ) {
+    super(id, clientId, actorId, logger);
+    this.storage = new AttributeStorage(logger, 'bl');
   }
 
   async create(value: Blob) : Promise<{ id: string }> {
