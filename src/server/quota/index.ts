@@ -1,13 +1,14 @@
 /* eslint-disable import/no-cycle */
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
-import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
-import AttributeStorage from '../../attributes/attribute_storage';
 import Fact from '../../facts/server';
 import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import PaymentProvider from '../payment_provider';
+import AttributeStoragePsqlWithHistory from '../../attributes/attribute_storage/psql_with_history';
+import AttributeStoragePsql from '../../attributes/attribute_storage/psql';
+import AttributeStorageBlob from '../../attributes/attribute_storage/blob';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
@@ -35,8 +36,6 @@ export default class Quota {
   readonly nodeId: string;
 
   logger: IsLogger;
-
-  attributeStorage: AttributeStorage;
 
   pool: PgPoolWithLog;
 
@@ -111,7 +110,6 @@ export default class Quota {
   }
 
   constructor(nodeId: string, logger: IsLogger) {
-    this.attributeStorage = new AttributeStorage(logger);
     this.pool = new PgPoolWithLog(logger);
     this.nodeId = nodeId;
     this.logger = logger;
@@ -139,7 +137,7 @@ export default class Quota {
 
     const [totalStorageAvailable, usedStorage] = await Promise.all([
       this.getTotalStorageAvailable(data),
-      this.getUsedStorageSize(),
+      this.getUsedStorageSize(this.logger),
     ]);
 
     let accounteeInformation;
@@ -238,12 +236,11 @@ export default class Quota {
 
   static async ensureStorageSpaceToSave<T>(
     actorId: string,
-    attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
+    attributesAndValuesToSave: [AbstractAttributeServer<T, any>, T][],
     logger: IsLogger,
     factsToSave: Fact[] = [],
   ): Promise<void> {
     const storageViolations: string[] = [];
-    const attributeStorage = new AttributeStorage(logger);
     const accountableMap = await Quota.getAccountableMap(logger, actorId, factsToSave);
 
     const storageRequiredByAccountee = await Quota.getStorageRequiredByAccountee(
@@ -257,7 +254,6 @@ export default class Quota {
         const available = await Quota.estimateRemainingStorageSize(
           accounteeId,
           storageRequired,
-          attributeStorage,
           logger,
         );
 
@@ -275,7 +271,6 @@ export default class Quota {
   private static async estimateRemainingStorageSize(
     accounteeId: string,
     requiredStorage: number,
-    storage: IsAttributeStorage,
     logger: IsLogger,
   ): Promise<number> {
     const mb = 1048576;
@@ -288,7 +283,6 @@ export default class Quota {
       uncheckedStorageConsumption[accounteeId] = 0;
       lastKnownStorageAvailable[accounteeId] = await Quota.getRemainingStorageSize(
         accounteeId,
-        storage,
         logger,
       );
     }
@@ -298,17 +292,16 @@ export default class Quota {
 
   private static async getRemainingStorageSize(
     accounteeId: string,
-    storage: IsAttributeStorage,
     logger: IsLogger,
   ): Promise<number> {
     const quota = new Quota(accounteeId, logger);
     const totalStoragePromise = quota.getTotalStorageAvailable();
-    const usedStoragePromise = quota.getUsedStorageSize();
+    const usedStoragePromise = quota.getUsedStorageSize(logger);
 
     return (await totalStoragePromise) - (await usedStoragePromise);
   }
 
-  private async getUsedStorageSize(): Promise<number> {
+  private async getUsedStorageSize(logger: IsLogger): Promise<number> {
     const accountableNodes = await this.getAccountableNodes();
 
     // FIXME: we need a pagination / map reduce approach here
@@ -318,7 +311,18 @@ export default class Quota {
       this.logger.warn(`accountable nodes for accounteeId ${this.nodeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
-    return this.attributeStorage.getSizeInBytesForAllAttributes(accountableNodes);
+    const storageDrivers = [
+      new AttributeStoragePsqlWithHistory(logger),
+      new AttributeStoragePsql(logger, 'kv'),
+      new AttributeStoragePsql(logger, 'bl'),
+      new AttributeStorageBlob(logger),
+    ];
+
+    const sizes = await Promise.all(storageDrivers.map(
+      (s) => s.getSizeInBytesForAllAttributes(accountableNodes),
+    ));
+
+    return sizes.reduce((acc, curr) => acc + curr, 0);
   }
 
   private static async getAccountableMap(
@@ -353,7 +357,7 @@ export default class Quota {
 
   private static async getStorageRequiredByAccountee<T>(
     actorId: string,
-    attributesAndValuesToSave: [AbstractAttributeServer<T, any, any>, T][],
+    attributesAndValuesToSave: [AbstractAttributeServer<T, any>, T][],
     accountableMap: Record<string, string>,
   ) {
     const storageRequiredByAccountee: Record<string, number> = {};

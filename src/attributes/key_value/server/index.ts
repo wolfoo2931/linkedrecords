@@ -7,22 +7,24 @@ import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_
 import KeyValueChange from '../key_value_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
 import Fact from '../../../facts/server';
+import IsLogger from '../../../../lib/is_logger';
+import AttributeStorage from '../../attribute_storage/psql';
 
 const queue: IsQueue = QueuedTasks.create();
 
 export default class KeyValueAttribute extends AbstractAttributeServer<
 object,
-KeyValueChange,
-IsAttributeStorage
+KeyValueChange
 > {
+  storage: IsAttributeStorage;
+
   public static getDataTypePrefix(): string {
     return 'kv';
   }
 
   public static async createAll(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    attr: [AbstractAttributeServer<any, any, any>, any][],
-    storage: IsAttributeStorage,
+    attr: [AbstractAttributeServer<any, any>, any][],
   ): Promise<string[]> {
     if (!attr[0]) {
       throw new Error('invalid attribute data found when creating all attributes');
@@ -35,6 +37,8 @@ IsAttributeStorage
       attr[0][0].logger,
     );
 
+    const storage = new AttributeStorage(attr[0][0].logger, 'kv');
+
     const result = await storage.createAllAttributes(attr.map((a) => ({
       attributeId: a[0].id,
       actorId: a[0].actorId,
@@ -42,6 +46,17 @@ IsAttributeStorage
     })));
 
     return result.map((r) => r.id);
+  }
+
+  constructor(
+    id: string,
+    clientId: string,
+    actorId: string,
+    logger: IsLogger,
+  ) {
+    super(id, clientId, actorId, logger);
+
+    this.storage = new AttributeStorage(logger, 'kv');
   }
 
   async getStorageRequiredForValue(value: object): Promise<number> {

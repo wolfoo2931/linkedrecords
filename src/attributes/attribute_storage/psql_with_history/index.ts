@@ -61,7 +61,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    if (await this.pgPool.findAny('SELECT id FROM facts WHERE subject=$1', [attributeId])) {
+    if (await Fact.areKnownSubjects([attributeId], this.logger)) {
       throw new Error('attributeId is invalid');
     }
 
