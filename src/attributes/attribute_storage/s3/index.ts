@@ -51,7 +51,7 @@ export default class AttributeStorage implements IsAttributeStorage {
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
     const sizes = await Promise.all(nodes.map((node) => this.getObjectSize(node)));
-    return sizes.reduce((acc, x) => acc + x);
+    return sizes.reduce((acc, x) => acc + x, 0);
   }
 
   async createAllAttributes(
