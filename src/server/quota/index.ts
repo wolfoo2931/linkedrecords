@@ -8,7 +8,7 @@ import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_c
 import PaymentProvider from '../payment_provider';
 import AttributeStoragePsqlWithHistory from '../../attributes/attribute_storage/psql_with_history';
 import AttributeStoragePsql from '../../attributes/attribute_storage/psql';
-import AttributeStorageBlob from '../../attributes/attribute_storage/blob';
+import AttributeStorageS3 from '../../attributes/attribute_storage/s3';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
@@ -315,7 +315,7 @@ export default class Quota {
       new AttributeStoragePsqlWithHistory(logger),
       new AttributeStoragePsql(logger, 'kv'),
       new AttributeStoragePsql(logger, 'bl'),
-      new AttributeStorageBlob(logger),
+      new AttributeStorageS3(logger),
     ];
 
     const sizes = await Promise.all(storageDrivers.map(

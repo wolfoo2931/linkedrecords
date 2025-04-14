@@ -2,18 +2,20 @@
 /* eslint-disable class-methods-use-this */
 import FileType from 'file-type';
 import assert from 'assert';
-import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
 import IsLogger from '../../../../lib/is_logger';
-import AttributeStorage from '../../attribute_storage/psql';
+import PsqlStorage from '../../attribute_storage/psql';
+import S3Storage from '../../attribute_storage/s3';
 
 export default class BlobAttribute extends AbstractAttributeServer<
 Blob,
 BlobChange
 > {
-  storage: IsAttributeStorage;
+  storage: S3Storage | PsqlStorage;
+
+  isS3Configured: boolean = S3Storage.isConfigurationAvailable();
 
   public static getDataTypePrefix(): string {
     return 'bl';
@@ -26,15 +28,16 @@ BlobChange
     logger: IsLogger,
   ) {
     super(id, clientId, actorId, logger);
-    this.storage = new AttributeStorage(logger, 'bl');
+
+    this.storage = this.isS3Configured
+      ? new S3Storage(logger)
+      : new PsqlStorage(logger, 'bl');
   }
 
   async create(value: Blob) : Promise<{ id: string }> {
-    const encoding = 'base64';
     await this.createAccountableFact();
 
-    const content = `data:${value.type};${encoding},${Buffer.from(await value.arrayBuffer()).toString(encoding)}`;
-    return this.storage.createAttribute(this.id, this.actorId, content);
+    return this.storage.createAttribute(this.id, this.actorId, await this.marshal(value));
   }
 
   async getStorageRequiredForValue(value: Blob): Promise<number> {
@@ -55,39 +58,15 @@ BlobChange
     updatedAt: number
   }> {
     const content = await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
-    const match = content.value.match(/^data:(.*?);(.*?),/);
-
-    if (!match) {
-      throw new Error('Attribute content seems not to be a blob type');
-    }
-
-    const encoding = match[2];
-    let mimetype = match[1];
-
-    assert(mimetype, 'No mimetype detected for the given blob attribute');
-    assert(encoding === 'base64' || encoding === 'utf8', 'No valid encoding detected for the given blob attribute');
-
-    const data = Buffer.from(content.value.replace(new RegExp(`^data:(.*?);${encoding},`), ''), encoding);
-
-    if (mimetype === 'application/octet-stream') {
-      try {
-        const typeFromBinary = await FileType.fromBuffer(data);
-        if (typeFromBinary && typeFromBinary.mime) {
-          mimetype = typeFromBinary.mime;
-        }
-      } catch (ex) {
-        this.logger.warn(`failed to determine mimetype for blob attribute with id: ${this.id}`);
-      }
-    }
 
     return {
       ...content,
-      value: new Blob([data], { type: mimetype }),
+      value: await this.unmarshal(content.value),
     };
   }
 
   async set(value: Blob) : Promise<{ id: string }> {
-    const content = `data:${value.type};utf-8,${await value.text()}`;
+    const content = await this.marshal(value);
     return this.storage.insertAttributeSnapshot(this.id, this.actorId, content);
   }
 
@@ -98,7 +77,7 @@ BlobChange
     const insertResult = await this.storage.insertAttributeSnapshot(
       this.id,
       this.actorId,
-      `data:${newValue.type};utf-8,${await newValue.text()}`,
+      await this.marshal(newValue),
     );
 
     return new SerializedChangeWithMetadata(
@@ -107,5 +86,50 @@ BlobChange
       changeWithMetadata.clientId,
       new BlobChange(new Blob(), insertResult.id),
     );
+  }
+
+  private async marshal(value: Blob): Promise<string> {
+    return `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
+
+    // TODO: this does not work with the current implementation of S3Storage
+    return this.isS3Configured
+      ? value.text()
+      : `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
+  }
+
+  private async unmarshal(value: string): Promise<Blob> {
+    const match = value.match(/^data:(.*?);(.*?),/);
+    let rawContent = value;
+    let data;
+    let mimetype;
+    let encoding;
+
+    if (match) {
+      [, mimetype, encoding] = match;
+
+      rawContent = value.replace(new RegExp(`^data:(.*?);${encoding},`), '');
+
+      assert(mimetype, 'No mimetype detected for the given blob attribute');
+      assert(encoding === 'base64' || encoding === 'utf8', 'No valid encoding detected for the given blob attribute');
+
+      data = Buffer.from(rawContent, encoding);
+    }
+
+    if (!mimetype || mimetype === 'application/octet-stream') {
+      try {
+        const typeFromBinary = await FileType.fromBuffer(data);
+        if (typeFromBinary && typeFromBinary.mime) {
+          mimetype = typeFromBinary.mime;
+        }
+      } catch (ex) {
+        this.logger.warn(`failed to determine mimetype for blob attribute with id: ${this.id}`);
+      }
+    }
+
+    if (!data) {
+      data = Buffer.from(value, 'utf8');
+    }
+
+    return new Blob([data], { type: mimetype });
   }
 }

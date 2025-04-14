@@ -8,7 +8,6 @@ import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
 import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
-import PsqlAttributeStorage from '../psql';
 
 function streamToString(stream: Readable): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -19,45 +18,40 @@ function streamToString(stream: Readable): Promise<string> {
   });
 }
 
-function isS3Configured() {
-  return !!process.env['S3_ENDPOINT'];
-}
-
 export default class AttributeStorage implements IsAttributeStorage {
   logger: IsLogger;
 
-  psqlStorage: PsqlAttributeStorage;
+  minioClient: Client;
 
-  minioClient?: Client;
+  bucketName: string;
 
-  bucketName?: string;
+  static isConfigurationAvailable() {
+    return !!process.env['S3_ENDPOINT'];
+  }
 
   constructor(logger: IsLogger) {
     this.logger = logger;
 
-    this.psqlStorage = new PsqlAttributeStorage(this.logger, 'bl');
+    ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_USE_SSL'].forEach((envVar) => {
+      if (!process.env[envVar]) {
+        throw new Error(`Missing ${envVar} environment variable`);
+      }
+    });
 
-    if (isS3Configured()) {
-      ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_USE_SSL'].forEach((envVar) => {
-        if (!process.env[envVar]) {
-          throw new Error(`Missing ${envVar} environment variable`);
-        }
-      });
+    this.bucketName = process.env['S3_BUCKET']!;
 
-      this.bucketName = process.env['S3_BUCKET']!;
-
-      this.minioClient = new Client({
-        endPoint: process.env['S3_ENDPOINT']!,
-        port: parseInt(process.env['S3_PORT'] || '9000', 10),
-        useSSL: process.env['S3_USE_SSL'] === 'true',
-        accessKey: process.env['S3_ACCESS_KEY']!,
-        secretKey: process.env['S3_SECRET_KEY']!,
-      });
-    }
+    this.minioClient = new Client({
+      endPoint: process.env['S3_ENDPOINT']!,
+      port: parseInt(process.env['S3_PORT'] || '9000', 10),
+      useSSL: process.env['S3_USE_SSL'] === 'true',
+      accessKey: process.env['S3_ACCESS_KEY']!,
+      secretKey: process.env['S3_SECRET_KEY']!,
+    });
   }
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
-    return this.psqlStorage.getSizeInBytesForAllAttributes(nodes);
+    const sizes = await Promise.all(nodes.map((node) => this.getObjectSize(node)));
+    return sizes.reduce((acc, x) => acc + x);
   }
 
   async createAllAttributes(
@@ -93,13 +87,16 @@ export default class AttributeStorage implements IsAttributeStorage {
     actorId: string,
     value: string,
   ) : Promise<{ id: string }> {
-    const toBeStored = await this.getRecordValueInDB(attributeId, actorId, value);
+    const now = new Date();
 
-    await this.psqlStorage.createAttributeWithoutFactsCheck(
+    await this.minioClient.putObject(
+      this.bucketName,
       attributeId,
-      actorId,
-      toBeStored,
-      Buffer.byteLength(value, 'utf8'),
+      value,
+      undefined,
+      {
+        actorId, createdAt: now, updatedAt: now,
+      },
     );
 
     return { id: attributeId };
@@ -118,31 +115,17 @@ export default class AttributeStorage implements IsAttributeStorage {
       }
     }
 
-    let value;
-
-    const dbEntry = await this
-      .psqlStorage
-      .getAttributeLatestSnapshot(attributeId, actorId, { inAuthorizedContext });
-
-    if (dbEntry.value.startsWith('s3://')) {
-      const s3Details = JSON.parse(dbEntry.value.replace(/^s3:\/\//, ''));
-
-      assert(this.minioClient, 'S3 configuration was not found in the environment variables!');
-      assert(s3Details.bucket, 'Could not find bucket name in s3 reference');
-      assert(s3Details.object, 'Could not find object name in s3 reference');
-
-      const dataStream = await this.minioClient.getObject(s3Details.bucket, s3Details.object);
-      value = await streamToString(dataStream);
-    } else {
-      value = dbEntry.value;
-    }
+    const [dataStream, stats] = await Promise.all([
+      this.minioClient.getObject(this.bucketName, attributeId),
+      this.minioClient.statObject(this.bucketName, attributeId),
+    ]);
 
     return {
-      value,
+      value: await streamToString(dataStream),
       changeId: '2147483647',
-      actorId: dbEntry.actorId,
-      createdAt: dbEntry.createdAt,
-      updatedAt: dbEntry.updatedAt,
+      actorId: stats.metaData['actorId'] || stats.metaData['actorid'],
+      createdAt: new Date(stats.metaData['createdAt'] || stats.metaData['createdat']).getTime(),
+      updatedAt: new Date(stats.metaData['updatedAt'] || stats.metaData['updatedat']).getTime(),
     };
   }
 
@@ -163,25 +146,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
     }
 
-    const toBeStored = await this.getRecordValueInDB(attributeId, actorId, value);
-
-    return this.psqlStorage.insertAttributeSnapshot(
-      attributeId,
-      actorId,
-      toBeStored,
-      undefined,
-      Buffer.byteLength(value, 'utf8'),
-    );
-  }
-
-  private async getRecordValueInDB(
-    attributeId: string,
-    actorId: string,
-    value: string,
-  ): Promise<string> {
-    if (!isS3Configured()) {
-      return value;
-    }
+    const updatedAt = new Date();
 
     assert(this.minioClient, 'S3 configuration was not found in the environment variables!');
     assert(this.bucketName, 'S3 configuration was not found in the environment variables!');
@@ -192,10 +157,36 @@ export default class AttributeStorage implements IsAttributeStorage {
       value,
       undefined,
       {
-        actorId, createdAt: new Date(), updatedAt: new Date(),
+        actorId, createdAt: new Date(), updatedAt,
       },
     );
 
-    return `s3://${JSON.stringify({ bucket: this.bucketName, object: attributeId })}`;
+    return {
+      id: attributeId,
+      updatedAt,
+    };
+  }
+
+  private async getObjectSize(nodeId: string): Promise<number> {
+    // const cacheKey = `node-size-${nodeId}`;
+    // const cached = cache.get(cacheKey);
+
+    // if (cached) {
+    //   return cached;
+    // }
+
+    try {
+      const stats = await this.minioClient.statObject(this.bucketName, nodeId);
+      const { size } = stats;
+
+      // cache.set(cacheKey, size);
+      return size || 0;
+    } catch (ex: any) {
+      if (ex.code === 'NotFound') {
+        return 0;
+      }
+
+      throw ex;
+    }
   }
 }
