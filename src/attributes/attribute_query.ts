@@ -6,7 +6,6 @@ import KeyValueAttribute from './key_value/server';
 import BlobAttribute from './blob/server';
 import IsLogger from '../../lib/is_logger';
 import AbstractAttributeClient from './abstract/abstract_attribute_client';
-import IsAttributeStorage from './abstract/is_attribute_storage';
 
 export type FactQueryWithOptionalSubjectPlaceholder =
   [string, string, string?] |
@@ -70,7 +69,6 @@ export default class QueryExecutor {
     query: AttributeQuery | CompoundAttributeQuery,
     clientId,
     actorId,
-    storage,
   ) {
     // undefined | string | string[] | { [key: string]: string | string[] };
     let resultWithIds = await this.resolveToIds(query, actorId);
@@ -103,7 +101,7 @@ export default class QueryExecutor {
       });
     }
 
-    const attributes = await this.loadAttributes(flatIds, clientId, actorId, storage);
+    const attributes = await this.loadAttributes(flatIds, clientId, actorId);
 
     if (typeof resultWithIds === 'string') {
       return attributes[resultWithIds];
@@ -217,7 +215,6 @@ export default class QueryExecutor {
     attributeIDs: string[],
     clientId: string,
     actorId: string,
-    storage: IsAttributeStorage,
   ): Promise<Record<string, any>> {
     const attributes = {};
 
@@ -227,7 +224,7 @@ export default class QueryExecutor {
       if (!AttributeClass) {
         attributes[id] = null;
       } else {
-        attributes[id] = new AttributeClass(id, clientId, actorId, storage, this.logger);
+        attributes[id] = new AttributeClass(id, clientId, actorId, this.logger);
         attributes[id] = await attributes[id].get({ inAuthorizedContext: true });
         attributes[id].id = id;
       }

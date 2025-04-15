@@ -2,7 +2,6 @@ import md5 from 'md5';
 import { uuidv7 as uuid } from 'uuidv7';
 import * as he from 'he';
 import QueryExecutor from '../../attributes/attribute_query';
-import AttributeStorage from '../../attributes/attribute_storage';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
 import IsLogger from '../../../lib/is_logger';
 
@@ -29,7 +28,10 @@ function getAttributeIdByRequest(req) {
   return req.query?.attributeId || req.params.attributeId;
 }
 
-function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any, any, any> {
+function getAttributeByParams(
+  req,
+  AttributeClass,
+): AbstractAttributeServer<any, any> {
   const id = getAttributeIdByRequest(req);
 
   if (!AttributeClass) {
@@ -44,14 +46,14 @@ function getAttributeByParams(req, AttributeClass): AbstractAttributeServer<any,
     throw new Error(`The request does not contain a clientId for attribute id: ${id}`);
   }
 
-  return new AttributeClass(id, req.clientId, req.actorId, req.attributeStorage);
+  return new AttributeClass(id, req.clientId, req.actorId, req.log);
 }
 
 export function getAttributeByMessage(
   attributeId,
   message,
   logger: IsLogger,
-): AbstractAttributeServer<any, any, any> {
+): AbstractAttributeServer<any, any> {
   const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
 
   if (!AttributeClass) {
@@ -70,7 +72,6 @@ export function getAttributeByMessage(
     attributeId,
     message.clientId,
     message.actorId,
-    new AttributeStorage(logger),
     logger,
   );
 }
@@ -79,7 +80,6 @@ export default function attributeMiddleware() {
   return (req, res, next) => {
     const id = getAttributeIdByRequest(req);
 
-    req.attributeStorage = new AttributeStorage(req.log);
     req.clientId = req.query?.clientId || req.body?.clientId;
     req.actorId = req?.oidc?.user?.sub;
 

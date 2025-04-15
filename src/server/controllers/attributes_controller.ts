@@ -16,14 +16,13 @@ const attributePrefixMap = {
 
 export default {
   async index(req, res) {
-    const { clientId, actorId, attributeStorage } = req;
+    const { clientId, actorId } = req;
     const query: AttributeQuery = JSON.parse(req.query.query);
     const queryExecutor = new QueryExecutor(req.log);
     const result = await queryExecutor.resolveToAttributes(
       query,
       clientId,
       actorId,
-      attributeStorage,
     );
 
     res.send(result);
@@ -99,7 +98,6 @@ export default {
         attributeId,
         req.clientId,
         req.actorId,
-        req.attributeStorage,
         req.log,
       );
 
@@ -208,7 +206,7 @@ export default {
 
     // eslint-disable-next-line no-restricted-syntax
     for (const [AC, attributesAndValues] of attributesToSaveEntries) {
-      attributeSavePromises.push(AC.createAll(attributesAndValues, req.attributeStorage));
+      attributeSavePromises.push(AC.createAll(attributesAndValues));
     }
 
     const isNewUserScopedGraph = await Fact.isNewUserScopedGraph(

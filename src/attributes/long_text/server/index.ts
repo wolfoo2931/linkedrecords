@@ -1,20 +1,33 @@
 /* eslint-disable no-console */
 // eslint-disable-next-line max-classes-per-file
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
-import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
+import IsLogger from '../../../../lib/is_logger';
+import AttributeStorage from '../../attribute_storage/psql_with_history';
 
 const queue: IsQueue = QueuedTasks.create();
 
 export default class LongTextAttribute extends AbstractAttributeServer<
 string,
-LongTextChange,
-IsAttributeStorage
+LongTextChange
 > {
+  storage: AttributeStorage;
+
   public static getDataTypePrefix(): string {
     return 'l';
+  }
+
+  constructor(
+    id: string,
+    clientId: string,
+    actorId: string,
+    logger: IsLogger,
+  ) {
+    super(id, clientId, actorId, logger);
+
+    this.storage = new AttributeStorage(logger);
   }
 
   // eslint-disable-next-line class-methods-use-this
