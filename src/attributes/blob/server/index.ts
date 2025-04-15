@@ -8,6 +8,7 @@ import BlobChange from '../blob_change';
 import IsLogger from '../../../../lib/is_logger';
 import PsqlStorage from '../../attribute_storage/psql';
 import S3Storage from '../../attribute_storage/s3';
+import PgPoolWithLog from '../../../../lib/pg-log';
 
 export default class BlobAttribute extends AbstractAttributeServer<
 Blob,
@@ -19,6 +20,26 @@ BlobChange
 
   public static getDataTypePrefix(): string {
     return 'bl';
+  }
+
+  public static async copyFromPSQLToS3(logger: IsLogger) {
+    if (process.env['S3_COPY_FROM_BL_ATTRIBUTE_TABLE'] !== 'true' || !S3Storage.isConfigurationAvailable()) {
+      return;
+    }
+
+    const s3storage = new S3Storage(logger);
+    const pgPool = new PgPoolWithLog(logger);
+    const prefix = this.getDataTypePrefix();
+
+    const data = await pgPool.query('SELECT id, actor_id, value FROM bl_attributes');
+
+    logger.info(`copy ${data.rows.length} files to S3`);
+
+    await Promise.all(
+      data.rows.map(({ id, value, actor_id }) => s3storage.createAttributeWithoutFactsCheck(`${prefix}-${id}`, actor_id, value)),
+    );
+
+    logger.info('copy to S3 done!');
   }
 
   constructor(

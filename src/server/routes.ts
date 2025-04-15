@@ -21,6 +21,7 @@ import quotaUpgrade from './middleware/quota_upgrade';
 import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../attributes/errors/authorization_error';
 import clearCookies from './middleware/clear_cookies';
+import BlobAttribute from '../attributes/blob/server';
 
 const blobUpload = multer().single('change');
 
@@ -30,6 +31,12 @@ const limiter = rateLimit({
 });
 
 Fact.initDB();
+
+BlobAttribute.copyFromPSQLToS3({
+  warn: console.log,
+  info: console.log,
+  debug: console.log,
+});
 
 async function withAuth(req, res, controllerAction) {
   const uploadWrappedControllerAction = (request, response) => new Promise((resolve, reject) => {
@@ -91,7 +98,7 @@ function getCorsOriginConfig(): string | string[] {
     return parsed;
   }
 
-  throw new Error(`Invalid value (${process.env['CORS_ORIGIN']}) for CORS_ORIGIN, needs to be string or JSON array. `);
+  throw new Error(`Invalid value (${process.env['CORS_ORIGIN']}) for CORS_ORIGIN, needs to be string or JSON array.`);
 }
 
 async function createApp(httpServer: https.Server) {
