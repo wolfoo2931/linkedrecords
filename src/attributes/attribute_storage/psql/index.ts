@@ -6,7 +6,7 @@ import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
 import EnsureIsValid from '../../../../lib/utils/sql_values';
-import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
+import { AttributeSnapshot, AttributeChangeCriteria, AttributeValue } from '../types';
 
 function getUuidByAttributeId(attributeId: string) {
   const parts = attributeId.split('-');
@@ -14,6 +14,14 @@ function getUuidByAttributeId(attributeId: string) {
   parts.shift();
 
   return parts.join('-');
+}
+
+function calculateSize(value: AttributeValue) {
+  if (typeof value === 'string') {
+    return Buffer.byteLength(value, 'utf8');
+  }
+
+  return value.length;
 }
 
 export default class AttributeStorage implements IsAttributeStorage {
@@ -73,7 +81,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async createAllAttributes(
-    attr: { attributeId: string, actorId: string, value: string, size?: number }[],
+    attr: { attributeId: string, actorId: string, value: AttributeValue, size?: number }[],
   ) : Promise<{ id: string }[]> {
     if (!attr.length) {
       return [];
@@ -117,7 +125,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async createAttribute(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: AttributeValue,
     size?: number,
   ) : Promise<{ id: string }> {
     if (await Fact.areKnownSubjects([attributeId], this.logger)) {
@@ -135,7 +143,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async createAttributeWithoutFactsCheck(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: AttributeValue,
     size?: number,
   ) : Promise<{ id: string }> {
     const pgTableName = await this.getAttributeTableName(attributeId);
@@ -146,7 +154,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       new Date(),
       new Date(),
       value,
-      size || Buffer.byteLength(value, 'utf8'),
+      size || calculateSize(value),
     ]);
 
     return { id: attributeId };
@@ -200,7 +208,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async insertAttributeSnapshot(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: AttributeValue,
     changeId?: string,
     size?: number,
   ) : Promise<{ id: string, updatedAt: Date }> {
@@ -213,7 +221,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       actorId,
       new Date(),
       value,
-      size || Buffer.byteLength(value, 'utf8'),
+      size || calculateSize(value),
       getUuidByAttributeId(attributeId),
     ]);
 

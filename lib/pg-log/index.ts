@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 import IsLogger from '../is_logger';
 
-const pool = new Pool({
+const pool: Pool = new Pool({
   max: 3,
   connectionTimeoutMillis: 2000,
 });
@@ -35,7 +35,7 @@ export default class PgPoolWithLog {
     console.log('\n\n');
   }
 
-  async query(...args) {
+  async query(...args: [string, any[]?]) {
     let pgresult;
 
     const startTime = Date.now();

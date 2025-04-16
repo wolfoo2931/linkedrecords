@@ -1,22 +1,13 @@
 /* eslint-disable class-methods-use-this */
 
 import { Client } from 'minio';
-import { Readable } from 'stream';
+import { text } from 'stream/consumers';
 import assert from 'assert';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
-import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
-
-function streamToString(stream: Readable): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: any[] = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-  });
-}
+import { AttributeSnapshot, AttributeChangeCriteria, AttributeSnapshotReadable } from '../types';
 
 export default class AttributeStorage implements IsAttributeStorage {
   logger: IsLogger;
@@ -55,7 +46,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async createAllAttributes(
-    attrs: { attributeId: string, actorId: string, value: string }[],
+    attrs: { attributeId: string, actorId: string, value: string | Buffer }[],
   ) : Promise<{ id: string }[]> {
     if (!attrs.length) {
       return [];
@@ -69,7 +60,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async createAttribute(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: string | Buffer,
   ) : Promise<{ id: string }> {
     if (await Fact.areKnownSubjects([attributeId], this.logger)) {
       throw new Error('attributeId is invalid');
@@ -85,7 +76,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async createAttributeWithoutFactsCheck(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: string | Buffer,
   ) : Promise<{ id: string }> {
     const now = new Date();
 
@@ -121,7 +112,34 @@ export default class AttributeStorage implements IsAttributeStorage {
     ]);
 
     return {
-      value: await streamToString(dataStream),
+      value: await text(dataStream),
+      changeId: '2147483647',
+      actorId: stats.metaData['actorId'] || stats.metaData['actorid'],
+      createdAt: new Date(stats.metaData['createdAt'] || stats.metaData['createdat']).getTime(),
+      updatedAt: new Date(stats.metaData['updatedAt'] || stats.metaData['updatedat']).getTime(),
+    };
+  }
+
+  async getAttributeLatestSnapshotAsReadable(
+    attributeId: string,
+    actorId: string,
+    { inAuthorizedContext = false }: AttributeChangeCriteria = {},
+  ) : Promise<AttributeSnapshotReadable> {
+    if (!inAuthorizedContext) {
+      if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
+        // TODO: when this is thrown, it is not visible in the logs probably??
+        // And the status code is 500
+        throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+      }
+    }
+
+    const [dataStream, stats] = await Promise.all([
+      this.minioClient.getObject(this.bucketName, attributeId),
+      this.minioClient.statObject(this.bucketName, attributeId),
+    ]);
+
+    return {
+      value: dataStream,
       changeId: '2147483647',
       actorId: stats.metaData['actorId'] || stats.metaData['actorid'],
       createdAt: new Date(stats.metaData['createdAt'] || stats.metaData['createdat']).getTime(),
@@ -140,7 +158,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async insertAttributeSnapshot(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: string | Buffer,
   ) : Promise<{ id: string, updatedAt: Date }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
       throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);

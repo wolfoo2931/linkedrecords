@@ -33,4 +33,10 @@ LinkedRecords is configured via environment variables. See table below.
 | PADDLE_NOTIFICATION_SECRET | xxxx | If paddle is used for upgrading quotas this needs to be the notification secret to verify the signature of the webhook content. |
 | PADDLE_API_URL | https://sandbox-api.paddle.com | The URL of the paddle api. |
 | PADDLE_API_KEY | xxx | the paddle API key. |
+| S3_COPY_FROM_BL_ATTRIBUTE_TABLE | false | This is used for migration blob storage from postgresql to S3. |
+| S3_ENDPOINT | s3.system.svc.cluster.local | The hostname of the S3 endpoint. |
+| S3_BUCKET | linkedrecords-blobs | The name of a bucket. The bucket must exists already. |
+| S3_ACCESS_KEY | xxx | The access key id to upload blobs to S3. |
+| S3_SECRET_KEY | xxx | The secret key id to upload blobs to S3. |
+| S3_USE_SSL | false | Do not use TLS when uploading/downloading to S3. |
 
