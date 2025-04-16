@@ -5,7 +5,7 @@ import PgPoolWithLog from '../../../../lib/pg-log';
 import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
-import { AttributeSnapshot, AttributeChangeCriteria } from '../types';
+import { AttributeSnapshot, AttributeChangeCriteria, AttributeValue } from '../types';
 import EnsureIsValid from '../../../../lib/utils/sql_values';
 
 export default class AttributeStorage implements IsAttributeStorage {
@@ -51,7 +51,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async createAllAttributes(
-    attr: { attributeId: string, actorId: string, value: string }[],
+    attr: { attributeId: string, actorId: string, value: AttributeValue }[],
   ) : Promise<{ id: string }[]> {
     return Promise.all(attr.map((a) => this.createAttribute(a.attributeId, a.actorId, a.value)));
   }
@@ -59,7 +59,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async createAttribute(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: AttributeValue,
   ) : Promise<{ id: string }> {
     if (await Fact.areKnownSubjects([attributeId], this.logger)) {
       throw new Error('attributeId is invalid');
@@ -71,7 +71,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async createAttributeWithoutFactsCheck(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: AttributeValue,
   ) : Promise<{ id: string }> {
     const pgTableName = AttributeStorage.getAttributeTableName(attributeId);
 
@@ -153,7 +153,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   async insertAttributeSnapshot(
     attributeId: string,
     actorId: string,
-    value: string,
+    value: AttributeValue,
     changeId?: string,
   ) : Promise<{ id: string, updatedAt: Date }> {
     if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {

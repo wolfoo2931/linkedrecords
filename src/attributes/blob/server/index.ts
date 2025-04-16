@@ -2,6 +2,8 @@
 /* eslint-disable class-methods-use-this */
 import FileType from 'file-type';
 import assert from 'assert';
+import { Readable } from 'stream';
+import streamToBlob from 'stream-to-blob';
 import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
@@ -9,12 +11,13 @@ import IsLogger from '../../../../lib/is_logger';
 import PsqlStorage from '../../attribute_storage/psql';
 import S3Storage from '../../attribute_storage/s3';
 import PgPoolWithLog from '../../../../lib/pg-log';
+import IsAttributeStorage from '../../abstract/is_attribute_storage';
 
 export default class BlobAttribute extends AbstractAttributeServer<
 Blob,
 BlobChange
 > {
-  storage: S3Storage | PsqlStorage;
+  storage: IsAttributeStorage;
 
   isS3Configured: boolean = S3Storage.isConfigurationAvailable();
 
@@ -36,7 +39,11 @@ BlobChange
     logger.info(`copy ${data.rows.length} files to S3`);
 
     await Promise.all(
-      data.rows.map(({ id, value, actor_id }) => s3storage.createAttributeWithoutFactsCheck(`${prefix}-${id}`, actor_id, value)),
+      data.rows.map(async ({ id, value, actor_id }) => {
+        const interVal = await BlobAttribute.unmarshal(value, id, logger);
+        const buffer = await BlobAttribute.marshal(interVal, S3Storage.isConfigurationAvailable());
+        await s3storage.createAttributeWithoutFactsCheck(`${prefix}-${id}`, actor_id, buffer);
+      }),
     );
 
     logger.info('copy to S3 done!');
@@ -78,7 +85,9 @@ BlobChange
     createdAt: number,
     updatedAt: number
   }> {
-    const content = await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
+    const content = this.storage.getAttributeLatestSnapshotAsReadable
+      ? await this.storage.getAttributeLatestSnapshotAsReadable(this.id, this.actorId, { maxChangeId: '2147483647' })
+      : await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
 
     return {
       ...content,
@@ -109,16 +118,29 @@ BlobChange
     );
   }
 
-  private async marshal(value: Blob): Promise<string> {
-    return `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
+  private async marshal(value: Blob): Promise<string | Buffer> {
+    return BlobAttribute.marshal(value, this.isS3Configured);
+  }
 
-    // TODO: this does not work with the current implementation of S3Storage
-    return this.isS3Configured
-      ? value.text()
+  private static async marshal(value: Blob, isS3Configured: boolean): Promise<string | Buffer> {
+    return isS3Configured
+      ? Buffer.from(await value.arrayBuffer())
       : `data:${value.type};base64,${Buffer.from(await value.arrayBuffer()).toString('base64')}`;
   }
 
-  private async unmarshal(value: string): Promise<Blob> {
+  private async unmarshal(value: string | Readable): Promise<Blob> {
+    return BlobAttribute.unmarshal(value, this.id, this.logger);
+  }
+
+  private static async unmarshal(
+    value: string | Readable,
+    attributeId: string,
+    logger: IsLogger,
+  ): Promise<Blob> {
+    if (value instanceof Readable) {
+      return streamToBlob(value);
+    }
+
     const match = value.match(/^data:(.*?);(.*?),/);
     let rawContent = value;
     let data;
@@ -143,7 +165,7 @@ BlobChange
           mimetype = typeFromBinary.mime;
         }
       } catch (ex) {
-        this.logger.warn(`failed to determine mimetype for blob attribute with id: ${this.id}`);
+        logger.warn(`failed to determine mimetype for blob attribute with id: ${attributeId}`);
       }
     }
 
