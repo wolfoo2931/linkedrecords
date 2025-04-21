@@ -138,7 +138,19 @@ BlobChange
     logger: IsLogger,
   ): Promise<Blob> {
     if (value instanceof Readable) {
-      return streamToBlob(value);
+      const blob = await streamToBlob(value);
+
+      if (blob.type) {
+        return blob;
+      }
+
+      const typeFromBinary = await FileType.fromBuffer(await blob.arrayBuffer());
+
+      if (!typeFromBinary || !typeFromBinary.mime) {
+        return blob;
+      }
+
+      return new Blob([blob], { type: typeFromBinary?.mime });
     }
 
     const match = value.match(/^data:(.*?);(.*?),/);
