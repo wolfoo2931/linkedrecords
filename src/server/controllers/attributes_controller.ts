@@ -107,6 +107,7 @@ export default {
 
     Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {
       const facts = (config.facts || [])
+        .filter((rawFact) => rawFact[1] !== '$isAccountableFor' || rawFact[0] !== req.actorId)
         .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it') || (rawFact.length === 3 && rawFact[0] === '$it'))
         .map((rawFact) => {
           if (rawFact.length === 2) {

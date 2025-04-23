@@ -1,3 +1,9 @@
+// This file demonstrates and tests the usage of tinytodo.ts
+
+// This tests spins up multiple browser windows and signs in a different user in
+// each browser window. The browser management is based on webdriver.io and implemented
+// in ../helpers/session'.
+
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import Session from '../helpers/session';
