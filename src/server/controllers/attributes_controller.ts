@@ -219,6 +219,7 @@ export default {
 
     const savedAttributeIds = await Promise.all(attributeSavePromises).then((r) => r.flat());
 
+    // TODO: This is slow
     const factBox = await Fact.saveAllWithoutAuthCheck(
       resolvedFacts,
       req.hashedUserID,
