@@ -1,3 +1,5 @@
+// helper functions to make the test cases in tinytodo.spec.ts more readable
+
 /* eslint-disable import/prefer-default-export */
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 import { expect } from 'chai';

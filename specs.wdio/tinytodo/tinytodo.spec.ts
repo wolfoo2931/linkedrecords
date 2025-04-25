@@ -1,3 +1,9 @@
+// This file demonstrates and tests the usage of tinytodo.ts
+
+// This tests spins up multiple browser windows and signs in a different user in
+// each browser window. The browser management is based on webdriver.io and implemented
+// in ../helpers/session'.
+
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import Session from '../helpers/session';
@@ -286,5 +292,42 @@ describe('TinyTodo', () => {
     const listID = await TinyTodo.createList(andrew, 'List', orgID);
 
     await TinyTodo.createTask(aaron, listID, 'Task created the Intern');
+  });
+
+  describe('when a user creates an org and lists and only after the creation of lists shares it with another user', () => {
+    it('shows all documents to the other user', async () => {
+      const [emina, andrew, kescha, aaron] = await Session.getFourSessions();
+
+      const andrewId = await andrew.getActorId();
+      const keschaId = await kescha.getActorId();
+      const aaronId = await aaron.getActorId();
+
+      const {
+        orgID, adminTeamID, tempTeamID, internTeamID,
+      } = await setUpOrg({
+        admins: [emina],
+        temps: [],
+        interns: [],
+      });
+
+      await setUpOrg({
+        admins: [emina],
+        temps: [],
+        interns: [],
+      });
+
+      const list1 = await TinyTodo.createList(emina, 'List1', orgID);
+      await TinyTodo.createTask(emina, list1, 'Task1');
+
+      const list2 = await TinyTodo.createList(emina, 'List2', orgID);
+      await TinyTodo.createTask(emina, list2, 'Task2');
+
+      await TinyTodo.addUserToOrg(emina, andrewId, orgID, adminTeamID);
+      await TinyTodo.addUserToOrg(emina, keschaId, orgID, tempTeamID);
+      await TinyTodo.addUserToOrg(emina, aaronId, orgID, internTeamID);
+
+      await expectToBeAbleToSeeListsOfOrg(emina, orgID, 2);
+      await expectToBeAbleToSeeListsOfOrg(andrew, orgID, 2);
+    });
   });
 });

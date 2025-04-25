@@ -16,6 +16,18 @@ chai.use(chaiAsPromised);
 const hour = 60 * 60 * 1000;
 const pgPool = new pg.Pool({ max: 2 });
 
+function getRandomElements(arr, n) {
+  const result: any[] = [];
+  const { length } = arr;
+
+  for (let i = 0; i < n; i++) {
+    const randomIndex = Math.floor(Math.random() * length);
+    result.push(arr[randomIndex]);
+  }
+
+  return result;
+}
+
 async function ensureTerminologyIsDefined(client) {
   return client.Fact.createAll([
     ['userActivityState', '$isATermFor', 'xx'],
@@ -27,22 +39,76 @@ async function ensureTerminologyIsDefined(client) {
   ]);
 }
 
-async function fetchDocuments(client) {
+async function fetchDocuments(client, teamId?) {
   const userId = await client.getActorId();
+  const accountee = teamId || userId;
 
-  await client.Attribute.findAll({
+  const { documents } = await client.Attribute.findAll({
     documents: [
       ['$it', '$hasDataType', 'KeyValueAttribute'],
       ['$it', 'isA', 'documentConfig'],
       ['$it', '$latest(deletionStateIs)', '$not(inTrashbin)'],
       ['$it', '$latest(deletionStateIs)', '$not(deleted)'],
+      [accountee, '$isAccountableFor', '$it'],
+    ],
+  });
+
+  return documents;
+}
+
+async function fetchDocument(client, contentId) {
+  const userId = await client.getActorId();
+
+  return client.Attribute.findAll({
+    content: contentId,
+    otherUsersComments: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'documentCommentCollection'],
+      ['belongsTo', contentId],
+      [userId, '$isAccountableFor', '$not($it)'],
+    ],
+    myComments: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'documentCommentCollection'],
+      ['belongsTo', contentId],
       [userId, '$isAccountableFor', '$it'],
+    ],
+    documentCollaboratorGroup: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isDocumentCollaboratorGroupOf', contentId],
+    ],
+    documentReaderGroup: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isDocumentReaderGroupOf', contentId],
+    ],
+    usersActivityAttribute: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'userActivityState'],
+      ['belongsTo', contentId],
+    ],
+    references: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'referenceStore'],
+      ['belongsTo', contentId],
+    ],
+    referenceSources: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'referenceSourceStore'],
+      ['belongsTo', contentId],
+      ['belongsTo', userId],
+    ],
+    documentConfig: [
+      ['$hasDataType', 'KeyValueAttribute'],
+      ['isA', 'documentConfig'],
+      ['belongsTo', contentId],
     ],
   });
 }
 
-async function createDocument(client) {
+async function createDocument(client, teamId?) {
   const userId = await client.getActorId();
+  const accountee = teamId || userId;
+
   await client.Attribute.createAll({
     documentCollaboratorGroup: {
       type: 'KeyValueAttribute',
@@ -54,6 +120,7 @@ async function createDocument(client) {
         ['$canAccess', '{{documentConfig}}'],
         ['$canAccess', '{{references}}'],
         ['$canAccess', '{{usersActivityAttribute}}'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     documentReaderGroup: {
@@ -66,6 +133,7 @@ async function createDocument(client) {
         ['$canRead', '{{documentConfig}}'],
         ['$canRead', '{{references}}'],
         ['$canRead', '{{usersActivityAttribute}}'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     usersActivityAttribute: {
@@ -74,6 +142,7 @@ async function createDocument(client) {
       facts: [
         ['isA', 'userActivityState'],
         ['belongsTo', '{{content}}'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     content: {
@@ -81,6 +150,7 @@ async function createDocument(client) {
       value: 'xxx',
       facts: [
         ['isA', 'documentContent'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     myComments: {
@@ -89,6 +159,7 @@ async function createDocument(client) {
       facts: [
         ['isA', 'documentCommentCollection'],
         ['belongsTo', '{{content}}'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     documentConfig: {
@@ -97,6 +168,7 @@ async function createDocument(client) {
       facts: [
         ['isA', 'documentConfig'],
         ['belongsTo', '{{content}}'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     references: {
@@ -105,6 +177,7 @@ async function createDocument(client) {
       facts: [
         ['isA', 'referenceStore'],
         ['belongsTo', '{{content}}'],
+        [accountee, '$isAccountableFor', '$it'],
       ],
     },
     referenceSources: {
@@ -113,14 +186,60 @@ async function createDocument(client) {
       facts: [
         ['isA', 'referenceSourceStore'],
         ['belongsTo', '{{content}}'],
+        [userId, '$isAccountableFor', '$it'],
         ['belongsTo', userId],
       ],
     },
   });
 }
 
-describe('Many Many Document', function () {
-  this.timeout(1 * hour);
+function addChartDataTo(chartData, file) {
+  let fileExists = false;
+
+  try {
+    fs.statSync(file);
+    fileExists = true;
+  } catch (ex) {
+    fileExists = false;
+  }
+
+  if (!fileExists) {
+    return fs.writeFileSync(file, JSON.stringify(chartData));
+  }
+
+  const fileContent = fs.readFileSync(file, 'utf8');
+  const existing = JSON.parse(fileContent);
+
+  chartData.forEach((record) => {
+    const existingRecord = existing.find((x) => x.name === record.name);
+    existingRecord.x.push(...record.x);
+    existingRecord.y.push(...record.y);
+  });
+
+  return fs.writeFileSync(file, JSON.stringify(existing));
+}
+
+async function getRandomContentIds(client, accountee, n) {
+  const { content } = await client.Attribute.findAll({
+    content: [
+      ['isA', 'documentContent'],
+      [accountee, '$isAccountableFor', '$it'],
+    ],
+  });
+
+  if (!content.length) {
+    for (let index = 0; index < n; index++) {
+      await createDocument(client, accountee);
+    }
+
+    return getRandomContentIds(client, accountee, n);
+  }
+
+  return getRandomElements(content, n).map((x) => x.id);
+}
+
+describe('Many Documents', function () {
+  this.timeout(4 * hour);
   beforeEach(Session.truncateDB);
   afterEach(Session.afterEach);
   after(Session.deleteBrowsers);
@@ -130,43 +249,60 @@ describe('Many Many Document', function () {
       this.skip();
     }
 
+    const [user1, user2, user3] = await Session.getThreeSessions();
+    const orgUnderTestId = await user2.getActorId();
+    const maxDocumentsForOrgUnderTest = 300;
+    const createDocumentForOrgUnderTestEvery = 10;
+
     const timer = new Timer(async () => {
       const result = await pgPool.query("SELECT count(*) as count FROM facts WHERE predicate='isA' and object='documentContent';");
 
       return parseInt(result.rows[0].count, 10);
     });
 
-    const [user1, user2, user3] = await Session.getThreeSessions();
-
     await ensureTerminologyIsDefined(user1);
 
-    for (let index = 0; index < 10000; index++) {
+    for (let index = 0; index < 1000; index++) {
       await timer.timeIt('createDocument', () => createDocument(user1));
 
-      if (index % 20 === 0) {
-        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
-        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
-        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
-        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2));
-      }
-
-      if (index % 200 === 0) {
-        await timer.timeIt('createDocument', () => createDocument(user2));
+      if (index % createDocumentForOrgUnderTestEvery === 0) {
+        const user2docs = await fetchDocuments(user2);
+        if (maxDocumentsForOrgUnderTest > user2docs.length) {
+          await timer.timeIt('createDocument', () => createDocument(user2));
+        } else {
+          console.log('............ skip creation of documents for user2');
+        }
       }
 
       if (index % 1000 === 0) {
         await timer.timeIt('createDocument', () => createDocument(user3));
+      }
+
+      if (index % 20 === 0) {
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2, orgUnderTestId));
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2, orgUnderTestId));
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2, orgUnderTestId));
+        await timer.timeIt('fetchDocuments', () => fetchDocuments(user2, orgUnderTestId));
+
+        const contentIds = await getRandomContentIds(user2, orgUnderTestId, 4);
+        await timer.timeIt('fetchDocument', () => fetchDocument(user2, contentIds[0]));
+        await timer.timeIt('fetchDocument', () => fetchDocument(user2, contentIds[1]));
+        await timer.timeIt('fetchDocument', () => fetchDocument(user2, contentIds[2]));
+        await timer.timeIt('fetchDocument', () => fetchDocument(user2, contentIds[3]));
       }
     }
 
     const chartData = await Promise.all([
       timer.getPlotyTraceForLabel('createDocument'),
       timer.getPlotyTraceForLabel('fetchDocuments'),
+      timer.getPlotyTraceForLabel('fetchDocument'),
     ]);
 
+    addChartDataTo(chartData, path.join(__dirname, '.chart', 'acc_chart_data.json'));
     fs.writeFileSync(path.join(__dirname, '.chart', 'chart_data.js'), `var data = ${JSON.stringify(chartData)}`);
 
     expect(await timer.getAverageRuntimeForLabel('createDocument')).to.be.below(200);
     expect(await timer.getAverageRuntimeForLabel('fetchDocuments')).to.be.below(100);
+    expect(await timer.getAverageRuntimeForLabel('fetchDocument')).to.be.below(100);
   });
 });

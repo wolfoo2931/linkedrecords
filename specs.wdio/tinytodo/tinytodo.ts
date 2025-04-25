@@ -1,3 +1,8 @@
+// This file implements the domain model of TinyTodo.
+// It can be used by a Single Page Application frontend to
+// create and share todo lists.
+// The usage of this code is demonstrated and tested in tinytodo.spec.ts
+
 import { uuidv4 } from 'uuidv7';
 import { CompositionCreationRequest } from '../../src/browser_sdk/attributes_repository';
 import { InitializedSession } from '../helpers/session';
