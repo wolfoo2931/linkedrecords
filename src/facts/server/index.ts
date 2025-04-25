@@ -974,6 +974,8 @@ export default class Fact {
       const internalSubId = await Fact.getInternalUserId(this.subject, this.logger);
 
       if (!objectFactPlacement.graphId) {
+        // this is not a private graph but a shared fact box
+        // we just have to assign the userId given as subject to the fact box
         await Fact.ensureUserIsAssignedToFactBox(internalSubId, objectFactPlacement, this.logger);
         return objectFactPlacement;
       }
@@ -1035,7 +1037,7 @@ export default class Fact {
       if (factBoxSubject.id === internalUserId && factBoxObject.id === internalUserId) {
         return {
           id: internalUserId,
-          graphId: await Fact.getNewGraphId(this.logger),
+          graphId: await Fact.mergeUserGraphs(factBoxSubject, factBoxObject, this.logger),
         };
       }
 
@@ -1122,7 +1124,7 @@ export default class Fact {
     }
 
     await Promise.all([
-      pool.query('UPDATE facts SET fact_box_id=$1, graph_id=NULL WHERE fact_box_id=$2', [factBoxId, graphBox.id]),
+      pool.query('UPDATE facts SET fact_box_id=$1, graph_id=NULL WHERE graph_id=$2', [factBoxId, graphBox.graphId]),
       ...users.map((userId) => pool.query('INSERT INTO users_fact_boxes (fact_box_id, user_id) VALUES ($1, $2);', [factBoxId, userId])),
     ]);
 
@@ -1132,6 +1134,24 @@ export default class Fact {
       id: factBoxId,
       graphId: null,
     };
+  }
+
+  // TODO: make sure the smaller graph box is merged into the bigger graph box;
+  private static async mergeUserGraphs(
+    gb1: FactBox,
+    gb2: FactBox,
+    logger: IsLogger,
+  ): Promise<number> {
+    const pool = new PgPoolWithLog(logger);
+
+    if (!gb1.graphId || !gb2.graphId) {
+      logger.warn(`Cannot merge a user graph: ${JSON.stringify(gb1)} and ${JSON.stringify(gb2)}`);
+      throw new Error('Cannot merge a user graphs. At least one graph box is invalid');
+    }
+
+    await pool.query('UPDATE facts SET graph_id=$1 WHERE graph_id=$2', [gb1.graphId, gb2.graphId]);
+
+    return gb1.graphId;
   }
 
   private static async mergeUserGraphToFactBox(
