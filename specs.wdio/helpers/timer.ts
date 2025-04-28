@@ -1,11 +1,5 @@
+import chunk from '../../lib/utils/chunk_array';
 import Session from './session';
-
-function chunk(array, n) {
-  if (!array.length) {
-    return [];
-  }
-  return [array.slice(0, n)].concat(chunk(array.slice(n), n));
-}
 
 type PlotyTrace = {
   x: number[];
@@ -42,7 +36,7 @@ export default class Timer {
 
   getAverageDataForLabel(label: string): { runtime: number; factCount: number }[] {
     const timings = this.timings[label];
-    const chunkedTimings = chunk(timings, Math.floor(timings.length / this.xAxisSteps) || 1);
+    const chunkedTimings = chunk<any>(timings, Math.floor(timings.length / this.xAxisSteps) || 1);
 
     return chunkedTimings.map((chunkedTiming) => {
       const runtimeSum = chunkedTiming.reduce((a, b) => a + b.runtime, 0);

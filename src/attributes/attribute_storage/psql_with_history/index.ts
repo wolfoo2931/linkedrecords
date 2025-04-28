@@ -19,7 +19,7 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
-    const filteredNodes = nodes.filter((n) => n.startsWith('-'));
+    const filteredNodes = nodes.filter((n) => n.startsWith('l-'));
 
     if (!filteredNodes.length) {
       return 0;

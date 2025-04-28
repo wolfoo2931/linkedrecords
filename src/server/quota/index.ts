@@ -315,11 +315,12 @@ export default class Quota {
     const storageDrivers: IsAttributeStorage[] = [
       new AttributeStoragePsqlWithHistory(logger),
       new AttributeStoragePsql(logger, 'kv'),
-      new AttributeStoragePsql(logger, 'bl'),
     ];
 
     if (AttributeStorageS3.isConfigurationAvailable()) {
       storageDrivers.push(new AttributeStorageS3(logger));
+    } else {
+      storageDrivers.push(new AttributeStoragePsql(logger, 'bl'));
     }
 
     const sizes = await Promise.all(storageDrivers.map(
