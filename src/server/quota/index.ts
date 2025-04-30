@@ -312,10 +312,15 @@ export default class Quota {
       this.logger.warn(`accountable nodes for accounteeId ${this.nodeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
-    const storageDrivers: IsAttributeStorage[] = [
-      new AttributeStoragePsqlWithHistory(logger),
-      new AttributeStoragePsql(logger, 'kv'),
-    ];
+    const storageDrivers: IsAttributeStorage[] = [];
+
+    if (process.env['QUOTA_COUNT_KV_ATTRIBUTES'] === 'true') {
+      storageDrivers.push(new AttributeStoragePsql(logger, 'kv'));
+    }
+
+    if (process.env['QUOTA_COUNT_LT_ATTRIBUTES'] === 'true') {
+      storageDrivers.push(new AttributeStoragePsqlWithHistory(logger));
+    }
 
     if (AttributeStorageS3.isConfigurationAvailable()) {
       storageDrivers.push(new AttributeStorageS3(logger));
