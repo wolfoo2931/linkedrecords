@@ -58,5 +58,7 @@ jobs:
           PADDLE_API_URL: https://sandbox-api.paddle.com
           PADDLE_NOTIFICATION_SECRET: ${{ secrets.PADDLE_NOTIFICATION_SECRET }}
           PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
+          QUOTA_COUNT_KV_ATTRIBUTES: true
+          QUOTA_COUNT_LT_ATTRIBUTES: true
         run: |
           npm run wdio:fast
