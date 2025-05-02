@@ -39,4 +39,6 @@ LinkedRecords is configured via environment variables. See table below.
 | S3_ACCESS_KEY | xxx | The access key id to upload blobs to S3. |
 | S3_SECRET_KEY | xxx | The secret key id to upload blobs to S3. |
 | S3_USE_SSL | false | Do not use TLS when uploading/downloading to S3. |
+| QUOTA_COUNT_KV_ATTRIBUTES | false | If the storage space for KeyValue attributes are deducted from the accountee quota. |
+| QUOTA_COUNT_LT_ATTRIBUTES | false | If the storage space for LongText attributes are deducted from the accountee quota. |
 
