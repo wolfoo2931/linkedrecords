@@ -6,7 +6,7 @@ const redisConnectionsPromise = {};
 
 function getRedisConnectionPromise(connectionName) {
   if (!process.env['REDIS_HOST']) {
-    return undefined;
+    return Promise.resolve(undefined);
   }
 
   if (redisConnectionsPromise[connectionName]) {
@@ -27,9 +27,11 @@ function getRedisConnectionPromise(connectionName) {
 }
 
 getRedisConnectionPromise('sub').then((redisClient) => {
-  redisClient.subscribe('invalidate_local_cache_entry', (message) => {
-    cache.delete(message);
-  });
+  if (redisClient) {
+    redisClient.subscribe('invalidate_local_cache_entry', (message) => {
+      cache.delete(message);
+    });
+  }
 });
 
 export default {
@@ -38,7 +40,9 @@ export default {
   invalidate: (key: string) => {
     cache.delete(key);
     getRedisConnectionPromise('pub').then((redisClient) => {
-      redisClient.publish('invalidate_local_cache_entry', key);
+      if (redisClient) {
+        redisClient.publish('invalidate_local_cache_entry', key);
+      }
     });
   },
 };
