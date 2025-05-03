@@ -791,11 +791,11 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const internalUserId = await Fact.getInternalUserId(userId, logger);
 
-    // const hit = cache.get(`factScopeByUser/${internalUserId}`);
+    const hit = cache.get(`factScopeByUser/${internalUserId}`);
 
-    // if (hit) {
-    //   return hit;
-    // }
+    if (hit) {
+      return hit;
+    }
 
     const factBoxIdsResult = await pool.query('SELECT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
     const factBoxIds = factBoxIdsResult.rows.map((r) => r.fact_box_id);
@@ -808,7 +808,7 @@ export default class Fact {
       ],
     };
 
-    // cache.set(`factScopeByUser/${internalUserId}`, result);
+    cache.set(`factScopeByUser/${internalUserId}`, result);
 
     return result;
   }
