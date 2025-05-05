@@ -174,12 +174,17 @@ export default class AttributeStorage implements IsAttributeStorage {
     assert(attributeIds[0]);
     assert(!attributeIds.find((id) => !id || typeof id !== 'string'));
 
+    const idPrefix = attributeIds[0].split('-')[0];
+
+    assert(idPrefix, 'getAttributeLatestSnapshots: at least one ID is invalid!');
+    assert(!attributeIds.find((id) => !id.startsWith(idPrefix)), 'getAttributeLatestSnapshots: all attribute IDs need to have the same prefix!');
+
     const pgTableName = await this.getAttributeTableName(attributeIds[0]);
     const idsAsString = attributeIds.map((id) => `'${getUuidByAttributeId(id)}'`);
     const snapshots = await this.pgPool.query(`SELECT id, value, actor_id, created_at, updated_at from ${EnsureIsValid.tableName(pgTableName)} WHERE id IN (${idsAsString.join(',')})`);
 
     return snapshots.rows.map((snapshot) => ({
-      id: snapshot.id,
+      id: `${idPrefix}-${snapshot.id}`,
       value: snapshot.value,
       changeId: snapshot.change_id,
       actorId: snapshot.actor_id,
