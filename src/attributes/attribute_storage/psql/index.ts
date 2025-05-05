@@ -1,5 +1,6 @@
 /* eslint-disable class-methods-use-this */
 
+import assert from 'assert';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import PgPoolWithLog from '../../../../lib/pg-log';
 import IsLogger from '../../../../lib/is_logger';
@@ -13,7 +14,7 @@ function getUuidByAttributeId(attributeId: string) {
 
   parts.shift();
 
-  return parts.join('-');
+  return EnsureIsValid.nodeId(parts.join('-'));
 }
 
 function calculateSize(value: AttributeValue) {
@@ -160,6 +161,33 @@ export default class AttributeStorage implements IsAttributeStorage {
     return { id: attributeId };
   }
 
+  async getAttributeLatestSnapshots(
+    attributeIds: string[],
+    actorId: string,
+    { inAuthorizedContext = false }: AttributeChangeCriteria = {},
+  ) : Promise<AttributeSnapshot[]> {
+    if (!attributeIds.length) {
+      return [];
+    }
+
+    assert(inAuthorizedContext, 'getAttributeLatestSnapshots is not implemented in unauthorized context');
+    assert(attributeIds[0]);
+    assert(!attributeIds.find((id) => !id || typeof id !== 'string'));
+
+    const pgTableName = await this.getAttributeTableName(attributeIds[0]);
+    const idsAsString = attributeIds.map((id) => `'${getUuidByAttributeId(id)}'`);
+    const snapshots = await this.pgPool.query(`SELECT id, value, actor_id, created_at, updated_at from ${EnsureIsValid.tableName(pgTableName)} WHERE id IN (${idsAsString.join(',')})`);
+
+    return snapshots.rows.map((snapshot) => ({
+      id: snapshot.id,
+      value: snapshot.value,
+      changeId: snapshot.change_id,
+      actorId: snapshot.actor_id,
+      createdAt: Date.parse(snapshot.created_at),
+      updatedAt: Date.parse(snapshot.updated_at),
+    }));
+  }
+
   async getAttributeLatestSnapshot(
     attributeId: string,
     actorId: string,
@@ -189,6 +217,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     return {
+      id: attributeId,
       value: snapshot.value,
       changeId: snapshot.change_id,
       actorId: snapshot.actor_id,

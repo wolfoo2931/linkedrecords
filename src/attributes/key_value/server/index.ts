@@ -1,8 +1,8 @@
+/* eslint-disable import/no-cycle */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 /* eslint-disable class-methods-use-this */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import IsAttributeStorage from '../../abstract/is_attribute_storage';
-import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
+import AbstractAttributeServer, { LoadResult } from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import KeyValueChange from '../key_value_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
@@ -16,7 +16,7 @@ export default class KeyValueAttribute extends AbstractAttributeServer<
 object,
 KeyValueChange
 > {
-  storage: IsAttributeStorage;
+  storage: AttributeStorage;
 
   public static getDataTypePrefix(): string {
     return 'kv';
@@ -48,6 +48,30 @@ KeyValueChange
     return result.map((r) => r.id);
   }
 
+  public static async loadAll(
+    attributeIDs: string[],
+    clientId: string,
+    actorId: string,
+    logger: IsLogger,
+    args?: { inAuthorizedContext?: boolean },
+  ): Promise<LoadResult<object>[]> {
+    if (!args?.inAuthorizedContext) {
+      return super.loadAll(attributeIDs, clientId, actorId, logger, args);
+    }
+
+    const storage = new AttributeStorage(logger, 'kv');
+    const snapshots = await storage.getAttributeLatestSnapshots(attributeIDs, actorId, args);
+
+    return snapshots.map((snapshot) => ({
+      id: snapshot.id,
+      value: JSON.parse(snapshot.value),
+      changeId: snapshot.changeId,
+      actorId: snapshot.actorId,
+      createdAt: snapshot.createdAt,
+      updatedAt: snapshot.updatedAt,
+    }));
+  }
+
   constructor(
     id: string,
     clientId: string,
@@ -74,13 +98,7 @@ KeyValueChange
     return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
   }
 
-  async get(args?: { inAuthorizedContext?: boolean }) : Promise<{
-    value: object,
-    changeId: string,
-    actorId: string,
-    createdAt: number,
-    updatedAt: number
-  }> {
+  async get(args?: { inAuthorizedContext?: boolean }) : Promise<LoadResult<object>> {
     const queryOptions = { maxChangeId: '2147483647', inAuthorizedContext: args?.inAuthorizedContext };
 
     const result = await this.storage.getAttributeLatestSnapshot(
@@ -90,6 +108,7 @@ KeyValueChange
     );
 
     return {
+      id: this.id,
       value: JSON.parse(result.value),
       changeId: result.changeId,
       actorId: result.actorId,

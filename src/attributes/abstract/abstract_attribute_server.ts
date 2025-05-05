@@ -1,7 +1,18 @@
+/* eslint-disable import/no-cycle */
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
 import IsLogger from '../../../lib/is_logger';
 import Fact from '../../facts/server';
+import QueryExecutor from '../attribute_query';
+
+export type LoadResult<T> = {
+  id: string,
+  value: T,
+  changeId: string,
+  actorId: string,
+  createdAt: number,
+  updatedAt: number
+};
 
 export default abstract class AbstractAttributeServer <
   Type,
@@ -14,6 +25,28 @@ export default abstract class AbstractAttributeServer <
   readonly clientId: string;
 
   readonly logger: IsLogger;
+
+  public static async loadAll(
+    attributeIDs: string[],
+    clientId: string,
+    actorId: string,
+    logger: IsLogger,
+    args?: { inAuthorizedContext?: boolean },
+  ): Promise<LoadResult<object>[]> {
+    const attributes: LoadResult<any>[] = [];
+
+    await Promise.all(attributeIDs.map(async (id) => {
+      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
+
+      if (AttributeClass) {
+        const attrInstance = new AttributeClass(id, clientId, actorId, logger);
+        const attrValue = await attrInstance.get(args);
+        attributes.push(attrValue);
+      }
+    }));
+
+    return attributes;
+  }
 
   constructor(
     id: string,
@@ -62,13 +95,7 @@ export default abstract class AbstractAttributeServer <
     value: Type
   ) : Promise<{ id: string }>;
 
-  abstract get() : Promise<{
-    value: Type,
-    changeId: string,
-    actorId: string,
-    createdAt: number,
-    updatedAt: number
-  }>;
+  abstract get() : Promise<LoadResult<Type>>;
 
   abstract set(value: Type) : Promise<{ id: string }>;
 
