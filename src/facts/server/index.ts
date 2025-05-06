@@ -797,7 +797,7 @@ export default class Fact {
       return hit;
     }
 
-    const factBoxIdsResult = await pool.query('SELECT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
+    const factBoxIdsResult = await pool.query('SELECT DISTINCT fact_box_id FROM users_fact_boxes WHERE user_id=$1', [internalUserId]);
     const factBoxIds = factBoxIdsResult.rows.map((r) => r.fact_box_id);
     const uniqueBoxIdsSet: Set<number> = new Set(factBoxIds);
 
