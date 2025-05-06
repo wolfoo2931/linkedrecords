@@ -8,6 +8,7 @@ import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
 import EnsureIsValid from '../../../../lib/utils/sql_values';
 import { AttributeSnapshot, AttributeChangeCriteria, AttributeValue } from '../types';
+import chunk from '../../../../lib/utils/chunk_array';
 
 function getUuidByAttributeId(attributeId: string) {
   const parts = attributeId.split('-');
@@ -162,6 +163,23 @@ export default class AttributeStorage implements IsAttributeStorage {
   }
 
   async getAttributeLatestSnapshots(
+    attributeIds: string[],
+    actorId: string,
+    arg: AttributeChangeCriteria = {},
+  ) : Promise<AttributeSnapshot[]> {
+    if (!attributeIds.length) {
+      return [];
+    }
+
+    const chunks = chunk<string>(attributeIds, 250);
+    const chunkedResult = await Promise.all(
+      chunks.map((c) => this.getAttributeLatestSnapshotsUnchunked(c, actorId, arg)),
+    );
+
+    return chunkedResult.flat();
+  }
+
+  private async getAttributeLatestSnapshotsUnchunked(
     attributeIds: string[],
     actorId: string,
     { inAuthorizedContext = false }: AttributeChangeCriteria = {},
