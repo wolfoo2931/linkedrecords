@@ -4,9 +4,9 @@ import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
 import Fact from '../../facts/server';
-import SQL from '../../facts/server/authorization_sql_builder';
 import PgPoolWithLog from '../../../lib/pg-log';
 import Quota from '../quota';
+import AuthCache from '../../facts/server/auth_cache';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -25,6 +25,25 @@ export default {
       actorId,
     );
 
+    if (Array.isArray(result)) {
+      result.map((attr) => AuthCache.cache(actorId, ['reader'], attr.id, req.log));
+    } else if (result) {
+      const allResults: { id: string }[][] = Object.values(result);
+      allResults.map((partialResult: any) => {
+        if (Array.isArray(partialResult)) {
+          return partialResult.map((attr) => AuthCache.cache(actorId, ['reader'], attr.id, req.log));
+        }
+
+        if (partialResult && partialResult.id) {
+          return AuthCache.cache(actorId, ['reader'], partialResult.id, req.log);
+        }
+
+        console.log('result could not been cached', result);
+
+        return undefined;
+      });
+    }
+
     res.send(result);
   },
 
@@ -35,7 +54,7 @@ export default {
 
     const pool = new PgPoolWithLog(req.log);
 
-    const hasAccess = await pool.findAny(SQL.getSQLToCheckAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id, req.log));
+    const hasAccess = await Fact.hasAccess(req.hashedUserID, ['creator', 'host'], req.attribute.id, req.log);
 
     if (!hasAccess) {
       res.send({
@@ -228,7 +247,7 @@ export default {
     );
 
     if (factBox) {
-      await Fact.moveAllAccountabilityFactsToFactBox(savedAttributeIds, factBox, req.logger);
+      await Fact.moveAllAccountabilityFactsToFactBox(savedAttributeIds, factBox, req.log);
     }
 
     const result = {};

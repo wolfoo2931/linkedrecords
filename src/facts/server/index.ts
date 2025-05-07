@@ -7,11 +7,12 @@ import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
 import AuthorizationError from '../../attributes/errors/authorization_error';
-import SQL, { rolePredicateMap } from './authorization_sql_builder';
+import SQL, { Role, rolePredicateMap } from './authorization_sql_builder';
 import cache from '../../server/cache';
 import EnsureIsValid from '../../../lib/utils/sql_values';
+import AuthCache from './auth_cache';
 
-type FactBox = {
+export type FactBox = {
   id: number;
   graphId: number | null;
 };
@@ -191,14 +192,12 @@ export default class Fact {
       return true;
     }
 
-    const pool = new PgPoolWithLog(logger);
-
-    return pool.findAny(SQL.getSQLToCheckAccess(
+    return Fact.hasAccess(
       userid,
       ['creator'],
       nodeId,
       logger,
-    ));
+    );
   }
 
   public static async isAuthorizedToModifyPayload(
@@ -206,14 +205,12 @@ export default class Fact {
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
-    const pool = new PgPoolWithLog(logger);
-
-    return pool.findAny(SQL.getSQLToCheckAccess(
+    return Fact.hasAccess(
       userid,
       ['creator', 'host', 'member', 'access'],
       nodeId,
       logger,
-    ));
+    );
   }
 
   public static async isAuthorizedToReadPayload(
@@ -221,13 +218,12 @@ export default class Fact {
     userid: string,
     logger: IsLogger,
   ): Promise<boolean> {
-    const pool = new PgPoolWithLog(logger);
-    const res = await pool.findAny(SQL.getSQLToCheckAccess(
+    const res = await Fact.hasAccess(
       userid,
       ['creator', 'host', 'member', 'access', 'reader'],
       nodeId,
       logger,
-    ));
+    );
 
     return res;
   }
@@ -702,6 +698,8 @@ export default class Fact {
       cache.invalidate(`isKnownTerm/${this.subject.trim()}`);
     }
 
+    await AuthCache.onFactDeletion(this, this.logger);
+
     await pool.query(`WITH deleted_rows AS (
         DELETE FROM facts
         WHERE subject = $1 AND predicate = $2 AND object = $3
@@ -776,10 +774,10 @@ export default class Fact {
     }
 
     const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject, this.logger));
+      || await Fact.hasAccess(userid, ['creator', 'host', 'member', 'conceptor'], this.subject, this.logger);
     const hasObjectAccess = args?.attributesInCreation?.includes(this.object)
       || await Fact.isKnownTerm(this.object, this.logger)
-      || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger));
+      || await Fact.hasAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger);
 
     return hasSubjectAccess && hasObjectAccess;
   }
@@ -876,7 +874,7 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(this.logger);
 
-    const hasObjectAccessPromise = pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'host'], this.object, this.logger));
+    const hasObjectAccessPromise = Fact.hasAccess(userid, ['creator', 'host'], this.object, this.logger);
 
     const subjectIsKnownUserPromise = pool.findAny(`
       SELECT id
@@ -885,6 +883,32 @@ export default class Fact {
     `, [this.subject]);
 
     return await hasObjectAccessPromise && await subjectIsKnownUserPromise;
+  }
+
+  static async hasAccess(
+    userid: string,
+    roles: Role[],
+    attributeId: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const pool = new PgPoolWithLog(logger);
+
+    if (await AuthCache.hasCachedAccess(userid, roles, attributeId, logger)) {
+      return true;
+    }
+
+    const result = await pool.findAny(SQL.getSQLToCheckAccess(
+      userid,
+      roles,
+      attributeId,
+      logger,
+    ));
+
+    if (result) {
+      await AuthCache.cache(userid, roles, attributeId, logger);
+    }
+
+    return result;
   }
 
   private async isValidCreatedAtFact(userid: string) {
@@ -921,8 +945,8 @@ export default class Fact {
       return false;
     }
 
-    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject, this.logger));
-    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await pool.findAny(SQL.getSQLToCheckAccess(userid, ['creator'], this.object, this.logger));
+    const hasSubjectAccess = args?.attributesInCreation?.includes(this.subject) || await Fact.hasAccess(userid, ['creator', 'selfAccess', 'member', 'access', 'conceptor'], this.subject, this.logger);
+    const hasObjectAccess = args?.attributesInCreation?.includes(this.object) || await Fact.hasAccess(userid, ['creator'], this.object, this.logger);
 
     return hasSubjectAccess && hasObjectAccess;
   }
