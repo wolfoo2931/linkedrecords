@@ -20,6 +20,8 @@ export type CompoundAttributeQuery = {
 
 type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
 
+type Attribute = typeof LongTextAttribute | typeof KeyValueAttribute | typeof BlobAttribute;
+
 function factQueryWithOptionalSubjectPlaceholderToFactQuery(
   x: [string, string, string?],
 ): SubjectQuery {
@@ -101,7 +103,12 @@ export default class QueryExecutor {
       });
     }
 
-    const attributes = await this.loadAttributes(flatIds, clientId, actorId);
+    const attributes = await this.loadAttributes(
+      flatIds,
+      clientId,
+      actorId,
+      { inAuthorizedContext: true },
+    );
 
     if (typeof resultWithIds === 'string') {
       return attributes[resultWithIds];
@@ -215,20 +222,29 @@ export default class QueryExecutor {
     attributeIDs: string[],
     clientId: string,
     actorId: string,
+    args?: { inAuthorizedContext: boolean },
   ): Promise<Record<string, any>> {
+    const attributesByType = QueryExecutor.groupAttributeIDsByClass(attributeIDs);
     const attributes = {};
+    const promises: Promise<any>[] = [];
 
-    await Promise.all(attributeIDs.map(async (id) => {
-      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
+    attributesByType.forEach((ids, c) => {
+      const promise = c.loadAll(
+        ids,
+        clientId,
+        actorId,
+        this.logger,
+        args,
+      ).then((attrs) => {
+        attrs.forEach((attr) => {
+          attributes[attr.id] = attr;
+        });
+      });
 
-      if (!AttributeClass) {
-        attributes[id] = null;
-      } else {
-        attributes[id] = new AttributeClass(id, clientId, actorId, this.logger);
-        attributes[id] = await attributes[id].get({ inAuthorizedContext: true });
-        attributes[id].id = id;
-      }
-    }));
+      promises.push(promise);
+    });
+
+    await Promise.all(promises);
 
     return attributes;
   }
@@ -267,9 +283,32 @@ export default class QueryExecutor {
 
   static getAttributeClassByAttributeId(
     id: string,
-  ) : typeof LongTextAttribute | typeof KeyValueAttribute | typeof BlobAttribute | undefined {
+  ) : Attribute | undefined {
     const attributeTypes = [LongTextAttribute, KeyValueAttribute, BlobAttribute];
     const [attributeTypePrefix] = id.split('-');
     return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
+  }
+
+  static groupAttributeIDsByClass(attributeIDs: string[]): Map<Attribute, string[]> {
+    const attributesByType = new Map<Attribute, string[]>();
+
+    attributeIDs.forEach((id) => {
+      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
+      if (!AttributeClass) {
+        return;
+      }
+
+      if (!attributesByType.get(AttributeClass)) {
+        attributesByType.set(AttributeClass, []);
+      }
+
+      const ids = attributesByType.get(AttributeClass);
+
+      if (ids) {
+        ids.push(id);
+      }
+    });
+
+    return attributesByType;
   }
 }

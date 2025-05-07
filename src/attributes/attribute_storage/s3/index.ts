@@ -112,6 +112,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     ]);
 
     return {
+      id: attributeId,
       value: await text(dataStream),
       changeId: '2147483647',
       actorId: stats.metaData['actorId'] || stats.metaData['actorid'],

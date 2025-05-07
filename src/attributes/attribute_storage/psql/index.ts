@@ -1,5 +1,6 @@
 /* eslint-disable class-methods-use-this */
 
+import assert from 'assert';
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import PgPoolWithLog from '../../../../lib/pg-log';
 import IsLogger from '../../../../lib/is_logger';
@@ -7,13 +8,14 @@ import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
 import EnsureIsValid from '../../../../lib/utils/sql_values';
 import { AttributeSnapshot, AttributeChangeCriteria, AttributeValue } from '../types';
+import chunk from '../../../../lib/utils/chunk_array';
 
 function getUuidByAttributeId(attributeId: string) {
   const parts = attributeId.split('-');
 
   parts.shift();
 
-  return parts.join('-');
+  return EnsureIsValid.nodeId(parts.join('-'));
 }
 
 function calculateSize(value: AttributeValue) {
@@ -160,6 +162,55 @@ export default class AttributeStorage implements IsAttributeStorage {
     return { id: attributeId };
   }
 
+  async getAttributeLatestSnapshots(
+    attributeIds: string[],
+    actorId: string,
+    arg: AttributeChangeCriteria = {},
+  ) : Promise<AttributeSnapshot[]> {
+    if (!attributeIds.length) {
+      return [];
+    }
+
+    const chunks = chunk<string>(attributeIds, 250);
+    const chunkedResult = await Promise.all(
+      chunks.map((c) => this.getAttributeLatestSnapshotsUnchunked(c, actorId, arg)),
+    );
+
+    return chunkedResult.flat();
+  }
+
+  private async getAttributeLatestSnapshotsUnchunked(
+    attributeIds: string[],
+    actorId: string,
+    { inAuthorizedContext = false }: AttributeChangeCriteria = {},
+  ) : Promise<AttributeSnapshot[]> {
+    if (!attributeIds.length) {
+      return [];
+    }
+
+    assert(inAuthorizedContext, 'getAttributeLatestSnapshots is not implemented in unauthorized context');
+    assert(attributeIds[0]);
+    assert(!attributeIds.find((id) => !id || typeof id !== 'string'));
+
+    const idPrefix = attributeIds[0].split('-')[0];
+
+    assert(idPrefix, 'getAttributeLatestSnapshots: at least one ID is invalid!');
+    assert(!attributeIds.find((id) => !id.startsWith(idPrefix)), 'getAttributeLatestSnapshots: all attribute IDs need to have the same prefix!');
+
+    const pgTableName = await this.getAttributeTableName(attributeIds[0]);
+    const idsAsString = attributeIds.map((id) => `'${getUuidByAttributeId(id)}'`);
+    const snapshots = await this.pgPool.query(`SELECT id, value, actor_id, created_at, updated_at from ${EnsureIsValid.tableName(pgTableName)} WHERE id IN (${idsAsString.join(',')})`);
+
+    return snapshots.rows.map((snapshot) => ({
+      id: `${idPrefix}-${snapshot.id}`,
+      value: snapshot.value,
+      changeId: snapshot.change_id,
+      actorId: snapshot.actor_id,
+      createdAt: Date.parse(snapshot.created_at),
+      updatedAt: Date.parse(snapshot.updated_at),
+    }));
+  }
+
   async getAttributeLatestSnapshot(
     attributeId: string,
     actorId: string,
@@ -189,6 +240,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     return {
+      id: attributeId,
       value: snapshot.value,
       changeId: snapshot.change_id,
       actorId: snapshot.actor_id,

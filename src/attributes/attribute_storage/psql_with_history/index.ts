@@ -105,6 +105,7 @@ export default class AttributeStorage implements IsAttributeStorage {
     }
 
     return {
+      id: attributeId,
       value: snapshot.value,
       changeId: snapshot.change_id,
       actorId: snapshot.actor_id,

@@ -11,6 +11,7 @@ export type AttributeSnapshotReadable = {
 };
 
 export type AttributeSnapshot = {
+  id: string,
   value: string,
   changeId: string,
   actorId: string,

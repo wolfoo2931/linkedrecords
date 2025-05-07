@@ -4,7 +4,7 @@ import FileType from 'file-type';
 import assert from 'assert';
 import { Readable } from 'stream';
 import streamToBlob from 'stream-to-blob';
-import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
+import AbstractAttributeServer, { LoadResult } from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
 import IsLogger from '../../../../lib/is_logger';
@@ -78,19 +78,14 @@ BlobChange
     return this.getStorageRequiredForValue(change.change.value);
   }
 
-  async get() : Promise<{
-    value: Blob,
-    changeId: string,
-    actorId: string,
-    createdAt: number,
-    updatedAt: number
-  }> {
+  async get() : Promise<LoadResult<Blob>> {
     const content = this.storage.getAttributeLatestSnapshotAsReadable
       ? await this.storage.getAttributeLatestSnapshotAsReadable(this.id, this.actorId, { maxChangeId: '2147483647' })
       : await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
 
     return {
       ...content,
+      id: this.id,
       value: await this.unmarshal(content.value),
     };
   }

@@ -1,6 +1,7 @@
+/* eslint-disable import/no-cycle */
 /* eslint-disable no-console */
 // eslint-disable-next-line max-classes-per-file
-import AbstractAttributeServer from '../../abstract/abstract_attribute_server';
+import AbstractAttributeServer, { LoadResult } from '../../abstract/abstract_attribute_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
@@ -47,13 +48,7 @@ LongTextChange
     return this.storage.createAttribute(this.id, this.actorId, value);
   }
 
-  async get(args?: { inAuthorizedContext?: boolean }) : Promise<{
-    value: string,
-    changeId: string,
-    actorId: string,
-    createdAt: number,
-    updatedAt: number,
-  }> {
+  async get(args?: { inAuthorizedContext?: boolean }) : Promise<LoadResult<string>> {
     return this.getByChangeId('2147483647', args);
   }
 
@@ -98,13 +93,7 @@ LongTextChange
   private async getByChangeId(
     changeId: string,
     args?: { inAuthorizedContext?: boolean },
-  ) : Promise<{
-      value: string,
-      changeId: string,
-      actorId: string,
-      createdAt: number,
-      updatedAt: number,
-    }> {
+  ) : Promise<LoadResult<string>> {
     const queryOptions = { maxChangeId: changeId, inAuthorizedContext: args?.inAuthorizedContext };
     const result = await this.storage.getAttributeLatestSnapshot(
       this.id,
