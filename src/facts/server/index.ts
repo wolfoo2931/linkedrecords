@@ -113,7 +113,8 @@ export default class Fact {
   logger: IsLogger;
 
   static async initDB() {
-    const pg = new PgPoolWithLog(console as unknown as IsLogger);
+    const logger = console as unknown as IsLogger;
+    const pg = new PgPoolWithLog(logger);
 
     await pg.query(`
       CREATE TABLE IF NOT EXISTS facts (id SERIAL, subject CHAR(40), predicate CHAR(40), object TEXT, created_at timestamp DEFAULT NOW(), created_by CHAR(40));
@@ -134,8 +135,10 @@ export default class Fact {
       CREATE SEQUENCE IF NOT EXISTS graph_id START WITH 1000;
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int DEFAULT 0;
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS graph_id int;
+      ALTER TABLE facts ADD COLUMN IF NOT EXISTS latest BOOLEAN;
       CREATE INDEX IF NOT EXISTS idx_facts_fact_box_id ON facts (fact_box_id);
       CREATE INDEX IF NOT EXISTS idx_facts_fact_graph_id ON facts (graph_id);
+      CREATE INDEX IF NOT EXISTS idx_facts_latest ON facts (latest);
 
       CREATE TABLE IF NOT EXISTS users_fact_boxes (fact_box_id int, user_id int);
       CREATE INDEX IF NOT EXISTS idx_users_fact_boxes_fact_box_id ON users_fact_boxes (fact_box_id);
@@ -151,6 +154,8 @@ export default class Fact {
       ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS provider_id CHAR(40);
       ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS valid_from TIMESTAMP with time zone;
     `);
+
+    await Fact.refreshLatestState(logger);
   }
 
   public static async getUserIdByEmail(
@@ -242,12 +247,12 @@ export default class Fact {
     return `
     WITH  auth_nodes AS (${authorizedNodes}),
           auth_facts AS (
-              SELECT id, subject, predicate, object
+              SELECT id, subject, predicate, object, latest
               FROM facts
               WHERE predicate='$isATermFor'
               AND fact_box_id=0
             UNION
-              SELECT id, subject, predicate, object
+              SELECT id, subject, predicate, object, latest
               FROM facts
               WHERE facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
               AND subject IN (SELECT node FROM auth_nodes)
@@ -332,18 +337,14 @@ export default class Fact {
       } else if (!hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
         if (predicate) {
-          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM auth_facts WHERE id IN (SELECT max(id) FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}' GROUP BY subject) AND object='${EnsureIsValid.object(query[1])}')`]);
+          sqlConditions.push(['subject', 'IN', `(SELECT subject FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}' AND object='${EnsureIsValid.object(query[1])}' AND latest=TRUE)`]);
         }
       } else if (hasNotModifier(query) && hasLatestModifier(query)) {
         const predicate = query[0].match(/^\$latest\(([a-zA-Z]+)\)$/)![1];
         const object = query[1].match(/^\$not\(([a-zA-Z0-9-]+)\)$/)![1];
 
         if (predicate && object) {
-          sqlConditions.push(['subject', 'IN', `(SELECT
-            subject
-            FROM auth_facts
-            WHERE (object != '${EnsureIsValid.object(object)}' AND id IN (SELECT max(id) FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}' GROUP BY subject))
-            OR subject NOT IN (SELECT subject FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}'))`]);
+          sqlConditions.push(['subject', 'NOT IN', `(SELECT subject FROM auth_facts WHERE predicate='${EnsureIsValid.predicate(predicate)}' AND object='${EnsureIsValid.object(object)}' AND latest=TRUE)`]);
         }
       }
     });
@@ -463,6 +464,8 @@ export default class Fact {
 
       await Promise.all(promises);
     }
+
+    await Fact.refreshLatestState(logger);
   }
 
   static async findNodes(
@@ -672,6 +675,8 @@ export default class Fact {
         factPlacement.graphId,
       ]);
     }
+
+    await Fact.refreshLatestState(this.logger);
   }
 
   async delete(userid: string) {
@@ -708,6 +713,23 @@ export default class Fact {
       this.object,
       userid,
     ]);
+
+    await Fact.refreshLatestState(this.logger, this.subject, this.predicate);
+  }
+
+  static async refreshLatestState(logger: IsLogger, subject?: string, predicate?: string) {
+    const pool = new PgPoolWithLog(logger);
+
+    if (subject && predicate) {
+      await pool.query(`UPDATE facts
+        SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate)
+        WHERE subject=$1
+        AND predicate=$2`, [subject, predicate]);
+    } else {
+      await pool.query('UPDATE facts SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate) WHERE latest IS NULL');
+    }
+
+    // throw new Error('Either both subject or predicate need to be present or none');
   }
 
   async isAuthorizedToDelete(userid: string) {
