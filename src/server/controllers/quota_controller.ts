@@ -12,7 +12,7 @@ export default {
     const asAccountee = await Fact.isAuthorizedToManageQuota(
       req.params.nodeId,
       req.hashedUserID,
-      req.logger,
+      req.log,
     );
 
     res.send(await quota.toJSON(asAccountee));

@@ -6,6 +6,8 @@ set -e
 export NODE_ENV=production
 export SERVER_BASE_URL=http://localhost:3000
 export FRONTEND_BASE_URL=http://localhost:3002
+export QUOTA_COUNT_KV_ATTRIBUTES=true
+export QUOTA_COUNT_LT_ATTRIBUTES=true
 
 npx webpack --config ./specs.wdio/testapp/webpack.config.js
 

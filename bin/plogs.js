@@ -38,9 +38,8 @@ function logAggregate(agg) {
         } else {
           console.log(colors.red(`${log.err.type}: ${log.err.message}`.split('\n').map((l) => `    ${l}`).join('\n')));
         }
-
       } else if(log.msg !== 'request completed' && log.msg !== 'request errored') {
-        console.log(log)
+        console.log(log.msg ? log.msg : log);
       }
     })
   }
@@ -65,7 +64,11 @@ function processJSONLog(json) {
 
   } else {
     if(process.env.LOG_LEVEL !== 'summary') {
-      console.log(`WS${timeOutput(json?.timeInMS, 11)}: ${json?.queryTemplate}`);
+      if(json?.queryTemplate) {
+        console.log(`WS${timeOutput(json?.timeInMS, 11)}: ${json?.queryTemplate}`);
+      } else {
+        console.log('WS:', json.msg);
+      }
     }
   }
 }

@@ -13,7 +13,7 @@ export default function quotaUpgrade() {
           req.log.warn('quota event does not match an event handler');
           res.sendStatus(422);
         } else {
-          const quota = new Quota(quotaEvent.nodeId, req.logger);
+          const quota = new Quota(quotaEvent.nodeId, req.log);
           await quota.set(
             quotaEvent.totalStorageAvailable,
             quotaEvent.providerId,
