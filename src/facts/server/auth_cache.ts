@@ -1,6 +1,7 @@
 /* eslint-disable import/no-cycle */
 import Fact from '.';
 import IsLogger from '../../../lib/is_logger';
+import { ResolveToAttributesResult } from '../../attributes/attribute_query';
 import cache from '../../server/cache';
 import { Role } from './authorization_sql_builder';
 import FactBox from './fact_box';
@@ -81,9 +82,13 @@ export default class AuthCache {
     }
   }
 
-  static async cacheQueryResult(actorId: string, result: any, logger: IsLogger,) {
+  static async cacheQueryResult(
+    actorId: string,
+    result: ResolveToAttributesResult,
+    logger: IsLogger,
+  ) {
     if (Array.isArray(result)) {
-      result.map((attr) => AuthCache.cache(actorId, ['reader'], attr.id, logger));
+      result.map((attr) => attr.id && AuthCache.cache(actorId, ['reader'], attr.id, logger));
     } else if (result) {
       const allResults: { id: string }[][] = Object.values(result);
       allResults.map((partialResult: any) => {

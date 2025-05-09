@@ -19,6 +19,11 @@ export type CompoundAttributeQuery = {
 };
 
 type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
+export type ResolveToAttributesResult =
+  undefined |
+  AbstractAttributeClient<any, any> |
+  AbstractAttributeClient<any, any>[] |
+  { [key: string]: AbstractAttributeClient<any, any> | AbstractAttributeClient<any, any>[] };
 
 type Attribute = typeof LongTextAttribute | typeof KeyValueAttribute | typeof BlobAttribute;
 
@@ -71,7 +76,7 @@ export default class QueryExecutor {
     query: AttributeQuery | CompoundAttributeQuery,
     clientId,
     actorId,
-  ) {
+  ): Promise<ResolveToAttributesResult> {
     // undefined | string | string[] | { [key: string]: string | string[] };
     let resultWithIds = await this.resolveToIds(query, actorId);
 
@@ -120,21 +125,22 @@ export default class QueryExecutor {
         .filter((x) => x);
     }
 
+    const resultWithAttr: ResolveToAttributesResult = {};
     Object.keys(resultWithIds).forEach((group) => {
       if (!resultWithIds) {
         return;
       }
 
       if (typeof resultWithIds[group] === 'string') {
-        resultWithIds[group] = attributes[resultWithIds[group] as string];
+        resultWithAttr[group] = attributes[resultWithIds[group]];
       } else if (Array.isArray(resultWithIds[group])) {
-        resultWithIds[group] = (resultWithIds[group] as string[])
+        resultWithAttr[group] = resultWithIds[group]
           .map((id) => attributes[id])
           .filter((x) => x);
       }
     });
 
-    return resultWithIds;
+    return resultWithAttr;
   }
 
   async resolveToIds(
