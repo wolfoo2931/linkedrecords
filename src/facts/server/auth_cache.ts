@@ -13,6 +13,10 @@ export default class AuthCache {
     attributeId: string,
     logger: IsLogger,
   ): Promise<boolean> {
+    if (process.env['ENABLE_AUTH_RULE_CACHE'] !== 'true') {
+      return false;
+    }
+
     const roleKey = roles.sort().join(':');
     const allowedRoleCombos = this.getCachedRoleCombos(userid, attributeId);
 
@@ -31,6 +35,10 @@ export default class AuthCache {
     fact: Fact,
     logger: IsLogger,
   ): Promise<void> {
+    if (process.env['ENABLE_AUTH_RULE_CACHE'] !== 'true') {
+      return;
+    }
+
     if (!fact.predicate.startsWith('$')) {
       return;
     }
@@ -44,25 +52,16 @@ export default class AuthCache {
     users.forEach((uid) => cache.invalidate(uid));
   }
 
-  private static getCachedRoleCombos(
-    userid: string,
-    attributeId: string,
-  ) {
-    const userCache = cache.get(userid) || {};
-
-    if (!userCache[attributeId]) {
-      userCache[attributeId] = [];
-    }
-
-    return userCache[attributeId];
-  }
-
   static async cache(
     userid: string,
     roles: Role[],
     attributeId: string,
     logger: IsLogger,
   ) {
+    if (process.env['ENABLE_AUTH_RULE_CACHE'] !== 'true') {
+      return;
+    }
+
     if (!userid.startsWith('us-')) {
       throw new Error('caching access rules for non user nodes is not supported.');
     }
@@ -87,6 +86,10 @@ export default class AuthCache {
     result: ResolveToAttributesResult,
     logger: IsLogger,
   ) {
+    if (process.env['ENABLE_AUTH_RULE_CACHE'] !== 'true') {
+      return;
+    }
+
     if (Array.isArray(result)) {
       result.map((attr) => attr.id && AuthCache.cache(actorId, ['reader'], attr.id, logger));
     } else if (result) {
@@ -103,5 +106,18 @@ export default class AuthCache {
         return undefined;
       });
     }
+  }
+
+  private static getCachedRoleCombos(
+    userid: string,
+    attributeId: string,
+  ) {
+    const userCache = cache.get(userid) || {};
+
+    if (!userCache[attributeId]) {
+      userCache[attributeId] = [];
+    }
+
+    return userCache[attributeId];
   }
 }
