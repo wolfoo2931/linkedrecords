@@ -127,7 +127,19 @@ export default class FactBox {
     throw new Error('Unexpected error while trying to determine fact box id');
   }
 
-  static async getInternalUserId(userid: string, logger: IsLogger): Promise<number> {
+  public static async getAllAssociatedUsers(nodeId: string, logger: IsLogger) {
+    const pool = new PgPoolWithLog(logger);
+
+    const result = await pool.query(`
+      SELECT DISTINCT users.id
+      FROM users_fact_boxes, users
+      WHERE users_fact_boxes.user_id = users._id
+      AND users_fact_boxes.fact_box_id IN (SELECT fact_box_id FROM facts WHERE subject=$1 OR object=$1 LIMIT 1)`, [nodeId]);
+
+    return result.rows.map((r) => r.id.trim());
+  }
+
+  public static async getInternalUserId(userid: string, logger: IsLogger): Promise<number> {
     const hit = cache.get(`internalUserId/${userid}`);
 
     if (hit) {

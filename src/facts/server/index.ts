@@ -544,14 +544,14 @@ export default class Fact {
 
     if (subjectBlacklist && subjectBlacklist.length) {
       const bl = subjectBlacklist
-        .map(([s, p]) => (`SELECT object FROM facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
+        .map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
         .join(' UNION ');
       sqlQuery += ` ${and()} subject NOT IN (${bl})`;
     }
 
     if (objectBlacklist && objectBlacklist.length) {
       const bl = objectBlacklist
-        .map(([s, p]) => (`SELECT object FROM facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
+        .map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
         .join(' UNION ');
       sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
@@ -786,7 +786,7 @@ export default class Fact {
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isMemberOf') {
-      if (await pool.findAny('SELECT id FROM facts WHERE predicate=$1 AND subject=$2', ['$isATermFor', this.subject])) {
+      if (await pool.findAny('SELECT id FROM facts WHERE predicate=$1 AND subject=$2 LIMIT 1', ['$isATermFor', this.subject])) {
         return false;
       }
     }
@@ -910,6 +910,12 @@ export default class Fact {
     logger: IsLogger,
   ): Promise<boolean> {
     const pool = new PgPoolWithLog(logger);
+
+    if (roles.sort().join(':') === 'access:creator:host:member:reader') {
+      if (await AuthCache.hasCachedAccess(userid, ['reader'], attributeId, logger)) {
+        return true;
+      }
+    }
 
     if (await AuthCache.hasCachedAccess(userid, roles, attributeId, logger)) {
       return true;

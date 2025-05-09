@@ -41,4 +41,5 @@ LinkedRecords is configured via environment variables. See table below.
 | S3_USE_SSL | false | Do not use TLS when uploading/downloading to S3. |
 | QUOTA_COUNT_KV_ATTRIBUTES | false | If the storage space for KeyValue attributes are deducted from the accountee quota. |
 | QUOTA_COUNT_LT_ATTRIBUTES | false | If the storage space for LongText attributes are deducted from the accountee quota. |
+| ENABLE_AUTH_RULE_CACHE | false | Enable cache for authorization lookups. Might require a lot of memory. |
 
