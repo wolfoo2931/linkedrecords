@@ -153,9 +153,8 @@ export default class Fact {
       ALTER TABLE quota_events ALTER COLUMN total_storage_available TYPE BIGINT;
       ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS provider_id CHAR(40);
       ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS valid_from TIMESTAMP with time zone;
+      UPDATE facts SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate) WHERE latest IS NULL;
     `);
-
-    await Fact.refreshLatestState(logger);
   }
 
   public static async getUserIdByEmail(
@@ -465,7 +464,12 @@ export default class Fact {
       await Promise.all(promises);
     }
 
-    await Fact.refreshLatestState(logger);
+    const subPreds: [string, string][] = [];
+    facts.forEach((f) => {
+      subPreds.push([f.subject, f.predicate]);
+    });
+
+    await Fact.refreshLatestState(logger, subPreds);
   }
 
   static async findNodes(
@@ -676,7 +680,7 @@ export default class Fact {
       ]);
     }
 
-    await Fact.refreshLatestState(this.logger);
+    await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
   }
 
   async delete(userid: string) {
@@ -714,22 +718,26 @@ export default class Fact {
       userid,
     ]);
 
-    await Fact.refreshLatestState(this.logger, this.subject, this.predicate);
+    await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
   }
 
-  static async refreshLatestState(logger: IsLogger, subject?: string, predicate?: string) {
+  static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
     const pool = new PgPoolWithLog(logger);
 
-    if (subject && predicate) {
-      await pool.query(`UPDATE facts
-        SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate)
-        WHERE subject=$1
-        AND predicate=$2`, [subject, predicate]);
-    } else {
-      await pool.query('UPDATE facts SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate) WHERE latest IS NULL');
+    const nonAuth = subPreds
+      .filter(([, p]) => !p.startsWith('$'));
+
+    if (!nonAuth.length) {
+      return;
     }
 
-    // throw new Error('Either both subject or predicate need to be present or none');
+    const conditions = nonAuth
+      .map(([s, p]) => `(subject='${s}' AND predicate='${p}')`)
+      .join(' OR ');
+
+    await pool.query(`UPDATE facts
+      SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate)
+      WHERE ${conditions}`);
   }
 
   async isAuthorizedToDelete(userid: string) {
