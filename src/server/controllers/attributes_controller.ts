@@ -1,5 +1,6 @@
 /* eslint-disable no-await-in-loop */
 /* eslint-disable no-plusplus */
+// eslint-disable-next-line max-classes-per-file
 import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
 import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
@@ -15,6 +16,15 @@ const attributePrefixMap = {
   LongTextAttribute: 'l',
   BlobAttribute: 'bl',
 };
+
+class UnauthorizedFactsError extends Error {
+  public facts: Fact[];
+
+  constructor(facts: Fact[]) {
+    super();
+    this.facts = facts;
+  }
+}
 
 export default class Controller {
   static async index(req, res) {
@@ -64,77 +74,24 @@ export default class Controller {
   }
 
   static async createComposition(req, res) {
-    const composition = req.body;
+    try {
+      res.send(await Controller.createCompositionWithoutRequestObject(
+        req.body,
+        req.clientId,
+        req.actorId,
+        req.hashedUserID,
+        req.log,
+      ));
+    } catch (err) {
+      if (err instanceof UnauthorizedFactsError) {
+        req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(err.facts)}`);
 
-    const nameIdMap = Controller.getNamedAttributesToIdDictionaryAndAnnotateComposition(
-      composition,
-      req.clientId,
-      req.actorId,
-      req.log,
-    );
-
-    const resolvedFacts = Controller.resolvePlaceholdersInFactComposition(
-      composition,
-      req.actorId,
-      req.log,
-      nameIdMap,
-    );
-
-    const unauthorizedFacts = await Controller.findUnauthorizedFacts(
-      resolvedFacts,
-      req.hashedUserID,
-      nameIdMap,
-    );
-
-    if (unauthorizedFacts.length) {
-      req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(unauthorizedFacts)}`);
-
-      res.status(401);
-      res.send({ unauthorizedFacts });
-      return;
+        res.status(401);
+        res.send({ unauthorizedFacts: err.facts });
+      } else {
+        throw err;
+      }
     }
-
-    const attributesByAttributeClass = Controller.groupCompositionByAttributeClass(
-      composition,
-    );
-
-    const attributeSavePromises: Promise<any>[] = [];
-    const attributesToSaveEntries = attributesByAttributeClass.entries();
-
-    await Quota.ensureStorageSpaceToSave(
-      req.actorId,
-      Array.from(attributesByAttributeClass.values()).flat(),
-      req.log,
-      resolvedFacts,
-    );
-
-    // eslint-disable-next-line no-restricted-syntax
-    for (const [AC, attributesAndValues] of attributesToSaveEntries) {
-      attributeSavePromises.push(AC.createAll(attributesAndValues));
-    }
-
-    const isNewUserScopedGraph = await Fact.isNewUserScopedGraph(
-      resolvedFacts,
-      Object.values(nameIdMap),
-      req.hashedUserID,
-      req.log,
-    );
-
-    const savedAttributeIds = await Promise.all(attributeSavePromises).then((r) => r.flat());
-
-    // TODO: This is slow
-    const factBox = await Fact.saveAllWithoutAuthCheck(
-      resolvedFacts,
-      req.hashedUserID,
-      isNewUserScopedGraph,
-      req.log,
-    );
-
-    if (factBox) {
-      await Fact.moveAllAccountabilityFactsToFactBox(savedAttributeIds, factBox, req.log);
-    }
-
-    res.send(await Controller.getCompositionResult(composition, nameIdMap));
   }
 
   static async create(req, res) {
@@ -239,6 +196,75 @@ export default class Controller {
     res.sendClientServerMessage(req.params.attributeId, committedChange);
     res.status(200);
     res.send();
+  }
+
+  private static async createCompositionWithoutRequestObject(
+    composition,
+    clientId: string,
+    actorId: string,
+    hashedUserID: string,
+    log: IsLogger,
+  ): Promise<Record<string, { id: string }>> {
+    const nameIdMap = Controller.getNamedAttributesToIdDictionaryAndAnnotateComposition(
+      composition,
+      clientId,
+      actorId,
+      log,
+    );
+
+    const resolvedFacts = Controller.resolvePlaceholdersInFactComposition(
+      composition,
+      actorId,
+      log,
+      nameIdMap,
+    );
+
+    const unauthorizedFacts = await Controller.findUnauthorizedFacts(
+      resolvedFacts,
+      hashedUserID,
+      nameIdMap,
+    );
+
+    if (unauthorizedFacts.length) {
+      throw new UnauthorizedFactsError(unauthorizedFacts);
+    }
+
+    const attributesByAttributeClass = Controller.groupCompositionByAttributeClass(
+      composition,
+    );
+
+    await Quota.ensureStorageSpaceToSave(
+      actorId,
+      Array.from(attributesByAttributeClass.values()).flat(),
+      log,
+      resolvedFacts,
+    );
+
+    const isNewUserScopedGraph = await Fact.isNewUserScopedGraph(
+      resolvedFacts,
+      Object.values(nameIdMap),
+      hashedUserID,
+      log,
+    );
+
+    const attributesToSaveEntries = Array.from(attributesByAttributeClass.entries());
+    const attributeSavePromises = attributesToSaveEntries
+      .map(([AC, attributesAndValues]) => AC.createAll(attributesAndValues));
+    const savedAttributeIds = await Promise.all(attributeSavePromises).then((r) => r.flat());
+
+    // TODO: This is slow
+    const factBox = await Fact.saveAllWithoutAuthCheck(
+      resolvedFacts,
+      hashedUserID,
+      isNewUserScopedGraph,
+      log,
+    );
+
+    if (factBox) {
+      await Fact.moveAllAccountabilityFactsToFactBox(savedAttributeIds, factBox, log);
+    }
+
+    return Controller.getCompositionResult(composition, nameIdMap);
   }
 
   // This has a side effect: It annotates the map with the composition parameter - which is
