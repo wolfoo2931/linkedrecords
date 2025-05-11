@@ -25,24 +25,7 @@ export default {
       actorId,
     );
 
-    if (Array.isArray(result)) {
-      result.map((attr) => AuthCache.cache(actorId, ['reader'], attr.id, req.log));
-    } else if (result) {
-      const allResults: { id: string }[][] = Object.values(result);
-      allResults.map((partialResult: any) => {
-        if (Array.isArray(partialResult)) {
-          return partialResult.map((attr) => AuthCache.cache(actorId, ['reader'], attr.id, req.log));
-        }
-
-        if (partialResult && partialResult.id) {
-          return AuthCache.cache(actorId, ['reader'], partialResult.id, req.log);
-        }
-
-        console.log('result could not been cached', result);
-
-        return undefined;
-      });
-    }
+    await AuthCache.cacheQueryResult(actorId, result, req.log);
 
     res.send(result);
   },

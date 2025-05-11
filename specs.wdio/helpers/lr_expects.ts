@@ -72,6 +72,7 @@ export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, clien
     object: [attributeId],
   })).length).to.eql(0);
 
+  client.Attribute.clearCache();
   const noAccessAttr = await client.Attribute.find(attributeId);
   const accessAttr = await client.Attribute.find(attributeWithAccess.id);
 

@@ -5,6 +5,7 @@
 /* eslint-disable no-await-in-loop */
 import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
+import assert from 'assert';
 import Session from '../helpers/session';
 import {
   expectFactToExists,
@@ -2190,6 +2191,49 @@ describe('authorization', () => {
     await cDocuments[0]?.set('authorized update');
 
     // await browser.pause(500);
-    // expect(await documents[0]?.getValue()).to.eql('authorized update'); // TODO: the unauthorized write was saved locally in the unauthorized client
+    // expect(await documents[0]?.getValue()).to.eql('authorized update'); // TODO: the unauthorized write was saved locally in the unauthorized client but not in the database
+  });
+
+  it('does revoke access of a attribute/group', async () => {
+    const [admin, readingUser] = await Session.getTwoSessions();
+    const readingUserId = await admin.getUserIdByEmail(readingUser.email);
+
+    await readingUser.Fact.createAll([
+      ['Team', '$isATermFor', 'a term for a concept'],
+      ['Document', '$isATermFor', 'a term for a concept'],
+    ]);
+
+    const { team } = await admin.Attribute.createAll({
+      team: {
+        value: { name: 'The team with groups' },
+        facts: [
+          ['$it', 'isA', 'Team'],
+          [readingUserId, '$isMemberOf', '$it'],
+        ],
+      },
+      document: {
+        value: { name: 'the document' },
+        facts: [
+          ['$it', 'isA', 'Document'],
+          ['{{team}}', '$canAccess', '$it'],
+        ],
+      },
+    });
+
+    const { documents } = await readingUser.Attribute.findAll({
+      documents: [
+        ['$it', 'isA', 'Document'],
+      ],
+    });
+
+    assert(documents[0]?.id);
+    assert(team.id);
+    expect(await documents[0]!.getValue()).to.deep.equal({ name: 'the document' });
+
+    await admin.Fact.deleteAll([
+      [team.id, '$canAccess', documents[0].id],
+    ]);
+
+    await expectNotToBeAbleToReadOrWriteAttribute(documents[0].id, readingUser);
   });
 });

@@ -252,4 +252,8 @@ export default class AttributesRepository {
 
     return result;
   }
+
+  clearCache() {
+    this.attributeCache = {};
+  }
 }
