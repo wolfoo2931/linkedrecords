@@ -1,4 +1,5 @@
 /* eslint-disable import/no-cycle */
+import * as jose from 'jose';
 import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
 import IsLogger from '../../../lib/is_logger';
@@ -58,6 +59,26 @@ export default abstract class AbstractAttributeServer <
     this.clientId = clientId;
     this.actorId = actorId;
     this.logger = logger;
+  }
+
+  public static async getReadToken(
+    attr: { id?: string | undefined },
+    userId,
+  ): Promise<string | undefined> {
+    if (!process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING'] || !attr.id) {
+      return undefined;
+    }
+
+    const alg = 'HS256';
+    const secret = new TextEncoder().encode(process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING']);
+
+    return new jose.SignJWT({ attrId: attr.id, sub: userId })
+      .setProtectedHeader({ alg })
+      .setIssuedAt()
+      .setIssuer('urn:example:issuer')
+      .setAudience('urn:example:audience')
+      .setExpirationTime('1m')
+      .sign(secret);
   }
 
   public static isValidChange(

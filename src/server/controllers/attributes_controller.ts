@@ -3,13 +3,14 @@
 // eslint-disable-next-line max-classes-per-file
 import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
-import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
+import QueryExecutor, { AttributeQuery, ResolveToAttributesResult } from '../../attributes/attribute_query';
 import Fact from '../../facts/server';
 import PgPoolWithLog from '../../../lib/pg-log';
 import Quota from '../quota';
 import AuthCache from '../../facts/server/auth_cache';
 import IsLogger from '../../../lib/is_logger';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
+import AbstractAttributeClient from '../../attributes/abstract/abstract_attribute_client';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -31,13 +32,20 @@ export default class Controller {
     const { clientId, actorId } = req;
     const query: AttributeQuery = JSON.parse(req.query.query);
     const queryExecutor = new QueryExecutor(req.log);
-    const result = await queryExecutor.resolveToAttributes(
+    const result: ResolveToAttributesResult = await queryExecutor.resolveToAttributes(
       query,
       clientId,
       actorId,
     );
 
     await AuthCache.cacheQueryResult(actorId, result, req.log);
+
+    await Promise.all(
+      Controller.resolveToAttributesResultToFlatArray(result).map(async (record) => {
+        // eslint-disable-next-line no-param-reassign
+        record.readToken = await AbstractAttributeServer.getReadToken(record, actorId);
+      }),
+    );
 
     res.send(result);
   }
@@ -196,6 +204,25 @@ export default class Controller {
     res.sendClientServerMessage(req.params.attributeId, committedChange);
     res.status(200);
     res.send();
+  }
+
+  private static resolveToAttributesResultToFlatArray(
+    result: ResolveToAttributesResult,
+  ): AbstractAttributeClient<any, any>[] {
+    if (!result) {
+      return [];
+    }
+
+    if (Array.isArray(result)) {
+      return result;
+    }
+
+    if (result.id) {
+      // TODO: find a type save way to return "[result]"
+      return [];
+    }
+
+    return Object.values(result).flatMap((r) => Controller.resolveToAttributesResultToFlatArray(r));
   }
 
   private static async createCompositionWithoutRequestObject(

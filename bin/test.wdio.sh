@@ -8,6 +8,7 @@ export SERVER_BASE_URL=http://localhost:3000
 export FRONTEND_BASE_URL=http://localhost:3002
 export QUOTA_COUNT_KV_ATTRIBUTES=true
 export QUOTA_COUNT_LT_ATTRIBUTES=true
+export SHORT_LIVED_ACCESS_TOKEN_SIGNING=cc7e0d44fd473002f1c42167459001140ec6389b7353f8088f4d9a95f2f596f2
 
 npx webpack --config ./specs.wdio/testapp/webpack.config.js
 
