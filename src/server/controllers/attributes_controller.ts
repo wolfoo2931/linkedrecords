@@ -3,7 +3,7 @@
 // eslint-disable-next-line max-classes-per-file
 import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
-import QueryExecutor, { AttributeQuery } from '../../attributes/attribute_query';
+import QueryExecutor, { AttributeQuery, ResolveToAttributesResult } from '../../attributes/attribute_query';
 import Fact from '../../facts/server';
 import PgPoolWithLog from '../../../lib/pg-log';
 import Quota from '../quota';
@@ -31,13 +31,20 @@ export default class Controller {
     const { clientId, actorId } = req;
     const query: AttributeQuery = JSON.parse(req.query.query);
     const queryExecutor = new QueryExecutor(req.log);
-    const result = await queryExecutor.resolveToAttributes(
+    const result: ResolveToAttributesResult = await queryExecutor.resolveToAttributes(
       query,
       clientId,
       actorId,
     );
 
     await AuthCache.cacheQueryResult(actorId, result, req.log);
+
+    await Promise.all(
+      Controller.resolveToAttributesResultToFlatArray(result).map(async (record) => {
+        // eslint-disable-next-line no-param-reassign
+        record.readToken = await AbstractAttributeServer.getReadToken(record, actorId);
+      }),
+    );
 
     res.send(result);
   }
@@ -75,13 +82,22 @@ export default class Controller {
 
   static async createComposition(req, res) {
     try {
-      res.send(await Controller.createCompositionWithoutRequestObject(
+      const result = await Controller.createCompositionWithoutRequestObject(
         req.body,
         req.clientId,
         req.actorId,
         req.hashedUserID,
         req.log,
-      ));
+      );
+
+      await Promise.all(
+        Controller.resolveToAttributesResultToFlatArray(result).map(async (record) => {
+          // eslint-disable-next-line no-param-reassign
+          record.readToken = await AbstractAttributeServer.getReadToken(record, req.actorId);
+        }),
+      );
+
+      res.send(result);
     } catch (err) {
       if (err instanceof UnauthorizedFactsError) {
         req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(err.facts)}`);
@@ -196,6 +212,24 @@ export default class Controller {
     res.sendClientServerMessage(req.params.attributeId, committedChange);
     res.status(200);
     res.send();
+  }
+
+  private static resolveToAttributesResultToFlatArray(
+    result: ResolveToAttributesResult | Record<string, { id: string; }>,
+  ): any[] {
+    if (!result) {
+      return [];
+    }
+
+    if (Array.isArray(result)) {
+      return result;
+    }
+
+    if (result.id) {
+      return [result];
+    }
+
+    return Object.values(result).flatMap((r) => Controller.resolveToAttributesResultToFlatArray(r));
   }
 
   private static async createCompositionWithoutRequestObject(

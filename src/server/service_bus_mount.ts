@@ -1,5 +1,6 @@
 /* eslint-disable class-methods-use-this */
 /* eslint-disable max-len */
+import * as jose from 'jose';
 import http from 'http';
 import clientServerBus from '../../lib/client-server-bus/server';
 import IsLogger from '../../lib/is_logger';
@@ -38,9 +39,21 @@ class WSAccessControl {
     userId: string,
     channel: string,
     request: http.IncomingMessage,
+    readToken?: string,
   ): Promise<boolean> {
     if (!userId) {
       return Promise.resolve(false);
+    }
+
+    if (process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING'] && readToken) {
+      try {
+        const secret = new TextEncoder().encode(`${process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING']}`);
+        const verificationResult = await jose.jwtVerify(readToken, secret, { subject: userId });
+
+        return verificationResult.payload?.['attrId'] === channel && verificationResult.payload?.sub === userId;
+      } catch (ex) {
+        request.log.warn(ex);
+      }
     }
 
     return Fact.isAuthorizedToReadPayload(channel, userId, request.log as unknown as IsLogger);

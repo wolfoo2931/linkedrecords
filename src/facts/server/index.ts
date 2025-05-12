@@ -153,7 +153,7 @@ export default class Fact {
       ALTER TABLE quota_events ALTER COLUMN total_storage_available TYPE BIGINT;
       ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS provider_id CHAR(40);
       ALTER TABLE quota_events ADD COLUMN IF NOT EXISTS valid_from TIMESTAMP with time zone;
-      UPDATE facts SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate) WHERE latest IS NULL;
+      UPDATE facts SET latest = (SELECT max(id) = facts.id as latest FROM facts as ifacts WHERE facts.subject=ifacts.subject AND facts.predicate=ifacts.predicate) WHERE latest IS NULL AND predicate NOT LIKE '$%';
     `);
   }
 

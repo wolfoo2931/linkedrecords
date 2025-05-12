@@ -18,14 +18,14 @@ export default class ClientServerBus {
     this.connectionInterruptedSubscribers.push(sub);
   }
 
-  public async subscribe(url: string, channel: string, handler: (data: any) => any)
+  public async subscribe(url: string, channel: string, readToken, handler: (data: any) => any)
     : Promise<[string, (data: any) => any]> {
     const parsedUrl: URL = new URL(url);
     const subId = `${parsedUrl.origin}-${channel}`;
     const connection = await this.ensureConnection(parsedUrl.origin);
 
     const subResult = await new Promise((resolve) => {
-      connection.emit('subscribe', { channel }, resolve);
+      connection.emit('subscribe', { channel, readToken }, resolve);
     }) as any;
 
     if (subResult.status === 'unauthorized') {

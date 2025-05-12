@@ -25,6 +25,7 @@ export interface AccessControl {
     userId: string,
     channel: string,
     request: http.IncomingMessage,
+    readToken?: string,
   ): Promise<boolean>;
 
   verifyAuthorizedSend(
@@ -87,10 +88,17 @@ export default async function clientServerBus(
     if (!connections[socket.id]) {
       connections[socket.id] = { socket, userId };
 
-      socket.on('subscribe', async ({ channel }, callback) => {
+      socket.on('subscribe', async ({ channel, readToken }, callback) => {
+        const isAuthorizedToJoin = await accessControl.verifyAuthorizedChannelJoin(
+          userId,
+          channel,
+          request,
+          readToken,
+        );
+
         if (!channel) {
           callback({ status: 'invalid channel' });
-        } else if (await accessControl.verifyAuthorizedChannelJoin(userId, channel, request)) {
+        } else if (isAuthorizedToJoin) {
           socket.join(channel);
           callback({ status: 'subscribed' });
         } else {

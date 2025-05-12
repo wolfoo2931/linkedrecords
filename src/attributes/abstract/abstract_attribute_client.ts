@@ -33,6 +33,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   attrSubscription?: [string, (data: any) => any] = undefined;
 
+  readToken?: string;
+
   constructor(linkedRecords: LinkedRecords, clientServerBus: ClientServerBus, id?: string) {
     this.id = id;
     this.linkedRecords = linkedRecords;
@@ -209,6 +211,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     value: string,
     createdAt: Date,
     updatedAt: Date,
+    readToken?: string,
   }, forceReload: boolean = false): Promise<boolean> {
     let result = serverState;
 
@@ -248,13 +251,14 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.value = await this.deserializeValue(serializedValue);
     this.createdAt = new Date(result.createdAt);
     this.updatedAt = new Date(result.updatedAt);
+    this.readToken = result.readToken;
     this.isInitialized = true;
     this.onLoad();
     this.notifySubscribers(undefined, undefined);
 
     if (!this.attrSubscription) {
       const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
-      this.attrSubscription = await this.clientServerBus.subscribe(url, this.id, (parsedData) => {
+      const callback = (parsedData) => {
         if (parsedData.error === 'quota_violation') {
           this.linkedRecords.handleQuotaViolationError(parsedData);
           return;
@@ -267,7 +271,14 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
         this.updatedAt = new Date(parsedData.updatedAt);
 
         this.onServerMessage(parsedData);
-      });
+      };
+
+      this.attrSubscription = await this.clientServerBus.subscribe(
+        url,
+        this.id,
+        this.readToken,
+        callback,
+      );
     }
 
     return true;
