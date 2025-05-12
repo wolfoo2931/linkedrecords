@@ -10,7 +10,6 @@ import Quota from '../quota';
 import AuthCache from '../../facts/server/auth_cache';
 import IsLogger from '../../../lib/is_logger';
 import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
-import AbstractAttributeClient from '../../attributes/abstract/abstract_attribute_client';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -83,13 +82,22 @@ export default class Controller {
 
   static async createComposition(req, res) {
     try {
-      res.send(await Controller.createCompositionWithoutRequestObject(
+      const result = await Controller.createCompositionWithoutRequestObject(
         req.body,
         req.clientId,
         req.actorId,
         req.hashedUserID,
         req.log,
-      ));
+      );
+
+      await Promise.all(
+        Controller.resolveToAttributesResultToFlatArray(result).map(async (record) => {
+          // eslint-disable-next-line no-param-reassign
+          record.readToken = await AbstractAttributeServer.getReadToken(record, req.actorId);
+        }),
+      );
+
+      res.send(result);
     } catch (err) {
       if (err instanceof UnauthorizedFactsError) {
         req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(err.facts)}`);
@@ -207,8 +215,8 @@ export default class Controller {
   }
 
   private static resolveToAttributesResultToFlatArray(
-    result: ResolveToAttributesResult,
-  ): AbstractAttributeClient<any, any>[] {
+    result: ResolveToAttributesResult | Record<string, { id: string; }>,
+  ): any[] {
     if (!result) {
       return [];
     }
@@ -218,8 +226,7 @@ export default class Controller {
     }
 
     if (result.id) {
-      // TODO: find a type save way to return "[result]"
-      return [];
+      return [result];
     }
 
     return Object.values(result).flatMap((r) => Controller.resolveToAttributesResultToFlatArray(r));

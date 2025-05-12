@@ -1,3 +1,4 @@
+/* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 
 import assert from 'assert';
@@ -171,7 +172,7 @@ export default class AttributeStorage implements IsAttributeStorage {
       return [];
     }
 
-    const chunks = chunk<string>(attributeIds, 250);
+    const chunks = chunk<string>(attributeIds, 1000);
     const chunkedResult = await Promise.all(
       chunks.map((c) => this.getAttributeLatestSnapshotsUnchunked(c, actorId, arg)),
     );
