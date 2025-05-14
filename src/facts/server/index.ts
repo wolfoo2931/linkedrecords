@@ -531,9 +531,7 @@ export default class Fact {
   }
 
   static async findAll(
-    {
-      subject, predicate, object, subjectBlacklist, objectBlacklist,
-    }: FactQuery,
+    { subject, predicate, object }: FactQuery,
     userid: string,
     logger: IsLogger,
   ): Promise<Fact[]> {
@@ -562,8 +560,6 @@ export default class Fact {
       }
     }
 
-    // FIXME: subjectBlacklist and objectBlacklist needs to be in the predicate list as well
-
     let sqlQuery = await Fact.authorizedSelect(userid, logger, relevantPredicates);
 
     if (subject) {
@@ -587,20 +583,6 @@ export default class Fact {
 
     if (object) {
       sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
-    }
-
-    if (subjectBlacklist && subjectBlacklist.length) {
-      const bl = subjectBlacklist
-        .map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
-        .join(' UNION ');
-      sqlQuery += ` ${and()} subject NOT IN (${bl})`;
-    }
-
-    if (objectBlacklist && objectBlacklist.length) {
-      const bl = objectBlacklist
-        .map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
-        .join(' UNION ');
-      sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
 
     const result = await pool.query(sqlQuery);
