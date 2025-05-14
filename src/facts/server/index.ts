@@ -228,8 +228,18 @@ export default class Fact {
     return res;
   }
 
-  private static async withAuthNodesAndFacts(userid: string, logger: IsLogger) {
+  private static async withAuthNodesAndFacts(
+    userid: string,
+    logger: IsLogger,
+    relevantPredicates: string[] = [],
+  ) {
     EnsureIsValid.userId(userid);
+
+    const predicateFilters = relevantPredicates
+      .map((p) => p.trim())
+      .map((p) => p.replace('$latest(', '').replace(/\)$/, ''))
+      .map((p) => EnsureIsValid.predicate(p))
+      .map((p) => `'${p}'`);
 
     const authorizedNodes = await SQL.selectSubjectsInAnyGroup(
       userid,
@@ -254,15 +264,20 @@ export default class Fact {
               SELECT id, subject, predicate, object, latest
               FROM facts
               WHERE facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
+              ${predicateFilters.length ? `AND predicate IN (${predicateFilters.join(',')})` : ''}
               AND subject IN (SELECT node FROM auth_nodes)
               AND (object IN (SELECT node FROM auth_nodes) OR object = ANY ('{${allTerms.map(EnsureIsValid.term).join(',')}}'))
           )
     `;
   }
 
-  private static async authorizedSelect(userid: string, logger: IsLogger) {
+  private static async authorizedSelect(
+    userid: string,
+    logger: IsLogger,
+    relevantPredicates: string[] = [],
+  ) {
     return `
-    ${await this.withAuthNodesAndFacts(userid, logger)}
+    ${await this.withAuthNodesAndFacts(userid, logger, relevantPredicates)}
     SELECT subject, predicate, object FROM auth_facts`;
   }
 
@@ -480,7 +495,13 @@ export default class Fact {
     logger: IsLogger,
   ) {
     const pool = new PgPoolWithLog(logger);
-    const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger);
+    const relevantPredicates = [
+      ...isSubjectAllOf.map((x) => x[0]),
+      ...isObjectAllOf.map((x) => x[1]),
+      ...blacklistNodes.map((x) => x[1]),
+    ];
+
+    const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger, relevantPredicates);
     const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`)).join(' UNION ').trim();
     const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
     const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${EnsureIsValid.subject(q[0])}' AND predicate='${EnsureIsValid.predicate(q[1])}'`).join(' INTERSECT ').trim();
@@ -510,9 +531,7 @@ export default class Fact {
   }
 
   static async findAll(
-    {
-      subject, predicate, object, subjectBlacklist, objectBlacklist,
-    }: FactQuery,
+    { subject, predicate, object }: FactQuery,
     userid: string,
     logger: IsLogger,
   ): Promise<Fact[]> {
@@ -521,7 +540,27 @@ export default class Fact {
     const pool = new PgPoolWithLog(logger);
     const and = andFactory();
 
-    let sqlQuery = await Fact.authorizedSelect(userid, logger);
+    const relevantPredicates: string[] = [];
+
+    const containsUnknownPredicateQueries = !!subject?.find((sf) => sf.length !== 2)
+      || !!object?.find((of) => of.length !== 2)
+      || !predicate?.length;
+
+    if (!containsUnknownPredicateQueries) {
+      if (subject && subject.length === 2) {
+        relevantPredicates.push(...subject.filter(Array.isArray).map((sf) => sf[0]));
+      }
+
+      if (predicate) {
+        relevantPredicates.push(...predicate);
+      }
+
+      if (object) {
+        relevantPredicates.push(...object.filter(Array.isArray).map((sf) => sf[0]));
+      }
+    }
+
+    let sqlQuery = await Fact.authorizedSelect(userid, logger, relevantPredicates);
 
     if (subject) {
       const subjectFilter = Fact.getSQLToResolveToSubjectIdsWithModifiers(subject);
@@ -544,20 +583,6 @@ export default class Fact {
 
     if (object) {
       sqlQuery += ` ${and()} object IN (${Fact.getSQLToResolveToSubjectIdsWithModifiers(object)})`;
-    }
-
-    if (subjectBlacklist && subjectBlacklist.length) {
-      const bl = subjectBlacklist
-        .map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
-        .join(' UNION ');
-      sqlQuery += ` ${and()} subject NOT IN (${bl})`;
-    }
-
-    if (objectBlacklist && objectBlacklist.length) {
-      const bl = objectBlacklist
-        .map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`))
-        .join(' UNION ');
-      sqlQuery += ` ${and()} object NOT IN (${bl})`;
     }
 
     const result = await pool.query(sqlQuery);
