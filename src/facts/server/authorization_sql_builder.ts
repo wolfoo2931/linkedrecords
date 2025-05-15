@@ -1,5 +1,5 @@
 // eslint-disable-next-line import/no-cycle
-import Fact from '.';
+import Fact, { FactScope } from '.';
 import IsLogger from '../../../lib/is_logger';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 
@@ -41,6 +41,7 @@ export default class AuthorizationSqlBuilder {
     attributeId: string | undefined,
     logger: IsLogger,
     membershipType: MembershipType = 'all',
+    factScope?: FactScope,
   ) {
     const selfSubSelect = roles
       .filter((role) => role === 'selfAccess')
@@ -58,14 +59,14 @@ export default class AuthorizationSqlBuilder {
     const groupSubSelect: string[] = [];
 
     if (groupRoles.length) {
-      const factScope = await Fact.getFactScopeByUser(userid, logger);
+      const factScopeOrDefault = factScope || await Fact.getFactScopeByUser(userid, logger);
 
       const allDirectAccessibleNodeMembers = `SELECT
         object as node
         FROM facts
         WHERE predicate IN (${groupRoles.join(',')})
-        AND fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
-        AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, factScope)})`;
+        AND fact_box_id IN (${factScopeOrDefault.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
+        AND subject IN (${await this.getGroupsOfTheUser(userid, membershipType, factScopeOrDefault)})`;
 
       const allDirectAccessibleNode = allDirectAccessibleNodeMembers + (attributeId ? ` AND object='${EnsureIsValid.object(attributeId)}'` : '');
 
@@ -79,7 +80,7 @@ export default class AuthorizationSqlBuilder {
           SELECT subject as node
           FROM facts
           WHERE predicate='$isMemberOf'
-          AND fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
+          AND fact_box_id IN (${factScopeOrDefault.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
           AND object IN (SELECT node FROM direct_accessible_node_members))
       `);
     }
