@@ -2236,4 +2236,62 @@ describe('authorization', () => {
 
     await expectNotToBeAbleToReadOrWriteAttribute(documents[0].id, readingUser);
   });
+
+  it('returns facts when subject is a query itself', async () => {
+    const [user1, user2] = await Session.getTwoSessions();
+
+    await user1.Fact.createAll([
+      ['documentCategory', '$isATermFor', 'a term for a concept'],
+      ['documentConfig', '$isATermFor', 'a term for a concept'],
+    ]);
+
+    const k1 = await user1.Attribute.createKeyValue({}, [['isA', 'documentCategory']]);
+    const k2 = await user1.Attribute.createKeyValue({}, [['isA', 'documentCategory'], ['isCategorizedAs*', k1.id!]]);
+    const k3 = await user1.Attribute.createKeyValue({}, [['isA', 'documentCategory'], ['isCategorizedAs*', k2.id!]]);
+
+    const d1 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig']]);
+    const d2 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k1.id!]]);
+    const d3 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k2.id!]]);
+    const d4 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k3.id!]]);
+
+    {
+      const factsBySubject = await user1.Fact.findAll({
+        subject: [['isA', 'documentCategory']],
+        predicate: ['isCategorizedAs*'],
+      });
+
+      const allFacts = await user1.Fact.findAll({
+        predicate: ['isCategorizedAs*'],
+      });
+
+      const factsByObject = await user1.Fact.findAll({
+        predicate: ['isCategorizedAs*'],
+        object: [['isA', 'documentCategory']],
+      });
+
+      expect(factsBySubject.length).to.eql(2);
+      expect(factsByObject.length).to.eql(5);
+      expect(allFacts.length).to.eql(5);
+    }
+
+    {
+      const factsBySubject = await user2.Fact.findAll({
+        subject: [['isA', 'documentCategory']],
+        predicate: ['isCategorizedAs*'],
+      });
+
+      const allFacts = await user2.Fact.findAll({
+        predicate: ['isCategorizedAs*'],
+      });
+
+      const factsByObject = await user2.Fact.findAll({
+        predicate: ['isCategorizedAs*'],
+        object: [['isA', 'documentCategory']],
+      });
+
+      expect(factsBySubject.length).to.eql(0);
+      expect(factsByObject.length).to.eql(0);
+      expect(allFacts.length).to.eql(0);
+    }
+  });
 });

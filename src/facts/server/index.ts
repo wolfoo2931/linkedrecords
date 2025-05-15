@@ -547,8 +547,12 @@ export default class Fact {
       || !predicate?.length;
 
     if (!containsUnknownPredicateQueries) {
-      if (subject && subject.length === 2) {
-        relevantPredicates.push(...subject.filter(Array.isArray).map((sf) => sf[0]));
+      if (subject) {
+        relevantPredicates.push(
+          ...subject
+            .filter(Array.isArray)
+            .map((sf) => sf[0]),
+        );
       }
 
       if (predicate) {
@@ -556,7 +560,11 @@ export default class Fact {
       }
 
       if (object) {
-        relevantPredicates.push(...object.filter(Array.isArray).map((sf) => sf[0]));
+        relevantPredicates.push(
+          ...object
+            .filter(Array.isArray)
+            .map((sf) => sf[0]),
+        );
       }
     }
 
