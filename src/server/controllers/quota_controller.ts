@@ -7,6 +7,15 @@ export default {
       throw new Error('no nodeId given to retrieve quota');
     }
 
+    if (!await Fact.isAuthorizedToReadQuota(
+      req.params.nodeId,
+      req.hashedUserID,
+      req.log,
+    )) {
+      res.send({});
+      return;
+    }
+
     const quota = new Quota(req.params.nodeId, req.log);
 
     const asAccountee = await Fact.isAuthorizedToManageQuota(
