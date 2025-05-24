@@ -180,6 +180,26 @@ export default class Fact {
     }
   }
 
+  public static async isAuthorizedToReadQuota(
+    nodeId: string,
+    userid: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    assert(nodeId, 'nodeId needs to be provided in isAuthorizedToReadQuota');
+    assert(userid, 'userid needs to be provided in isAuthorizedToReadQuota');
+
+    if (nodeId === userid) {
+      return true;
+    }
+
+    return Fact.hasAccess(
+      userid,
+      ['creator', 'host', 'member', 'access'],
+      nodeId,
+      logger,
+    );
+  }
+
   public static async isAuthorizedToManageQuota(
     nodeId: string,
     userid: string,

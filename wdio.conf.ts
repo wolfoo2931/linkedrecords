@@ -14,6 +14,7 @@ exports.config = {
     tinytodo: ['./specs.wdio/tinytodo/**/*.spec.ts'],
     auth: ['./specs.wdio/**/auth.spec.ts'],
     quota_upgrade: ['./specs.wdio/quota_upgrade/**/*.spec.ts'],
+    quota: ['./specs.wdio/browser_sdk/**/quota.spec.ts'],
     browser_sdk: ['./specs.wdio/browser_sdk/**/*.spec.ts'],
     load: ['./specs.wdio/load/**/*.spec.ts'],
   },
