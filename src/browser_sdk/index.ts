@@ -2,7 +2,6 @@
 
 import { uuidv7 as uuid } from 'uuidv7';
 
-import Cookies from 'js-cookie';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import KeyValueChange from '../attributes/key_value/key_value_change';
@@ -11,6 +10,7 @@ import ClientServerBus from '../../lib/client-server-bus/client';
 import FactsRepository from './facts_repository';
 import AttributesRepository from './attributes_repository';
 import { QuotaAsJSON } from '../server/quota';
+import { OIDCManager, OIDCConfig } from './oidc';
 
 type FetchOptions = {
   headers?: object | undefined,
@@ -54,27 +54,55 @@ export default class LinkedRecords {
 
   Fact: FactsRepository;
 
-  static readUserIdFromCookies(): string | undefined {
-    const cookieValue = Cookies.get('userId');
+  private oidcManager?: OIDCManager;
 
+  static async readUserIdFromCookies(): Promise<string | undefined> {
+    if (typeof window === 'undefined' || !window.document) return undefined;
+    const Cookies = (await import('js-cookie')).default;
+    const cookieValue = Cookies.get('userId');
     if (!cookieValue) {
       return undefined;
     }
-
     const withoutSignature = cookieValue.slice(0, cookieValue.lastIndexOf('.'));
     const split = withoutSignature.split(':');
     const userId = split.length === 1 ? split[0] : split[1];
-
     return userId;
   }
 
-  constructor(serverURL: URL) {
+  constructor(serverURL: URL, oidcConfig?: OIDCConfig, autoHandleRedirect = true) {
     this.serverURL = serverURL;
-    this.actorId = LinkedRecords.readUserIdFromCookies();
+    LinkedRecords.readUserIdFromCookies().then((id) => { this.actorId = id; });
     this.clientId = uuid();
     this.clientServerBus = new ClientServerBus();
     this.Attribute = new AttributesRepository(this, this.clientServerBus);
     this.Fact = new FactsRepository(this);
+
+    if (oidcConfig) {
+      this.oidcManager = new OIDCManager(oidcConfig);
+
+      if (
+        autoHandleRedirect
+        && typeof window !== 'undefined'
+        && window.location
+        && window.location.search
+      ) {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('code') && params.has('state')) {
+          this.oidcManager
+            .handleRedirectCallback()
+            .then(() => {
+              // Clean up the URL after handling the callback
+              // Remove OIDC parameters from the URL
+              // for a cleaner user experience
+              window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname,
+              );
+            });
+        }
+      }
+    }
 
     this.clientServerBus.subscribeConnectionInterrupted(() => {
       if (this.connectionLostHandler) {
@@ -135,25 +163,40 @@ export default class LinkedRecords {
       doNotHandleExpiredSessions = false,
     } = fetchOpt || {};
 
-    const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+    const base = this.serverURL.toString().replace(/\/$/, '');
+    const path = url.replace(/^\//, '');
+    const absoluteUrl = `${base}/${path}`;
     const options: any = {
       method,
       credentials: 'include',
     };
 
+    const mergedHeaders: Record<string, string> = headers
+      ? { ...(headers as Record<string, string>) }
+      : {};
+
+    // If OIDC is enabled and access token is available, use Bearer token
+    if (this.oidcManager) {
+      const accessToken = await this.oidcManager.getAccessToken();
+      if (accessToken) {
+        mergedHeaders['Authorization'] = `Bearer ${accessToken}`;
+        // For cross-origin, do not send cookies if using Bearer
+        options.credentials = 'same-origin';
+      }
+    }
+
     if (body) {
       options.body = body;
     }
 
-    if (headers) {
-      options.headers = headers;
+    if (Object.keys(mergedHeaders).length > 0) {
+      options.headers = mergedHeaders;
     }
 
     if (isJSON) {
       if (!options.headers) {
         options.headers = {};
       }
-
       options.headers.Accept = 'application/json';
       options.headers['Content-Type'] = 'application/json';
     }
@@ -259,7 +302,7 @@ export default class LinkedRecords {
 
     const userInfoResponse = await LinkedRecords.ensureUserIdIsKnownPromise;
 
-    this.actorId = LinkedRecords.readUserIdFromCookies();
+    this.actorId = await LinkedRecords.readUserIdFromCookies();
 
     if (userInfoResponse.status === 401) {
       this.handleExpiredLoginSession();
@@ -269,5 +312,36 @@ export default class LinkedRecords {
     LinkedRecords.ensureUserIdIsKnownPromise = undefined;
 
     return this.actorId;
+  }
+
+  // OIDC Auth methods
+  public async login() {
+    if (!this.oidcManager) throw new Error('OIDC not configured');
+    await this.oidcManager.login();
+  }
+
+  public async handleRedirectCallback() {
+    if (!this.oidcManager) throw new Error('OIDC not configured');
+    return this.oidcManager.handleRedirectCallback();
+  }
+
+  public async logout() {
+    if (!this.oidcManager) throw new Error('OIDC not configured');
+    await this.oidcManager.logout();
+  }
+
+  public async isAuthenticated() {
+    if (!this.oidcManager) return false;
+    return this.oidcManager.isAuthenticated();
+  }
+
+  public async getUser() {
+    if (!this.oidcManager) return null;
+    return this.oidcManager.getUser();
+  }
+
+  public async getAccessToken() {
+    if (!this.oidcManager) return null;
+    return this.oidcManager.getAccessToken();
   }
 }
