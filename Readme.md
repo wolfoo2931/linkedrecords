@@ -44,3 +44,38 @@ LinkedRecords is configured via environment variables. See table below.
 | ENABLE_AUTH_RULE_CACHE | false | Enable cache for authorization lookups. Might require a lot of memory. |
 | SHORT_LIVED_ACCESS_TOKEN_SIGNING | xxxx | Configuring this is optional but can reduce load on the database because short lived access token will be used for checking access when a client subscribes to attribute changes. |
 
+## Example: Using LinkedRecords SDK with OIDC Authentication in an SPA
+
+Use the SDK in your frontend application:
+
+```js
+import LinkedRecords from './src/browser_sdk';
+
+const oidcConfig = {
+  authority: 'https://your-oidc-provider.com',
+  client_id: 'your-client-id',
+  redirect_uri: window.location.origin + '/callback',
+  // Optionally:
+  // post_logout_redirect_uri: window.location.origin + '/',
+  // scope: 'openid profile email',
+};
+
+// Instantiating LinkedRecords will automatically handle the OIDC redirect callback
+const lr = new LinkedRecords(new URL('https://your-backend.com'), oidcConfig);
+
+// To start login flow (e.g., on a button click):
+// lr.login();
+
+// To check if the user is authenticated:
+// const isAuth = await lr.isAuthenticated();
+
+// To get the current user info:
+// const user = await lr.getUser();
+
+// To logout:
+// await lr.logout();
+```
+
+- If the current page is the OIDC redirect URI and contains the `code` and `state` parameters, the SDK will automatically handle the redirect callback and clean up the URL.
+- All API requests will use the OIDC access token as a Bearer token if available, or fallback to cookies if not.
+
