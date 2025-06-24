@@ -148,4 +148,24 @@ describe('quota', () => {
     expect(beforeQuotaViolation.remainingStorageAvailable)
       .to.be.eq(afterQuotaViolation.remainingStorageAvailable);
   });
+
+  it('does not allow to lookup other users quota', async () => {
+    const [user1, user2] = await Session.getTwoSessions();
+
+    const quota = await user1.getQuota(await user2.getActorId());
+
+    expect(quota).to.eql({});
+  });
+
+  it('does not allow to lookup quota if the user is not member of the attribute', async () => {
+    const [user1, user2] = await Session.getTwoSessions();
+
+    const team = await user1.Attribute.createKeyValue({});
+
+    const authorizedQuotaLookup = await user1.getQuota(team.id);
+    const unauthorizedQuotaLookup = await user2.getQuota(team.id);
+
+    expect(unauthorizedQuotaLookup).to.eql({});
+    expect(authorizedQuotaLookup).to.not.eql({});
+  });
 });
