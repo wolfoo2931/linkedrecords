@@ -13,8 +13,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
   id?: string;
 
-  actorId: string | undefined;
-
   clientId: string;
 
   createdAt: Date | undefined;
@@ -47,7 +45,6 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     // because the same user can be logged on two browsers/laptops, we need
     // a clientId and an actorId. Every attribute needs to have its own clientId.
     this.clientId = linkedRecords.getAttributeClientId();
-    this.actorId = linkedRecords.actorId;
 
     this.version = '0';
     this.value = this.getDefaultValue();
@@ -78,7 +75,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     const requestConfig: any = {
       method: 'POST',
-      body: this.getCreatePayload(value, facts),
+      body: await this.getCreatePayload(value, facts),
     };
 
     if (typeof requestConfig.body !== 'string') {
@@ -135,17 +132,22 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
   }
 
-  protected getCreatePayload(
-    value: Type,
-    facts: [ string?, string?, string? ][] = [],
-  ): string | FormData {
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not create blob payload!');
+  protected async getActorId(): Promise<string> {
+    const actorId = await this.linkedRecords.getActorId();
+    if (!actorId) {
+      throw new Error('userId could not be determined');
     }
 
+    return actorId;
+  }
+
+  protected async getCreatePayload(
+    value: Type,
+    facts: [ string?, string?, string? ][] = [],
+  ): Promise<string | FormData> {
     return JSON.stringify({
       clientId: this.clientId,
-      actorId: this.actorId,
+      actorId: await this.getActorId(),
       facts,
       value,
     });
@@ -158,14 +160,10 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       return undefined;
     }
 
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not get attribute value!');
-    }
-
     return {
       value: this.value,
       changeId: this.version,
-      actorId: this.actorId,
+      actorId: await this.getActorId(),
     };
   }
 

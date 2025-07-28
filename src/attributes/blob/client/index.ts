@@ -30,14 +30,10 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
     return new Blob([serializedValue]);
   }
 
-  protected getCreatePayload(value: Blob) {
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not create blob payload!');
-    }
-
+  protected async getCreatePayload(value: Blob) {
     const formData = new FormData();
     formData.append('change', value, 'blob');
-    formData.append('actorId', this.actorId);
+    formData.append('actorId', await this.getActorId());
     formData.append('clientId', this.clientId);
 
     return formData;
@@ -64,16 +60,13 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
 
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not transmit change!');
-    }
-
+    const actorId = await this.getActorId();
     const formData = new FormData();
-    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${this.actorId}`;
+    const url = `/attributes/${this.id}?clientId=${this.clientId}&actorId=${actorId}`;
 
     formData.append('change', value, 'blob');
     formData.append('attributeId', this.id);
-    formData.append('actorId', this.actorId);
+    formData.append('actorId', actorId);
     formData.append('clientId', this.clientId);
 
     const success = await this.linkedRecords.fetch(url, {

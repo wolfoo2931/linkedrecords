@@ -140,19 +140,15 @@ export default class LongTextAttribute extends AbstractAttributeClient<string, L
     }
   }
 
-  protected transmitChange(changeset: LongTextChange): Promise<boolean> {
+  protected async transmitChange(changeset: LongTextChange): Promise<boolean> {
     if (!this.id) {
       throw new Error('change can not be transmitted because attribute does not has an id');
-    }
-
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not transmit change!');
     }
 
     this.changeInTransmissionSendAt = new Date();
     this.changeInTransmission = new SerializedChangeWithMetadata<LongTextChange>(
       this.id,
-      this.actorId,
+      await this.getActorId(),
       this.clientId,
       changeset,
     );
