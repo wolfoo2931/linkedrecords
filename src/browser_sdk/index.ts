@@ -48,7 +48,7 @@ export default class LinkedRecords {
 
   clientId: string;
 
-  actorId: string | undefined;
+  private actorId: string | undefined;
 
   Attribute: AttributesRepository;
 
@@ -268,6 +268,10 @@ export default class LinkedRecords {
 
     LinkedRecords.ensureUserIdIsKnownPromise = undefined;
 
+    return this.actorId;
+  }
+
+  async getActorId() {
     return this.actorId;
   }
 }

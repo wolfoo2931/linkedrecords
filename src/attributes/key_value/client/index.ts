@@ -128,18 +128,14 @@ export default class KeyValueAttribute extends AbstractAttributeClient<object, K
     this.notifySubscribers(change, changeWithMetadata);
   }
 
-  protected transmitChange(changeset: KeyValueChange): Promise<boolean> {
+  protected async transmitChange(changeset: KeyValueChange): Promise<boolean> {
     if (!this.id) {
       throw new Error('change can not be transmitted because attribute does not has an id');
     }
 
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not transmit change!');
-    }
-
     return this.sendToServer(new SerializedChangeWithMetadata<KeyValueChange>(
       this.id,
-      this.actorId,
+      await this.getActorId(),
       this.clientId,
       changeset,
     ));
