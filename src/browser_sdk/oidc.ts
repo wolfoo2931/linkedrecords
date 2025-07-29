@@ -42,6 +42,7 @@ export class OIDCManager {
   }
 
   async handleRedirectCallback(): Promise<User> {
+    console.log('handling it OIDC callback');
     this.user = await this.userManager.signinRedirectCallback();
     return this.user;
   }

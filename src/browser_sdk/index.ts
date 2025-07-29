@@ -88,6 +88,7 @@ export default class LinkedRecords {
       ) {
         const params = new URLSearchParams(window.location.search);
         if (params.has('code') && params.has('state')) {
+          console.log('OIDC callback detected, handling it');
           this.oidcManager
             .handleRedirectCallback()
             .then(() => {
