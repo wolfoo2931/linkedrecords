@@ -37,7 +37,6 @@ async function fetchUserInfo(accessToken: string): Promise<any> {
   });
 
   if (!res.ok) {
-    console.log(res);
     throw new Error('Failed to fetch user info');
   }
 
@@ -66,7 +65,9 @@ function dummyUserAuthenticationMiddleware(req, res, next) {
   const toBeUser = req?.cookies?.pretendToBeUser;
 
   if (!['testuser-1-id', 'testuser-2-id', 'testuser-unauthorized-id'].includes(toBeUser)) {
-    throw new Error(`${toBeUser} is not in the allowed test user whitelist. This is probably a configuration issue. ${req.method} ${req.path}`);
+    res.sendStatus(401);
+    req.log.info(`${toBeUser} is not in the allowed test user whitelist. This is probably a configuration issue. ${req.method} ${req.path}`);
+    return;
   }
 
   Fact.recordUserEmail(`${toBeUser}@example.com`, hashUserId(toBeUser), req.log);

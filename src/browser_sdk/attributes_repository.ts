@@ -95,10 +95,10 @@ export default class AttributesRepository {
       return this.attributeCache[id];
     }
 
-    const attr = new AttributeClass(this.linkedRecords, this.clientServerBus, id);
+    const attr = new AttributeClass(this.linkedRecords, await this.getClientServerBus(), id);
 
     if (serverState) {
-      attr.load(serverState);
+      await attr.load(serverState);
     }
 
     this.attributeCache[id] = attr;

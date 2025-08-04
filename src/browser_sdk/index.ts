@@ -1,3 +1,4 @@
+/* eslint-disable class-methods-use-this */
 /* eslint-disable import/no-cycle */
 
 import { uuidv7 as uuid } from 'uuidv7';
@@ -58,22 +59,8 @@ export default class LinkedRecords {
 
   private initializeClientServerBusPromise: Promise<ClientServerBus>;
 
-  static async readUserIdFromCookies(): Promise<string | undefined> {
-    if (typeof window === 'undefined' || !window.document) return undefined;
-    const Cookies = (await import('js-cookie')).default;
-    const cookieValue = Cookies.get('userId');
-    if (!cookieValue) {
-      return undefined;
-    }
-    const withoutSignature = cookieValue.slice(0, cookieValue.lastIndexOf('.'));
-    const split = withoutSignature.split(':');
-    const userId = split.length === 1 ? split[0] : split[1];
-    return userId;
-  }
-
   constructor(serverURL: URL, oidcConfig?: OIDCConfig, autoHandleRedirect = true) {
     this.serverURL = serverURL;
-    LinkedRecords.readUserIdFromCookies().then((id) => { this.actorId = id; });
 
     if (oidcConfig) {
       this.oidcManager = new OIDCManager(oidcConfig, serverURL);
@@ -98,6 +85,8 @@ export default class LinkedRecords {
     this.Attribute = new AttributesRepository(this, () => this.getClientServerBus());
     this.clientId = uuid();
     this.Fact = new FactsRepository(this);
+
+    this.ensureUserIdIsKnown();
 
     if (this.oidcManager) {
       if (
@@ -310,18 +299,17 @@ export default class LinkedRecords {
       return this.actorId;
     }
 
-    LinkedRecords.ensureUserIdIsKnownPromise = fetch(`${this.serverURL}userinfo`, {
-      credentials: 'include',
-    });
+    LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo');
 
     const userInfoResponse = await LinkedRecords.ensureUserIdIsKnownPromise;
-
-    this.actorId = await LinkedRecords.readUserIdFromCookies();
 
     if (userInfoResponse.status === 401) {
       this.handleExpiredLoginSession();
       return undefined;
     }
+
+    const responseBody = await userInfoResponse.json();
+    this.actorId = responseBody.userId;
 
     LinkedRecords.ensureUserIdIsKnownPromise = undefined;
 
