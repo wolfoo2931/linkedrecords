@@ -72,6 +72,10 @@ export default async function clientServerBus(
     const request = socket?.request;
     let userId;
 
+    if (socket.handshake.auth['token']) {
+      request.headers.authorization = socket.handshake.auth['token'];
+    }
+
     try {
       userId = await accessControl.verifyAuthenticated(request);
     } catch (ex) {

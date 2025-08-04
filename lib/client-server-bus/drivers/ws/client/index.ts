@@ -1,5 +1,5 @@
 /* eslint-disable import/no-cycle */
-import { io } from 'socket.io-client';
+import { io, ManagerOptions, SocketOptions } from 'socket.io-client';
 
 export default class ClientServerBus {
   subscriptions = {};
@@ -13,6 +13,12 @@ export default class ClientServerBus {
   connectionInterruptedSubscribers: ((error?: any) => void)[] = [];
 
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
+
+  bearerToken?: any;
+
+  constructor(bearerToken?) {
+    this.bearerToken = bearerToken;
+  }
 
   public subscribeConnectionInterrupted(sub: (error?: any) => void): void {
     this.connectionInterruptedSubscribers.push(sub);
@@ -87,11 +93,19 @@ export default class ClientServerBus {
 
   private getWSAsync(url: URL) {
     return new Promise((resolve, reject) => {
-      const socket = io(url.origin, {
+      const opt: Partial<ManagerOptions & SocketOptions> = {
         withCredentials: true,
         path: url.pathname,
         transports: ['websocket'],
-      });
+      };
+
+      if (this.bearerToken) {
+        opt.auth = {
+          token: `Bearer ${this.bearerToken}`,
+        };
+      }
+
+      const socket = io(url.origin, opt);
 
       socket.on('connect', () => {
         resolve(socket);

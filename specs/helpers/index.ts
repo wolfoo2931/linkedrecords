@@ -32,12 +32,15 @@ export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]
   await client.ensureUserIdIsKnown();
   clients.push(client);
   await new Promise((r) => { setTimeout(r, 100); });
-  return [client, client.getClientServerBus()];
+  const csb = await client.getClientServerBus();
+  return [client, csb];
 }
 
 export function cleanupClients() {
   clients.forEach((client) => {
-    client.clientServerBus.unsubscribeAll();
+    client.getClientServerBus().then((csb) => {
+      csb.unsubscribeAll();
+    });
   });
 
   clients = [];

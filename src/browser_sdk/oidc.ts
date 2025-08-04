@@ -21,7 +21,7 @@ export class OIDCManager {
 
   private user: User | null = null;
 
-  constructor(config: OIDCConfig) {
+  constructor(config: OIDCConfig, serverURL: URL) {
     const settings: UserManagerSettings = {
       authority: config.authority,
       client_id: config.client_id,
@@ -32,6 +32,9 @@ export class OIDCManager {
       userStore: new WebStorageStateStore({ store: window.sessionStorage }),
       silent_redirect_uri: config.silent_redirect_uri,
       automaticSilentRenew: config.automaticSilentRenew ?? true,
+      extraQueryParams: {
+        audience: serverURL.host,
+      },
     };
 
     this.userManager = new UserManager(settings);
@@ -42,7 +45,6 @@ export class OIDCManager {
   }
 
   async handleRedirectCallback(): Promise<User> {
-    console.log('handling it OIDC callback');
     this.user = await this.userManager.signinRedirectCallback();
     return this.user;
   }

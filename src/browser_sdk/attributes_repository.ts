@@ -64,7 +64,7 @@ const byId = (a, b) => {
 export default class AttributesRepository {
   private linkedRecords: LinkedRecords;
 
-  private clientServerBus: ClientServerBus;
+  private getClientServerBus: () => Promise<ClientServerBus>;
 
   private attributeCache: Record<string, AbstractAttributeClient<any, any>>;
 
@@ -74,14 +74,14 @@ export default class AttributesRepository {
     BlobAttribute,
   ];
 
-  constructor(linkedRecords: LinkedRecords, clientServerBus: ClientServerBus) {
+  constructor(linkedRecords: LinkedRecords, getClientServerBus: () => Promise<ClientServerBus>) {
     this.linkedRecords = linkedRecords;
-    this.clientServerBus = clientServerBus;
+    this.getClientServerBus = getClientServerBus;
     this.attributeCache = {};
   }
 
   // TODO: we should cache this
-  private idToAttribute(id, ignoreCache: boolean = false, serverState?): AbstractAttributeClient<any, any> | undefined {
+  private async idToAttribute(id, ignoreCache: boolean = false, serverState?): Promise<AbstractAttributeClient<any, any> | undefined> {
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = AttributesRepository
       .attributeTypes
@@ -142,7 +142,7 @@ export default class AttributesRepository {
 
     const attribute: AbstractAttributeClient<any, IsSerializable> = new AttributeClass(
       this.linkedRecords,
-      this.clientServerBus,
+      await this.getClientServerBus(),
     );
 
     await attribute.create(value, facts);
@@ -169,9 +169,9 @@ export default class AttributesRepository {
 
     const result: { [key: string]: AbstractAttributeClient<any, any> } = {};
 
-    Object.entries(resultBody).forEach(([attrName, config]: [string, any]) => {
+    await Promise.all(Object.entries(resultBody).map(async ([attrName, config]: [string, any]) => {
       if (config.id) {
-        const tmpResult = this.idToAttribute(config.id!, false, config);
+        const tmpResult = await this.idToAttribute(config.id!, false, config);
 
         if (!tmpResult) {
           throw new Error(`Error transforming id to attribute: ${config.id}`);
@@ -179,7 +179,7 @@ export default class AttributesRepository {
 
         result[attrName] = tmpResult;
       }
-    });
+    }));
 
     // @ts-ignore I don't know how to make him happy here.
     return result;
@@ -216,15 +216,15 @@ export default class AttributesRepository {
 
     const attributeResult = {} as any;
 
-    Object.keys(records).forEach((key) => {
+    await Promise.all(Object.keys(records).map(async (key) => {
       if (Array.isArray(records[key])) {
-        attributeResult[key] = records[key].map((attr) => this.idToAttribute(attr.id, ignoreCache, attr)).sort(byId);
+        attributeResult[key] = (await Promise.all(records[key].map((attr) => this.idToAttribute(attr.id, ignoreCache, attr)))).sort(byId);
       } else if (records[key]) {
-        attributeResult[key] = this.idToAttribute(records[key].id, ignoreCache, records[key]);
+        attributeResult[key] = await this.idToAttribute(records[key].id, ignoreCache, records[key]);
       } else {
         attributeResult[key] = null;
       }
-    });
+    }));
 
     return attributeResult;
   }

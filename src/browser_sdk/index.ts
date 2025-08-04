@@ -32,7 +32,7 @@ export default class LinkedRecords {
 
   KeyValueChange: typeof KeyValueChange = KeyValueChange;
 
-  clientServerBus: ClientServerBus;
+  private clientServerBus?: ClientServerBus;
 
   serverURL: URL;
 
@@ -56,6 +56,8 @@ export default class LinkedRecords {
 
   private oidcManager?: OIDCManager;
 
+  private initializeClientServerBusPromise: Promise<ClientServerBus>;
+
   static async readUserIdFromCookies(): Promise<string | undefined> {
     if (typeof window === 'undefined' || !window.document) return undefined;
     const Cookies = (await import('js-cookie')).default;
@@ -72,14 +74,32 @@ export default class LinkedRecords {
   constructor(serverURL: URL, oidcConfig?: OIDCConfig, autoHandleRedirect = true) {
     this.serverURL = serverURL;
     LinkedRecords.readUserIdFromCookies().then((id) => { this.actorId = id; });
-    this.clientId = uuid();
-    this.clientServerBus = new ClientServerBus();
-    this.Attribute = new AttributesRepository(this, this.clientServerBus);
-    this.Fact = new FactsRepository(this);
 
     if (oidcConfig) {
-      this.oidcManager = new OIDCManager(oidcConfig);
+      this.oidcManager = new OIDCManager(oidcConfig, serverURL);
+    }
 
+    this.initializeClientServerBusPromise = this.getAccessToken().then((at) => {
+      if (at) {
+        this.clientServerBus = new ClientServerBus(at);
+      } else {
+        this.clientServerBus = new ClientServerBus();
+      }
+
+      this.clientServerBus.subscribeConnectionInterrupted(() => {
+        if (this.connectionLostHandler) {
+          this.connectionLostHandler();
+        }
+      });
+
+      return this.clientServerBus;
+    });
+
+    this.Attribute = new AttributesRepository(this, () => this.getClientServerBus());
+    this.clientId = uuid();
+    this.Fact = new FactsRepository(this);
+
+    if (this.oidcManager) {
       if (
         autoHandleRedirect
         && typeof window !== 'undefined'
@@ -88,7 +108,6 @@ export default class LinkedRecords {
       ) {
         const params = new URLSearchParams(window.location.search);
         if (params.has('code') && params.has('state')) {
-          console.log('OIDC callback detected, handling it');
           this.oidcManager
             .handleRedirectCallback()
             .then(() => {
@@ -104,12 +123,6 @@ export default class LinkedRecords {
         }
       }
     }
-
-    this.clientServerBus.subscribeConnectionInterrupted(() => {
-      if (this.connectionLostHandler) {
-        this.connectionLostHandler();
-      }
-    });
   }
 
   public getAttributeClientId(): string {
@@ -117,8 +130,8 @@ export default class LinkedRecords {
     return `${this.clientId}-${this.attributeClientIdSuffix}`;
   }
 
-  public getClientServerBus(): ClientServerBus {
-    return this.clientServerBus;
+  public async getClientServerBus(): Promise<ClientServerBus> {
+    return this.initializeClientServerBusPromise;
   }
 
   public async getUserIdByEmail(email: string): Promise<string | undefined> {
