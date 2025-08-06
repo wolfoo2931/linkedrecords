@@ -171,7 +171,7 @@ async function httpAuthHeaderMiddleware(req, res, next) {
         return next();
       }
 
-      tokenCache[token] = undefined;
+      delete tokenCache[token];
     }
   }
 
