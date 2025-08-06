@@ -11,9 +11,30 @@ LinkedRecords is a NoSQL database you can connect to directly from your single p
 
 Developer documentation follows. Curious readers can check out the specs.wdio/tinytodo directory for a simple usage example.
 
+# Concept
+
+You can think of LinkedRecords as a bucket in which anybody can sign up and write data into it. As long as you do not share this data with another
+user or a group of users nobody then you can access the data you have written into this bucket.
+
+In theory every user can use the LinkedRecords API to write and retrieve data. But this would be quite inconvenient to a user - the same way you would
+not expect your user to write SQL queries you would not expect your users to use the LinkedRecords API. A LinkedRecord app is an specialized
+frontend which hides the LinkedRecords API from the user and provides them a convenient user interface to accomplish their use cases.
+
+In the traditional SQL world, incontinence is not the only reason why you do not let the user access your database with SQL: Authentication and
+Authorization challenges are by far the stronger argument not to do this. This is not a problem within LinkedRecords as authorization is backed into
+the LinkedRecords API.
+
+When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled architecture are the main qualities we strive to achieve.
+
+* Simplicity: The API should not have many endpoints or methods but instead consists of a few fundamental building blocks.
+* Flexibility: The few available endpoints can be composed to serve a variety of use cases.
+* Decoupled: LinkedRecords should be decoupled from the single page applications which use it as data storage
+
+Think of it as SQL which you do not have to worry about permissions so you can just use it directly in your react app but is easier to read then SQL and it has live updates.
+
 # Configuration
 
-LinkedRecords is configured via environment variables. See table below.
+LinkedRecords is configured via environment variables. See tables below.
 
 | Environment Variable Name | Example | Description |
 | ------------------------- | ------- | ----------- |
@@ -24,22 +45,21 @@ LinkedRecords is configured via environment variables. See table below.
 | CORS_ORIGIN | ["https://app.example.com", "https://app.example.app"] | The content of the cors origin header. If not provided, the value of FRONTEND_BASE_URL will be used. |
 | SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
 | DEFAULT_STORAGE_SIZE_QUOTA | 50 | The default storage size quota in MB. |
-| PADDLE_NOTIFICATION_SECRET | xxxx | If paddle is used for upgrading quotas this needs to be the notification secret to verify the signature of the webhook content. |
-| PADDLE_API_URL | https://sandbox-api.paddle.com | The URL of the paddle api. |
-| PADDLE_API_KEY | xxx | the paddle API key. |
-| S3_COPY_FROM_BL_ATTRIBUTE_TABLE | false | This is used for migration blob storage from postgresql to S3. |
-| S3_ENDPOINT | s3.system.svc.cluster.local | The hostname of the S3 endpoint. |
-| S3_BUCKET | linkedrecords-blobs | The name of a bucket. The bucket must exist already. |
-| S3_ACCESS_KEY | xxx | The access key id to upload blobs to S3. |
-| S3_SECRET_KEY | xxx | The secret key id to upload blobs to S3. |
-| S3_USE_SSL | false | Do not use TLS when uploading/downloading to S3. |
 | QUOTA_COUNT_KV_ATTRIBUTES | false | If the storage space for KeyValue attributes are deducted from the accountee quota. |
 | QUOTA_COUNT_LT_ATTRIBUTES | false | If the storage space for LongText attributes are deducted from the accountee quota. |
 | ENABLE_AUTH_RULE_CACHE | false | Enable cache for authorization lookups. Might require a lot of memory. |
 | SHORT_LIVED_ACCESS_TOKEN_SIGNING | xxxx | Configuring this is optional but can reduce load on the database because short lived access token will be used for checking access when a client subscribes to attribute changes. |
 
-## Confidential Client Mode (Cookies possible)
+## Confidential Client Mode
 
+The environment variables in this section are all optional if the configuration described in the section "Public Client Mode" are provided.
+
+If LinkedRecords runs in confidential client mode, then a session token will be stored in a httpOnly cookie. From a security standpoint
+this is considered the suggested method. However, this is not possible if the LinkedRecord server and the frontend do not share the same domain.
+In case of different domains, the cookie would be considered a third party cookie.
+
+| Environment Variable Name | Example | Description |
+| ------------------------- | ------- | ----------- |
 | FRONTEND_BASE_URL | http://localhost:3001 | The base URL of the frontend. It will be used for the Access-Control-Allow-Origin HTTP header and is also required for the OpenID connect redirection. |
 | AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
 | AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
@@ -48,14 +68,17 @@ LinkedRecords is configured via environment variables. See table below.
 | AUTH_COOKIE_SIGNING_SECRET | xxxx | The secret used to sign cookies. |
 
 ## Public Client Mode
-| ALLOW_HTTP_AUTHENTICATION_HEADER | false | Allows public clients to make requests providing an access token via http authentication header. |
+
+In case the single page application is hosted on a different domain then the LinkedRecords server, the single page application has
+to store the access token in the browser. In this scenario the following environment variables need to be configured.
+
+| Environment Variable Name | Example | Description |
+| ------------------------- | ------- | ----------- |
+| ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests providing an access token via http authentication header. |
 | AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
-| AUTH_TOKEN_AUDIENCE | |
+| AUTH_TOKEN_AUDIENCE | LinkedRecords will check the audience specified in the JWT bearer token against the value specified in this field. |
 
-
-## Example: Using LinkedRecords SDK with OIDC Authentication in an SPA
-
-Use the SDK in your frontend application:
+The single page application needs to initialize the LinkedRecords SDK as shown below:
 
 ```js
 import LinkedRecords from './src/browser_sdk';
@@ -64,27 +87,40 @@ const oidcConfig = {
   authority: 'https://your-oidc-provider.com',
   client_id: 'your-client-id',
   redirect_uri: window.location.origin + '/callback',
-  // Optionally:
-  // post_logout_redirect_uri: window.location.origin + '/',
-  // scope: 'openid profile email',
 };
 
 // Instantiating LinkedRecords will automatically handle the OIDC redirect callback
 const lr = new LinkedRecords(new URL('https://your-backend.com'), oidcConfig);
 
-// To start login flow (e.g., on a button click):
-// lr.login();
-
 // To check if the user is authenticated:
 // const isAuth = await lr.isAuthenticated();
 
-// To get the current user info:
-// const user = await lr.getUser();
-
-// To logout:
-// await lr.logout();
+// To start login flow (e.g., on a button click):
+// lr.login();
 ```
 
-- If the current page is the OIDC redirect URI and contains the `code` and `state` parameters, the SDK will automatically handle the redirect callback and clean up the URL.
-- All API requests will use the OIDC access token as a Bearer token if available, or fallback to cookies if not.
+## Optional Configuration
+
+### S3
+
+If S3 is configured it will be used to store blob attribute values. If it is not configured they will be stored in PostgreSQL database.
+It is recommended to configure S3.
+
+| Environment Variable Name | Example | Description |
+| ------------------------- | ------- | ----------- |
+| S3_COPY_FROM_BL_ATTRIBUTE_TABLE | false | This is used for migration blob storage from postgresql to S3. |
+| S3_ENDPOINT | s3.system.svc.cluster.local | The hostname of the S3 endpoint. |
+| S3_BUCKET | linkedrecords-blobs | The name of a bucket. The bucket must exist already. |
+| S3_ACCESS_KEY | xxx | The access key id to upload blobs to S3. |
+| S3_SECRET_KEY | xxx | The secret key id to upload blobs to S3. |
+| S3_USE_SSL | false | Do not use TLS when uploading/downloading to S3. |
+
+### Paddle
+
+| Environment Variable Name | Example | Description |
+| ------------------------- | ------- | ----------- |
+| PADDLE_NOTIFICATION_SECRET | xxxx | If paddle is used for upgrading quotas this needs to be the notification secret to verify the signature of the webhook content. |
+| PADDLE_API_URL | https://sandbox-api.paddle.com | The URL of the paddle api. |
+| PADDLE_API_KEY | xxx | the paddle API key. |
+
 
