@@ -15,7 +15,10 @@ export default {
           res.status(200).send({ id: undefined });
         }
       } else {
-        res.status(200).send({ userId: uid(req) });
+        res.status(200).send({
+          userId: uid(req),
+          userPicture: req?.oidc?.user?.picture,
+        });
       }
     });
   },

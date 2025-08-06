@@ -1,3 +1,4 @@
+/* eslint-disable no-new */
 function biggestCommonSuffix(str1, str2) {
   let i = str1.length - 1;
   let j = str2.length - 1;
@@ -50,6 +51,18 @@ export default function getCookieSettingsFromEnv() {
 
   if (!process.env['SERVER_BASE_URL']) {
     throw new Error('SERVER_BASE_URL environment variable must be provided');
+  }
+
+  try {
+    new URL(process.env['FRONTEND_BASE_URL']);
+  } catch {
+    throw new Error('Invalid URL format in FRONTEND_BASE_URL environment variable');
+  }
+
+  try {
+    new URL(process.env['SERVER_BASE_URL']);
+  } catch {
+    throw new Error('Invalid URL format in SERVER_BASE_URL environment variable');
   }
 
   return getCookieSettings(process.env['FRONTEND_BASE_URL'], process.env['SERVER_BASE_URL']);

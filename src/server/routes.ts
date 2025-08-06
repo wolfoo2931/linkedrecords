@@ -20,7 +20,6 @@ import authentication from './middleware/authentication';
 import quotaUpgrade from './middleware/quota_upgrade';
 import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../attributes/errors/authorization_error';
-import clearCookies from './middleware/clear_cookies';
 import BlobAttribute from '../attributes/blob/server';
 
 const blobUpload = multer().single('change');
@@ -115,7 +114,6 @@ async function createApp(httpServer: https.Server) {
   app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
-  app.use('/logout', clearCookies());
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/attribute-compositions', attributeMiddleware());

@@ -11,8 +11,30 @@ import IsLogger from '../../../lib/is_logger';
 
 const cookieSettings = getCookieSettingsFromEnv();
 const tokenCache = {};
+const userInfoCache = {};
+
+function assignWhenAuthenticatedFunction(req, res) {
+  req.whenAuthenticated = async (fn) => {
+    if (!req?.oidc?.user?.sub || !req.oidc.isAuthenticated()) {
+      res.sendStatus(401);
+    } else {
+      req.hashedUserID = uid(req);
+      await fn(uid(req));
+    }
+  };
+}
 
 async function getUserInfoEndpoint(): Promise<string> {
+  const issuerUrl = process.env['AUTH_ISSUER_BASE_URL'];
+
+  if (!issuerUrl) {
+    throw new Error('AUTH_ISSUER_BASE_URL needs to be defined');
+  }
+
+  if (userInfoCache[issuerUrl]) {
+    return userInfoCache[issuerUrl];
+  }
+
   const res = await fetch(`${process.env['AUTH_ISSUER_BASE_URL']}.well-known/openid-configuration`);
 
   if (!res.ok) {
@@ -20,9 +42,12 @@ async function getUserInfoEndpoint(): Promise<string> {
   }
 
   const config = await res.json();
+
   if (!config.userinfo_endpoint) {
     throw new Error('userinfo_endpoint not found in OIDC configuration');
   }
+
+  userInfoCache[issuerUrl] = config.userinfo_endpoint;
 
   return config.userinfo_endpoint;
 }
@@ -72,23 +97,7 @@ function dummyUserAuthenticationMiddleware(req, res, next) {
 
   Fact.recordUserEmail(`${toBeUser}@example.com`, hashUserId(toBeUser), req.log);
 
-  req.whenAuthenticated = async (fn) => {
-    if (!req?.oidc?.user?.sub || !req.oidc.isAuthenticated()) {
-      res.sendStatus(401);
-    } else {
-      if (!req.signedCookies.userId) {
-        res.cookie('userId', uid(req), {
-          ...cookieSettings,
-          secure: true,
-          signed: true,
-          httpOnly: false,
-        });
-      }
-
-      req.hashedUserID = uid(req);
-      await fn(uid(req));
-    }
-  };
+  assignWhenAuthenticatedFunction(req, res);
 
   req.oidc = {
     user: { sub: toBeUser },
@@ -96,40 +105,6 @@ function dummyUserAuthenticationMiddleware(req, res, next) {
   };
 
   next();
-}
-
-function assignWhenAuthenticatedFunction(req, res) {
-  req.whenAuthenticated = async (fn) => {
-    if (!req?.oidc?.user?.sub || !req.oidc.isAuthenticated()) {
-      res.sendStatus(401);
-    } else {
-      if (!req.signedCookies.userId) {
-        res.cookie('userId', uid(req), {
-          ...cookieSettings,
-          secure: true,
-          signed: true,
-          httpOnly: false,
-        });
-
-        try {
-          const pictureUrl = new URL(req.oidc.user.picture);
-          if (['http:', 'https:'].includes(pictureUrl.protocol)) {
-            res.cookie('userPicture', req?.oidc?.user?.picture, {
-              ...cookieSettings,
-              secure: true,
-              signed: true,
-              httpOnly: false,
-            });
-          }
-        } catch (error) {
-          req.log?.warn('Invalid user picture URL received from identity provider');
-        }
-      }
-
-      req.hashedUserID = uid(req);
-      await fn(uid(req));
-    }
-  };
 }
 
 function confidentialClientAuthenticationMiddleware(req, res, next) {
@@ -159,7 +134,9 @@ function confidentialClientAuthenticationMiddleware(req, res, next) {
       // which can not be redirected for refreshing the token.
       scope: 'openid email offline_access profile',
       response_type: 'code',
-      prompt: req.query.prompt,
+      prompt: ['none', 'login', 'consent', 'select_account'].includes(req.query.prompt)
+        ? req.query.prompt
+        : undefined,
     },
     session: {
       cookie: cookieSettings,
@@ -170,7 +147,10 @@ function confidentialClientAuthenticationMiddleware(req, res, next) {
 }
 
 async function httpAuthHeaderMiddleware(req, res, next) {
-  const willExpireIn = (token, x) => JSON.parse(atob(token.split('.')[1])).exp * 1000 < Date.now() + x * 1000;
+  const willExpireIn = (token, x) => {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    return payload.exp * 1000 < Date.now() + x * 1000;
+  };
 
   assignWhenAuthenticatedFunction(req, res);
 

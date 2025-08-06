@@ -41,7 +41,7 @@
     "@types/chai": "^4.3.3",
     "@types/chai-as-promised": "^7.1.8",
     "@types/mocha": "^9.1.1",
-    "@types/node": "^18.0.0",
+    "@types/node": "^24.2.0",
     "@types/pg": "^8.11.13",
     "@types/pg-format": "^1.0.5",
     "@types/stream-to-blob": "^2.0.0",

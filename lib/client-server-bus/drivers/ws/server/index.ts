@@ -72,8 +72,12 @@ export default async function clientServerBus(
     const request = socket?.request;
     let userId;
 
-    if (socket.handshake.auth['token']) {
-      request.headers.authorization = socket.handshake.auth['token'];
+    if (socket.handshake.auth?.['token']) {
+      const { token } = socket.handshake.auth;
+
+      if (typeof token === 'string' && token.trim()) {
+        request.headers.authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
     }
 
     try {
