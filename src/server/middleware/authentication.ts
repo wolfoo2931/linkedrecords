@@ -10,7 +10,7 @@ import getCookieSettingsFromEnv from '../../../lib/cookie-settings-from-env';
 import IsLogger from '../../../lib/is_logger';
 
 const cookieSettings = getCookieSettingsFromEnv();
-const userInfoCache = {};
+const userInfoEndpointCache = {};
 
 type TokenCacheEntry = {
   userInfo: any;
@@ -48,8 +48,8 @@ async function getUserInfoEndpoint(): Promise<string> {
     throw new Error('AUTH_ISSUER_BASE_URL needs to be defined');
   }
 
-  if (userInfoCache[issuerUrl]) {
-    return userInfoCache[issuerUrl];
+  if (userInfoEndpointCache[issuerUrl]) {
+    return userInfoEndpointCache[issuerUrl];
   }
 
   const res = await fetch(`${process.env['AUTH_ISSUER_BASE_URL']}.well-known/openid-configuration`);
@@ -64,7 +64,7 @@ async function getUserInfoEndpoint(): Promise<string> {
     throw new Error('userinfo_endpoint not found in OIDC configuration');
   }
 
-  userInfoCache[issuerUrl] = config.userinfo_endpoint;
+  userInfoEndpointCache[issuerUrl] = config.userinfo_endpoint;
 
   return config.userinfo_endpoint;
 }
@@ -210,7 +210,6 @@ async function httpAuthHeaderMiddleware(req, res, next) {
       return res.redirect('/?email-not-verified');
     }
 
-    tokenCache[req.auth.token] = userInfo;
     const payload = JSON.parse(Buffer.from(req.auth.token.split('.')[1], 'base64').toString());
 
     tokenCache[req.auth.token] = {
