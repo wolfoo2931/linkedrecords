@@ -17,18 +17,18 @@ You can think of LinkedRecords as a bucket in which anybody can sign up and writ
 user or a group of users nobody then you can access the data you have written into this bucket.
 
 In theory every user can use the LinkedRecords API to write and retrieve data. But this would be quite inconvenient to a user - the same way you would
-not expect your user to write SQL queries you would not expect your users to use the LinkedRecords API. A LinkedRecord app is an specialized
+not expect your user to write SQL queries you would not expect your users to use the LinkedRecords API. A LinkedRecords app is a specialized
 frontend which hides the LinkedRecords API from the user and provides them a convenient user interface to accomplish their use cases.
 
-In the traditional SQL world, incontinence is not the only reason why you do not let the user access your database with SQL: Authentication and
+In the traditional SQL world, inconvenience is not the only reason why you do not let the user access your database with SQL: Authentication and
 Authorization challenges are by far the stronger argument not to do this. This is not a problem within LinkedRecords as authorization is backed into
 the LinkedRecords API.
 
 When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled architecture are the main qualities we strive to achieve.
 
-* Simplicity: The API should not have many endpoints or methods but instead consists of a few fundamental building blocks.
-* Flexibility: The few available endpoints can be composed to serve a variety of use cases.
-* Decoupled: LinkedRecords should be decoupled from the single page applications which use it as data storage
+- Simplicity: The API should not have many endpoints or methods but instead consists of a few fundamental building blocks.
+- Flexibility: The few available endpoints can be composed to serve a variety of use cases.
+- Decoupled: LinkedRecords should be decoupled from the single page applications which use it as data storage
 
 Think of it as SQL which you do not have to worry about permissions so you can just use it directly in your react app but is easier to read then SQL and it has live updates.
 
@@ -61,7 +61,7 @@ In case of different domains, the cookie would be considered a third party cooki
 | Environment Variable Name | Example | Description |
 | ------------------------- | ------- | ----------- |
 | FRONTEND_BASE_URL | http://localhost:3001 | The base URL of the frontend. It will be used for the Access-Control-Allow-Origin HTTP header and is also required for the OpenID connect redirection. |
-| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
+| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID Connect compliant identity provider (e.g. Auth0, Okta). |
 | AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
 | AUTH_CLIENT_SECRET |  | The client secret. Can be obtained from the identity provider. |
 | AUTH_IDP_LOGOUT | true | When set to true the user session will be destroyed in the application AND the within the identity provider. |
@@ -75,7 +75,7 @@ to store the access token in the browser. In this scenario the following environ
 | Environment Variable Name | Example | Description |
 | ------------------------- | ------- | ----------- |
 | ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests providing an access token via http authentication header. |
-| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
+| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID Connect compliant identity provider (e.g. Auth0, Okta). |
 | AUTH_TOKEN_AUDIENCE | LinkedRecords will check the audience specified in the JWT bearer token against the value specified in this field. |
 
 The single page application needs to initialize the LinkedRecords SDK as shown below:
@@ -122,5 +122,3 @@ It is recommended to configure S3.
 | PADDLE_NOTIFICATION_SECRET | xxxx | If paddle is used for upgrading quotas this needs to be the notification secret to verify the signature of the webhook content. |
 | PADDLE_API_URL | https://sandbox-api.paddle.com | The URL of the paddle api. |
 | PADDLE_API_KEY | xxx | the paddle API key. |
-
-

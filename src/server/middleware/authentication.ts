@@ -55,7 +55,7 @@ async function getUserInfoEndpoint(): Promise<string> {
   const res = await fetch(`${process.env['AUTH_ISSUER_BASE_URL']}.well-known/openid-configuration`);
 
   if (!res.ok) {
-    throw new Error('Failed to fetch OIDC configuration');
+    throw new Error(`Failed to fetch OIDC configuration: ${res.status} ${res.statusText}`);
   }
 
   const config = await res.json();
@@ -242,7 +242,7 @@ export default function authentication() {
     }
 
     if (authHeader) {
-      throw new Error('HTTP authorization header is not activated');
+      throw new Error('HTTP Authorization header authentication is not enabled. Set ALLOW_HTTP_AUTHENTICATION_HEADER=true to enable it.');
     }
 
     return confidentialClientAuthenticationMiddleware(req, res, next);
