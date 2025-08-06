@@ -10,8 +10,25 @@ import getCookieSettingsFromEnv from '../../../lib/cookie-settings-from-env';
 import IsLogger from '../../../lib/is_logger';
 
 const cookieSettings = getCookieSettingsFromEnv();
-const tokenCache = {};
 const userInfoCache = {};
+
+type TokenCacheEntry = {
+  userInfo: any;
+  expiresAt: number;
+};
+
+const tokenCache: Record<string, TokenCacheEntry | undefined> = {};
+
+// Cleanup expired tokens periodically
+setInterval(() => {
+  const now = Date.now();
+  Object.keys(tokenCache).forEach((token) => {
+    const entry = tokenCache[token];
+    if (entry && entry.expiresAt < now) {
+      delete tokenCache[token];
+    }
+  });
+}, 60 * 60 * 1000);
 
 function assignWhenAuthenticatedFunction(req, res) {
   req.whenAuthenticated = async (fn) => {
@@ -156,16 +173,16 @@ async function httpAuthHeaderMiddleware(req, res, next) {
 
   if (req.headers.authorization) {
     const token = req.headers.authorization.split(' ')[1];
-    const userInfo = tokenCache[token];
+    const cachedToken = tokenCache[token];
 
-    if (userInfo) {
+    if (cachedToken) {
       if (!willExpireIn(token, 60)) {
         req.oidc = {
           user: {
-            sub: userInfo.sub,
-            picture: userInfo.picture,
+            sub: cachedToken.userInfo.sub,
+            picture: cachedToken.userInfo.picture,
           },
-          isAuthenticated: () => !!userInfo.sub?.trim(),
+          isAuthenticated: () => !!cachedToken.userInfo.sub?.trim(),
         };
 
         return next();
@@ -194,6 +211,12 @@ async function httpAuthHeaderMiddleware(req, res, next) {
     }
 
     tokenCache[req.auth.token] = userInfo;
+    const payload = JSON.parse(Buffer.from(req.auth.token.split('.')[1], 'base64').toString());
+
+    tokenCache[req.auth.token] = {
+      userInfo,
+      expiresAt: payload.exp * 1000,
+    };
 
     req.oidc = {
       user: {
