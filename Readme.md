@@ -20,15 +20,9 @@ LinkedRecords is configured via environment variables. See table below.
 | PGHOST | localhost | The hostname of the PostgreSQL server. |
 | PGUSER | linkedrecords | The PostgreSQL user name. |
 | PGPASSWORD | xxxx | The PostgreSQL password. |
-| PGDATABASE | xxxx | The PostgreSQL database name. |
-| SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
-| FRONTEND_BASE_URL | http://localhost:3001 | The base URL of the frontend. It will be used for the Access-Control-Allow-Origin HTTP header and is also required for the OpenID connect redirection. |
+| PGDATABASE | xxxx | The PostgreSQL database name. ||
 | CORS_ORIGIN | ["https://app.example.com", "https://app.example.app"] | The content of the cors origin header. If not provided, the value of FRONTEND_BASE_URL will be used. |
-| AUTH_COOKIE_SIGNING_SECRET | xxxx | The secret used to sign cookies. |
-| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
-| AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
-| AUTH_CLIENT_SECRET |  | The client secret. Can be obtained from the identity provider. |
-| AUTH_IDP_LOGOUT | true | When set to true the user session will be destroyed in the application AND the within the identity provider. |
+| SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
 | DEFAULT_STORAGE_SIZE_QUOTA | 50 | The default storage size quota in MB. |
 | PADDLE_NOTIFICATION_SECRET | xxxx | If paddle is used for upgrading quotas this needs to be the notification secret to verify the signature of the webhook content. |
 | PADDLE_API_URL | https://sandbox-api.paddle.com | The URL of the paddle api. |
@@ -43,6 +37,21 @@ LinkedRecords is configured via environment variables. See table below.
 | QUOTA_COUNT_LT_ATTRIBUTES | false | If the storage space for LongText attributes are deducted from the accountee quota. |
 | ENABLE_AUTH_RULE_CACHE | false | Enable cache for authorization lookups. Might require a lot of memory. |
 | SHORT_LIVED_ACCESS_TOKEN_SIGNING | xxxx | Configuring this is optional but can reduce load on the database because short lived access token will be used for checking access when a client subscribes to attribute changes. |
+
+## Confidential Client Mode (Cookies possible)
+
+| FRONTEND_BASE_URL | http://localhost:3001 | The base URL of the frontend. It will be used for the Access-Control-Allow-Origin HTTP header and is also required for the OpenID connect redirection. |
+| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
+| AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
+| AUTH_CLIENT_SECRET |  | The client secret. Can be obtained from the identity provider. |
+| AUTH_IDP_LOGOUT | true | When set to true the user session will be destroyed in the application AND the within the identity provider. |
+| AUTH_COOKIE_SIGNING_SECRET | xxxx | The secret used to sign cookies. |
+
+## Public Client Mode
+| ALLOW_HTTP_AUTHENTICATION_HEADER | false | Allows public clients to make requests providing an access token via http authentication header. |
+| AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID connect comply identity provider (e.g. Auth0, Okta). |
+| AUTH_TOKEN_AUDIENCE | |
+
 
 ## Example: Using LinkedRecords SDK with OIDC Authentication in an SPA
 

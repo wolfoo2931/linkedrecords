@@ -111,7 +111,7 @@ async function createApp(httpServer: https.Server) {
   app.use(limiter);
   app.use(cors({ origin: getCorsOriginConfig(), credentials: true, maxAge: 86400 }));
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
-  app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
+  app.use(cookieParser());
   app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
   app.use(authentication());
