@@ -19,6 +19,7 @@ type FetchOptions = {
   body?: any,
   isJSON?: boolean,
   doNotHandleExpiredSessions?: boolean,
+  skipWaitForUserId?: boolean,
 };
 
 export {
@@ -164,7 +165,12 @@ export default class LinkedRecords {
       body = undefined,
       isJSON = true,
       doNotHandleExpiredSessions = false,
+      skipWaitForUserId = false,
     } = fetchOpt || {};
+
+    if (!skipWaitForUserId) {
+      await this.ensureUserIdIsKnown();
+    }
 
     const base = this.serverURL.toString().replace(/\/$/, '');
     const path = url.replace(/^\//, '');
@@ -299,7 +305,7 @@ export default class LinkedRecords {
       return this.actorId;
     }
 
-    LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo');
+    LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true });
 
     const userInfoResponse = await LinkedRecords.ensureUserIdIsKnownPromise;
 
