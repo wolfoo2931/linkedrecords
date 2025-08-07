@@ -13,6 +13,8 @@ import EnsureIsValid from '../../../lib/utils/sql_values';
 import AuthCache from './auth_cache';
 import FactBox from './fact_box';
 
+export type FactScope = { internalUserId: number, factBoxIds: number[] };
+
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
 
@@ -252,6 +254,8 @@ export default class Fact {
     userid: string,
     logger: IsLogger,
     relevantPredicates: string[] = [],
+    factScope?: FactScope,
+    terms?: string[],
   ) {
     EnsureIsValid.userId(userid);
 
@@ -266,11 +270,13 @@ export default class Fact {
       ['selfAccess', 'creator', 'host', 'member', 'access', 'reader'],
       undefined,
       logger,
+      'all',
+      factScope,
     );
 
-    const [allTerms, factScope] = await Promise.all([
-      Fact.getAllTerms(logger),
-      Fact.getFactScopeByUser(userid, logger),
+    const [allTerms, factScopeOrDefault] = await Promise.all([
+      terms ? Promise.resolve(terms) : Fact.getAllTerms(logger),
+      factScope ? Promise.resolve(factScope) : Fact.getFactScopeByUser(userid, logger),
     ]);
 
     return `
@@ -283,7 +289,7 @@ export default class Fact {
             UNION
               SELECT id, subject, predicate, object, latest
               FROM facts
-              WHERE facts.fact_box_id IN (${factScope.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
+              WHERE facts.fact_box_id IN (${factScopeOrDefault.factBoxIds.map(EnsureIsValid.factBoxId).join(',')})
               ${predicateFilters.length ? `AND predicate IN (${predicateFilters.join(',')})` : ''}
               AND subject IN (SELECT node FROM auth_nodes)
               AND (object IN (SELECT node FROM auth_nodes) OR object = ANY ('{${allTerms.map(EnsureIsValid.term).join(',')}}'))
@@ -514,6 +520,43 @@ export default class Fact {
     userid: string,
     logger: IsLogger,
   ) {
+    const [terms, factScope] = await Promise.all([
+      Fact.getAllTerms(logger),
+      Fact.getFactScopeByUser(userid, logger),
+    ]);
+
+    const chunkedFactBoxes: FactScope[] = factScope
+      .factBoxIds
+      .filter((id) => id !== 0)
+      .map((id) => ({
+        factBoxIds: [0, id],
+        internalUserId: factScope.internalUserId,
+      }));
+
+    const chunkedResults = await Promise.all(
+      chunkedFactBoxes.map((cfs) => this.findNodesUnchunked(
+        isSubjectAllOf,
+        isObjectAllOf,
+        blacklistNodes,
+        userid,
+        logger,
+        cfs,
+        terms,
+      )),
+    );
+
+    return chunkedResults.flat();
+  }
+
+  static async findNodesUnchunked(
+    isSubjectAllOf: SubjectQueries,
+    isObjectAllOf: SubjectQueries,
+    blacklistNodes: [string, string][],
+    userid: string,
+    logger: IsLogger,
+    factScope?: FactScope,
+    terms?: string[],
+  ) {
     const pool = new PgPoolWithLog(logger);
     const relevantPredicates = [
       ...isSubjectAllOf.map((x) => x[0]),
@@ -521,7 +564,14 @@ export default class Fact {
       ...blacklistNodes.map((x) => x[1]),
     ];
 
-    const baseQuery = await Fact.withAuthNodesAndFacts(userid, logger, relevantPredicates);
+    const baseQuery = await Fact.withAuthNodesAndFacts(
+      userid,
+      logger,
+      relevantPredicates,
+      factScope,
+      terms,
+    );
+
     const blacklist = blacklistNodes.map(([s, p]) => (`SELECT object FROM auth_facts where subject='${EnsureIsValid.subject(s)}' AND predicate='${EnsureIsValid.predicate(p)}'`)).join(' UNION ').trim();
     const subjectSet = Fact.getSQLToResolveToSubjectIdsWithModifiers(isSubjectAllOf);
     const objectSet = isObjectAllOf.map((q) => `SELECT object FROM auth_facts WHERE subject='${EnsureIsValid.subject(q[0])}' AND predicate='${EnsureIsValid.predicate(q[1])}'`).join(' INTERSECT ').trim();
@@ -864,7 +914,7 @@ export default class Fact {
   static async getFactScopeByUser(
     userId: string,
     logger: IsLogger,
-  ): Promise<{ internalUserId: number, factBoxIds: number[] }> {
+  ): Promise<FactScope> {
     const pool = new PgPoolWithLog(logger);
     const internalUserId = await FactBox.getInternalUserId(userId, logger);
 
@@ -1054,7 +1104,7 @@ export default class Fact {
     return result;
   }
 
-  private static async getAllTerms(logger) {
+  private static async getAllTerms(logger): Promise<string[]> {
     const hit = cache.get('terms');
 
     if (hit) {
