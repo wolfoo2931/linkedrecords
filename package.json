@@ -56,7 +56,6 @@
     "chai-as-promised": "^7.1.2",
     "changesets": "https://github.com/wolfoo2931/changesets#77f814381280ca067c45fe7ff1e8aabe892d13a5",
     "colors": "^1.4.0",
-    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "diff_match_patch": "~0.1.1",
     "dotenv": "^16.0.1",

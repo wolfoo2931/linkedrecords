@@ -1,4 +1,3 @@
-import Cookies from 'js-cookie';
 import LinkedRecords from '../../src/browser_sdk';
 import ClientServerBus from '../../lib/client-server-bus/client';
 
@@ -20,14 +19,66 @@ export function waitFor(fn) {
   });
 }
 
-export async function changeUserContext(pretendToBe: string) {
-  Cookies.remove('pretendToBeUser', { path: '', doamin: 'localhost' });
-  Cookies.set('pretendToBeUser', pretendToBe, { path: '', doamin: 'localhost' });
+export async function changeUserContext(userId: string) {
+  sessionStorage.clear();
+
+  // Make a request to get tokens directly with user_id parameter
+  const tokenResponse = await fetch('http://localhost:3002/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: 'test-code',
+      client_id: 'test-client',
+      client_secret: 'test-secret',
+      redirect_uri: 'http://localhost:9876/callback',
+      user_id: userId,
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    throw new Error(`Failed to get tokens: ${tokenResponse.status}`);
+  }
+
+  const tokens = await tokenResponse.json();
+
+  // Create the user object as oidc-client-ts would store it
+  const user = {
+    id_token: tokens.id_token,
+    access_token: tokens.access_token,
+    token_type: tokens.token_type,
+    scope: tokens.scope,
+    expires_at: Date.now() + (tokens.expires_in * 1000),
+    profile: {
+      sub: userId,
+      email: `${userId}@example.com`,
+      email_verified: true,
+      name: `Test User ${userId}`,
+    },
+    state: 'test-state',
+    session_state: 'test-session-state',
+  };
+
+  // Store the user in session storage as oidc-client-ts would
+  // The key format is: oidc.user:{authority}:{client_id}
+  sessionStorage.setItem('oidc.user:http://localhost:3002:test-client', JSON.stringify(user));
 }
 
 export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]> {
   await changeUserContext('testuser-1-id');
-  const client = new LinkedRecords(new URL('http://localhost:3000'));
+
+  // OIDC configuration for tests
+  const oidcConfig = {
+    authority: 'http://localhost:3002',
+    client_id: 'test-client',
+    redirect_uri: 'http://localhost:9876/callback',
+    scope: 'openid profile email',
+    response_type: 'code',
+  };
+
+  const client = new LinkedRecords(new URL('http://localhost:3000'), oidcConfig);
   await client.ensureUserIdIsKnown();
   clients.push(client);
   await new Promise((r) => { setTimeout(r, 100); });

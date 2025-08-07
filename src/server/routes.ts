@@ -3,7 +3,6 @@
 import 'dotenv/config';
 import https from 'https';
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
 import pino from 'pino-http';
@@ -111,7 +110,6 @@ async function createApp(httpServer: https.Server) {
   app.use(limiter);
   app.use(cors({ origin: getCorsOriginConfig(), credentials: true, maxAge: 86400 }));
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
-  app.use(cookieParser());
   app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
   app.use(authentication());

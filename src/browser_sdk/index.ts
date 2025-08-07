@@ -213,7 +213,7 @@ export default class LinkedRecords {
     const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, options));
 
     if (response.status === 401) {
-      console.error(`Authorization Error when calling ${method} ${url}`);
+      console.error(`Authorization Error when calling ${method} ${url} ${await response.text()}`);
 
       // TODO: Throw an error here so the program code does not just move on as nothing happened.
 

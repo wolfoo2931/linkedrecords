@@ -103,27 +103,6 @@ async function ensureUserIsInLocalDBAndVerified(
   return false;
 }
 
-function dummyUserAuthenticationMiddleware(req, res, next) {
-  const toBeUser = req?.cookies?.pretendToBeUser;
-
-  if (!['testuser-1-id', 'testuser-2-id', 'testuser-unauthorized-id'].includes(toBeUser)) {
-    res.sendStatus(401);
-    req.log.info(`${toBeUser} is not in the allowed test user whitelist. This is probably a configuration issue. ${req.method} ${req.path}`);
-    return;
-  }
-
-  Fact.recordUserEmail(`${toBeUser}@example.com`, hashUserId(toBeUser), req.log);
-
-  assignWhenAuthenticatedFunction(req, res);
-
-  req.oidc = {
-    user: { sub: toBeUser },
-    isAuthenticated: () => true,
-  };
-
-  next();
-}
-
 function confidentialClientAuthenticationMiddleware(req, res, next) {
   assignWhenAuthenticatedFunction(req, res);
 
@@ -230,10 +209,6 @@ async function httpAuthHeaderMiddleware(req, res, next) {
 }
 
 export default function authentication() {
-  if (process.env['DISABLE_AUTHENTICATION'] === 'true') {
-    return dummyUserAuthenticationMiddleware;
-  }
-
   return (req, res, next) => {
     const authHeader = req.headers.authorization;
 
