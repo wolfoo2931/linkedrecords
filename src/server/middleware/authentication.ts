@@ -42,7 +42,7 @@ function assignWhenAuthenticatedFunction(req, res) {
 }
 
 async function getUserInfoEndpoint(): Promise<string> {
-  const issuerUrl = process.env['AUTH_ISSUER_BASE_URL'];
+  const issuerUrl = process.env['AUTH_ISSUER_BASE_URL']?.replace(/\/$/, '');
 
   if (!issuerUrl) {
     throw new Error('AUTH_ISSUER_BASE_URL needs to be defined');
@@ -52,7 +52,7 @@ async function getUserInfoEndpoint(): Promise<string> {
     return userInfoEndpointCache[issuerUrl];
   }
 
-  const res = await fetch(`${process.env['AUTH_ISSUER_BASE_URL']}.well-known/openid-configuration`);
+  const res = await fetch(`${issuerUrl}/.well-known/openid-configuration`);
 
   if (!res.ok) {
     throw new Error(`Failed to fetch OIDC configuration: ${res.status} ${res.statusText}`);
@@ -79,7 +79,7 @@ async function fetchUserInfo(accessToken: string): Promise<any> {
   });
 
   if (!res.ok) {
-    throw new Error('Failed to fetch user info');
+    throw new Error(`Failed to fetch user info: ${res.status} ${res.statusText}`);
   }
 
   return res.json();
@@ -136,11 +136,11 @@ function confidentialClientAuthenticationMiddleware(req, res, next) {
     errorOnRequiredAuth: true,
     enableTelemetry: false,
     idpLogout: process.env['AUTH_IDP_LOGOUT'] === 'true',
-    afterCallback: (_, __, session: any) => {
+    afterCallback: async (_, __, session: any) => {
       const userInfo = decodeJwt(session.id_token);
-      const isVerified = ensureUserIsInLocalDBAndVerified(userInfo, req.log);
+      const isVerified = await ensureUserIsInLocalDBAndVerified(userInfo, req.log);
 
-      if (!isVerified) {
+      if (isVerified !== true) {
         res.redirect('/?email-not-verified');
       }
 
@@ -204,9 +204,9 @@ async function httpAuthHeaderMiddleware(req, res, next) {
     }
 
     const userInfo = await fetchUserInfo(req.auth.token);
-    const isVerified = ensureUserIsInLocalDBAndVerified(userInfo, req.log);
+    const isVerified = await ensureUserIsInLocalDBAndVerified(userInfo, req.log);
 
-    if (!isVerified) {
+    if (isVerified !== true) {
       return res.redirect('/?email-not-verified');
     }
 

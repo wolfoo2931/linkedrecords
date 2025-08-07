@@ -41,7 +41,7 @@ LinkedRecords is configured via environment variables. See tables below.
 | PGHOST | localhost | The hostname of the PostgreSQL server. |
 | PGUSER | linkedrecords | The PostgreSQL user name. |
 | PGPASSWORD | xxxx | The PostgreSQL password. |
-| PGDATABASE | xxxx | The PostgreSQL database name. ||
+| PGDATABASE | xxxx | The PostgreSQL database name. |
 | CORS_ORIGIN | ["https://app.example.com", "https://app.example.app"] | The content of the cors origin header. If not provided, the value of FRONTEND_BASE_URL will be used. |
 | SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
 | DEFAULT_STORAGE_SIZE_QUOTA | 50 | The default storage size quota in MB. |
