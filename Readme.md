@@ -84,7 +84,6 @@ The single page application needs to initialize the LinkedRecords SDK as shown b
 import LinkedRecords from './src/browser_sdk';
 
 const oidcConfig = {
-  authority: 'https://your-oidc-provider.com',
   client_id: 'your-client-id',
   redirect_uri: window.location.origin + '/callback',
 };

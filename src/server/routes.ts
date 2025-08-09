@@ -15,6 +15,7 @@ import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
 import quotaController from './controllers/quota_controller';
 import userinfoController from './controllers/userinfo_controller';
+import oidcController from './controllers/oidc_controller';
 import authentication from './middleware/authentication';
 import quotaUpgrade from './middleware/quota_upgrade';
 import mountServiceBus from './service_bus_mount';
@@ -112,6 +113,7 @@ async function createApp(httpServer: https.Server) {
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
+  app.get('/oidc/discovery', (req, res) => oidcController.discovery(req, res));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/attribute-compositions', attributeMiddleware());

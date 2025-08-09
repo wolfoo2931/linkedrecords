@@ -6,9 +6,9 @@ import {
 } from 'oidc-client-ts';
 
 export interface OIDCConfig {
-  authority: string;
   client_id: string;
   redirect_uri: string;
+  authority?: string; // discovered from server if not provided
   post_logout_redirect_uri?: string;
   scope?: string;
   response_type?: string;
@@ -17,21 +17,53 @@ export interface OIDCConfig {
 }
 
 export class OIDCManager {
-  private userManager: UserManager;
+  private userManager!: UserManager;
 
   private user: User | null = null;
 
+  private ready: Promise<void>;
+
   constructor(config: OIDCConfig, serverURL: URL) {
+    this.ready = this.initialize(config, serverURL);
+  }
+
+  private async initialize(config: OIDCConfig, serverURL: URL): Promise<void> {
+    const {
+      authority: providedAuthority,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      post_logout_redirect_uri: postLogoutRedirectUri,
+      scope,
+      response_type: responseType,
+      silent_redirect_uri: silentRedirectUri,
+      automaticSilentRenew,
+    } = config;
+
+    let authority = providedAuthority;
+
+    if (!authority) {
+      const base = serverURL.toString().replace(/\/$/, '');
+      const resp = await fetch(`${base}/oidc/discovery`);
+      if (!resp.ok) {
+        throw new Error(`Failed to discover OIDC authority: ${resp.status} ${resp.statusText}`);
+      }
+      const data = await resp.json();
+      authority = (data && typeof data.authority === 'string') ? data.authority : undefined;
+      if (!authority) {
+        throw new Error('OIDC discovery did not return an authority');
+      }
+    }
+
     const settings: UserManagerSettings = {
-      authority: config.authority,
-      client_id: config.client_id,
-      redirect_uri: config.redirect_uri,
-      post_logout_redirect_uri: config.post_logout_redirect_uri,
-      scope: config.scope || 'openid profile email',
-      response_type: config.response_type || 'code',
+      authority,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      post_logout_redirect_uri: postLogoutRedirectUri,
+      scope: scope || 'openid profile email',
+      response_type: responseType || 'code',
       userStore: new WebStorageStateStore({ store: window.sessionStorage }),
-      silent_redirect_uri: config.silent_redirect_uri,
-      automaticSilentRenew: config.automaticSilentRenew ?? true,
+      silent_redirect_uri: silentRedirectUri,
+      automaticSilentRenew: automaticSilentRenew ?? true,
       extraQueryParams: {
         audience: serverURL.host,
       },
@@ -41,19 +73,23 @@ export class OIDCManager {
   }
 
   async login(): Promise<void> {
+    await this.ready;
     await this.userManager.signinRedirect();
   }
 
   async handleRedirectCallback(): Promise<User> {
+    await this.ready;
     this.user = await this.userManager.signinRedirectCallback();
     return this.user;
   }
 
   async logout(): Promise<void> {
+    await this.ready;
     await this.userManager.signoutRedirect();
   }
 
   async getUser(): Promise<User | null> {
+    await this.ready;
     if (!this.user) {
       this.user = await this.userManager.getUser();
     }
@@ -71,6 +107,7 @@ export class OIDCManager {
   }
 
   async signinSilent(): Promise<User | null> {
+    await this.ready;
     this.user = await this.userManager.signinSilent();
     return this.user;
   }

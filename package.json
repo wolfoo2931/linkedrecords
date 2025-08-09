@@ -5,7 +5,6 @@
   "exports": {
     "./server": "./dist/server.js",
     "./browser_sdk": {
-      "vite": "./src/browser_sdk/index.ts",
       "default": "./dist/browser_sdk.js",
       "types": "./dist/src/browser_sdk/index.d.ts"
     }
