@@ -34,7 +34,7 @@ export default class LinkedRecords {
 
   KeyValueChange: typeof KeyValueChange = KeyValueChange;
 
-  private clientServerBus?: ClientServerBus;
+  private clientServerBus: ClientServerBus;
 
   serverURL: URL;
 
@@ -58,8 +58,6 @@ export default class LinkedRecords {
 
   private oidcManager?: OIDCManager;
 
-  private initializeClientServerBusPromise: Promise<ClientServerBus>;
-
   constructor(serverURL: URL, oidcConfig?: OIDCConfig, autoHandleRedirect = true) {
     this.serverURL = serverURL;
 
@@ -67,20 +65,12 @@ export default class LinkedRecords {
       this.oidcManager = new OIDCManager(oidcConfig, serverURL);
     }
 
-    this.initializeClientServerBusPromise = this.getAccessToken().then((at) => {
-      if (at) {
-        this.clientServerBus = new ClientServerBus(at);
-      } else {
-        this.clientServerBus = new ClientServerBus();
+    this.clientServerBus = new ClientServerBus(() => this.getAccessToken());
+
+    this.clientServerBus.subscribeConnectionInterrupted(() => {
+      if (this.connectionLostHandler) {
+        this.connectionLostHandler();
       }
-
-      this.clientServerBus.subscribeConnectionInterrupted(() => {
-        if (this.connectionLostHandler) {
-          this.connectionLostHandler();
-        }
-      });
-
-      return this.clientServerBus;
     });
 
     this.Attribute = new AttributesRepository(this, () => this.getClientServerBus());
@@ -121,7 +111,7 @@ export default class LinkedRecords {
   }
 
   public async getClientServerBus(): Promise<ClientServerBus> {
-    return this.initializeClientServerBusPromise;
+    return this.clientServerBus;
   }
 
   public async getUserIdByEmail(email: string): Promise<string | undefined> {

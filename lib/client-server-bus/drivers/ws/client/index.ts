@@ -1,5 +1,11 @@
 /* eslint-disable import/no-cycle */
-import { io, ManagerOptions, SocketOptions } from 'socket.io-client';
+import { DefaultEventsMap } from 'socket.io';
+import {
+  io,
+  ManagerOptions,
+  Socket,
+  SocketOptions,
+} from 'socket.io-client';
 
 export default class ClientServerBus {
   subscriptions = {};
@@ -14,10 +20,10 @@ export default class ClientServerBus {
 
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
 
-  bearerToken?: any;
+  getBearerToken?: () => Promise<string | null>;
 
-  constructor(bearerToken?) {
-    this.bearerToken = bearerToken;
+  constructor(getBearerToken?: () => Promise<string | null>) {
+    this.getBearerToken = getBearerToken;
   }
 
   public subscribeConnectionInterrupted(sub: (error?: any) => void): void {
@@ -91,20 +97,24 @@ export default class ClientServerBus {
     this.messagesWhilePaused = [];
   }
 
-  private getWSAsync(url: URL) {
-    return new Promise((resolve, reject) => {
-      const opt: Partial<ManagerOptions & SocketOptions> = {
-        withCredentials: true,
-        path: url.pathname,
-        transports: ['websocket'],
-      };
+  private async getWSAsync(url: URL): Promise<Socket<DefaultEventsMap, DefaultEventsMap>> {
+    const opt: Partial<ManagerOptions & SocketOptions> = {
+      withCredentials: true,
+      path: url.pathname,
+      transports: ['websocket'],
+    };
 
-      if (this.bearerToken) {
+    if (this.getBearerToken) {
+      const token = await this.getBearerToken();
+
+      if (token) {
         opt.auth = {
-          token: `Bearer ${this.bearerToken}`,
+          token: `Bearer ${token}`,
         };
       }
+    }
 
+    return new Promise((resolve, reject) => {
       const socket = io(url.origin, opt);
 
       socket.on('connect', () => {
