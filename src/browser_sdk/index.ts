@@ -171,8 +171,8 @@ export default class LinkedRecords {
     } = fetchOpt || {};
 
     if (isOnRedirectUriRoute) {
-      // If we are on the redirect URI we do not make any requests to the server
-      // to avoid triggering the login flow again.
+      // We are on the OIDC redirect URI: delay requests briefly to avoid
+      // triggering the login flow again while the session is being established.
       await new Promise((resolve) => { setTimeout(resolve, 2000); });
     }
 
