@@ -23,8 +23,21 @@ export class OIDCManager {
 
   private ready: Promise<void>;
 
+  private redirectOriginPath?: string;
+
   constructor(config: OIDCConfig, serverURL: URL) {
+    const {
+      redirect_uri: redirectUri,
+    } = config;
+
     this.ready = this.initialize(config, serverURL);
+
+    try {
+      const ru = new URL(redirectUri);
+      this.redirectOriginPath = `${ru.origin}${ru.pathname}`;
+    } catch (_) {
+      throw new Error(`Invalid redirect URI ${redirectUri}`);
+    }
   }
 
   private async initialize(config: OIDCConfig, serverURL: URL): Promise<void> {
@@ -74,12 +87,27 @@ export class OIDCManager {
 
   async login(): Promise<void> {
     await this.ready;
+    if (await this.isOnRedirectUriRoute()) {
+      return;
+    }
+
+    const returnTo = window.location.pathname + window.location.search + window.location.hash;
+    window.sessionStorage.setItem('lr_return_to', returnTo);
+
     await this.userManager.signinRedirect();
   }
 
   async handleRedirectCallback(): Promise<User> {
     await this.ready;
     this.user = await this.userManager.signinRedirectCallback();
+
+    const returnTo = window.sessionStorage.getItem('lr_return_to');
+    window.sessionStorage.removeItem('lr_return_to');
+
+    if (returnTo && typeof returnTo === 'string') {
+      window.location.href = returnTo;
+    }
+
     return this.user;
   }
 
@@ -110,5 +138,10 @@ export class OIDCManager {
     await this.ready;
     this.user = await this.userManager.signinSilent();
     return this.user;
+  }
+
+  async isOnRedirectUriRoute(): Promise<boolean> {
+    const currentOriginPath = `${window.location.origin}${window.location.pathname}`;
+    return currentOriginPath === this.redirectOriginPath;
   }
 }

@@ -159,6 +159,8 @@ export default class LinkedRecords {
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
+    const isOnRedirectUriRoute = await this.oidcManager?.isOnRedirectUriRoute();
+
     const {
       headers = undefined,
       method = 'GET',
@@ -167,6 +169,12 @@ export default class LinkedRecords {
       doNotHandleExpiredSessions = false,
       skipWaitForUserId = false,
     } = fetchOpt || {};
+
+    if (isOnRedirectUriRoute) {
+      // If we are on the redirect URI we do not make any requests to the server
+      // to avoid triggering the login flow again.
+      await new Promise((resolve) => { setTimeout(resolve, 2000); });
+    }
 
     if (!skipWaitForUserId) {
       await this.ensureUserIdIsKnown();
