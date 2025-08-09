@@ -315,19 +315,19 @@ export default class LinkedRecords {
 
     LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true });
 
-    const userInfoResponse = await LinkedRecords.ensureUserIdIsKnownPromise;
+    try {
+      const userInfoResponse: any = await LinkedRecords.ensureUserIdIsKnownPromise;
+      if (!userInfoResponse || userInfoResponse.status === 401) {
+        this.handleExpiredLoginSession();
+        return undefined;
+      }
 
-    if (userInfoResponse.status === 401) {
-      this.handleExpiredLoginSession();
-      return undefined;
+      const responseBody = await userInfoResponse.json();
+      this.actorId = responseBody.userId;
+      return this.actorId;
+    } finally {
+      LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     }
-
-    const responseBody = await userInfoResponse.json();
-    this.actorId = responseBody.userId;
-
-    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
-
-    return this.actorId;
   }
 
   // OIDC Auth methods
