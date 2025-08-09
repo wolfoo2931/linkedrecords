@@ -19,10 +19,16 @@ describe('Blob Attributes', () => {
     const content = await dataToBlob(blobData);
 
     const [clientA] = await createClient();
+    const accessToken = await clientA.getAccessToken();
 
     const attribute = await clientA.Attribute.create('blob', content);
 
-    const response = await fetch(attribute.getDataURL());
+    const response = await fetch(attribute.getDataURL(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
     const result = await response.blob();
 
     expect((await result.text()).startsWith('�PNG')).to.eq(true);
@@ -58,13 +64,20 @@ describe('Blob Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
+      const accessToken = await clientA.getAccessToken();
+      const fetchOpts = {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      };
+
       const attributeClientA = await clientA.Attribute.create('blob', content);
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
       const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
 
-      const originalData = await fetch(attributeClientA.getDataURL()).then((x) => x.blob()).then((x) => x.text());
+      const originalData = await fetch(attributeClientA.getDataURL(), fetchOpts).then((x) => x.blob()).then((x) => x.text());
 
       attributeClientA.set(content2);
 
@@ -72,8 +85,8 @@ describe('Blob Attributes', () => {
         attributeClientB!.subscribe(resolve);
       });
 
-      const downloaded1 = await fetch(attributeClientA.getDataURL()).then((x) => x.blob()).then((x) => x.text());
-      const downloaded2 = await fetch(attributeClientB!.getDataURL()).then((x) => x.blob()).then((x) => x.text());
+      const downloaded1 = await fetch(attributeClientA.getDataURL(), fetchOpts).then((x) => x.blob()).then((x) => x.text());
+      const downloaded2 = await fetch(attributeClientB!.getDataURL(), fetchOpts).then((x) => x.blob()).then((x) => x.text());
 
       expect(downloaded1).to.eq(downloaded2);
       expect(downloaded1).to.not.eq(originalData);

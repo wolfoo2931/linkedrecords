@@ -15,10 +15,10 @@ export default {
           res.status(200).send({ id: undefined });
         }
       } else {
-        // If no email is provided as query param
-        // this endpoint can be used to just set
-        // the auth cookie
-        res.status(200).send('empty response');
+        res.status(200).send({
+          userId: uid(req),
+          userPicture: req?.oidc?.user?.picture,
+        });
       }
     });
   },
