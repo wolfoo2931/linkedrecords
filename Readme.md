@@ -13,15 +13,15 @@ Developer documentation follows. Curious readers can check out the specs.wdio/ti
 
 # Concept
 
-You can think of LinkedRecords as a bucket in which anybody can sign up and write data into it. As long as you do not share this data with another
-user or a group of users nobody then you can access the data you have written into this bucket.
+You can think of LinkedRecords as a bucket in which anybody can sign up and write data into it.
+As long as you do not share this data with other users or groups, only you can access the data you have written to the bucket.
 
 In theory every user can use the LinkedRecords API to write and retrieve data. But this would be quite inconvenient to a user - the same way you would
 not expect your user to write SQL queries you would not expect your users to use the LinkedRecords API. A LinkedRecords app is a specialized
 frontend which hides the LinkedRecords API from the user and provides them a convenient user interface to accomplish their use cases.
 
 In the traditional SQL world, inconvenience is not the only reason why you do not let the user access your database with SQL: Authentication and
-Authorization challenges are by far the stronger argument not to do this. This is not a problem within LinkedRecords as authorization is backed into
+Authorization challenges are by far the stronger argument not to do this. This is not a problem within LinkedRecords as authorization is built into
 the LinkedRecords API.
 
 When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled architecture are the main qualities we strive to achieve.
@@ -30,7 +30,7 @@ When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled
 - Flexibility: The few available endpoints can be composed to serve a variety of use cases.
 - Decoupled: LinkedRecords should be decoupled from the single page applications which use it as data storage
 
-Think of it as SQL which you do not have to worry about permissions so you can just use it directly in your react app but is easier to read then SQL and it has live updates.
+Think of it as SQL you can call directly from your React app without worrying about permissions; it is easier to read than SQL and provides live updates.
 
 # Configuration
 
@@ -54,9 +54,9 @@ LinkedRecords is configured via environment variables. See tables below.
 
 The environment variables in this section are all optional if the configuration described in the section "Public Client Mode" are provided.
 
-If LinkedRecords runs in confidential client mode, then a session token will be stored in a httpOnly cookie. From a security standpoint
+If LinkedRecords runs in confidential client mode, then a session token will be stored in an HttpOnly cookie. From a security standpoint
 this is considered the suggested method. However, this is not possible if the LinkedRecord server and the frontend do not share the same domain.
-In case of different domains, the cookie would be considered a third party cookie.
+Across different domains the cookie becomes a third-party cookie, so this mode cannot be used.
 
 | Environment Variable Name | Example | Description |
 | ------------------------- | ------- | ----------- |
