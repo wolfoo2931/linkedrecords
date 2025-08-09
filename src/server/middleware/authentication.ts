@@ -155,7 +155,7 @@ async function httpAuthHeaderMiddleware(req, res, next) {
     const cachedToken = tokenCache[token];
 
     if (cachedToken) {
-      if (!willExpireIn(token, 60)) {
+      if (!willExpireIn(token, 5)) {
         req.oidc = {
           user: {
             sub: cachedToken.userInfo.sub,
