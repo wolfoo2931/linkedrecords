@@ -1,5 +1,4 @@
 /* eslint-disable import/no-cycle */
-import { DefaultEventsMap } from 'socket.io';
 import {
   io,
   ManagerOptions,
@@ -97,7 +96,7 @@ export default class ClientServerBus {
     this.messagesWhilePaused = [];
   }
 
-  private async getWSAsync(url: URL): Promise<Socket<DefaultEventsMap, DefaultEventsMap>> {
+  private async getWSAsync(url: URL): Promise<Socket<any, any>> {
     const opt: Partial<ManagerOptions & SocketOptions> = {
       withCredentials: true,
       path: url.pathname,
