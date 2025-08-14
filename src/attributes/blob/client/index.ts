@@ -30,14 +30,16 @@ export default class BlobAttribute extends AbstractAttributeClient<Blob, BlobCha
     return new Blob([serializedValue]);
   }
 
-  protected getCreatePayload(value: Blob) {
-    if (!this.actorId) {
+  protected async getCreatePayload(value: Blob): Promise<string | FormData> {
+    const actorId = await this.linkedRecords.ensureUserIdIsKnown();
+
+    if (!actorId) {
       throw new Error('actorId is unknown, can not create blob payload!');
     }
 
     const formData = new FormData();
     formData.append('change', value, 'blob');
-    formData.append('actorId', this.actorId);
+    formData.append('actorId', actorId);
     formData.append('clientId', this.clientId);
 
     return formData;
