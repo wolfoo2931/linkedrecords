@@ -1,5 +1,10 @@
 /* eslint-disable import/no-cycle */
-import { io } from 'socket.io-client';
+import {
+  io,
+  ManagerOptions,
+  Socket,
+  SocketOptions,
+} from 'socket.io-client';
 
 export default class ClientServerBus {
   subscriptions = {};
@@ -13,6 +18,12 @@ export default class ClientServerBus {
   connectionInterruptedSubscribers: ((error?: any) => void)[] = [];
 
   messagesWhilePaused: { cb: (data: any) => any, data: any }[] = [];
+
+  getBearerToken?: () => Promise<string | null>;
+
+  constructor(getBearerToken?: () => Promise<string | null>) {
+    this.getBearerToken = getBearerToken;
+  }
 
   public subscribeConnectionInterrupted(sub: (error?: any) => void): void {
     this.connectionInterruptedSubscribers.push(sub);
@@ -85,13 +96,25 @@ export default class ClientServerBus {
     this.messagesWhilePaused = [];
   }
 
-  private getWSAsync(url: URL) {
+  private async getWSAsync(url: URL): Promise<Socket<any, any>> {
+    const opt: Partial<ManagerOptions & SocketOptions> = {
+      withCredentials: true,
+      path: url.pathname,
+      transports: ['websocket'],
+    };
+
+    if (this.getBearerToken) {
+      const token = await this.getBearerToken();
+
+      if (token) {
+        opt.auth = {
+          token: `Bearer ${token}`,
+        };
+      }
+    }
+
     return new Promise((resolve, reject) => {
-      const socket = io(url.origin, {
-        withCredentials: true,
-        path: url.pathname,
-        transports: ['websocket'],
-      });
+      const socket = io(url.origin, opt);
 
       socket.on('connect', () => {
         resolve(socket);
