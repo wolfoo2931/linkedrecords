@@ -250,7 +250,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     const serializedValue = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
 
-    if (!serializedValue) {
+    if (!serializedValue && serializedValue !== '') {
       throw new Error('invalid server state');
     }
 
