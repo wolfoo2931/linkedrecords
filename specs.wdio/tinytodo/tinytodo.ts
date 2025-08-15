@@ -1,5 +1,5 @@
 // This file implements the domain model of TinyTodo.
-// It can be used by a Single Page Application frontend to
+// It can be used by a single-page application frontend to
 // create and share todo lists.
 // The usage of this code is demonstrated and tested in tinytodo.spec.ts
 

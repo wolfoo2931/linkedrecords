@@ -20,11 +20,11 @@ A LinkedRecords app is a specialized frontend that hides the API and provides a 
 In the traditional SQL world, inconvenience isn’t the only reason you don’t let users access the database directly: authentication and authorization concerns are a much stronger reason.
 With LinkedRecords, this is not an issue - authorization is built directly into the API.
 
-When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled architecture are the main qualities we strive to achieve.
+For the LinkedRecords API, simplicity, flexibility, and a decoupled architecture are the main qualities we strive to achieve.
 
-- Simplicity: The API should not have many endpoints or methods but instead consists of a few fundamental building blocks.
-- Flexibility: The few available endpoints can be composed to serve a variety of use cases.
-- Decoupled: LinkedRecords should be decoupled from the single page applications which use it as data storage
+- Simplicity: The API should not have many endpoints or methods; instead, it consists of a few fundamental building blocks.
+- Flexibility: The few available endpoints can be composed to support a variety of use cases.
+- Decoupled: LinkedRecords should be decoupled from the single-page applications which use it as data storage
 
 Think of it as SQL you can call directly from your React app without worrying about permissions; it is easier to read than SQL and provides live updates.
 
@@ -65,16 +65,16 @@ Across different domains the cookie becomes a third-party cookie, so this mode c
 
 ## Public Client Mode
 
-In case the single page application is hosted on a different domain then the LinkedRecords server, the single page application has
+In case the single-page application is hosted on a different domain than the LinkedRecords server, the single-page application has
 to store the access token in the browser. In this scenario the following environment variables need to be configured.
 
 | Environment Variable Name | Example | Description |
 | ------------------------- | ------- | ----------- |
-| ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests providing an access token via http authentication header. |
+| ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests by providing an access token via http authentication header. |
 | AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID Connect compliant identity provider (e.g. Auth0, Okta). |
 | AUTH_TOKEN_AUDIENCE | your-audience-id | LinkedRecords will check the audience specified in the JWT bearer token against the value specified in this field. |
 
-The single page application needs to initialize the LinkedRecords SDK as shown below:
+The single-page application needs to initialize the LinkedRecords SDK as shown below:
 
 ```js
 import LinkedRecords from './src/browser_sdk';
