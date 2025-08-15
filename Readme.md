@@ -1,28 +1,24 @@
 # LinkedRecords
 
-LinkedRecords is a NoSQL database you can connect to directly from your single page application. You do not have to write any backend code.
+LinkedRecords is a NoSQL database that you can connect to directly from your single-page application - no backend code required.
 
-- You can use any OpenID Connect provider for authentication. You don't have to implement login,
-  password reset, etc. For now, automated tests run against Auth0. Other providers should work as well.
-- A flexible authorization model is build into LinkedRecords.
-- It allows you to build apps with real time collaboration. Under the hood it uses a simple
-  Conflict-free replicated data type (CRDT) for key-value documents and operational transformation (OT)
-  for large text.
+- You can use any OpenID Connect provider for authentication, so you don’t need to implement login, password reset, or similar features. Currently, automated tests run against Auth0, but other providers should work as well.
+- A flexible authorization model is built into LinkedRecords.
+- It supports real-time collaboration, using a simple conflict-free replicated data type (CRDT) for key-value documents and operational transformation (OT) for large text under the hood.
 
-Developer documentation follows. Curious readers can check out the specs.wdio/tinytodo directory for a simple usage example.
+Developer documentation follows. Curious readers can explore the `specs.wdio/tinytodo` directory for a simple usage example.
 
 # Concept
 
-You can think of LinkedRecords as a bucket in which anybody can sign up and write data into it.
-As long as you do not share this data with other users or groups, only you can access the data you have written to the bucket.
+You can think of LinkedRecords as a bucket where anyone can sign up and write data.
+As long as you don’t share this data with other users or groups, only you can access what you’ve written to the bucket.
 
-In theory every user can use the LinkedRecords API to write and retrieve data. But this would be quite inconvenient to a user - the same way you would
-not expect your user to write SQL queries you would not expect your users to use the LinkedRecords API. A LinkedRecords app is a specialized
-frontend which hides the LinkedRecords API from the user and provides them a convenient user interface to accomplish their use cases.
+In theory, any user could use the LinkedRecords API directly to write and retrieve data.
+However, this would be inconvenient—just as you wouldn’t expect your users to write SQL queries, you wouldn’t expect them to interact with the LinkedRecords API.
+A LinkedRecords app is a specialized frontend that hides the API and provides a convenient user interface for accomplishing their tasks.
 
-In the traditional SQL world, inconvenience is not the only reason why you do not let the user access your database with SQL: Authentication and
-Authorization challenges are by far the stronger argument not to do this. This is not a problem within LinkedRecords as authorization is built into
-the LinkedRecords API.
+In the traditional SQL world, inconvenience isn’t the only reason you don’t let users access the database directly: authentication and authorization concerns are a much stronger reason.
+With LinkedRecords, this is not an issue - authorization is built directly into the API.
 
 When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled architecture are the main qualities we strive to achieve.
 
