@@ -10,20 +10,22 @@ Developer documentation follows. Curious readers can explore the `specs.wdio/tin
 
 # Concept
 
-You can think of LinkedRecords as a bucket where anyone can sign up and write data.
-As long as you don’t share this data with other users or groups, only you can access what you’ve written to the bucket.
+You can think of LinkedRecords as a bucket where anyone can sign up and insert data.
+As long as you don’t share this data with other users or groups, only you can access what you’ve written into it.
 
 In theory, any user could use the LinkedRecords API directly to write and retrieve data.
 However, this would be inconvenient—just as you wouldn’t expect your users to write SQL queries, you wouldn’t expect them to interact with the LinkedRecords API.
 A LinkedRecords app is a specialized frontend that hides the API and provides a convenient user interface for accomplishing their tasks.
 
-In the traditional SQL world, inconvenience isn’t the only reason you don’t let users access the database directly: authentication and authorization concerns are a much stronger reason.
-With LinkedRecords, this is not an issue - authorization is built directly into the API.
+In the traditional SQL world, inconvenience isn’t the only reason you don’t let users access the database directly - authorization concerns are an even stronger reason.
+With LinkedRecords, this is no longer an issue: authorization is built directly into the API. This requires a small mindset shift:
+Instead of defining universal authorization rules in the backend for all records, the user who inserts a data record specifies who can read it.
 
 For the LinkedRecords API, simplicity, flexibility, and a decoupled architecture are the main qualities we strive to achieve.
 
 - Simplicity: The API should not have many endpoints or methods; instead, it consists of a few fundamental building blocks.
-- Flexibility: The few available endpoints can be composed to support a variety of use cases.
+- Flexibility: The few available endpoints can be composed to support a variety of use cases. The backed in authorization model should allow to
+  implement different authorization use cases (RBAC, ...).
 - Decoupled: LinkedRecords should be decoupled from the single-page applications which use it as data storage
 
 Think of it as SQL you can call directly from your React app without worrying about permissions; it is easier to read than SQL and provides live updates.
