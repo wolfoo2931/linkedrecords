@@ -294,8 +294,16 @@ export default class LinkedRecords {
   }
 
   async ensureUserIdIsKnown(): Promise<string | undefined> {
+    if (this.actorId && typeof this.actorId === 'string') {
+      return this.actorId;
+    }
 
-    const handleUserInfoResponse = async (response) => {
+    if (!LinkedRecords.ensureUserIdIsKnownPromise) {
+      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true });
+    }
+
+    try {
+      const response = await LinkedRecords.ensureUserIdIsKnownPromise;
       if (!response || response.status === 401) {
         this.handleExpiredLoginSession();
         return undefined;
@@ -304,21 +312,7 @@ export default class LinkedRecords {
       const responseBody = await response.json();
       this.actorId = responseBody.userId;
       return this.actorId;
-    }
 
-    if (this.actorId && typeof this.actorId === 'string') {
-      return this.actorId;
-    }
-
-    if (LinkedRecords.ensureUserIdIsKnownPromise) {
-      return handleUserInfoResponse(await LinkedRecords.ensureUserIdIsKnownPromise);
-    }
-
-    LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true });
-
-    try {
-      const userInfoResponse: any = await LinkedRecords.ensureUserIdIsKnownPromise;
-      return handleUserInfoResponse(userInfoResponse);
     } finally {
       LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     }
