@@ -299,20 +299,20 @@ export default class LinkedRecords {
     }
 
     if (!LinkedRecords.ensureUserIdIsKnownPromise) {
-      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true });
+      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
+        .then(async (response) => {
+          if (!response || response.status === 401) {
+            this.handleExpiredLoginSession();
+          }
+
+          const responseBody = await response.json();
+          return responseBody.userId;
+        });
     }
 
     try {
-      const response = await LinkedRecords.ensureUserIdIsKnownPromise;
-      if (!response || response.status === 401) {
-        this.handleExpiredLoginSession();
-        return undefined;
-      }
-
-      const responseBody = await response.json();
-      this.actorId = responseBody.userId;
+      this.actorId = await LinkedRecords.ensureUserIdIsKnownPromise;
       return this.actorId;
-
     } finally {
       LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     }
