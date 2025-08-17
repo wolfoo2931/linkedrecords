@@ -58,7 +58,12 @@ export default class LinkedRecords {
 
   private oidcManager?: OIDCManager;
 
-  constructor(serverURL: URL, oidcConfig?: OIDCConfig, autoHandleRedirect = true) {
+  constructor(
+    serverURL: URL,
+    oidcConfig?: OIDCConfig,
+    autoHandleRedirect = true,
+    deferUserInfoFetching = false,
+  ) {
     this.serverURL = serverURL;
 
     if (oidcConfig) {
@@ -77,7 +82,9 @@ export default class LinkedRecords {
     this.clientId = uuid();
     this.Fact = new FactsRepository(this);
 
-    this.ensureUserIdIsKnown();
+    if (!deferUserInfoFetching) {
+      this.ensureUserIdIsKnown();
+    }
 
     if (this.oidcManager) {
       if (
