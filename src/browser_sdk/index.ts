@@ -77,8 +77,6 @@ export default class LinkedRecords {
     this.clientId = uuid();
     this.Fact = new FactsRepository(this);
 
-    this.ensureUserIdIsKnown();
-
     if (this.oidcManager) {
       if (
         autoHandleRedirect
