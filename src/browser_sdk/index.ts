@@ -152,22 +152,18 @@ export default class LinkedRecords {
   }
 
   public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
-    const tenMins = 1000 * 60 * 10;
-
     if (this.qetQuotaPromise[nodeId || '']) {
       return this.qetQuotaPromise[nodeId || ''];
     }
 
     this.qetQuotaPromise[nodeId || ''] = this.ensureUserIdIsKnown()
       .then((uId) => this.fetch(`/quota/${nodeId || uId}`))
-      .then((r) => r.json())
-      .then(() => {
-        setTimeout(() => {
-          delete this.qetQuotaPromise[nodeId || ''];
-        }, tenMins);
-      });
+      .then((r) => r.json());
 
-    return this.qetQuotaPromise[nodeId || ''];
+    const result = await this.qetQuotaPromise[nodeId || ''];
+    delete this.qetQuotaPromise[nodeId || ''];
+
+    return result;
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
