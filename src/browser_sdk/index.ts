@@ -58,6 +58,8 @@ export default class LinkedRecords {
 
   private oidcManager?: OIDCManager;
 
+  private qetQuotaPromise: Record<string, Promise<any | undefined>> = {};
+
   constructor(
     serverURL: URL,
     oidcConfig?: OIDCConfig,
@@ -150,9 +152,18 @@ export default class LinkedRecords {
   }
 
   public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
-    const response = await this.fetch(`/quota/${nodeId || this.actorId}`);
+    if (this.qetQuotaPromise[nodeId || '']) {
+      return this.qetQuotaPromise[nodeId || ''];
+    }
 
-    return response.json();
+    this.qetQuotaPromise[nodeId || ''] = this.ensureUserIdIsKnown()
+      .then((uId) => this.fetch(`/quota/${nodeId || uId}`))
+      .then((r) => r.json());
+
+    const result = await this.qetQuotaPromise[nodeId || ''];
+    delete this.qetQuotaPromise[nodeId || ''];
+
+    return result;
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
