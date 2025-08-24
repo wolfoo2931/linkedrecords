@@ -1,35 +1,40 @@
 ---
-title: Home
+title: Introduction
 layout: home
 ---
 
-This is a *bare-minimum* template to create a Jekyll site that uses the [Just the Docs] theme. You can easily set the created site to be published on [GitHub Pages] – the [README] file explains how to do that, along with other details.
+LinkedRecords is a NoSQL database that you can connect to directly from your
+single-page application - no backend code required.
 
-If [Jekyll] is installed on your computer, you can also build and preview the created site *locally*. This lets you test changes before committing them, and avoids waiting for GitHub Pages.[^1] And you will be able to deploy your local build to a different platform than GitHub Pages.
+- You can use any OpenID Connect provider for authentication, so you don't need
+  to implement login, password reset, or similar features. Currently, automated
+  tests run against Auth0, but other providers should work as well.
+- A flexible authorization model is built into LinkedRecords.
+- It supports real-time collaboration, using a simple conflict-free replicated
+  data type (CRDT) for key-value documents and operational transformation (OT)
+  for large text under the hood.
 
-More specifically, the created site:
+Developer documentation follows. Curious readers can explore the `specs.wdio/tinytodo`
+directory for a simple usage example.
 
-- uses a gem-based approach, i.e. uses a `Gemfile` and loads the `just-the-docs` gem
-- uses the [GitHub Pages / Actions workflow] to build and publish the site on GitHub Pages
+# Concept
 
-Other than that, you're free to customize sites that you create with this template, however you like. You can easily change the versions of `just-the-docs` and Jekyll it uses, as well as adding further plugins.
+You can think of LinkedRecords as a bucket where anyone can sign up and insert data.
+As long as you don't share this data with other users or groups, only you can access
+what you've written into it.
 
-[Browse our documentation][Just the Docs] to learn more about how to use this theme.
+In theory, any user could use the LinkedRecords API directly to write and retrieve data.
+However, this would be inconvenient—just as you wouldn't expect your users to write SQL
+queries, you wouldn't expect them to interact with the LinkedRecords API. A LinkedRecords
+app is a specialized frontend that hides the API and provides a convenient user interface
+for accomplishing their tasks.
 
-To get started with creating a site, simply:
+In the traditional SQL world, inconvenience isn't the only reason you don't let users
+access the database directly - authorization concerns are an even stronger reason.
+With LinkedRecords, this is no longer an issue: authorization is built directly into
+the API. This requires a small mindset shift: Instead of defining universal authorization
+rules in the backend for all records, the user who inserts a data record specifies who
+can read it.
 
-1. click "[use this template]" to create a GitHub repository
-2. go to Settings > Pages > Build and deployment > Source, and select GitHub Actions
-
-If you want to maintain your docs in the `docs` directory of an existing project repo, see [Hosting your docs from an existing project repo](https://github.com/just-the-docs/just-the-docs-template/blob/main/README.md#hosting-your-docs-from-an-existing-project-repo) in the template README.
-
-----
-
-[^1]: [It can take up to 10 minutes for changes to your site to publish after you push the changes to GitHub](https://docs.github.com/en/pages/setting-up-a-github-pages-site-with-jekyll/creating-a-github-pages-site-with-jekyll#creating-your-site).
-
-[Just the Docs]: https://just-the-docs.github.io/just-the-docs/
-[GitHub Pages]: https://docs.github.com/en/pages
-[README]: https://github.com/just-the-docs/just-the-docs-template/blob/main/README.md
-[Jekyll]: https://jekyllrb.com
-[GitHub Pages / Actions workflow]: https://github.blog/changelog/2022-07-27-github-pages-custom-github-actions-workflows-beta/
-[use this template]: https://github.com/just-the-docs/just-the-docs-template/generate
+Think of it as SQL you can call directly from your React app without worrying about
+permissions; it is easier to read than SQL and provides live updates.
