@@ -23,7 +23,7 @@ instance, no setup, no API key, just a URL.
 # Concept
 
 You can think of LinkedRecords as a bucket where any user can sign up and insert data.
-As long as a user doesn't share this data with other users or groups, only this user
+As long as a user himself doesn't share this data with other users or groups, only this user
 can access what this user has written into it.
 
 In theory, any user could use the LinkedRecords API directly to write and retrieve data,
