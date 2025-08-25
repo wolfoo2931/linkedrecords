@@ -3,3 +3,35 @@ description: A documentation site for https://github.com/wolfoo2931/linkedrecord
 theme: just-the-docs
 
 url: https://wolfoo2931.github.io/linkedrecords
+
+# Enable search
+search_enabled: true
+
+# Enable callouts
+callouts_level: quiet
+callouts:
+  important:
+    name: Important
+  note:
+    name: Note
+  warning:
+    name: Warning
+  tip:
+    name: Tip
+
+# Enable copy button on code blocks
+copy_btn: true
+
+# Enable dark mode
+color_scheme: light
+
+# Enable back to top button
+back_to_top: true
+back_to_top_text: "Back to top"
+
+# Enable external links
+external_links:
+  - title: GitHub
+    url: https://github.com/wolfoo2931/linkedrecords
+  - title: Issues
+    url: https://github.com/wolfoo2931/linkedrecords/issues
