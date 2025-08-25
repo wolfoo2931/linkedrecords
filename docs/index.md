@@ -1,6 +1,7 @@
 ---
 title: Introduction
 layout: home
+nav_order: 1
 ---
 
 # Introduction
@@ -30,13 +31,3 @@ but this would be inconvenient - just as you wouldn't expect your users to write
 you wouldn't expect them to interact with the LinkedRecords API. A LinkedRecords app is a
 specialized frontend that hides the API and provides a convenient user interface for
 accomplishing their tasks.
-
-In the traditional SQL world, inconvenience isn't the only reason you don't let users
-access the database directly - authorization concerns are an even stronger reason.
-With LinkedRecords, this is no longer an issue: authorization is built directly into
-the API. This requires a small mindset shift: Instead of defining universal authorization
-rules in the backend for all records, the user who inserts a data record specifies who
-can read it.
-
-Think of it as SQL you can call directly from your React app without worrying about
-permissions; it is easier to read than SQL and provides live updates.
