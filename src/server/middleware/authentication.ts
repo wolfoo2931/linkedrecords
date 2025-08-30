@@ -9,7 +9,6 @@ import Fact from '../../facts/server';
 import getCookieSettingsFromEnv from '../../../lib/cookie-settings-from-env';
 import IsLogger from '../../../lib/is_logger';
 
-const cookieSettings = getCookieSettingsFromEnv();
 const userInfoEndpointCache = {};
 
 type TokenCacheEntry = {
@@ -105,6 +104,7 @@ async function ensureUserIsInLocalDBAndVerified(
 
 function confidentialClientAuthenticationMiddleware(req, res, next) {
   assignWhenAuthenticatedFunction(req, res);
+  const cookieSettings = getCookieSettingsFromEnv();
 
   const authMiddleware = auth({
     baseURL: process.env['FRONTEND_BASE_URL'],
