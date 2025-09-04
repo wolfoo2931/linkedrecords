@@ -6,7 +6,7 @@ import {
 } from 'oidc-client-ts';
 
 export interface OIDCConfig {
-  client_id: string;
+  client_id?: string;
   redirect_uri: string;
   authority?: string; // discovered from server if not provided
   post_logout_redirect_uri?: string;
