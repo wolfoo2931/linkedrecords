@@ -70,10 +70,10 @@ export class OIDCManager {
       if (!clientIdToUse) {
         clientIdToUse = data.client_id;
       }
+    }
 
-      if (!clientIdToUse) {
-        throw new Error('OIDC discovery did not return an clientId, you need to provide one when initializing LinkedRecords');
-      }
+    if (!clientIdToUse) {
+      throw new Error('OIDC discovery did not return an clientId, you need to provide one when initializing LinkedRecords');
     }
 
     const settings: UserManagerSettings = {
