@@ -60,42 +60,6 @@ export default class LinkedRecords {
 
   private qetQuotaPromise: Record<string, Promise<any | undefined>> = {};
 
-  public static async initAsPublicClient(
-    serverURL: string,
-    oidcConfig?: OIDCConfig,
-    autoHandleRedirect = true,
-  ): Promise<LinkedRecords> {
-    const win = window as any;
-
-    if (!win.lr) {
-      win.lr = {};
-    }
-
-    if (!win.lr[serverURL]) {
-      win.lr[serverURL] = new LinkedRecords(
-        new URL(serverURL),
-        oidcConfig,
-        autoHandleRedirect,
-        true,
-      );
-
-      win.lr[serverURL].setConnectionLostHandler((error: any) => {
-        throw error;
-      });
-
-      win.lr[serverURL].setUnknownServerErrorHandler(() => {
-        throw new Error('unknown server Error');
-      });
-
-      win.lr[serverURL].setLoginHandler(() => {
-      });
-    }
-
-    await win.lr[serverURL].ensureUserIdIsKnown();
-
-    return win.lr[serverURL];
-  }
-
   constructor(
     serverURL: URL,
     oidcConfig?: OIDCConfig,
