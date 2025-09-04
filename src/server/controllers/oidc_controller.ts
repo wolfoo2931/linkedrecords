@@ -8,8 +8,15 @@ export default {
 
     // Return without trailing slash for consistency
     const normalized = authority.replace(/\/$/, '');
-    return res.status(200).send({ authority: normalized });
+
+    const result: Record<string, string> = {
+      authority: normalized,
+    };
+
+    if (process.env['AUTH_CLIENT_ID']) {
+      result['client_id'] = process.env['AUTH_CLIENT_ID'];
+    }
+
+    return res.status(200).send(result);
   },
 };
-
-

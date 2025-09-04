@@ -75,6 +75,7 @@ to store the access token in the browser. In this scenario the following environ
 | ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests by providing an access token via http authentication header. |
 | AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID Connect compliant identity provider (e.g. Auth0, Okta). |
 | AUTH_TOKEN_AUDIENCE | your-audience-id | LinkedRecords will check the audience specified in the JWT bearer token against the value specified in this field. |
+| AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
 
 The single-page application needs to initialize the LinkedRecords SDK as shown below:
 
