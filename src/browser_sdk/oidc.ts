@@ -53,6 +53,7 @@ export class OIDCManager {
     } = config;
 
     let authority = providedAuthority;
+    let clientIdToUse = clientId;
 
     if (!authority) {
       const base = serverURL.toString().replace(/\/$/, '');
@@ -65,11 +66,19 @@ export class OIDCManager {
       if (!authority) {
         throw new Error('OIDC discovery did not return an authority');
       }
+
+      if (!clientIdToUse) {
+        clientIdToUse = data.client_id;
+      }
+
+      if (!clientIdToUse) {
+        throw new Error('OIDC discovery did not return an clientId, you need to provide one when initializing LinkedRecords');
+      }
     }
 
     const settings: UserManagerSettings = {
       authority,
-      client_id: clientId,
+      client_id: clientIdToUse,
       redirect_uri: redirectUri,
       post_logout_redirect_uri: postLogoutRedirectUri,
       scope: scope || 'openid profile email',
