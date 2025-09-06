@@ -10,9 +10,8 @@ single-page application - no backend code required.
   to implement login, password reset, or similar features. Currently, automated
   tests run against Auth0, but other providers should work as well.
 - A flexible authorization model is built into LinkedRecords.
-- It supports real-time collaboration, using a simple conflict-free replicated
-  data type (CRDT) for key-value documents and operational transformation (OT)
-  for large text under the hood.
+- It supports real-time collaboration to build multi player tools like notion,
+  miro, google docs, ...
 
 Developer documentation follows. Curious readers can explore the `specs.wdio/tinytodo`
 directory for a simple usage example.
