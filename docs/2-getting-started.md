@@ -1,7 +1,6 @@
 ---
 title: Getting Started
 layout: home
-order: 2
 ---
 
 This section guides you through the process of implementing a small hello world
@@ -42,7 +41,7 @@ rm -r src/assets
 
 And replace the content of `src/App.tsx` with the following:
 
-```ts
+```tsx
 function App() {
   return (
     <div>
