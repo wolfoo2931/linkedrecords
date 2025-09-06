@@ -1,4 +1,4 @@
-name: Check Jekyll build
+name: Verify Docs Build
 
 on:
   pull_request:
