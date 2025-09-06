@@ -67,4 +67,7 @@ To use LinkedRecords in our single page application, we need to install the npm 
 
 ```
 npm install https://github.com/wolfoo2931/linkedrecords --save
+npm install react-use --save
 ```
+
+#
