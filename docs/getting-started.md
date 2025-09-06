@@ -1,6 +1,7 @@
 ---
 title: Getting Started
 layout: home
+nav_order: 2
 ---
 
 This section guides you through the process of implementing a small hello world

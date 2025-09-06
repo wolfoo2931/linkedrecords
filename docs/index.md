@@ -1,6 +1,7 @@
 ---
 title: Introduction
 layout: home
+nav_order: 1
 ---
 
 LinkedRecords is a NoSQL database that you can connect to directly from your
