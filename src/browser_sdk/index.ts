@@ -64,7 +64,7 @@ export default class LinkedRecords {
 
   static getPublicClient(url: string): LinkedRecords {
     if (publicClients[url]) {
-      return publicClients[url];
+      return publicClients[url] as LinkedRecords;
     }
 
     const oidcConfig = {
