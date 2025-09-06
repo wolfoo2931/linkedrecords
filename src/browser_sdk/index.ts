@@ -29,6 +29,8 @@ export {
   LongTextChange,
 };
 
+const publicClients: Record<string, LinkedRecords> = {};
+
 export default class LinkedRecords {
   static ensureUserIdIsKnownPromise;
 
@@ -59,6 +61,41 @@ export default class LinkedRecords {
   private oidcManager?: OIDCManager;
 
   private qetQuotaPromise: Record<string, Promise<any | undefined>> = {};
+
+  static getPublicClient(url: string): LinkedRecords {
+    const normalizedUrl = new URL(url).toString().replace(/\/$/, '');
+    const cached = publicClients[normalizedUrl];
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const oidcConfig = {
+      redirect_uri: `${window.location.origin}/callback`,
+    };
+
+    const linkedRecords: LinkedRecords = new LinkedRecords(new URL(url), oidcConfig);
+
+    linkedRecords.setConnectionLostHandler((error: any) => {
+      console.error('linkedRecords connection lost error:', error);
+    });
+
+    linkedRecords.setUnknownServerErrorHandler(() => {
+      console.error('server error');
+    });
+
+    linkedRecords.setLoginHandler(() => {
+      const needsVerification = window.location.search.includes('email-not-verified');
+
+      if (needsVerification) {
+        console.log('the user must verify its email address.');
+      }
+
+      console.log('login required, set a login handler which prompts the user to login via linkedRecords.setLoginHandler');
+    });
+
+    publicClients[normalizedUrl] = linkedRecords;
+    return linkedRecords;
+  }
 
   constructor(
     serverURL: URL,
