@@ -22,7 +22,7 @@ As long as you don't share this data with other users or groups, only you can ac
 what you've written into it.
 
 In theory, any user could use the LinkedRecords API directly to write and retrieve data.
-However, this would be inconvenient—just as you wouldn't expect your users to write SQL
+However, this would be inconvenient - just as you wouldn't expect your users to write SQL
 queries, you wouldn't expect them to interact with the LinkedRecords API. A LinkedRecords
 app is a specialized frontend that hides the API and provides a convenient user interface
 for accomplishing their tasks.

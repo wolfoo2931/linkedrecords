@@ -4,12 +4,14 @@ layout: home
 nav_order: 2
 ---
 
-This section guides you through the process of implementing a small hello world
+This page guides you through the process of implementing a small hello world
 single page application to get to know the main LinkedRecords features.
 
 The example is using Vite and React but LinkedRecords is not limited to these tools.
 
-# 1. Setup React Using Vite
+# Initialize a new Project
+
+## Setup React Using Vite
 
 Vite is a modern TypeScript/JavaScript build system which bundles our code and prepares it
 for deployment. During development it updates the app in the browser as we change the code
@@ -28,7 +30,7 @@ npm run dev
 You will see an URL in your terminal (e.g. http://localhost:5173/). When you open it
 in your browser you will see the small scaffold application in action.
 
-# 2. Clean up Scaffold App
+## Clean up Scaffold App
 
 Next, we clean up the scaffold app a little to have a greenfield to start from.
 
@@ -59,7 +61,7 @@ You can also empty the the file `src/index.css` <strong>but do not delete it</st
 If your switch back to your browser, the app should look way simpler now.
 You should only see the writing "LinkedRecords Hello World".
 
-# 3. Install NPM Packages
+## Install NPM Packages
 
 To use LinkedRecords in our single page application, we need to install the npm package:
 
