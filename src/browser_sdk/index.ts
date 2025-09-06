@@ -93,7 +93,7 @@ export default class LinkedRecords {
       console.log('login required, set a login handler which prompts the user to login via linkedRecords.setLoginHandler');
     });
 
-    publicClients[url] = linkedRecords;
+    publicClients[normalizedUrl] = linkedRecords;
     return linkedRecords;
   }
 
