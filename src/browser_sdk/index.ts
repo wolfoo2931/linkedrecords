@@ -63,8 +63,10 @@ export default class LinkedRecords {
   private qetQuotaPromise: Record<string, Promise<any | undefined>> = {};
 
   static getPublicClient(url: string): LinkedRecords {
-    if (publicClients[url]) {
-      return publicClients[url] as LinkedRecords;
+    const normalizedUrl = new URL(url).toString().replace(/\/$/, '');
+    const cached = publicClients[normalizedUrl];
+    if (cached !== undefined) {
+      return cached;
     }
 
     const oidcConfig = {
