@@ -114,13 +114,22 @@ export default class Controller {
     const attributesInCreation = req.attribute.id;
     const rawFacts = req.body.facts || [];
     const facts = rawFacts
-      .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it')) // TODO: what is with: '$it', 'isA', 'Team' ?? this will be fileted out
+      .filter((rawFact) => rawFact.length === 2 || (rawFact.length === 3 && rawFact[2] === '$it') || (rawFact.length === 3 && rawFact[0] === '$it'))
       .map((rawFact) => {
         if (rawFact.length === 2) {
           return new Fact(
             attributesInCreation,
             rawFact[0],
             rawFact[1],
+            req.log,
+          );
+        }
+
+        if (rawFact.length === 3 && rawFact[0] === '$it') {
+          return new Fact(
+            attributesInCreation,
+            rawFact[1],
+            rawFact[2],
             req.log,
           );
         }
