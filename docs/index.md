@@ -4,8 +4,8 @@ layout: home
 nav_order: 1
 ---
 
-LinkedRecords is a NoSQL database that you can connect to directly from your
-single-page application - no backend code required.
+You can think of LinkedRecords as a NoSQL database that you can connect to directly
+from your single-page application - no backend code required.
 
 - You can use any OpenID Connect provider for authentication, so you don't need
   to implement login, password reset, or similar features. Currently, automated

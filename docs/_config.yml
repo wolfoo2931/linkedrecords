@@ -3,3 +3,8 @@ description: A documentation site for https://github.com/wolfoo2931/linkedrecord
 theme: just-the-docs
 
 url: https://wolfoo2931.github.io/linkedrecords
+
+callouts:
+  note:
+    title: Note
+    color: blue
