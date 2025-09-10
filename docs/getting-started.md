@@ -70,4 +70,92 @@ npm install https://github.com/wolfoo2931/linkedrecords --save
 npm install react-use --save
 ```
 
-#
+# Implement a Simple todo App
+
+Next we are going to implement a simple todo list application using LinkedRecords.
+
+
+We do so by replacing the content of `src/App.tsx` with the following:
+
+```tsx
+import { useEffect, useState } from 'react';
+import { useAsyncFn } from 'react-use';
+import { useLinkedRecords } from './context/useLinkedRecords';
+import { useKeyValueAttributes } from './context/useAttributes';
+
+function NewTodo() {
+  const { lr } = useLinkedRecords();
+  const [ title, setTitle ] = useState<string>('');
+  const [ state, onClick ] = useAsyncFn(async () => {
+    setTitle('');
+
+    await lr.Attribute.createKeyValue({
+      title,
+      completed: false,
+    }, [
+      ['isA', 'TodoList'], // FIXME '$it' does not work as subject
+    ]);
+  }, [ lr.Attribute, title ]);
+
+  return <div>
+    <input value={title} onChange={(e) => setTitle(e.target.value)} />
+    <button disabled={state.loading} onClick={onClick}>
+      {state.loading ? 'Saving ...' : 'Save'}
+    </button>
+  </div>
+}
+
+function TodoList() {
+  const { lr } = useLinkedRecords();
+  const todos = useKeyValueAttributes([
+    ['$it', 'isA', 'TodoList'],
+  ]);
+
+  const [ , onCompleted ] = useAsyncFn(async (id: string, checked) => {
+    const todoAttr = await lr.Attribute.find(id);
+    const todoObj = await todoAttr?.getValue();
+
+    todoAttr?.set({
+      ...todoObj,
+      completed: checked,
+    });
+  }, [ lr.Fact ]);
+
+  return <div>
+    {todos
+      .map((todo) => <div key={todo._id as string}>
+        <input
+          onChange={(e) => onCompleted(todo._id as string, e.target.checked)}
+          type="checkbox" checked={!!todo.completed}>
+        </input>
+        {typeof todo.title === 'string' ? todo.title : 'untitled'}
+    </div>)}
+  </div>
+}
+
+function App() {
+  const { lr } = useLinkedRecords();
+
+  useEffect(() => {
+    lr.isAuthenticated().then(async (isAuthenticated) => {
+      if (!isAuthenticated) {
+        await lr.login();
+      }
+
+      await lr.Fact.createAll([
+        ['TodoList', '$isATermFor', 'A list of things which needs to be done'],
+      ]);
+    });
+  }, [ lr ]);
+
+  return (
+    <div>
+      <NewTodo/>
+      <TodoList/>
+    </div>
+  );
+}
+
+export default App
+
+```
