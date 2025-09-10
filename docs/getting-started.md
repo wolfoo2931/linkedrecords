@@ -4,10 +4,10 @@ layout: home
 nav_order: 2
 ---
 
-This page guides you through the process of implementing a small hello world
-single page application to get to know the main LinkedRecords features.
+This page guides you through the process of implementing a small "Hello World"
+single-page application to get to know the main LinkedRecords features.
 
-The example is using Vite and React but LinkedRecords is not limited to these tools.
+The example uses Vite and React, but LinkedRecords is not limited to these tools.
 
 # Initialize a new Project
 
@@ -56,7 +56,7 @@ function App() {
 export default App
 ```
 
-You can also empty the the file `src/index.css` <strong>but do not delete it</strong>.
+You can also empty the file `src/index.css` <strong>but do not delete it</strong>.
 
 If your switch back to your browser, the app should look way simpler now.
 You should only see the writing "LinkedRecords Hello World".
@@ -71,8 +71,8 @@ npm install react-use --save
 ```
 
 {: .note }
-You can also use linkedrecords outside of React applications. The linkedrecords-react
-module provides some handy hooks which make our live easier.
+You can also use LinkedRecords outside of React applications. The linkedrecords-react
+module provides some handy hooks which make our lives easier.
 
 # Implement a Simple todo App
 
@@ -175,8 +175,8 @@ function App() {
 export default App
 ```
 
-If we start this app in the terminal by running `npm run dev` vite should display a local URL which
-we can open in our browser. Once we open the URL in the browser we notice that with very little code:
+If we start this app in the terminal by running `npm run dev`, Vite should display a local URL which
+we can open in our browser. Once we open the URL in the browser, we notice that with very little code:
 
 - We will be prompted to login. The LinkedRecords backend takes care of user management.
 - If we reload the page, all todo are persisted.
@@ -248,11 +248,11 @@ We also need to declare two more terms in the main `App` component:
 
 # Add an "Share" feature
 
-Next we are going to implement a share button. Once a user clicks that button, he will
-be prompted to provide an email address of the person which he wants to share the todo with.
+Next, we are going to implement a share button. Once a user clicks that button, they will
+be prompted to provide an email address of the person with whom they want to share the todo.
 
 {: .note }
-As of the current state of the implementation the user must be already signed up
+As of the current state of the implementation, the user must already be signed up.
 
 To implement the feature, once again we patch the TodoList component with the following few lines:
 
