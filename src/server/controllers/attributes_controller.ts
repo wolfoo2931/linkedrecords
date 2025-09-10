@@ -128,8 +128,8 @@ export default class Controller {
         if (rawFact.length === 3 && rawFact[0] === '$it') {
           return new Fact(
             attributesInCreation,
-            rawFact[0],
             rawFact[1],
+            rawFact[2],
             req.log,
           );
         }
