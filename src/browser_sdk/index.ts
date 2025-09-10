@@ -240,6 +240,10 @@ export default class LinkedRecords {
     // If OIDC is enabled and access token is available, use Bearer token
     if (this.oidcManager) {
       const accessToken = await this.oidcManager.getAccessToken();
+
+      // FIXME: if we do not hav a token but still are in public client mode,
+      // the userInfo request will fail because of CORS which tries to send
+      // cookies to the domain
       if (accessToken) {
         mergedHeaders['Authorization'] = `Bearer ${accessToken}`;
         // For cross-origin, do not send cookies if using Bearer
