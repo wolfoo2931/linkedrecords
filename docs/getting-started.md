@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-You will see an URL in your terminal (e.g. http://localhost:5173/). When you open it
+You will see a URL in your terminal (e.g. http://localhost:5173/). When you open it
 in your browser you will see the small scaffold application in action.
 
 ## Clean up Scaffold App
@@ -58,14 +58,14 @@ export default App
 
 You can also empty the file `src/index.css` <strong>but do not delete it</strong>.
 
-If your switch back to your browser, the app should look way simpler now.
-You should only see the writing "LinkedRecords Hello World".
+If you switch back to your browser, the app should look much simpler now.
+You should only see "LinkedRecords Hello World".
 
 ## Install NPM Packages
 
 To use LinkedRecords in our React single page application, we need to install the npm package:
 
-```
+```sh
 npm install https://github.com/wolfoo2931/linkedrecords-react --save
 npm install react-use --save
 ```
@@ -179,8 +179,8 @@ If we start this app in the terminal by running `npm run dev`, Vite should displ
 we can open in our browser. Once we open the URL in the browser, we notice that with very little code:
 
 - We will be prompted to login. The LinkedRecords backend takes care of user management.
-- If we reload the page, all todo are persisted.
-- If we login as another user, we see different todos. By default the todos are scoped to a user.
+- If we reload the page, all todos are persisted.
+- If we log in as another user, we see different todos. The todos are scoped to a user.
 
 In the next sections we will extend the app to learn about a few other LinkedRecords features. Especially
 how multiple users can collaborate on the same todos.
@@ -242,11 +242,11 @@ We also need to declare two more terms in the main `App` component:
        await lr.Fact.createAll([
          ['TodoList', '$isATermFor', 'A list of things which needs to be done'],
 +        ['Archived', '$isATermFor', 'A state which represent that the subject is archived and is not needed anymore for day-to-day operation'],
-+        ['Active', '$isATermFor', 'A state which represent that the subject is archived and is not needed anymore for day-to-day operation'],
++        ['Active', '$isATermFor', 'A state which represents that the subject is active and used for day-to-day operation'],
        ]);
 ```
 
-# Add an "Share" feature
+# Add a "Share" feature
 
 Next, we are going to implement a share button. Once a user clicks that button, they will
 be prompted to provide an email address of the person with whom they want to share the todo.
