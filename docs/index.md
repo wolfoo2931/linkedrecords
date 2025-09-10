@@ -12,8 +12,8 @@ from your single-page application - no backend code required.
   tests run against Auth0, but other providers should work as well.
 - A flexible authorization model is built into LinkedRecords. No need to write
   and deploy authorization rules into your backend.
-- It supports real-time collaboration to build multi player tools like notion,
-  miro, google docs, ...
+- It supports real-time collaboration to build multi player tools like Notion,
+  Miro, Google docs, ...
 
 # Concept
 

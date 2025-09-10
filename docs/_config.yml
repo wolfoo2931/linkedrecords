@@ -4,6 +4,10 @@ theme: just-the-docs
 
 url: https://wolfoo2931.github.io/linkedrecords
 
+aux_links:
+  LinkedRecords on GitHub:
+    - https://github.com/wolfoo2931/linkedrecords/
+
 callouts:
   note:
     title: Note
