@@ -117,7 +117,7 @@ function NewTodo() {
       title,
       completed: false,
     }, [
-      ['$it', 'isA', 'TodoList'],
+      ['$it', 'isA', 'Todo'],
     ]);
   }, [ lr.Attribute, title ]);
 
@@ -130,7 +130,7 @@ function NewTodo() {
 function TodoList() {
   const { lr } = useLinkedRecords();
   const todos = useKeyValueAttributes([
-    ['$it', 'isA', 'TodoList'],
+    ['$it', 'isA', 'Todo'],
   ]);
 
   const [ , onCompleted ] = useAsyncFn(async (id: string, checked) => {
@@ -159,7 +159,7 @@ function App() {
       }
 
       await lr.Fact.createAll([
-        ['TodoList', '$isATermFor', 'A list of things which needs to be done'],
+        ['Todo', '$isATermFor', 'A list of things which needs to be done'],
       ]);
     });
   }, [ lr ]);
@@ -200,12 +200,12 @@ index 3195cf6..0ae9803 100644
 @@ -26,6 +26,12 @@ function TodoList() {
    const { lr } = useLinkedRecords();
    const todos = useKeyValueAttributes([
-     ['$it', 'isA', 'TodoList'],
+     ['$it', 'isA', 'Todo'],
 +    ['$it', '$latest(stateIs)', '$not(Archived)'],
 +  ]);
 +
 +  const archivedTodos = useKeyValueAttributes([
-+    ['$it', 'isA', 'TodoList'],
++    ['$it', 'isA', 'Todo'],
 +    ['$it', '$latest(stateIs)', 'Archived'],
    ]);
 
@@ -240,7 +240,7 @@ We also need to declare two more terms in the main `App` component:
 
 ```diff
        await lr.Fact.createAll([
-         ['TodoList', '$isATermFor', 'A list of things which needs to be done'],
+         ['Todo', '$isATermFor', 'A list of things which needs to be done'],
 +        ['Archived', '$isATermFor', 'A state which represent that the subject is archived and is not needed anymore for day-to-day operation'],
 +        ['Active', '$isATermFor', 'A state which represents that the subject is active and used for day-to-day operation'],
        ]);
