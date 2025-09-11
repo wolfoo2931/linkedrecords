@@ -14,7 +14,7 @@ You can think of LinkedRecords as a bucket where anyone can sign up and insert d
 As long as you don’t share this data with other users or groups, only you can access what you’ve written into it.
 
 In theory, any user could use the LinkedRecords API directly to write and retrieve data.
-However, this would be inconvenient—just as you wouldn’t expect your users to write SQL queries, you wouldn’t expect them to interact with the LinkedRecords API.
+However, this would be inconvenient - just as you wouldn’t expect your users to write SQL queries, you wouldn’t expect them to interact with the LinkedRecords API.
 A LinkedRecords app is a specialized frontend that hides the API and provides a convenient user interface for accomplishing their tasks.
 
 In the traditional SQL world, inconvenience isn’t the only reason you don’t let users access the database directly - authorization concerns are an even stronger reason.
