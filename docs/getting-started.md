@@ -159,7 +159,7 @@ function App() {
       }
 
       await lr.Fact.createAll([
-        ['Todo', '$isATermFor', 'A list of things that needs to be done'],
+        ['Todo', '$isATermFor', 'A list of things that need to be done'],
       ]);
     });
   }, [ lr ]);
