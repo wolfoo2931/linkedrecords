@@ -97,7 +97,7 @@ createRoot(document.getElementById('root')!).render(
 )
 ```
 
-The LinkedRecords provider expects an URL of the LinkedRecords backend as property (`serverUrl`). In this case it is a
+The LinkedRecords provider expects a URL of the LinkedRecords backend as property (`serverUrl`). In this case it is a
 LinkedRecords setup which runs locally.
 
 For the actual app we replace the content of `src/App.tsx` with the following:
@@ -159,7 +159,7 @@ function App() {
       }
 
       await lr.Fact.createAll([
-        ['Todo', '$isATermFor', 'A list of things which needs to be done'],
+        ['Todo', '$isATermFor', 'A list of things that needs to be done'],
       ]);
     });
   }, [ lr ]);
