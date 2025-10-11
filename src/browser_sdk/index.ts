@@ -29,6 +29,8 @@ export {
   LongTextChange,
 };
 
+const publicClients: Record<string, LinkedRecords> = {};
+
 export default class LinkedRecords {
   static ensureUserIdIsKnownPromise;
 
@@ -58,7 +60,49 @@ export default class LinkedRecords {
 
   private oidcManager?: OIDCManager;
 
-  constructor(serverURL: URL, oidcConfig?: OIDCConfig, autoHandleRedirect = true) {
+  private qetQuotaPromise: Record<string, Promise<any | undefined>> = {};
+
+  static getPublicClient(url: string): LinkedRecords {
+    const normalizedUrl = new URL(url).toString().replace(/\/$/, '');
+    const cached = publicClients[normalizedUrl];
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const oidcConfig = {
+      redirect_uri: `${window.location.origin}/callback`,
+    };
+
+    const linkedRecords: LinkedRecords = new LinkedRecords(new URL(url), oidcConfig);
+
+    linkedRecords.setConnectionLostHandler((error: any) => {
+      console.error('linkedRecords connection lost error:', error);
+    });
+
+    linkedRecords.setUnknownServerErrorHandler(() => {
+      console.error('server error');
+    });
+
+    linkedRecords.setLoginHandler(() => {
+      const needsVerification = window.location.search.includes('email-not-verified');
+
+      if (needsVerification) {
+        console.log('the user must verify its email address.');
+      }
+
+      console.log('login required, set a login handler which prompts the user to login via linkedRecords.setLoginHandler');
+    });
+
+    publicClients[normalizedUrl] = linkedRecords;
+    return linkedRecords;
+  }
+
+  constructor(
+    serverURL: URL,
+    oidcConfig?: OIDCConfig,
+    autoHandleRedirect = true,
+    deferUserInfoFetching = false,
+  ) {
     this.serverURL = serverURL;
 
     if (oidcConfig) {
@@ -77,7 +121,9 @@ export default class LinkedRecords {
     this.clientId = uuid();
     this.Fact = new FactsRepository(this);
 
-    this.ensureUserIdIsKnown();
+    if (!deferUserInfoFetching) {
+      this.ensureUserIdIsKnown();
+    }
 
     if (this.oidcManager) {
       if (
@@ -143,9 +189,18 @@ export default class LinkedRecords {
   }
 
   public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
-    const response = await this.fetch(`/quota/${nodeId || this.actorId}`);
+    if (this.qetQuotaPromise[nodeId || '']) {
+      return this.qetQuotaPromise[nodeId || ''];
+    }
 
-    return response.json();
+    this.qetQuotaPromise[nodeId || ''] = this.ensureUserIdIsKnown()
+      .then((uId) => this.fetch(`/quota/${nodeId || uId}`))
+      .then((r) => r.json());
+
+    const result = await this.qetQuotaPromise[nodeId || ''];
+    delete this.qetQuotaPromise[nodeId || ''];
+
+    return result;
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
@@ -185,6 +240,10 @@ export default class LinkedRecords {
     // If OIDC is enabled and access token is available, use Bearer token
     if (this.oidcManager) {
       const accessToken = await this.oidcManager.getAccessToken();
+
+      // FIXME: if we do not hav a token but still are in public client mode,
+      // the userInfo request will fail because of CORS which tries to send
+      // cookies to the domain
       if (accessToken) {
         mergedHeaders['Authorization'] = `Bearer ${accessToken}`;
         // For cross-origin, do not send cookies if using Bearer
@@ -298,22 +357,20 @@ export default class LinkedRecords {
       return this.actorId;
     }
 
-    if (LinkedRecords.ensureUserIdIsKnownPromise) {
-      await LinkedRecords.ensureUserIdIsKnownPromise;
-      return this.actorId;
+    if (!LinkedRecords.ensureUserIdIsKnownPromise) {
+      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
+        .then(async (response) => {
+          if (!response || response.status === 401) {
+            this.handleExpiredLoginSession();
+          }
+
+          const responseBody = await response.json();
+          return responseBody.userId;
+        });
     }
 
-    LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true });
-
     try {
-      const userInfoResponse: any = await LinkedRecords.ensureUserIdIsKnownPromise;
-      if (!userInfoResponse || userInfoResponse.status === 401) {
-        this.handleExpiredLoginSession();
-        return undefined;
-      }
-
-      const responseBody = await userInfoResponse.json();
-      this.actorId = responseBody.userId;
+      this.actorId = await LinkedRecords.ensureUserIdIsKnownPromise;
       return this.actorId;
     } finally {
       LinkedRecords.ensureUserIdIsKnownPromise = undefined;

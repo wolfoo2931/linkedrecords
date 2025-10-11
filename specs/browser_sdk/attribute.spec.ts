@@ -707,4 +707,28 @@ describe('Attribute', () => {
       expect(references.length).to.equal(0);
     });
   });
+
+  describe('Attribute.create()', () => {
+    it('allows to specify "$it" as subject placeholder', async () => {
+      const [client] = await createClient();
+
+      await client.Fact.createAll([
+        ['Thing', '$isATermFor', 'some category'],
+      ]);
+
+      const attr = await client.Attribute.create('keyValue', {}, [
+        ['$it', 'isA', 'Thing'],
+      ]);
+
+      const { retrieved } = await client.Attribute.findAll({
+        retrieved: [
+          ['$it', 'isA', 'Thing'],
+        ],
+      });
+
+      expect(retrieved).to.not.equal(undefined);
+      expect(retrieved.length).to.equal(1);
+      expect(retrieved[0]!.id).to.equal(attr.id);
+    });
+  });
 });

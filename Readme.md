@@ -1,34 +1,32 @@
 # LinkedRecords
 
-LinkedRecords is a NoSQL database you can connect to directly from your single page application. You do not have to write any backend code.
+LinkedRecords is a NoSQL database that you can connect to directly from your single-page application - no backend code required.
 
-- You can use any OpenID Connect provider for authentication. You don't have to implement login,
-  password reset, etc. For now, automated tests run against Auth0. Other providers should work as well.
-- A flexible authorization model is build into LinkedRecords.
-- It allows you to build apps with real time collaboration. Under the hood it uses a simple
-  Conflict-free replicated data type (CRDT) for key-value documents and operational transformation (OT)
-  for large text.
+- You can use any OpenID Connect provider for authentication, so you don’t need to implement login, password reset, or similar features. Currently, automated tests run against Auth0, but other providers should work as well.
+- A flexible authorization model is built into LinkedRecords.
+- It supports real-time collaboration, using a simple conflict-free replicated data type (CRDT) for key-value documents and operational transformation (OT) for large text under the hood.
 
-Developer documentation follows. Curious readers can check out the specs.wdio/tinytodo directory for a simple usage example.
+Developer documentation follows. Curious readers can explore the `specs.wdio/tinytodo` directory for a simple usage example.
 
 # Concept
 
-You can think of LinkedRecords as a bucket in which anybody can sign up and write data into it.
-As long as you do not share this data with other users or groups, only you can access the data you have written to the bucket.
+You can think of LinkedRecords as a bucket where anyone can sign up and insert data.
+As long as you don’t share this data with other users or groups, only you can access what you’ve written into it.
 
-In theory every user can use the LinkedRecords API to write and retrieve data. But this would be quite inconvenient to a user - the same way you would
-not expect your user to write SQL queries you would not expect your users to use the LinkedRecords API. A LinkedRecords app is a specialized
-frontend which hides the LinkedRecords API from the user and provides them a convenient user interface to accomplish their use cases.
+In theory, any user could use the LinkedRecords API directly to write and retrieve data.
+However, this would be inconvenient - just as you wouldn’t expect your users to write SQL queries, you wouldn’t expect them to interact with the LinkedRecords API.
+A LinkedRecords app is a specialized frontend that hides the API and provides a convenient user interface for accomplishing their tasks.
 
-In the traditional SQL world, inconvenience is not the only reason why you do not let the user access your database with SQL: Authentication and
-Authorization challenges are by far the stronger argument not to do this. This is not a problem within LinkedRecords as authorization is built into
-the LinkedRecords API.
+In the traditional SQL world, inconvenience isn’t the only reason you don’t let users access the database directly - authorization concerns are an even stronger reason.
+With LinkedRecords, this is no longer an issue: authorization is built directly into the API. This requires a small mindset shift:
+Instead of defining universal authorization rules in the backend for all records, the user who inserts a data record specifies who can read it.
 
-When it comes to the LinkedRecords API - simplicity, flexibility and a decoupled architecture are the main qualities we strive to achieve.
+For the LinkedRecords API, simplicity, flexibility, and a decoupled architecture are the main qualities we strive to achieve.
 
-- Simplicity: The API should not have many endpoints or methods but instead consists of a few fundamental building blocks.
-- Flexibility: The few available endpoints can be composed to serve a variety of use cases.
-- Decoupled: LinkedRecords should be decoupled from the single page applications which use it as data storage
+- Simplicity: The API should not have many endpoints or methods; instead, it consists of a few fundamental building blocks.
+- Flexibility: The few available endpoints can be composed to support a variety of use cases. The backed in authorization model should allow to
+  implement different authorization use cases (RBAC, ...).
+- Decoupled: LinkedRecords should be decoupled from the single-page applications which use it as data storage
 
 Think of it as SQL you can call directly from your React app without worrying about permissions; it is easier to read than SQL and provides live updates.
 
@@ -69,16 +67,17 @@ Across different domains the cookie becomes a third-party cookie, so this mode c
 
 ## Public Client Mode
 
-In case the single page application is hosted on a different domain then the LinkedRecords server, the single page application has
+In case the single-page application is hosted on a different domain than the LinkedRecords server, the single-page application has
 to store the access token in the browser. In this scenario the following environment variables need to be configured.
 
 | Environment Variable Name | Example | Description |
 | ------------------------- | ------- | ----------- |
-| ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests providing an access token via http authentication header. |
+| ALLOW_HTTP_AUTHENTICATION_HEADER | true | Allows public clients to make requests by providing an access token via http authentication header. |
 | AUTH_ISSUER_BASE_URL | https://xxx.us.auth0.com/ | The URL of the OIDC issuer. Can be any OpenID Connect compliant identity provider (e.g. Auth0, Okta). |
 | AUTH_TOKEN_AUDIENCE | your-audience-id | LinkedRecords will check the audience specified in the JWT bearer token against the value specified in this field. |
+| AUTH_CLIENT_ID |  | The client id. Can be obtained from the identity provider. |
 
-The single page application needs to initialize the LinkedRecords SDK as shown below:
+The single-page application needs to initialize the LinkedRecords SDK as shown below:
 
 ```js
 import LinkedRecords from './src/browser_sdk';

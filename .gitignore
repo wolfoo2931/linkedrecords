@@ -18,3 +18,9 @@ specs.wdio/testapp/client.packaged.js.map
 specs.wdio/testapp/testserver.js
 specs.wdio/testapp/testserver.js.map
 **/acc_chart_data.json
+docs/_site/
+docs/.sass-cache/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+docs/.bundle/
+docs/vendor/
