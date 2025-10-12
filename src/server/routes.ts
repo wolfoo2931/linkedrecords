@@ -3,7 +3,6 @@
 import 'dotenv/config';
 import https from 'https';
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import multer from 'multer';
 import pino from 'pino-http';
@@ -16,11 +15,11 @@ import factsController from './controllers/facts_controller';
 import attributesController from './controllers/attributes_controller';
 import quotaController from './controllers/quota_controller';
 import userinfoController from './controllers/userinfo_controller';
+import oidcController from './controllers/oidc_controller';
 import authentication from './middleware/authentication';
 import quotaUpgrade from './middleware/quota_upgrade';
 import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../attributes/errors/authorization_error';
-import clearCookies from './middleware/clear_cookies';
 import BlobAttribute from '../attributes/blob/server';
 
 const blobUpload = multer().single('change');
@@ -112,10 +111,9 @@ async function createApp(httpServer: https.Server) {
   app.use(limiter);
   app.use(cors({ origin: getCorsOriginConfig(), credentials: true, maxAge: 86400 }));
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
-  app.use(cookieParser(process.env['AUTH_COOKIE_SIGNING_SECRET']));
   app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
-  app.use('/logout', clearCookies());
+  app.get('/oidc/discovery', (req, res) => oidcController.discovery(req, res));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/attribute-compositions', attributeMiddleware());

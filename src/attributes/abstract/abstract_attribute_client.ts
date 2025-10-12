@@ -47,7 +47,12 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     // because the same user can be logged on two browsers/laptops, we need
     // a clientId and an actorId. Every attribute needs to have its own clientId.
     this.clientId = linkedRecords.getAttributeClientId();
-    this.actorId = linkedRecords.actorId;
+
+    if (linkedRecords.actorId) {
+      this.actorId = linkedRecords.actorId;
+    } else {
+      linkedRecords.ensureUserIdIsKnown().then((aId) => { this.actorId = aId; });
+    }
 
     this.version = '0';
     this.value = this.getDefaultValue();
@@ -78,7 +83,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     const requestConfig: any = {
       method: 'POST',
-      body: this.getCreatePayload(value, facts),
+      body: await this.getCreatePayload(value, facts),
     };
 
     if (typeof requestConfig.body !== 'string') {
@@ -135,17 +140,19 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
   }
 
-  protected getCreatePayload(
+  protected async getCreatePayload(
     value: Type,
     facts: [ string?, string?, string? ][] = [],
-  ): string | FormData {
-    if (!this.actorId) {
-      throw new Error('actorId is unknown, can not create blob payload!');
+  ): Promise<string | FormData> {
+    const actorId = await this.linkedRecords.ensureUserIdIsKnown();
+
+    if (!actorId) {
+      throw new Error('actorId is unknown, can not create payload!');
     }
 
     return JSON.stringify({
       clientId: this.clientId,
-      actorId: this.actorId,
+      actorId,
       facts,
       value,
     });
@@ -243,7 +250,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
 
     const serializedValue = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
 
-    if (!serializedValue) {
+    if (!serializedValue && serializedValue !== '') {
       throw new Error('invalid server state');
     }
 

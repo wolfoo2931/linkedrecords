@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 
-import { expect } from 'chai';
+import { expect, assert } from 'chai';
 import { uuidv7 as uuid } from 'uuidv7';
 import {
   createClient, cleanupClients, truncateDB, waitFor,
@@ -165,6 +165,20 @@ describe('Long Text Attributes', () => {
 
       expect(convergedValueClientA).to.equal(convergedValueClientB);
       expect(convergedValueClientA!.length).to.equal(17);
+    });
+
+    it('works when the value is an empty string', async () => {
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
+
+      const attributeClientA = await clientA.Attribute.createLongText('');
+
+      assert(attributeClientA.id);
+      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+
+      assert(attributeClientB);
+
+      expect(await attributeClientB?.getValue()).to.equal('');
     });
   });
 });

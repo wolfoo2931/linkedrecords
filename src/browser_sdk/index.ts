@@ -1,8 +1,8 @@
+/* eslint-disable class-methods-use-this */
 /* eslint-disable import/no-cycle */
 
 import { uuidv7 as uuid } from 'uuidv7';
 
-import Cookies from 'js-cookie';
 import LongTextAttribute from '../attributes/long_text/client';
 import KeyValueAttribute from '../attributes/key_value/client';
 import KeyValueChange from '../attributes/key_value/key_value_change';
@@ -11,6 +11,7 @@ import ClientServerBus from '../../lib/client-server-bus/client';
 import FactsRepository from './facts_repository';
 import AttributesRepository from './attributes_repository';
 import { QuotaAsJSON } from '../server/quota';
+import { OIDCManager, OIDCConfig } from './oidc';
 
 type FetchOptions = {
   headers?: object | undefined,
@@ -18,6 +19,7 @@ type FetchOptions = {
   body?: any,
   isJSON?: boolean,
   doNotHandleExpiredSessions?: boolean,
+  skipWaitForUserId?: boolean,
 };
 
 export {
@@ -27,12 +29,14 @@ export {
   LongTextChange,
 };
 
+const publicClients: Record<string, LinkedRecords> = {};
+
 export default class LinkedRecords {
   static ensureUserIdIsKnownPromise;
 
   KeyValueChange: typeof KeyValueChange = KeyValueChange;
 
-  clientServerBus: ClientServerBus;
+  private clientServerBus: ClientServerBus;
 
   serverURL: URL;
 
@@ -54,33 +58,97 @@ export default class LinkedRecords {
 
   Fact: FactsRepository;
 
-  static readUserIdFromCookies(): string | undefined {
-    const cookieValue = Cookies.get('userId');
+  private oidcManager?: OIDCManager;
 
-    if (!cookieValue) {
-      return undefined;
+  private qetQuotaPromise: Record<string, Promise<any | undefined>> = {};
+
+  static getPublicClient(url: string): LinkedRecords {
+    const normalizedUrl = new URL(url).toString().replace(/\/$/, '');
+    const cached = publicClients[normalizedUrl];
+    if (cached !== undefined) {
+      return cached;
     }
 
-    const withoutSignature = cookieValue.slice(0, cookieValue.lastIndexOf('.'));
-    const split = withoutSignature.split(':');
-    const userId = split.length === 1 ? split[0] : split[1];
+    const oidcConfig = {
+      redirect_uri: `${window.location.origin}/callback`,
+    };
 
-    return userId;
+    const linkedRecords: LinkedRecords = new LinkedRecords(new URL(url), oidcConfig);
+
+    linkedRecords.setConnectionLostHandler((error: any) => {
+      console.error('linkedRecords connection lost error:', error);
+    });
+
+    linkedRecords.setUnknownServerErrorHandler(() => {
+      console.error('server error');
+    });
+
+    linkedRecords.setLoginHandler(() => {
+      const needsVerification = window.location.search.includes('email-not-verified');
+
+      if (needsVerification) {
+        console.log('the user must verify its email address.');
+      }
+
+      console.log('login required, set a login handler which prompts the user to login via linkedRecords.setLoginHandler');
+    });
+
+    publicClients[normalizedUrl] = linkedRecords;
+    return linkedRecords;
   }
 
-  constructor(serverURL: URL) {
+  constructor(
+    serverURL: URL,
+    oidcConfig?: OIDCConfig,
+    autoHandleRedirect = true,
+    deferUserInfoFetching = false,
+  ) {
     this.serverURL = serverURL;
-    this.actorId = LinkedRecords.readUserIdFromCookies();
-    this.clientId = uuid();
-    this.clientServerBus = new ClientServerBus();
-    this.Attribute = new AttributesRepository(this, this.clientServerBus);
-    this.Fact = new FactsRepository(this);
+
+    if (oidcConfig) {
+      this.oidcManager = new OIDCManager(oidcConfig, serverURL);
+    }
+
+    this.clientServerBus = new ClientServerBus(() => this.getAccessToken());
 
     this.clientServerBus.subscribeConnectionInterrupted(() => {
       if (this.connectionLostHandler) {
         this.connectionLostHandler();
       }
     });
+
+    this.Attribute = new AttributesRepository(this, () => this.getClientServerBus());
+    this.clientId = uuid();
+    this.Fact = new FactsRepository(this);
+
+    if (!deferUserInfoFetching) {
+      this.ensureUserIdIsKnown();
+    }
+
+    if (this.oidcManager) {
+      if (
+        autoHandleRedirect
+        && typeof window !== 'undefined'
+        && window.location
+        && window.location.search
+      ) {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('code') && params.has('state')) {
+          this.oidcManager
+            .handleRedirectCallback()
+            .then(() => {
+              // Clean up the URL after handling the callback
+              // Remove OIDC parameters from the URL
+              // for a cleaner user experience
+              window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname,
+              );
+            });
+        }
+      }
+    }
   }
 
   public getAttributeClientId(): string {
@@ -88,7 +156,7 @@ export default class LinkedRecords {
     return `${this.clientId}-${this.attributeClientIdSuffix}`;
   }
 
-  public getClientServerBus(): ClientServerBus {
+  public async getClientServerBus(): Promise<ClientServerBus> {
     return this.clientServerBus;
   }
 
@@ -121,39 +189,80 @@ export default class LinkedRecords {
   }
 
   public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
-    const response = await this.fetch(`/quota/${nodeId || this.actorId}`);
+    if (this.qetQuotaPromise[nodeId || '']) {
+      return this.qetQuotaPromise[nodeId || ''];
+    }
 
-    return response.json();
+    this.qetQuotaPromise[nodeId || ''] = this.ensureUserIdIsKnown()
+      .then((uId) => this.fetch(`/quota/${nodeId || uId}`))
+      .then((r) => r.json());
+
+    const result = await this.qetQuotaPromise[nodeId || ''];
+    delete this.qetQuotaPromise[nodeId || ''];
+
+    return result;
   }
 
   public async fetch(url: string, fetchOpt?: FetchOptions) {
+    const isOnRedirectUriRoute = await this.oidcManager?.isOnRedirectUriRoute();
+
     const {
       headers = undefined,
       method = 'GET',
       body = undefined,
       isJSON = true,
       doNotHandleExpiredSessions = false,
+      skipWaitForUserId = false,
     } = fetchOpt || {};
 
-    const absoluteUrl = `${this.serverURL.toString().replace(/\/$/, '')}/${url.replace(/^\//, '')}`;
+    if (isOnRedirectUriRoute) {
+      // We are on the OIDC redirect URI: delay requests briefly to avoid
+      // triggering the login flow again while the session is being established.
+      await new Promise((resolve) => { setTimeout(resolve, 2000); });
+    }
+
+    if (!skipWaitForUserId) {
+      await this.ensureUserIdIsKnown();
+    }
+
+    const base = this.serverURL.toString().replace(/\/$/, '');
+    const path = url.replace(/^\//, '');
+    const absoluteUrl = `${base}/${path}`;
     const options: any = {
       method,
       credentials: 'include',
     };
 
+    const mergedHeaders: Record<string, string> = headers
+      ? { ...(headers as Record<string, string>) }
+      : {};
+
+    // If OIDC is enabled and access token is available, use Bearer token
+    if (this.oidcManager) {
+      const accessToken = await this.oidcManager.getAccessToken();
+
+      // FIXME: if we do not hav a token but still are in public client mode,
+      // the userInfo request will fail because of CORS which tries to send
+      // cookies to the domain
+      if (accessToken) {
+        mergedHeaders['Authorization'] = `Bearer ${accessToken}`;
+        // For cross-origin, do not send cookies if using Bearer
+        options.credentials = 'same-origin';
+      }
+    }
+
     if (body) {
       options.body = body;
     }
 
-    if (headers) {
-      options.headers = headers;
+    if (Object.keys(mergedHeaders).length > 0) {
+      options.headers = mergedHeaders;
     }
 
     if (isJSON) {
       if (!options.headers) {
         options.headers = {};
       }
-
       options.headers.Accept = 'application/json';
       options.headers['Content-Type'] = 'application/json';
     }
@@ -161,7 +270,7 @@ export default class LinkedRecords {
     const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, options));
 
     if (response.status === 401) {
-      console.error(`Authorization Error when calling ${method} ${url}`);
+      console.error(`Authorization Error when calling ${method} ${url} ${await response.text()}`);
 
       // TODO: Throw an error here so the program code does not just move on as nothing happened.
 
@@ -248,26 +357,54 @@ export default class LinkedRecords {
       return this.actorId;
     }
 
-    if (LinkedRecords.ensureUserIdIsKnownPromise) {
-      await LinkedRecords.ensureUserIdIsKnownPromise;
+    if (!LinkedRecords.ensureUserIdIsKnownPromise) {
+      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
+        .then(async (response) => {
+          if (!response || response.status === 401) {
+            this.handleExpiredLoginSession();
+          }
+
+          const responseBody = await response.json();
+          return responseBody.userId;
+        });
+    }
+
+    try {
+      this.actorId = await LinkedRecords.ensureUserIdIsKnownPromise;
       return this.actorId;
+    } finally {
+      LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     }
+  }
 
-    LinkedRecords.ensureUserIdIsKnownPromise = fetch(`${this.serverURL}userinfo`, {
-      credentials: 'include',
-    });
+  // OIDC Auth methods
+  public async login() {
+    if (!this.oidcManager) throw new Error('OIDC not configured');
+    await this.oidcManager.login();
+  }
 
-    const userInfoResponse = await LinkedRecords.ensureUserIdIsKnownPromise;
+  public async handleRedirectCallback() {
+    if (!this.oidcManager) throw new Error('OIDC not configured');
+    return this.oidcManager.handleRedirectCallback();
+  }
 
-    this.actorId = LinkedRecords.readUserIdFromCookies();
+  public async logout() {
+    if (!this.oidcManager) throw new Error('OIDC not configured');
+    await this.oidcManager.logout();
+  }
 
-    if (userInfoResponse.status === 401) {
-      this.handleExpiredLoginSession();
-      return undefined;
-    }
+  public async isAuthenticated() {
+    if (!this.oidcManager) return false;
+    return this.oidcManager.isAuthenticated();
+  }
 
-    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+  public async getUser() {
+    if (!this.oidcManager) return null;
+    return this.oidcManager.getUser();
+  }
 
-    return this.actorId;
+  public async getAccessToken() {
+    if (!this.oidcManager) return null;
+    return this.oidcManager.getAccessToken();
   }
 }
