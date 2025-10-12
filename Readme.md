@@ -42,7 +42,7 @@ LinkedRecords is configured via environment variables. See tables below.
 | PGDATABASE | xxxx | The PostgreSQL database name. |
 | CORS_ORIGIN | ["https://app.example.com", "https://app.example.app"] | The content of the cors origin header. If not provided, the value of FRONTEND_BASE_URL will be used. |
 | SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
-| DEFAULT_STORAGE_SIZE_QUOTA | 50 | The default storage size quota in MB. |
+| DEFAULT_STORAGE_SIZE_QUOTA | 500 | The default storage size quota in MB. |
 | QUOTA_COUNT_KV_ATTRIBUTES | false | If the storage space for KeyValue attributes are deducted from the accountee quota. |
 | QUOTA_COUNT_LT_ATTRIBUTES | false | If the storage space for LongText attributes are deducted from the accountee quota. |
 | ENABLE_AUTH_RULE_CACHE | false | Enable cache for authorization lookups. Might require a lot of memory. |
