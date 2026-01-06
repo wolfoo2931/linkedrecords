@@ -9,6 +9,8 @@ import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
+import QuerySubscriptionService from './services/query_subscription_service';
+import SubscriptionHooks from './services/subscription_hooks';
 
 class WSAccessControl {
   app: any;
@@ -73,8 +75,37 @@ class WSAccessControl {
 }
 
 export default async function mountServiceBus(httpServer, app) {
-  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
+  // Initialize query subscription service if enabled
+  const querySubscriptionService = new QuerySubscriptionService();
+
+  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change: any, request, userId) => {
     const logger = request.log as unknown as IsLogger;
+
+    // Check if this is a query subscription message
+    if (change?.type === 'subscribe_query') {
+      // Handle query subscription
+      try {
+        const { subscriptionId, query } = change;
+        querySubscriptionService.subscribe(userId, query, subscriptionId, logger);
+        // Confirmation will be sent automatically by client-server-bus callback mechanism
+      } catch (error) {
+        logger.warn(`Error handling query subscription: ${(error as Error).message}`);
+      }
+      return;
+    }
+
+    if (change?.type === 'unsubscribe_query') {
+      // Handle query unsubscribe
+      try {
+        const { subscriptionId } = change;
+        querySubscriptionService.unsubscribe(subscriptionId, logger);
+      } catch (error) {
+        logger.warn(`Error handling query unsubscription: ${(error as Error).message}`);
+      }
+      return;
+    }
+
+    // Regular attribute change handling
     const attribute = getAttributeByMessage(attributeId, change, logger);
 
     try {
@@ -97,4 +128,10 @@ export default async function mountServiceBus(httpServer, app) {
       }
     }
   });
+
+  // Initialize subscription service with sendMessage function
+  querySubscriptionService.setSendMessageFunction(sendMessage);
+
+  // Initialize subscription hooks
+  SubscriptionHooks.initialize(querySubscriptionService);
 }

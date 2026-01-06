@@ -61,12 +61,20 @@ const byId = (a, b) => {
   return 0;
 };
 
+interface QuerySubscription {
+  subscriptionId: string;
+  query: CompoundAttributeQuery;
+  callback: () => void;
+}
+
 export default class AttributesRepository {
   private linkedRecords: LinkedRecords;
 
   private getClientServerBus: () => Promise<ClientServerBus>;
 
   private attributeCache: Record<string, AbstractAttributeClient<any, any>>;
+
+  private querySubscriptions: Map<string, QuerySubscription> = new Map();
 
   static attributeTypes = [
     LongTextAttribute,
@@ -203,10 +211,11 @@ export default class AttributesRepository {
   }
 
   // TODO: check for null values in the query
-  async findAll<T extends CompoundAttributeQuery>(query: T, ignoreCache: boolean = false)
-    : Promise<
-    { [K in keyof T]: TransformQueryRecord<T[K]> }
-    > {
+  async findAll<T extends CompoundAttributeQuery>(
+    query: T,
+    ignoreCache: boolean = false,
+    onChange?: () => void
+  ): Promise<{ [K in keyof T]: TransformQueryRecord<T[K]> }> {
     const params = new URLSearchParams();
 
     params.append('query', stringify(query));
@@ -226,7 +235,97 @@ export default class AttributesRepository {
       }
     }));
 
+    // If callback provided, establish query subscription
+    if (onChange) {
+      await this.subscribeToQuery(query, onChange);
+    }
+
     return attributeResult;
+  }
+
+  /**
+   * Subscribe to query changes via WebSocket
+   */
+  private async subscribeToQuery<T extends CompoundAttributeQuery>(
+    query: T,
+    callback: () => void
+  ): Promise<string> {
+    const subscriptionId = this.generateSubscriptionId();
+    const clientServerBus = await this.getClientServerBus();
+
+    // Subscribe to the subscription-specific channel
+    await clientServerBus.subscribe(
+      `${this.linkedRecords.serverURL}query-sub-${subscriptionId}`,
+      `query-sub-${subscriptionId}`,
+      undefined,
+      async (data) => {
+        if (data.type === 'query_change_ping') {
+          // Simple ping received - invoke callback
+          callback();
+        }
+      }
+    );
+
+    // Send subscription request to server
+    await clientServerBus.send(
+      `${this.linkedRecords.serverURL}subscriptions`,
+      'message',
+      {
+        channel: 'subscriptions',
+        message: {
+          type: 'subscribe_query',
+          subscriptionId,
+          query: JSON.parse(stringify(query)) // Serialize query same way as findAll
+        }
+      }
+    );
+
+    // Store subscription for cleanup
+    this.querySubscriptions.set(subscriptionId, {
+      subscriptionId,
+      query,
+      callback
+    });
+
+    return subscriptionId;
+  }
+
+  /**
+   * Unsubscribe from query changes
+   */
+  async unsubscribeQuery(subscriptionId: string): Promise<void> {
+    const subscription = this.querySubscriptions.get(subscriptionId);
+    if (!subscription) {
+      return;
+    }
+
+    const clientServerBus = await this.getClientServerBus();
+
+    // Unsubscribe from channel
+    // Note: clientServerBus doesn't have explicit unsubscribe, socket.io handles cleanup on disconnect
+
+    // Send unsubscribe request to server
+    await clientServerBus.send(
+      `${this.linkedRecords.serverURL}subscriptions`,
+      'message',
+      {
+        channel: 'subscriptions',
+        message: {
+          type: 'unsubscribe_query',
+          subscriptionId
+        }
+      }
+    );
+
+    // Remove from local tracking
+    this.querySubscriptions.delete(subscriptionId);
+  }
+
+  /**
+   * Generate a unique subscription ID
+   */
+  private generateSubscriptionId(): string {
+    return `sub-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   async findAndLoadAll<T extends CompoundAttributeQuery>(query: T)

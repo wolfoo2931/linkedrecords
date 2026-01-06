@@ -12,6 +12,7 @@ import cache from '../../server/cache';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 import AuthCache from './auth_cache';
 import FactBox from './fact_box';
+import SubscriptionHooks from '../../server/services/subscription_hooks';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -734,6 +735,9 @@ export default class Fact {
     }
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+
+    // Notify query subscriptions of fact change
+    await SubscriptionHooks.notifyFactChanged(this, this.logger);
   }
 
   async delete(userid: string) {
@@ -772,6 +776,9 @@ export default class Fact {
     ]);
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+
+    // Notify query subscriptions of fact deletion
+    await SubscriptionHooks.notifyFactChanged(this, this.logger);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
