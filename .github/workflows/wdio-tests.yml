@@ -16,7 +16,7 @@ jobs:
   wdio-tests:
     strategy:
       matrix:
-        node: [24]
+        node: [22]
         psql: [15, 17]
     runs-on: ubuntu-latest
     services:
