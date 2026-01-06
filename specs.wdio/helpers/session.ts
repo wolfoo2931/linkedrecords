@@ -11,6 +11,7 @@ const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
 const capabilities = {
   browserName: 'chrome',
+  'wdio:enforceWebDriverClassic': true,
   'goog:chromeOptions': {
     args: ['headless'],
   },
