@@ -182,6 +182,16 @@ export default class Session {
 
   async initLinkedRecord() {
     const remote = new WdioRemote(this.browser);
+
+    // Wait for window.lr to be initialized before accessing it
+    await this.browser.waitUntil(
+      async () => this.browser.execute(() => typeof (window as any).lr !== 'undefined'),
+      {
+        timeout: 10000,
+        timeoutMsg: 'window.lr was not initialized within 10 seconds',
+      },
+    );
+
     this.Attribute = (await remote.execute(
       () => (window as any).lr.Attribute,
     )) as AttributesRepository;
