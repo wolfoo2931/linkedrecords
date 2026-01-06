@@ -529,7 +529,7 @@ const result = await client.Attribute.createAll({
 
 ## Related Resources
 
-- README: `/Users/wolf/git/linkedrecords/README.md`
+- README: `README.md`
 - Example app: `specs.wdio/tinytodo/tinytodo.ts`
 - Test suite: `specs.wdio/browser_sdk/auth.spec.ts`
 - Helpers: `specs.wdio/helpers/`
