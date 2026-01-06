@@ -51,5 +51,6 @@ jobs:
           AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
           AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
+          ENABLE_QUERY_SUBSCRIPTIONS: true
         run: |
           npm test
