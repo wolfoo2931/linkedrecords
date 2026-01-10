@@ -10,7 +10,7 @@ import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
-import { CompoundAttributeQuery } from '../attributes/attribute_query';
+import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../attributes/attribute_query';
 
 let sendMessage: (channel: string, body: any) => void;
 class WSAccessControl {
@@ -52,8 +52,14 @@ class WSAccessControl {
       const query = channel.replace(/^query-sub:/, '').trim();
 
       try {
-        JSON.parse(query);
-        return true;
+        const parsedQuery = JSON.parse(query);
+        const isValid = isValidCompoundAttributeQuery(parsedQuery);
+
+        if (!isValid) {
+          request.log.warn('Invalid compound attribute query');
+        }
+
+        return isValid;
       } catch (ex) {
         return false;
       }

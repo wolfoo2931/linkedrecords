@@ -279,7 +279,7 @@ describe('Attribute', () => {
           ['$it', 'isA', 'Document'],
         ],
       }, ({ items }) => {
-        keyValueItems = items;
+        keyValueItems = items as any;
       });
 
       await client.Attribute.subscribeToQuery({
