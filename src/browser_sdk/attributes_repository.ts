@@ -31,6 +31,8 @@ type TransformCompositionCreationResult<X extends { type?: typeof AbstractAttrib
         X['type'] extends string ? AbstractAttributeClient<any, IsSerializable> :
           KeyValueAttribute;
 
+type QueryResult<T> = { [K in keyof T]: TransformQueryRecord<T[K]> };
+
 export type CompositionCreationRequest = {
   [k: string]: {
     type?: typeof AbstractAttributeClient<any, IsSerializable> | string,
@@ -203,10 +205,10 @@ export default class AttributesRepository {
   }
 
   // TODO: check for null values in the query
-  async findAll<T extends CompoundAttributeQuery>(query: T, ignoreCache: boolean = false)
-    : Promise<
-    { [K in keyof T]: TransformQueryRecord<T[K]> }
-    > {
+  async findAll<T extends CompoundAttributeQuery>(
+    query: T,
+    ignoreCache: boolean = false,
+  ): Promise<QueryResult<T>> {
     const params = new URLSearchParams();
 
     params.append('query', stringify(query));
@@ -229,10 +231,7 @@ export default class AttributesRepository {
     return attributeResult;
   }
 
-  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T)
-    : Promise<
-    { [K in keyof T]: TransformQueryRecord<T[K]> }
-    > {
+  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T): Promise<QueryResult<T>> {
     const result = await this.findAll(query);
     const promises: Promise<boolean>[] = [];
 
@@ -251,6 +250,23 @@ export default class AttributesRepository {
     await Promise.all(promises);
 
     return result;
+  }
+
+  async subscribeToQuery<T extends CompoundAttributeQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
+    const bus = await this.linkedRecords.getClientServerBus();
+    const url = `${this.linkedRecords.serverURL.toString()}query-sub`;
+    const channel = `query-sub:${JSON.stringify(query)}`;
+
+    const [subscription, result] = await Promise.all([
+      bus.subscribe(url, channel, undefined, onChange),
+      this.findAndLoadAll(query),
+    ]);
+
+    onChange(result);
+
+    return () => {
+      bus.unsubscribe(subscription);
+    };
   }
 
   clearCache() {

@@ -1,15 +1,18 @@
+/* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 /* eslint-disable max-len */
 import * as jose from 'jose';
 import http from 'http';
-import clientServerBus from '../../lib/client-server-bus/server';
+import clientServerBus, { getAllChannels } from '../../lib/client-server-bus/server';
 import IsLogger from '../../lib/is_logger';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
+import { CompoundAttributeQuery } from '../attributes/attribute_query';
 
+let sendMessage: (channel: string, body: any) => void;
 class WSAccessControl {
   app: any;
 
@@ -56,6 +59,17 @@ class WSAccessControl {
       }
     }
 
+    if (channel.startsWith('query-sub:')) {
+      const query = channel.replace(/^query-sub/, '');
+
+      try {
+        JSON.parse(query);
+        return true;
+      } catch (ex) {
+        return false;
+      }
+    }
+
     return Fact.isAuthorizedToReadPayload(channel, userId, request.log as unknown as IsLogger);
   }
 
@@ -72,8 +86,22 @@ class WSAccessControl {
   }
 }
 
+export async function getSubscribedQueries(): Promise<CompoundAttributeQuery[]> {
+  return [...(await getAllChannels())]
+    .filter((channel) => channel.startsWith('query-sub:'))
+    .map((channel) => JSON.parse(channel.replace(/^query-sub/, '')));
+}
+
+export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery) {
+  if (!sendMessage) {
+    console.warn('sending messages does not work yet, sendMessage is not initialized');
+  }
+
+  sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChange' });
+}
+
 export default async function mountServiceBus(httpServer, app) {
-  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
+  sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
     const logger = request.log as unknown as IsLogger;
     const attribute = getAttributeByMessage(attributeId, change, logger);
 

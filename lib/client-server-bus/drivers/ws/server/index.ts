@@ -8,6 +8,7 @@ import SerializedChangeWithMetadata from '../../../../../src/attributes/abstract
 import IsSerializable from '../../../../../src/attributes/abstract/is_serializable';
 
 const connections = {};
+const channels = new Set<string>();
 
 type MessageHandler<ChangeType extends IsSerializable> = (
   channel: string,
@@ -33,6 +34,10 @@ export interface AccessControl {
     channel: string,
     request: http.IncomingMessage,
   ): Promise<boolean>;
+}
+
+export async function getAllChannels(): Promise<Set<string>> {
+  return channels;
 }
 
 export default async function clientServerBus(
@@ -67,6 +72,8 @@ export default async function clientServerBus(
       sseChannel: channel,
     });
   };
+
+  io.of('/').adapter.on('create-room', (room) => channels.add(room));
 
   io.on('connection', async (socket) => {
     const request = socket?.request;

@@ -12,6 +12,8 @@ import cache from '../../server/cache';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 import AuthCache from './auth_cache';
 import FactBox from './fact_box';
+import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
+import { CompoundAttributeQuery } from '../../attributes/attribute_query';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -497,6 +499,8 @@ export default class Fact {
       }
 
       await Promise.all(promises);
+
+      this.onFactsAdded(facts);
     }
 
     const subPreds: [string, string][] = [];
@@ -734,6 +738,8 @@ export default class Fact {
     }
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+
+    Fact.onFactsAdded([this]);
   }
 
   async delete(userid: string) {
@@ -772,6 +778,8 @@ export default class Fact {
     ]);
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+
+    Fact.onFactsDeleted([this]);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
@@ -1071,5 +1079,35 @@ export default class Fact {
     }
 
     return result;
+  }
+
+  private static async onFactsDeleted(facts: Fact[]): Promise<void> {
+    return this.notifyFactChanged(facts);
+  }
+
+  private static async onFactsAdded(facts: Fact[]): Promise<void> {
+    return this.notifyFactChanged(facts);
+  }
+
+  private static async notifyFactChanged(facts: Fact[]): Promise<void> {
+    const allSubscribedQueries = await getSubscribedQueries();
+
+    allSubscribedQueries
+      .filter((query) => this.factsChangeMightAffectQuery(facts, query))
+      .forEach(notifyQueryResultMightHaveChanged);
+  }
+
+  private static factsChangeMightAffectQuery(
+    facts: Fact[],
+    query: CompoundAttributeQuery,
+  ): boolean {
+    return facts.some((f) => this.factChangeMightAffectQuery(f, query));
+  }
+
+  private static factChangeMightAffectQuery(fact: Fact, query: CompoundAttributeQuery): boolean {
+    console.log(`check if ${fact} change might affect query: ${query}`);
+
+    // FIXME: implement this;
+    return true;
   }
 }
