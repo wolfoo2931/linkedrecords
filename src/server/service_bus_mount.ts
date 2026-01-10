@@ -103,6 +103,10 @@ export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery)
     throw new Error('sending messages does not work yet, sendMessage is not initialized');
   }
 
+  if (!isValidCompoundAttributeQuery(query)) {
+    throw new Error(`invalid query: ${JSON.stringify(query)}`);
+  }
+
   sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChange' });
 }
 

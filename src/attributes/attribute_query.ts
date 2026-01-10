@@ -267,6 +267,10 @@ export default class QueryExecutor {
       return undefined;
     }
 
+    if (!isValidCompoundAttributeQuery(query) && !isValidAttributeQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
+    }
+
     if (!Array.isArray(query)) {
       return this.resolveCompoundQueryToIds(query, userid);
     }
@@ -364,6 +368,10 @@ export default class QueryExecutor {
   })> {
     if (!userid) {
       throw new Error('resolveCompoundQueryToIds needs to receive a valid userid!');
+    }
+
+    if (!isValidCompoundAttributeQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
     const result = {};

@@ -13,7 +13,7 @@ import EnsureIsValid from '../../../lib/utils/sql_values';
 import AuthCache from './auth_cache';
 import FactBox from './fact_box';
 import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
-import { CompoundAttributeQuery } from '../../attributes/attribute_query';
+import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../../attributes/attribute_query';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -1106,6 +1106,10 @@ export default class Fact {
 
   private static factChangeMightAffectQuery(fact: Fact, query: CompoundAttributeQuery): boolean {
     console.log(`check if ${fact} change might affect query: ${query}`);
+
+    if (!isValidCompoundAttributeQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
+    }
 
     // FIXME: implement this;
     return true;
