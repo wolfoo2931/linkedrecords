@@ -500,7 +500,7 @@ export default class Fact {
 
       await Promise.all(promises);
 
-      this.onFactsAdded(facts);
+      await this.onFactsAdded(facts);
     }
 
     const subPreds: [string, string][] = [];
@@ -739,7 +739,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
-    Fact.onFactsAdded([this]);
+    await Fact.onFactsAdded([this]);
   }
 
   async delete(userid: string) {
@@ -779,7 +779,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
-    Fact.onFactsDeleted([this]);
+    await Fact.onFactsDeleted([this]);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
