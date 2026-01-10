@@ -74,6 +74,7 @@ export default async function clientServerBus(
   };
 
   io.of('/').adapter.on('create-room', (room) => channels.add(room));
+  io.of('/').adapter.on('delete-room', (room) => channels.delete(room));
 
   io.on('connection', async (socket) => {
     const request = socket?.request;
