@@ -6,10 +6,114 @@ import KeyValueAttribute from '../../src/attributes/key_value/client/index';
 import {
   createClient, cleanupClients, truncateDB, sleep,
 } from '../helpers';
+import AbstractAttributeClient from '../../src/attributes/abstract/abstract_attribute_client';
 
 describe('Attribute', () => {
   beforeEach(truncateDB);
   afterEach(cleanupClients);
+
+  describe('Attribute.subscribeToQuery()', () => {
+    it('calls the passed callback whenever the query result might have changed', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
+        ['Magazine', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      await otherClient.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+        magazines: [['$it', 'isA', 'Magazine']],
+      }, ({ books, magazines }) => {
+        liveBooks = books;
+        liveMagazines = magazines;
+      });
+
+      await client.Attribute.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
+
+      await client.Attribute.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
+
+      await sleep(300);
+
+      expect(liveBooks).to.have.lengthOf(1);
+      expect(liveMagazines).to.have.lengthOf(1);
+
+      expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
+      expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
+
+      await client.Attribute.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
+
+      await sleep(300);
+
+      expect(liveBooks).to.have.lengthOf(2);
+      expect(liveMagazines).to.have.lengthOf(1);
+
+      expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
+      expect(await liveBooks[1]?.getValue()).to.haveOwnProperty('title', 'the second book');
+      expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
+
+      // use the other client now
+      await client.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+
+      await sleep(300);
+
+      expect(liveBooks).to.have.lengthOf(2);
+      expect(liveMagazines).to.have.lengthOf(2);
+
+      expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
+      expect(await liveBooks[1]?.getValue()).to.haveOwnProperty('title', 'the second book');
+      expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
+      expect(await liveMagazines[1]?.getValue()).to.haveOwnProperty('title', 'the second magazine');
+    });
+
+    it('returns a callback function to cancel the subscription', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
+        ['Magazine', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      const unsubscribeBooks = await otherClient.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, ({ books }) => {
+        liveBooks = books;
+      });
+
+      await otherClient.Attribute.subscribeToQuery({
+        magazines: [['$it', 'isA', 'Magazine']],
+      }, ({ magazines }) => {
+        liveMagazines = magazines;
+      });
+
+      await client.Attribute.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
+      await client.Attribute.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
+
+      await sleep(300);
+
+      expect(liveBooks).to.have.lengthOf(1);
+      expect(liveMagazines).to.have.lengthOf(1);
+
+      await unsubscribeBooks();
+
+      await sleep(100);
+
+      await client.Attribute.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
+      await client.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+
+      await sleep(100);
+      expect(liveBooks).to.have.lengthOf(1);
+      expect(liveMagazines).to.have.lengthOf(2);
+    });
+  });
 
   describe('Attribute.findAndLoadAll()', () => {
     it('find attributes by facts', async () => {

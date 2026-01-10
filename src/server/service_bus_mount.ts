@@ -48,6 +48,17 @@ class WSAccessControl {
       return Promise.resolve(false);
     }
 
+    if (channel.startsWith('query-sub:')) {
+      const query = channel.replace(/^query-sub:/, '').trim();
+
+      try {
+        JSON.parse(query);
+        return true;
+      } catch (ex) {
+        return false;
+      }
+    }
+
     if (process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING'] && readToken) {
       try {
         const secret = new TextEncoder().encode(`${process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING']}`);
@@ -56,17 +67,6 @@ class WSAccessControl {
         return verificationResult.payload?.['attrId'] === channel && verificationResult.payload?.sub === userId;
       } catch (ex) {
         request.log.warn(ex);
-      }
-    }
-
-    if (channel.startsWith('query-sub:')) {
-      const query = channel.replace(/^query-sub/, '');
-
-      try {
-        JSON.parse(query);
-        return true;
-      } catch (ex) {
-        return false;
       }
     }
 
@@ -89,7 +89,7 @@ class WSAccessControl {
 export async function getSubscribedQueries(): Promise<CompoundAttributeQuery[]> {
   return [...(await getAllChannels())]
     .filter((channel) => channel.startsWith('query-sub:'))
-    .map((channel) => JSON.parse(channel.replace(/^query-sub/, '')));
+    .map((channel) => JSON.parse(channel.replace(/^query-sub:/, '').trim()));
 }
 
 export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery) {
