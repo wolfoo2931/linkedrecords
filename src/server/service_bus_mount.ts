@@ -59,6 +59,12 @@ class WSAccessControl {
           request.log.warn('Invalid compound attribute query');
         }
 
+        // as long as the query is valid every authenticated user is authorized
+        // to execute the query or subscribe to it. The user will receive a result
+        // set which will reflect the users authorization.
+        // In the current implementation this is handled in the following way:
+        // If there might be change which might match the users query subscription the
+        // users client receives a simple ping and will then execute the query.
         return isValid;
       } catch (ex) {
         return false;

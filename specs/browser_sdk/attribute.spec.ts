@@ -256,9 +256,9 @@ describe('Attribute', () => {
       }, () => {});
 
       // Multiple unsubscribes should not throw
-      await unsubscribe();
-      await unsubscribe();
-      await unsubscribe();
+      unsubscribe();
+      unsubscribe();
+      unsubscribe();
     });
 
     // AI generated test case, manually reworked
