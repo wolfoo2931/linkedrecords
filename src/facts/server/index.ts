@@ -15,6 +15,11 @@ import FactBox from './fact_box';
 import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
 import { CompoundAttributeQuery } from '../../attributes/attribute_query';
 
+/**
+ * Creates a stateful SQL clause connector generator that returns `'WHERE'` on the first call and `'AND'` on subsequent calls.
+ *
+ * @returns A function with no parameters that yields `'WHERE'` on its first invocation and `'AND'` on every subsequent invocation.
+ */
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
 

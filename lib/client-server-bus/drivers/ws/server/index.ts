@@ -36,10 +36,26 @@ export interface AccessControl {
   ): Promise<boolean>;
 }
 
+/**
+ * Retrieve the set of all channel names currently tracked by the server.
+ *
+ * @returns The `Set<string>` containing every known channel name (the live set, not a copy).
+ */
 export async function getAllChannels(): Promise<Set<string>> {
   return channels;
 }
 
+/**
+ * Attaches a Socket.IO-based WebSocket bus to the given HTTP server and Express-like app, wiring authentication/authorization and channel message handling.
+ *
+ * Initializes the Socket.IO server (optionally with a Redis adapter when REDIS_HOST is set), manages socket connections and subscriptions using the provided AccessControl, forwards incoming client messages to `onMessage`, and registers a helper on the Express response to send messages to a channel.
+ *
+ * @param httpServer - The HTTPS server to bind the WebSocket server to
+ * @param app - An Express-like application; a `sendClientServerMessage` helper is attached to responses
+ * @param accessControl - Object implementing authentication and authorization checks for connections, channel joins, and sends
+ * @param onMessage - Callback invoked for validated incoming channel messages: (channel, message, request, userId)
+ * @returns The helper function used to emit a message to a channel; it emits a `data` event to the channel with the provided body augmented by an `sseChannel` property set to the channel
+ */
 export default async function clientServerBus(
   httpServer: https.Server,
   app: any,

@@ -86,12 +86,26 @@ class WSAccessControl {
   }
 }
 
+/**
+ * Retrieve subscribed query channels and return them as query objects.
+ *
+ * @returns An array of `CompoundAttributeQuery` parsed from channels that begin with the `query-sub:` prefix (each channel is expected to contain a JSON-encoded query after the prefix)
+ */
 export async function getSubscribedQueries(): Promise<CompoundAttributeQuery[]> {
   return [...(await getAllChannels())]
     .filter((channel) => channel.startsWith('query-sub:'))
     .map((channel) => JSON.parse(channel.replace(/^query-sub/, '')));
 }
 
+/**
+ * Notify subscribers that the result set for a compound attribute query may have changed.
+ *
+ * Sends a message on the subscription channel for the provided query (channel name
+ * is `query-sub:<JSON of query>`) with payload `{ type: 'resultMightHaveChange' }`.
+ * If the module-level `sendMessage` is not initialized, a warning is logged to the console.
+ *
+ * @param query - The compound attribute query whose subscribers should be notified
+ */
 export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery) {
   if (!sendMessage) {
     console.warn('sending messages does not work yet, sendMessage is not initialized');
@@ -100,6 +114,12 @@ export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery)
   sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChange' });
 }
 
+/**
+ * Initializes the service bus for the given HTTP server and application and registers the message handler used to process attribute change requests.
+ *
+ * @param httpServer - The HTTP/S server instance to attach the service bus to
+ * @param app - The application instance used to handle HTTP requests and extract request context
+ */
 export default async function mountServiceBus(httpServer, app) {
   sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
     const logger = request.log as unknown as IsLogger;
