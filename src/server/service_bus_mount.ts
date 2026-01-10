@@ -107,7 +107,7 @@ export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery)
     throw new Error(`invalid query: ${JSON.stringify(query)}`);
   }
 
-  sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChange' });
+  sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChanged' });
 }
 
 export default async function mountServiceBus(httpServer, app) {
