@@ -257,12 +257,13 @@ export default class AttributesRepository {
     const url = `${this.linkedRecords.serverURL.toString()}query-sub`;
     const channel = `query-sub:${JSON.stringify(query)}`;
 
-    const [subscription, result] = await Promise.all([
-      bus.subscribe(url, channel, undefined, onChange),
-      this.findAndLoadAll(query),
-    ]);
+    const onPossibleChange = () => {
+      this.findAndLoadAll(query).then(onChange);
+    };
 
-    onChange(result);
+    const subscription = await bus.subscribe(url, channel, undefined, onPossibleChange);
+
+    onPossibleChange();
 
     return () => {
       bus.unsubscribe(subscription);
