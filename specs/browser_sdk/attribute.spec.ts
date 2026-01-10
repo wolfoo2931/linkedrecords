@@ -52,7 +52,7 @@ describe('Attribute', () => {
       expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
 
       // use the other client now
-      await client.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+      await otherClient.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
 
       await waitFor(() => liveMagazines.length === 2);
 
