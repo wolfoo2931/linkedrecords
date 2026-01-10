@@ -100,7 +100,7 @@ export async function getSubscribedQueries(): Promise<CompoundAttributeQuery[]> 
 
 export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery) {
   if (!sendMessage) {
-    console.warn('sending messages does not work yet, sendMessage is not initialized');
+    throw new Error('sending messages does not work yet, sendMessage is not initialized');
   }
 
   sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChange' });
