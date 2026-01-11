@@ -79,10 +79,12 @@ export default async function clientServerBus(
   io.fetchSockets().then((sockets) => {
     sockets.forEach((socket) => {
       socket.rooms.forEach((room) => channels.add(room));
-      console.log(`found ${channels.size} socket.io channels`);
     });
 
+    console.log(`found ${channels.size} socket.io channels`);
     channelsResolver.resolve(undefined);
+  }).catch((ex) => {
+    channelsResolver.reject(ex);
   });
 
   io.of('/').adapter.on('create-room', (room) => channels.add(room));

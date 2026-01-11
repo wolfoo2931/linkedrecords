@@ -1128,17 +1128,18 @@ export default class Fact {
   private static factsChangeMightAffectQuery(
     facts: Fact[],
     query: CompoundAttributeQuery,
-    userId: string, // does the query change for this user
-    actorId: string, // this is the actor who created/deleted the fact
+    userId: string,
+    actorId: string,
     logger: IsLogger,
   ): boolean {
-    return facts.some((f) => this.factChangeMightAffectQuery(f, query, actorId, logger));
+    return facts.some((f) => this.factChangeMightAffectQuery(f, query, userId, actorId, logger));
   }
 
   private static factChangeMightAffectQuery(
     fact: Fact,
     query: CompoundAttributeQuery,
-    actorId: string,
+    userid: string, // does the query change for this user
+    actorId: string, // this is the actor who created/deleted the fact
     logger: IsLogger,
   ): boolean {
     logger.debug(`check if ${fact} change might affect query: ${query}`);

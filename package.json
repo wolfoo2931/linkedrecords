@@ -2,6 +2,9 @@
   "name": "linkedrecords",
   "version": "0.1.0",
   "description": "A BaaS (Backend-as-a-Service) solution for web applications",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "exports": {
     "./server": "./dist/server.js",
     "./browser_sdk": {
