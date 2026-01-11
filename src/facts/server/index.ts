@@ -499,8 +499,6 @@ export default class Fact {
       }
 
       await Promise.all(promises);
-
-      await this.onFactsAdded(facts, userid, logger);
     }
 
     const subPreds: [string, string][] = [];
@@ -509,6 +507,8 @@ export default class Fact {
     });
 
     await Fact.refreshLatestState(logger, subPreds);
+
+    await this.onFactsAdded(facts, userid, logger);
   }
 
   static async findNodes(
