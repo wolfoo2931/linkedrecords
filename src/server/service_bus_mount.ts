@@ -111,8 +111,6 @@ export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAt
     .forEach((channel) => {
       const match = channel.replace(/^query-sub:/, '').match(/^(.*?):(.*)$/);
 
-      console.log('!!!!!', channel);
-
       if (!match || !match[1] || !match[2]) {
         logger.warn(`Unexpected error parsing query in query subscription list (could not determine user of subscription): ${channel}`);
         return;

@@ -114,6 +114,8 @@ export default class Fact {
 
   logger: IsLogger;
 
+  factBox?: FactBox;
+
   static async initDB() {
     const logger = console as unknown as IsLogger;
     const pg = new PgPoolWithLog(logger);
@@ -464,6 +466,8 @@ export default class Fact {
         factBox.graphId,
       ]);
 
+      facts.forEach((f) => { f.setFactBox(factBox); });
+
       if (values.length) {
         await pool.query(
           `INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ${values}`,
@@ -489,6 +493,8 @@ export default class Fact {
               factPlacement.graphId,
             ],
           );
+
+          facts.forEach((f) => { f.setFactBox(factPlacement); });
 
           if (factBox) {
             promises.push(insertPromise);
@@ -738,6 +744,7 @@ export default class Fact {
     }
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+    this.setFactBox(factPlacement);
 
     await Fact.onFactsAdded([this], userid, this.logger);
   }
@@ -764,18 +771,28 @@ export default class Fact {
 
     await AuthCache.onFactDeletion(this, this.logger);
 
-    await pool.query(`WITH deleted_rows AS (
+    const deletedFacts = await pool.query(`WITH deleted_rows AS (
         DELETE FROM facts
         WHERE subject = $1 AND predicate = $2 AND object = $3
         RETURNING *
+    ),
+    inserted_rows AS (
+        INSERT INTO deleted_facts (subject, predicate, object, deleted_by)
+        SELECT subject, predicate, object, $4 FROM deleted_rows
     )
-    INSERT INTO deleted_facts (subject, predicate, object, deleted_by)
-    SELECT subject, predicate, object, $4 FROM deleted_rows;`, [
+    SELECT * FROM deleted_rows;`, [
       this.subject,
       this.predicate,
       this.object,
       userid,
     ]);
+
+    if (deletedFacts.rows[0]) {
+      this.factBox = {
+        id: deletedFacts.rows[0].fact_box_id,
+        graphId: deletedFacts.rows[0].graph_id,
+      };
+    }
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
@@ -867,6 +884,10 @@ export default class Fact {
       || await Fact.hasAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger);
 
     return hasSubjectAccess && hasObjectAccess;
+  }
+
+  private setFactBox(fb: FactBox) {
+    this.factBox = fb;
   }
 
   static async getFactScopeByUser(

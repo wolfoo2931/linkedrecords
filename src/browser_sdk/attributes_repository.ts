@@ -253,6 +253,10 @@ export default class AttributesRepository {
   }
 
   async subscribeToQuery<T extends CompoundAttributeQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
+    if (!this.linkedRecords.actorId) {
+      throw new Error('Not ready to subscribe to queries yet: this.linkedRecords.actorId is not initialized');
+    }
+
     const bus = await this.linkedRecords.getClientServerBus();
     const url = new URL('query-sub', this.linkedRecords.serverURL).toString();
     const channel = `query-sub:${this.linkedRecords.actorId}:${stringify(query)}`;
