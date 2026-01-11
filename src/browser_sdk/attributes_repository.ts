@@ -257,7 +257,7 @@ export default class AttributesRepository {
       throw new Error('Not ready to subscribe to queries yet: this.linkedRecords.actorId is not initialized');
     }
 
-    const bus = await this.linkedRecords.getClientServerBus();
+    const bus = await this.getClientServerBus();
     const url = new URL('query-sub', this.linkedRecords.serverURL).toString();
     const channel = `query-sub:${this.linkedRecords.actorId}:${stringify(query)}`;
 
