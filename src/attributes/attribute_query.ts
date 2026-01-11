@@ -71,9 +71,7 @@ function isValidFactQueryTuple(value: unknown): boolean {
   }
 
   // Third element can be string, undefined, null, or AbstractAttributeClient subclass
-  // Note: null occurs when AbstractAttributeClient classes are serialized over JSON
   if (value[2] !== undefined
-      && value[2] !== null
       && typeof value[2] !== 'string'
       && !isAttributeClientClass(value[2])) {
     return false;
