@@ -500,7 +500,7 @@ export default class Fact {
 
       await Promise.all(promises);
 
-      await this.onFactsAdded(facts);
+      await this.onFactsAdded(facts, logger);
     }
 
     const subPreds: [string, string][] = [];
@@ -739,7 +739,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
-    await Fact.onFactsAdded([this]);
+    await Fact.onFactsAdded([this], this.logger);
   }
 
   async delete(userid: string) {
@@ -779,7 +779,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
-    await Fact.onFactsDeleted([this]);
+    await Fact.onFactsDeleted([this], this.logger);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
@@ -1081,31 +1081,44 @@ export default class Fact {
     return result;
   }
 
-  private static async onFactsDeleted(facts: Fact[]): Promise<void> {
-    return this.notifyFactChanged(facts);
+  private static async onFactsDeleted(facts: Fact[], logger: IsLogger): Promise<void> {
+    try {
+      await this.notifyFactChanged(facts, logger);
+    } catch (ex: any) {
+      logger.warn(`Failed to notify query subscribers on fact deleted: ${ex?.message}`);
+    }
   }
 
-  private static async onFactsAdded(facts: Fact[]): Promise<void> {
-    return this.notifyFactChanged(facts);
+  private static async onFactsAdded(facts: Fact[], logger: IsLogger): Promise<void> {
+    try {
+      await this.notifyFactChanged(facts, logger);
+    } catch (ex: any) {
+      logger.warn(`Failed to notify query subscribers on fact added: ${ex?.message}`);
+    }
   }
 
-  private static async notifyFactChanged(facts: Fact[]): Promise<void> {
+  private static async notifyFactChanged(facts: Fact[], logger: IsLogger): Promise<void> {
     const allSubscribedQueries = await getSubscribedQueries();
 
     allSubscribedQueries
-      .filter((query) => this.factsChangeMightAffectQuery(facts, query))
+      .filter((query) => this.factsChangeMightAffectQuery(facts, query, logger))
       .forEach(notifyQueryResultMightHaveChanged);
   }
 
   private static factsChangeMightAffectQuery(
     facts: Fact[],
     query: CompoundAttributeQuery,
+    logger: IsLogger,
   ): boolean {
-    return facts.some((f) => this.factChangeMightAffectQuery(f, query));
+    return facts.some((f) => this.factChangeMightAffectQuery(f, query, logger));
   }
 
-  private static factChangeMightAffectQuery(fact: Fact, query: CompoundAttributeQuery): boolean {
-    console.log(`check if ${fact} change might affect query: ${query}`);
+  private static factChangeMightAffectQuery(
+    fact: Fact,
+    query: CompoundAttributeQuery,
+    logger: IsLogger,
+  ): boolean {
+    logger.debug(`check if ${fact} change might affect query: ${query}`);
 
     if (!isValidCompoundAttributeQuery(query)) {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
