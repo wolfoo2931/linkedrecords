@@ -76,6 +76,7 @@ export default async function clientServerBus(
   io.fetchSockets().then((sockets) => {
     sockets.forEach((socket) => {
       socket.rooms.forEach((room) => channels.add(room));
+      console.log(`found ${channels.size} socket.io channels`);
     });
   });
 
