@@ -10,6 +10,8 @@ import IsSerializable from '../../../../../src/attributes/abstract/is_serializab
 const connections = {};
 const channels = new Set<string>();
 
+const channelsResolver = Promise.withResolvers();
+
 type MessageHandler<ChangeType extends IsSerializable> = (
   channel: string,
   message: SerializedChangeWithMetadata<ChangeType>,
@@ -37,6 +39,7 @@ export interface AccessControl {
 }
 
 export async function getAllChannels(): Promise<Set<string>> {
+  await channelsResolver.promise;
   return channels;
 }
 
@@ -78,6 +81,8 @@ export default async function clientServerBus(
       socket.rooms.forEach((room) => channels.add(room));
       console.log(`found ${channels.size} socket.io channels`);
     });
+
+    channelsResolver.resolve(undefined);
   });
 
   io.of('/').adapter.on('create-room', (room) => channels.add(room));
