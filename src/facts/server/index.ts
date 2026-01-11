@@ -1098,7 +1098,7 @@ export default class Fact {
   }
 
   private static async notifyFactChanged(facts: Fact[], logger: IsLogger): Promise<void> {
-    const allSubscribedQueries = await getSubscribedQueries();
+    const allSubscribedQueries = await getSubscribedQueries(logger);
 
     allSubscribedQueries
       .filter((query) => this.factsChangeMightAffectQuery(facts, query, logger))

@@ -98,10 +98,17 @@ class WSAccessControl {
   }
 }
 
-export async function getSubscribedQueries(): Promise<CompoundAttributeQuery[]> {
+export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAttributeQuery[]> {
   return [...(await getAllChannels())]
     .filter((channel) => channel.startsWith('query-sub:'))
-    .map((channel) => JSON.parse(channel.replace(/^query-sub:/, '').trim()));
+    .flatMap((channel) => {
+      try {
+        return [JSON.parse(channel.replace(/^query-sub:/, '').trim())];
+      } catch {
+        logger.warn(`Unexpected error parsing query in query subscription list: ${channel}`);
+        return [];
+      }
+    });
 }
 
 export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery) {
