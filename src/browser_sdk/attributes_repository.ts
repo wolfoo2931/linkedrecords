@@ -254,7 +254,7 @@ export default class AttributesRepository {
 
   async subscribeToQuery<T extends CompoundAttributeQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
     const bus = await this.linkedRecords.getClientServerBus();
-    const url = `${this.linkedRecords.serverURL.toString()}query-sub`;
+    const url = new URL('query-sub', this.linkedRecords.serverURL).toString();
     const channel = `query-sub:${this.linkedRecords.actorId}:${stringify(query)}`;
 
     const onPossibleChange = () => {

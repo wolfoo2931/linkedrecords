@@ -70,7 +70,7 @@ function isValidFactQueryTuple(value: unknown): boolean {
     return false;
   }
 
-  // Third element can be string, undefined, null, or AbstractAttributeClient subclass
+  // Third element can be string, undefined, or AbstractAttributeClient subclass
   if (value[2] !== undefined
       && typeof value[2] !== 'string'
       && !isAttributeClientClass(value[2])) {

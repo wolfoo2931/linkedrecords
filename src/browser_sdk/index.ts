@@ -225,9 +225,7 @@ export default class LinkedRecords {
       await this.ensureUserIdIsKnown();
     }
 
-    const base = this.serverURL.toString().replace(/\/$/, '');
-    const path = url.replace(/^\//, '');
-    const absoluteUrl = `${base}/${path}`;
+    const absoluteUrl = (new URL(url, this.serverURL)).toString();
     const options: any = {
       method,
       credentials: 'include',
