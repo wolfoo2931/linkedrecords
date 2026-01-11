@@ -1142,7 +1142,7 @@ export default class Fact {
     actorId: string, // this is the actor who created/deleted the fact
     logger: IsLogger,
   ): boolean {
-    logger.debug(`check if ${fact} change might affect query: ${query}`);
+    logger.debug(`check if fact (${fact.subject}, ${fact.predicate}, ${fact.object}) change might affect query: ${JSON.stringify(query)}`);
 
     if (!isValidCompoundAttributeQuery(query)) {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
