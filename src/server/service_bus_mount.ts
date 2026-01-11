@@ -12,6 +12,11 @@ import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
 import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../attributes/attribute_query';
 
+export type CompoundAttributeQuerySubscribers = {
+  query: CompoundAttributeQuery,
+  userIds: string[],
+};
+
 let sendMessage: (channel: string, body: any) => void;
 class WSAccessControl {
   app: any;
@@ -49,7 +54,7 @@ class WSAccessControl {
     }
 
     if (channel.startsWith('query-sub:')) {
-      const query = channel.replace(/^query-sub:/, '').trim();
+      const query = channel.replace(/^query-sub:.*?:/, '').trim();
 
       try {
         const parsedQuery = JSON.parse(query);
@@ -66,7 +71,8 @@ class WSAccessControl {
         // If there might be change which might match the users query subscription the
         // users client receives a simple ping and will then execute the query.
         return isValid;
-      } catch (ex) {
+      } catch (ex: any) {
+        request.log.warn(`Unexpected error in verifying query subscription: ${ex?.message}`);
         return false;
       }
     }
@@ -98,20 +104,42 @@ class WSAccessControl {
   }
 }
 
-export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAttributeQuery[]> {
-  return [...(await getAllChannels())]
+export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAttributeQuerySubscribers[]> {
+  const queryUserMap: Record<string, string[]> = {};
+  [...(await getAllChannels())]
     .filter((channel) => channel.startsWith('query-sub:'))
-    .flatMap((channel) => {
-      try {
-        return [JSON.parse(channel.replace(/^query-sub:/, '').trim())];
-      } catch {
-        logger.warn(`Unexpected error parsing query in query subscription list: ${channel}`);
-        return [];
+    .forEach((channel) => {
+      const match = channel.replace(/^query-sub:/, '').match(/^(.*?):(.*)$/);
+
+      console.log('!!!!!', channel);
+
+      if (!match || !match[1] || !match[2]) {
+        logger.warn(`Unexpected error parsing query in query subscription list (could not determine user of subscription): ${channel}`);
+        return;
       }
+
+      const userId = match[1].trim();
+      const queryString = match[2].trim();
+
+      if (!queryUserMap[queryString]) {
+        queryUserMap[queryString] = [];
+      }
+
+      queryUserMap[queryString].push(userId);
     });
+
+  return Object.entries(queryUserMap).flatMap(([queryString, userIds]) => {
+    try {
+      const query = JSON.parse(queryString);
+      return { query, userIds };
+    } catch (ex) {
+      logger.warn(`Unexpected error parsing query in query subscription list (could not parse query): ${queryString}`);
+      return [];
+    }
+  });
 }
 
-export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery) {
+export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery, userId) {
   if (!sendMessage) {
     throw new Error('sending messages does not work yet, sendMessage is not initialized');
   }
@@ -120,7 +148,7 @@ export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery)
     throw new Error(`invalid query: ${JSON.stringify(query)}`);
   }
 
-  sendMessage(`query-sub:${JSON.stringify(query)}`, { type: 'resultMightHaveChanged' });
+  sendMessage(`query-sub:${userId}:${JSON.stringify(query)}`, { type: 'resultMightHaveChanged' });
 }
 
 export default async function mountServiceBus(httpServer, app) {
