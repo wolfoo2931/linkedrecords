@@ -29,7 +29,7 @@ function isAttributeClientClass(value: unknown): boolean {
   // Check if it's one of the known attribute client classes or extends AbstractAttributeClient
   let proto = value;
   while (proto && proto !== Function.prototype) {
-    if (proto === AbstractAttributeClient || proto.name === 'AbstractAttributeClient') {
+    if (proto === AbstractAttributeClient || proto.name === AbstractAttributeClient.name) {
       return true;
     }
     proto = Object.getPrototypeOf(proto);
