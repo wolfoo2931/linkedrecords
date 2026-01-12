@@ -14,6 +14,7 @@ import AuthCache from './auth_cache';
 import FactBox from './fact_box';
 import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
 import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../../attributes/attribute_query';
+import PredicateExtractor from './predicate_extractor';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -1193,7 +1194,8 @@ export default class Fact {
       return false;
     }
 
-    // FIXME: implement this;
-    return true;
+    const predicates = PredicateExtractor.extractFromQuery(query);
+
+    return predicates.has(fact.predicate);
   }
 }
