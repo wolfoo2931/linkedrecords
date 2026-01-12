@@ -48,7 +48,7 @@ export default class AuthCache {
       return;
     }
 
-    const users = await FactBox.getAllAssociatedUsers(fact.subject, logger);
+    const users = await FactBox.getAllAssociatedUsersByNode(fact.subject, logger);
     users.forEach((uid) => cache.invalidate(uid));
   }
 

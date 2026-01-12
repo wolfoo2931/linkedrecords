@@ -788,10 +788,7 @@ export default class Fact {
     ]);
 
     if (deletedFacts.rows[0]) {
-      this.factBox = {
-        id: deletedFacts.rows[0].fact_box_id,
-        graphId: deletedFacts.rows[0].graph_id,
-      };
+      this.factBox = new FactBox(deletedFacts.rows[0].fact_box_id, deletedFacts.rows[0].graph_id);
     }
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
@@ -1133,45 +1130,68 @@ export default class Fact {
   ): Promise<void> {
     const allSubscribedQueries = await getSubscribedQueries(logger);
 
-    allSubscribedQueries.forEach(({ userIds, query }) => {
-      userIds
-        .filter((userId) => this.factsChangeMightAffectQuery(
-          facts,
-          query,
+    await Promise.all(allSubscribedQueries.map(async ({ userIds, query }) => {
+      const affectedUsers = await Promise.all(
+        userIds.map(async (userId) => ({
           userId,
-          actorId,
-          logger,
-        ))
-        .forEach((userId) => notifyQueryResultMightHaveChanged(query, userId));
-    });
+          affected: await this.factsChangeMightAffectQuery(facts, query, userId, actorId, logger),
+        })),
+      );
+
+      affectedUsers
+        .filter(({ affected }) => affected)
+        .forEach(({ userId }) => notifyQueryResultMightHaveChanged(query, userId));
+    }));
   }
 
-  private static factsChangeMightAffectQuery(
+  private static async factsChangeMightAffectQuery(
     facts: Fact[],
     query: CompoundAttributeQuery,
     userId: string,
     actorId: string,
     logger: IsLogger,
-  ): boolean {
-    return facts.some((f) => this.factChangeMightAffectQuery(f, query, userId, actorId, logger));
+  ): Promise<boolean> {
+    const results = await Promise.all(
+      facts.map((f) => this.factChangeMightAffectQuery(f, query, userId, actorId, logger)),
+    );
+
+    return results.some((result) => result);
   }
 
-  private static factChangeMightAffectQuery(
+  private static async factChangeMightAffectQuery(
     fact: Fact,
     query: CompoundAttributeQuery,
-    userid: string, // does the query change for this user
+    userid: string, // does the query result change for this user
     actorId: string, // this is the actor who created/deleted the fact
     logger: IsLogger,
-  ): boolean {
+  ): Promise<boolean> {
     logger.debug(`check if fact (${fact.subject}, ${fact.predicate}, ${fact.object}) change might affect query: ${JSON.stringify(query)}`);
 
     if (!isValidCompoundAttributeQuery(query)) {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
-    // Handle term declarations
+    if (!fact.factBox) {
+      logger.warn(`unexpected FactBox miss for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}. Determining fact box ...`);
+      const fb = await FactBox.getFactBoxPlacement(userid, fact, logger);
 
-    // Scope notification to fact boxes
+      fact.setFactBox(fb);
+
+      if (!fact.factBox) {
+        throw new Error(`could not determine fact box for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}.`);
+      }
+    }
+
+    if (fact.predicate === '$isATermFor') {
+      // When we query for a term which is not defined yet,
+      // this query will not be updated once the term is defined.
+      // This should be an edge case, we accept this for now.
+      return false;
+    }
+
+    if (!(await FactBox.isUserAssociatedToFactBox(fact.factBox.id, userid, logger))) {
+      return false;
+    }
 
     // FIXME: implement this;
     return true;

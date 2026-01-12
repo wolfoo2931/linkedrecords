@@ -127,7 +127,28 @@ export default class FactBox {
     throw new Error('Unexpected error while trying to determine fact box id');
   }
 
-  public static async getAllAssociatedUsers(nodeId: string, logger: IsLogger) {
+  public static async isUserAssociatedToFactBox(
+    factBoxId: number,
+    userId: string,
+    logger: IsLogger,
+  ): Promise<boolean> {
+    const pool = new PgPoolWithLog(logger);
+
+    const internalUserId = await this.getInternalUserId(userId, logger);
+
+    if (factBoxId === internalUserId) {
+      return true;
+    }
+
+    return pool.findAny(`
+      SELECT DISTINCT users.id
+      FROM users_fact_boxes, users
+      WHERE users_fact_boxes.user_id = users._id
+      AND users_fact_boxes.fact_box_id=$1
+      AND users.id=$2`, [factBoxId, userId]);
+  }
+
+  public static async getAllAssociatedUsersByNode(nodeId: string, logger: IsLogger) {
     const pool = new PgPoolWithLog(logger);
 
     const result = await pool.query(`

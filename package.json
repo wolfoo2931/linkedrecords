@@ -14,7 +14,7 @@
   },
   "scripts": {
     "start": "npm run build && node --enable-source-maps dist/server.js | node bin/plogs.js",
-    "test": "bin/test.sh",
+    "test": "LOG_LEVEL=summary bin/test.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "webpack --config ./webpack.config.js",
