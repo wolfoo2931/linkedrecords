@@ -515,7 +515,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(logger, subPreds);
 
-    await this.onFactsAdded(facts, userid, logger);
+    await this.onFactsAdded(facts, logger);
   }
 
   static async findNodes(
@@ -747,7 +747,7 @@ export default class Fact {
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
     this.setFactBox(factPlacement);
 
-    await Fact.onFactsAdded([this], userid, this.logger);
+    await Fact.onFactsAdded([this], this.logger);
   }
 
   async delete(userid: string) {
@@ -794,7 +794,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
-    await Fact.onFactsDeleted([this], userid, this.logger);
+    await Fact.onFactsDeleted([this], this.logger);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
@@ -1102,11 +1102,10 @@ export default class Fact {
 
   private static async onFactsDeleted(
     facts: Fact[],
-    actorId: string,
     logger: IsLogger,
   ): Promise<void> {
     try {
-      await this.notifyFactChanged(facts, actorId, logger);
+      await this.notifyFactChanged(facts, logger);
     } catch (ex: any) {
       logger.warn(`Failed to notify query subscribers on fact deleted: ${ex?.message}`);
     }
@@ -1114,11 +1113,10 @@ export default class Fact {
 
   private static async onFactsAdded(
     facts: Fact[],
-    actorId: string,
     logger: IsLogger,
   ): Promise<void> {
     try {
-      await this.notifyFactChanged(facts, actorId, logger);
+      await this.notifyFactChanged(facts, logger);
     } catch (ex: any) {
       logger.warn(`Failed to notify query subscribers on fact added: ${ex?.message}`);
     }
@@ -1126,7 +1124,6 @@ export default class Fact {
 
   private static async notifyFactChanged(
     facts: Fact[],
-    actorId: string,
     logger: IsLogger,
   ): Promise<void> {
     const allSubscribedQueries = await getSubscribedQueries(logger);
@@ -1135,7 +1132,7 @@ export default class Fact {
       const affectedUsers = await Promise.all(
         userIds.map(async (userId) => ({
           userId,
-          affected: await this.factsChangeMightAffectQuery(facts, query, userId, actorId, logger),
+          affected: await this.factsChangeMightAffectQuery(facts, query, userId, logger),
         })),
       );
 
@@ -1149,11 +1146,10 @@ export default class Fact {
     facts: Fact[],
     query: CompoundAttributeQuery,
     userId: string,
-    actorId: string,
     logger: IsLogger,
   ): Promise<boolean> {
     const results = await Promise.all(
-      facts.map((f) => this.factChangeMightAffectQuery(f, query, userId, actorId, logger)),
+      facts.map((f) => this.factChangeMightAffectQuery(f, query, userId, logger)),
     );
 
     return results.some((result) => result);
@@ -1163,7 +1159,6 @@ export default class Fact {
     fact: Fact,
     query: CompoundAttributeQuery,
     userid: string, // does the query result change for this user
-    actorId: string, // this is the actor who created/deleted the fact
     logger: IsLogger,
   ): Promise<boolean> {
     logger.debug(`check if fact (${fact.subject}, ${fact.predicate}, ${fact.object}) change might affect query: ${JSON.stringify(query)}`);
