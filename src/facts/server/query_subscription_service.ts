@@ -74,6 +74,17 @@ export default class QuerySubscriptionService {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
+    if (fact.predicate === '$isATermFor') {
+      // When we query for a term which is not defined yet,
+      // this query will not be updated once the term is defined.
+      // This should be an edge case, we accept this for now.
+      return false;
+    }
+
+    if (!QuerySubscriptionService.hasPredicate(query, fact.predicate)) {
+      return false;
+    }
+
     if (!fact.factBox) {
       this.logger.warn(`unexpected FactBox miss for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}. Determining fact box ...`);
       const fb = await FactBox.getFactBoxPlacement(userid, fact, this.logger);
@@ -85,20 +96,16 @@ export default class QuerySubscriptionService {
       }
     }
 
-    if (fact.predicate === '$isATermFor') {
-      // When we query for a term which is not defined yet,
-      // this query will not be updated once the term is defined.
-      // This should be an edge case, we accept this for now.
-      return false;
-    }
-
     if (!(await FactBox.isUserAssociatedToFactBox(fact.factBox.id, userid, this.logger))) {
       return false;
     }
 
-    const predicates = QuerySubscriptionService.extractAllPredicatesFromQuery(query);
+    return true;
+  }
 
-    return predicates.has(fact.predicate);
+  private static hasPredicate(query: CompoundAttributeQuery, predicate: string) {
+    const predicates = QuerySubscriptionService.extractAllPredicatesFromQuery(query);
+    return predicates.has(predicate);
   }
 
   private static extractAllPredicatesFromQuery(query: CompoundAttributeQuery): Set<string> {
