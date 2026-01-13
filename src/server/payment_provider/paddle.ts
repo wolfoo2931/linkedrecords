@@ -1,8 +1,7 @@
 /* eslint-disable class-methods-use-this */
-/* eslint-disable import/no-cycle */
 import crypto from 'crypto';
 import assert from 'assert';
-import { QuotaEvent } from '../quota';
+import type { QuotaEvent } from '../quota';
 import safeCompare from '../../../lib/utils/safe_compare';
 import readBody from '../../../lib/utils/read_body';
 import AbstractPaymentProvider from './abstract_provider';

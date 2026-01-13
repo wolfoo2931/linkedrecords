@@ -1,5 +1,5 @@
 /* eslint-disable import/no-cycle */
-import Fact from '.';
+import type Fact from '.';
 import IsLogger from '../../../lib/is_logger';
 import { ResolveToAttributesResult } from '../../attributes/attribute_query';
 import cache from '../../server/cache';
