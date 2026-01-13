@@ -12,9 +12,7 @@ import cache from '../../server/cache';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 import AuthCache from './auth_cache';
 import FactBox from './fact_box';
-import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
-import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../../attributes/attribute_query';
-import PredicateExtractor from './predicate_extractor';
+import QuerySubscriptionService from './query_subscription_service';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -515,7 +513,8 @@ export default class Fact {
 
     await Fact.refreshLatestState(logger, subPreds);
 
-    await this.onFactsAdded(facts, logger);
+    const querySubscriptionService = new QuerySubscriptionService(logger);
+    await querySubscriptionService.onFactsAdded(facts);
   }
 
   static async findNodes(
@@ -678,6 +677,7 @@ export default class Fact {
   }
 
   async save(userid: string): Promise<void> {
+    const querySubscriptionService = new QuerySubscriptionService(this.logger);
     this.ensureValidSyntax();
 
     if (!(await this.isAuthorizedToSave(userid))) {
@@ -747,7 +747,7 @@ export default class Fact {
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
     this.setFactBox(factPlacement);
 
-    await Fact.onFactsAdded([this], this.logger);
+    await querySubscriptionService.onFactsAdded([this]);
   }
 
   async delete(userid: string) {
@@ -763,6 +763,7 @@ export default class Fact {
   }
 
   private async deleteWithoutAuthCheck(userid: string) {
+    const querySubscriptionService = new QuerySubscriptionService(this.logger);
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isATermFor') {
@@ -794,7 +795,7 @@ export default class Fact {
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
 
-    await Fact.onFactsDeleted([this], this.logger);
+    await querySubscriptionService.onFactsDeleted([this]);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
@@ -884,7 +885,7 @@ export default class Fact {
     return hasSubjectAccess && hasObjectAccess;
   }
 
-  private setFactBox(fb: FactBox) {
+  setFactBox(fb: FactBox) {
     this.factBox = fb;
   }
 
@@ -1098,99 +1099,5 @@ export default class Fact {
     }
 
     return result;
-  }
-
-  private static async onFactsDeleted(
-    facts: Fact[],
-    logger: IsLogger,
-  ): Promise<void> {
-    try {
-      await this.notifyFactChanged(facts, logger);
-    } catch (ex: any) {
-      logger.warn(`Failed to notify query subscribers on fact deleted: ${ex?.message}`);
-    }
-  }
-
-  private static async onFactsAdded(
-    facts: Fact[],
-    logger: IsLogger,
-  ): Promise<void> {
-    try {
-      await this.notifyFactChanged(facts, logger);
-    } catch (ex: any) {
-      logger.warn(`Failed to notify query subscribers on fact added: ${ex?.message}`);
-    }
-  }
-
-  private static async notifyFactChanged(
-    facts: Fact[],
-    logger: IsLogger,
-  ): Promise<void> {
-    const allSubscribedQueries = await getSubscribedQueries(logger);
-
-    await Promise.all(allSubscribedQueries.map(async ({ userIds, query }) => {
-      const affectedUsers = await Promise.all(
-        userIds.map(async (userId) => ({
-          userId,
-          affected: await this.factsChangeMightAffectQuery(facts, query, userId, logger),
-        })),
-      );
-
-      affectedUsers
-        .filter(({ affected }) => affected)
-        .forEach(({ userId }) => notifyQueryResultMightHaveChanged(query, userId));
-    }));
-  }
-
-  private static async factsChangeMightAffectQuery(
-    facts: Fact[],
-    query: CompoundAttributeQuery,
-    userId: string,
-    logger: IsLogger,
-  ): Promise<boolean> {
-    const results = await Promise.all(
-      facts.map((f) => this.factChangeMightAffectQuery(f, query, userId, logger)),
-    );
-
-    return results.some((result) => result);
-  }
-
-  private static async factChangeMightAffectQuery(
-    fact: Fact,
-    query: CompoundAttributeQuery,
-    userid: string, // does the query result change for this user
-    logger: IsLogger,
-  ): Promise<boolean> {
-    logger.debug(`check if fact (${fact.subject}, ${fact.predicate}, ${fact.object}) change might affect query: ${JSON.stringify(query)}`);
-
-    if (!isValidCompoundAttributeQuery(query)) {
-      throw new Error(`invalid query: ${JSON.stringify(query)}`);
-    }
-
-    if (!fact.factBox) {
-      logger.warn(`unexpected FactBox miss for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}. Determining fact box ...`);
-      const fb = await FactBox.getFactBoxPlacement(userid, fact, logger);
-
-      fact.setFactBox(fb);
-
-      if (!fact.factBox) {
-        throw new Error(`could not determine fact box for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}.`);
-      }
-    }
-
-    if (fact.predicate === '$isATermFor') {
-      // When we query for a term which is not defined yet,
-      // this query will not be updated once the term is defined.
-      // This should be an edge case, we accept this for now.
-      return false;
-    }
-
-    if (!(await FactBox.isUserAssociatedToFactBox(fact.factBox.id, userid, logger))) {
-      return false;
-    }
-
-    const predicates = PredicateExtractor.extractFromQuery(query);
-
-    return predicates.has(fact.predicate);
   }
 }
