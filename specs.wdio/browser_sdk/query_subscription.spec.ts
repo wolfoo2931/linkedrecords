@@ -40,11 +40,13 @@ describe('query subscriptions', () => {
       const jsonResult = {};
       const result = (window as any)[`sub_${id}_results`];
 
-      Object.entries(result).map(async ([group, results]: [string, any]) => {
+      const promises = Object.entries(result).map(async ([group, results]: [string, any]) => {
         jsonResult[group] = await Promise.all(
           results.map((r) => r.getValue()),
         );
       });
+
+      await Promise.all(promises);
 
       return jsonResult;
     }, trackerId);
