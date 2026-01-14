@@ -56,6 +56,7 @@ export default class QuerySubscriptionService {
     query: CompoundAttributeQuery,
     userId: string,
   ): Promise<boolean> {
+    // FIXME: we can return as soon as we find one match, we do not have to check every fact
     const results = await Promise.all(
       facts.map((f) => this.factChangeMightAffectQuery(f, query, userId)),
     );
@@ -81,19 +82,20 @@ export default class QuerySubscriptionService {
       return false;
     }
 
-    if (!QuerySubscriptionService.hasPredicate(query, fact.predicate)) {
+    if (!fact.factBox) {
+      this.logger.warn(`unexpected factBox miss for ${fact.subject}, ${fact.predicate}, ${fact.object}. Will not notify subscribers of possible query change!`);
       return false;
     }
 
-    if (!fact.factBox) {
-      this.logger.warn(`unexpected FactBox miss for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}. Determining fact box ...`);
-      const fb = await FactBox.getFactBoxPlacement(userid, fact, this.logger);
+    if (fact.predicate.startsWith('$')) {
+      // We can not simply check for predicates here because this might give
+      // a user access to whole bunch of different data
 
-      fact.setFactBox(fb);
+      return FactBox.isUserAssociatedToFactBox(fact.factBox.id, userid, this.logger);
+    }
 
-      if (!fact.factBox) {
-        throw new Error(`could not determine fact box for fact: ${fact.subject}, ${fact.predicate}, ${fact.object}.`);
-      }
+    if (!QuerySubscriptionService.hasPredicate(query, fact.predicate)) {
+      return false;
     }
 
     if (!(await FactBox.isUserAssociatedToFactBox(fact.factBox.id, userid, this.logger))) {
