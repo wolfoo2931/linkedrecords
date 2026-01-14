@@ -56,12 +56,15 @@ export default class QuerySubscriptionService {
     query: CompoundAttributeQuery,
     userId: string,
   ): Promise<boolean> {
-    // FIXME: we can return as soon as we find one match, we do not have to check every fact
-    const results = await Promise.all(
-      facts.map((f) => this.factChangeMightAffectQuery(f, query, userId)),
-    );
+    // eslint-disable-next-line no-restricted-syntax
+    for (const fact of facts) {
+      // eslint-disable-next-line no-await-in-loop
+      if (await this.factChangeMightAffectQuery(fact, query, userId)) {
+        return true;
+      }
+    }
 
-    return results.some((result) => result);
+    return false;
   }
 
   private async factChangeMightAffectQuery(
