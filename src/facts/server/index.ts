@@ -12,6 +12,7 @@ import cache from '../../server/cache';
 import EnsureIsValid from '../../../lib/utils/sql_values';
 import AuthCache from './auth_cache';
 import FactBox from './fact_box';
+import QuerySubscriptionService from './query_subscription_service';
 
 function andFactory(): () => 'WHERE' | 'AND' {
   let whereUsed = false;
@@ -111,6 +112,8 @@ export default class Fact {
   object: string;
 
   logger: IsLogger;
+
+  factBox?: FactBox;
 
   static async initDB() {
     const logger = console as unknown as IsLogger;
@@ -398,6 +401,39 @@ export default class Fact {
       .join(' INTERSECT ');
   }
 
+  static async refreshFactBoxPlacements(facts: Fact[], logger: IsLogger) {
+    if (facts.length === 0) return;
+
+    const pool = new PgPoolWithLog(logger);
+
+    // Query by the fact triples to get the current fact_box_id and graph_id
+    const conditions = facts
+      .map((_, i) => `(subject = $${i * 3 + 1} AND predicate = $${i * 3 + 2} AND object = $${i * 3 + 3})`)
+      .join(' OR ');
+    const params = facts.flatMap((f) => [f.subject, f.predicate, f.object]);
+
+    const result = await pool.query(
+      `SELECT subject, predicate, object, fact_box_id, graph_id FROM facts WHERE ${conditions}`,
+      params,
+    );
+
+    // Build a map of "subject|predicate|object" -> FactBox
+    const factToFactBox = new Map<string, FactBox>();
+    result.rows.forEach((row) => {
+      const key = `${row.subject.trim()}|${row.predicate.trim()}|${row.object.trim()}`;
+      factToFactBox.set(key, new FactBox(row.fact_box_id, row.graph_id));
+    });
+
+    // Update each fact with its final fact box placement from the database
+    facts.forEach((fact) => {
+      const key = `${fact.subject}|${fact.predicate}|${fact.object}`;
+      const finalFactBox = factToFactBox.get(key);
+      if (finalFactBox) {
+        fact.setFactBox(finalFactBox);
+      }
+    });
+  }
+
   static async saveAllWithoutAuthCheck(
     facts: Fact[],
     userid: string,
@@ -462,6 +498,8 @@ export default class Fact {
         factBox.graphId,
       ]);
 
+      facts.forEach((f) => { f.setFactBox(factBox); });
+
       if (values.length) {
         await pool.query(
           `INSERT INTO facts (subject, predicate, object, created_by, fact_box_id, graph_id) VALUES ${values}`,
@@ -497,6 +535,9 @@ export default class Fact {
       }
 
       await Promise.all(promises);
+
+      // Refresh fact box placements after merges may have occurred
+      await Fact.refreshFactBoxPlacements(facts, logger);
     }
 
     const subPreds: [string, string][] = [];
@@ -505,6 +546,9 @@ export default class Fact {
     });
 
     await Fact.refreshLatestState(logger, subPreds);
+
+    const querySubscriptionService = new QuerySubscriptionService(logger);
+    await querySubscriptionService.onFactsAdded(facts);
   }
 
   static async findNodes(
@@ -667,6 +711,7 @@ export default class Fact {
   }
 
   async save(userid: string): Promise<void> {
+    const querySubscriptionService = new QuerySubscriptionService(this.logger);
     this.ensureValidSyntax();
 
     if (!(await this.isAuthorizedToSave(userid))) {
@@ -734,6 +779,9 @@ export default class Fact {
     }
 
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+    this.setFactBox(factPlacement);
+
+    await querySubscriptionService.onFactsAdded([this]);
   }
 
   async delete(userid: string) {
@@ -749,6 +797,7 @@ export default class Fact {
   }
 
   private async deleteWithoutAuthCheck(userid: string) {
+    const querySubscriptionService = new QuerySubscriptionService(this.logger);
     const pool = new PgPoolWithLog(this.logger);
 
     if (this.predicate === '$isATermFor') {
@@ -758,20 +807,29 @@ export default class Fact {
 
     await AuthCache.onFactDeletion(this, this.logger);
 
-    await pool.query(`WITH deleted_rows AS (
+    const deletedFacts = await pool.query(`WITH deleted_rows AS (
         DELETE FROM facts
         WHERE subject = $1 AND predicate = $2 AND object = $3
         RETURNING *
+    ),
+    inserted_rows AS (
+        INSERT INTO deleted_facts (subject, predicate, object, deleted_by)
+        SELECT subject, predicate, object, $4 FROM deleted_rows
     )
-    INSERT INTO deleted_facts (subject, predicate, object, deleted_by)
-    SELECT subject, predicate, object, $4 FROM deleted_rows;`, [
+    SELECT * FROM deleted_rows;`, [
       this.subject,
       this.predicate,
       this.object,
       userid,
     ]);
 
+    if (deletedFacts.rows[0]) {
+      this.factBox = new FactBox(deletedFacts.rows[0].fact_box_id, deletedFacts.rows[0].graph_id);
+    }
+
     await Fact.refreshLatestState(this.logger, [[this.subject, this.predicate]]);
+
+    await querySubscriptionService.onFactsDeleted([this]);
   }
 
   static async refreshLatestState(logger: IsLogger, subPreds: [string, string][]) {
@@ -859,6 +917,10 @@ export default class Fact {
       || await Fact.hasAccess(userid, ['creator', 'host', 'member', 'access', 'referer', 'selfAccess'], this.object, this.logger);
 
     return hasSubjectAccess && hasObjectAccess;
+  }
+
+  setFactBox(fb: FactBox) {
+    this.factBox = fb;
   }
 
   static async getFactScopeByUser(

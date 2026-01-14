@@ -18,6 +18,108 @@ export type CompoundAttributeQuery = {
   [key: string]: AttributeQuery
 };
 
+/**
+ * Checks if a value is an AbstractAttributeClient subclass.
+ */
+function isAttributeClientClass(value: unknown): boolean {
+  if (typeof value !== 'function') {
+    return false;
+  }
+
+  // Check if it's one of the known attribute client classes or extends AbstractAttributeClient
+  let proto = value;
+  while (proto && proto !== Function.prototype) {
+    if (proto === AbstractAttributeClient || proto.name === AbstractAttributeClient.name) {
+      return true;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+
+  return false;
+}
+
+/**
+ * Validates if a value is a valid FactQueryWithOptionalSubjectPlaceholder tuple.
+ * Accepts:
+ * - [string, string, string?]
+ * - [string, string, AbstractAttributeClient subclass]
+ * - [string, AbstractAttributeClient subclass]
+ */
+function isValidFactQueryTuple(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  if (value.length < 2 || value.length > 3) {
+    return false;
+  }
+
+  // First element must be a string
+  if (typeof value[0] !== 'string') {
+    return false;
+  }
+
+  // Handle [string, AbstractAttributeClient] case (2 elements)
+  if (value.length === 2) {
+    return typeof value[1] === 'string' || isAttributeClientClass(value[1]);
+  }
+
+  // Handle 3-element tuples
+  // Second element must be a string
+  if (typeof value[1] !== 'string') {
+    return false;
+  }
+
+  // Third element can be string, undefined, or AbstractAttributeClient subclass
+  if (value[2] !== undefined
+      && typeof value[2] !== 'string'
+      && !isAttributeClientClass(value[2])) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validates if a value is a valid AttributeQuery.
+ * An AttributeQuery is either a string or an array of
+ * FactQueryWithOptionalSubjectPlaceholder tuples.
+ */
+export function isValidAttributeQuery(value: unknown): value is AttributeQuery {
+  if (typeof value === 'string') {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isValidFactQueryTuple);
+  }
+
+  return false;
+}
+
+/**
+ * Validates if a JSON object is a valid CompoundAttributeQuery.
+ * A CompoundAttributeQuery is an object where each value is a valid AttributeQuery.
+ */
+export function isValidCompoundAttributeQuery(value: unknown): value is CompoundAttributeQuery {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+
+  if (entries.length === 0) {
+    return false;
+  }
+
+  return entries.every(([key, val]) => {
+    if (typeof key !== 'string') {
+      return false;
+    }
+    return isValidAttributeQuery(val);
+  });
+}
+
 type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
 export type ResolveToAttributesResult =
   undefined |
@@ -163,6 +265,10 @@ export default class QueryExecutor {
       return undefined;
     }
 
+    if (!isValidCompoundAttributeQuery(query) && !isValidAttributeQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
+    }
+
     if (!Array.isArray(query)) {
       return this.resolveCompoundQueryToIds(query, userid);
     }
@@ -260,6 +366,10 @@ export default class QueryExecutor {
   })> {
     if (!userid) {
       throw new Error('resolveCompoundQueryToIds needs to receive a valid userid!');
+    }
+
+    if (!isValidCompoundAttributeQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
     const result = {};

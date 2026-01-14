@@ -4,12 +4,310 @@ import { expect } from 'chai';
 import LongTextAttribute from '../../src/attributes/long_text/client/index';
 import KeyValueAttribute from '../../src/attributes/key_value/client/index';
 import {
-  createClient, cleanupClients, truncateDB, sleep,
+  createClient, cleanupClients, truncateDB, waitFor, sleep,
 } from '../helpers';
+import AbstractAttributeClient from '../../src/attributes/abstract/abstract_attribute_client';
 
 describe('Attribute', () => {
   beforeEach(truncateDB);
   afterEach(cleanupClients);
+
+  describe('Attribute.subscribeToQuery()', () => {
+    it('calls the passed callback whenever the query result might have changed', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
+        ['Magazine', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      await otherClient.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+        magazines: [['$it', 'isA', 'Magazine']],
+      }, ({ books, magazines }) => {
+        liveBooks = books;
+        liveMagazines = magazines;
+      });
+
+      await client.Attribute.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
+      await client.Attribute.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
+
+      await waitFor(() => liveBooks.length === 1);
+      await waitFor(() => liveMagazines.length === 1);
+
+      expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
+      expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
+
+      await client.Attribute.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
+
+      await waitFor(() => liveBooks.length === 2);
+
+      expect(liveMagazines).to.have.lengthOf(1);
+      expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
+      expect(await liveBooks[1]?.getValue()).to.haveOwnProperty('title', 'the second book');
+      expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
+
+      // use the other client now
+      await otherClient.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+
+      await waitFor(() => liveMagazines.length === 2);
+
+      expect(liveBooks).to.have.lengthOf(2);
+      expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
+      expect(await liveBooks[1]?.getValue()).to.haveOwnProperty('title', 'the second book');
+      expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
+      expect(await liveMagazines[1]?.getValue()).to.haveOwnProperty('title', 'the second magazine');
+    });
+
+    it('returns a callback function to cancel the subscription', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
+        ['Magazine', '$isATermFor', 'A source of external reference sources'],
+      ]);
+
+      const unsubscribeBooks = await otherClient.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, ({ books }) => {
+        liveBooks = books;
+      });
+
+      await otherClient.Attribute.subscribeToQuery({
+        magazines: [['$it', 'isA', 'Magazine']],
+      }, ({ magazines }) => {
+        liveMagazines = magazines;
+      });
+
+      await client.Attribute.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
+      await client.Attribute.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
+
+      await waitFor(() => liveBooks.length === 1);
+      await waitFor(() => liveMagazines.length === 1);
+
+      unsubscribeBooks();
+
+      await client.Attribute.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
+      await client.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+
+      await waitFor(() => liveMagazines.length === 2);
+
+      // liveBooks should still be 1 since we unsubscribed
+      expect(liveBooks).to.have.lengthOf(1);
+    });
+
+    // AI generated test case
+    it('invokes the callback immediately with initial query results', async () => {
+      const [client] = await createClient();
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A book'],
+      ]);
+
+      // Create attributes BEFORE subscribing
+      await client.Attribute.createKeyValue({ title: 'existing book' }, [['isA', 'Book']]);
+
+      let books: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, ({ books: b }) => {
+        books = b;
+      });
+
+      await waitFor(() => books.length === 1);
+
+      expect(await books[0]?.getValue()).to.haveOwnProperty('title', 'existing book');
+    });
+
+    // AI generated test case
+    it('updates when an attribute no longer matches the query due to fact deletion', async () => {
+      const [client] = await createClient();
+
+      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A book'],
+      ]);
+
+      const book1 = await client.Attribute.createKeyValue({ title: 'book 1' }, [['isA', 'Book']]);
+      const book2 = await client.Attribute.createKeyValue({ title: 'book 2' }, [['isA', 'Book']]);
+
+      await client.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, ({ books }) => {
+        liveBooks = books;
+      });
+
+      await waitFor(() => liveBooks.length === 2);
+
+      // Remove the fact that makes book1 a "Book"
+      await client.Fact.deleteAll([
+        [book1.id!, 'isA', 'Book'],
+      ]);
+
+      await waitFor(() => liveBooks.length === 1);
+
+      expect(liveBooks[0]?.id).to.equal(book2.id);
+    });
+
+    // AI generated test case
+    it('allows multiple subscriptions to the same query', async () => {
+      const [client] = await createClient();
+
+      let callback1Count = 0;
+      let callback2Count = 0;
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A book'],
+      ]);
+
+      await client.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, () => { callback1Count += 1; });
+
+      await client.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, () => { callback2Count += 1; });
+
+      await client.Attribute.createKeyValue({ title: 'new book' }, [['isA', 'Book']]);
+
+      // initial + update = at least 2
+      await waitFor(() => callback1Count >= 2);
+      await waitFor(() => callback2Count >= 2);
+    });
+
+    // AI generated test case
+    it('updates correctly with queries using $latest and $not modifiers', async () => {
+      const [client] = await createClient();
+
+      let activeBooks: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A book'],
+        ['archived', '$isATermFor', 'An archived state'],
+      ]);
+
+      const book1 = await client.Attribute.createKeyValue({ title: 'book 1' }, [['isA', 'Book']]);
+      const book2 = await client.Attribute.createKeyValue({ title: 'book 2' }, [['isA', 'Book']]);
+
+      await client.Attribute.subscribeToQuery({
+        activeBooks: [
+          ['$it', 'isA', 'Book'],
+          ['$it', '$latest(stateIs)', '$not(archived)'],
+        ],
+      }, ({ activeBooks: books }) => {
+        activeBooks = books;
+      });
+
+      await waitFor(() => activeBooks.length === 2);
+
+      // Archive book1
+      await client.Fact.createAll([
+        [book1.id, 'stateIs', 'archived'],
+      ]);
+
+      await waitFor(() => activeBooks.length === 1);
+
+      expect(activeBooks[0]?.id).to.equal(book2.id);
+    });
+
+    // AI generated test case
+    it('handles empty query results gracefully', async () => {
+      const [client] = await createClient();
+
+      let callbackCount = 0;
+      let lastResult: AbstractAttributeClient<any, any>[] = [];
+
+      await client.Fact.createAll([
+        ['Unicorn', '$isATermFor', 'A mythical creature'],
+      ]);
+
+      await client.Attribute.subscribeToQuery({
+        unicorns: [['$it', 'isA', 'Unicorn']],
+      }, ({ unicorns }) => {
+        callbackCount += 1;
+        lastResult = unicorns;
+      });
+
+      await waitFor(() => callbackCount >= 1);
+
+      expect(lastResult).to.have.lengthOf(0);
+    });
+
+    // AI generated test case
+    it('handles multiple unsubscribe calls gracefully', async () => {
+      const [client] = await createClient();
+
+      await client.Fact.createAll([
+        ['Book', '$isATermFor', 'A book'],
+      ]);
+
+      const unsubscribe = await client.Attribute.subscribeToQuery({
+        books: [['$it', 'isA', 'Book']],
+      }, () => {});
+
+      // Multiple unsubscribes should not throw
+      unsubscribe();
+      unsubscribe();
+      unsubscribe();
+    });
+
+    // AI generated test case, manually reworked
+    it('updates correctly when filtering by data type', async () => {
+      const [client] = await createClient();
+
+      let keyValueItems: KeyValueAttribute[] = [];
+      let longTextItems: LongTextAttribute[] = [];
+      let initialCallbackReceived = false;
+
+      await client.Fact.createAll([
+        ['Document', '$isATermFor', 'A document'],
+      ]);
+
+      await client.Attribute.subscribeToQuery({
+        items: [
+          ['$it', '$hasDataType', KeyValueAttribute],
+          ['$it', 'isA', 'Document'],
+        ],
+      }, ({ items }) => {
+        keyValueItems = items as any;
+      });
+
+      await client.Attribute.subscribeToQuery({
+        items: [
+          ['$it', '$hasDataType', LongTextAttribute],
+          ['$it', 'isA', 'Document'],
+        ],
+      }, ({ items }) => {
+        longTextItems = items;
+        initialCallbackReceived = true;
+      });
+
+      await waitFor(() => initialCallbackReceived);
+      expect(keyValueItems).to.have.lengthOf(0);
+
+      // Create a KeyValue document
+      await client.Attribute.createKeyValue({ content: 'kv doc' }, [['isA', 'Document']]);
+
+      await waitFor(() => keyValueItems.length === 1);
+
+      // Create a LongText document - should NOT appear in keyValueItems
+      await client.Attribute.create('longText', 'long text doc', [['isA', 'Document']]);
+
+      await waitFor(() => longTextItems.length === 1);
+
+      expect(keyValueItems).to.have.lengthOf(1);
+    });
+  });
 
   describe('Attribute.findAndLoadAll()', () => {
     it('find attributes by facts', async () => {

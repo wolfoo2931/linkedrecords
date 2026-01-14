@@ -137,7 +137,8 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
   }
 
   public getDataURL() {
-    return `${this.linkedRecords.serverURL}attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`;
+    const url = new URL(`/attributes/${this.id}?clientId=${this.clientId}&valueOnly=true`, this.linkedRecords.serverURL);
+    return url.toString();
   }
 
   protected async getCreatePayload(
@@ -264,7 +265,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
     this.notifySubscribers(undefined, undefined);
 
     if (!this.attrSubscription) {
-      const url = `${this.serverURL}attributes/${this.id}/changes?clientId=${this.clientId}`;
+      const url = new URL(`/attributes/${this.id}/changes?clientId=${this.clientId}`, this.serverURL);
       const callback = (parsedData) => {
         if (parsedData.error === 'quota_violation') {
           this.linkedRecords.handleQuotaViolationError(parsedData);
@@ -281,7 +282,7 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       };
 
       this.attrSubscription = await this.clientServerBus.subscribe(
-        url,
+        url.toString(),
         this.id,
         this.readToken,
         callback,

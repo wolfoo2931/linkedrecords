@@ -31,6 +31,8 @@ type TransformCompositionCreationResult<X extends { type?: typeof AbstractAttrib
         X['type'] extends string ? AbstractAttributeClient<any, IsSerializable> :
           KeyValueAttribute;
 
+type QueryResult<T> = { [K in keyof T]: TransformQueryRecord<T[K]> };
+
 export type CompositionCreationRequest = {
   [k: string]: {
     type?: typeof AbstractAttributeClient<any, IsSerializable> | string,
@@ -203,10 +205,10 @@ export default class AttributesRepository {
   }
 
   // TODO: check for null values in the query
-  async findAll<T extends CompoundAttributeQuery>(query: T, ignoreCache: boolean = false)
-    : Promise<
-    { [K in keyof T]: TransformQueryRecord<T[K]> }
-    > {
+  async findAll<T extends CompoundAttributeQuery>(
+    query: T,
+    ignoreCache: boolean = false,
+  ): Promise<QueryResult<T>> {
     const params = new URLSearchParams();
 
     params.append('query', stringify(query));
@@ -229,10 +231,7 @@ export default class AttributesRepository {
     return attributeResult;
   }
 
-  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T)
-    : Promise<
-    { [K in keyof T]: TransformQueryRecord<T[K]> }
-    > {
+  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T): Promise<QueryResult<T>> {
     const result = await this.findAll(query);
     const promises: Promise<boolean>[] = [];
 
@@ -251,6 +250,28 @@ export default class AttributesRepository {
     await Promise.all(promises);
 
     return result;
+  }
+
+  async subscribeToQuery<T extends CompoundAttributeQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
+    if (!this.linkedRecords.actorId) {
+      throw new Error('Not ready to subscribe to queries yet: this.linkedRecords.actorId is not initialized');
+    }
+
+    const bus = await this.getClientServerBus();
+    const url = new URL('query-sub', this.linkedRecords.serverURL).toString();
+    const channel = `query-sub:${this.linkedRecords.actorId}:${stringify(query)}`;
+
+    const onPossibleChange = () => {
+      this.findAndLoadAll(query).then(onChange);
+    };
+
+    const subscription = await bus.subscribe(url, channel, undefined, onPossibleChange);
+
+    onPossibleChange();
+
+    return () => {
+      bus.unsubscribe(subscription);
+    };
   }
 
   clearCache() {

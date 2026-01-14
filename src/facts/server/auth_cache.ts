@@ -1,5 +1,5 @@
 /* eslint-disable import/no-cycle */
-import Fact from '.';
+import type Fact from '.';
 import IsLogger from '../../../lib/is_logger';
 import { ResolveToAttributesResult } from '../../attributes/attribute_query';
 import cache from '../../server/cache';
@@ -48,7 +48,7 @@ export default class AuthCache {
       return;
     }
 
-    const users = await FactBox.getAllAssociatedUsers(fact.subject, logger);
+    const users = await FactBox.getAllAssociatedUsersByNode(fact.subject, logger);
     users.forEach((uid) => cache.invalidate(uid));
   }
 

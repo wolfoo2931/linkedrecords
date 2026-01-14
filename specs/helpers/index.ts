@@ -7,13 +7,20 @@ export const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 // eslint-disable-next-line import/prefer-default-export
 export function waitFor(fn) {
-  return new Promise<void>((resolve) => {
+  let tries = 0;
+  return new Promise<void>((resolve, reject) => {
     const intervalId = setInterval(async () => {
       const result = await fn();
 
       if (result) {
         clearInterval(intervalId);
         resolve();
+      }
+
+      tries += 1;
+
+      if (tries >= 15) {
+        reject(new Error('waitFor timed out'));
       }
     }, 100);
   });

@@ -1,15 +1,23 @@
+/* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 /* eslint-disable max-len */
 import * as jose from 'jose';
 import http from 'http';
-import clientServerBus from '../../lib/client-server-bus/server';
+import clientServerBus, { getAllChannels } from '../../lib/client-server-bus/server';
 import IsLogger from '../../lib/is_logger';
 import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
 import { getAttributeByMessage } from './middleware/attribute';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
+import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../attributes/attribute_query';
 
+export type CompoundAttributeQuerySubscribers = {
+  query: CompoundAttributeQuery,
+  userIds: string[],
+};
+
+let sendMessage: (channel: string, body: any) => void;
 class WSAccessControl {
   app: any;
 
@@ -45,6 +53,30 @@ class WSAccessControl {
       return Promise.resolve(false);
     }
 
+    if (channel.startsWith('query-sub:')) {
+      const query = channel.replace(/^query-sub:.*?:/, '').trim();
+
+      try {
+        const parsedQuery = JSON.parse(query);
+        const isValid = isValidCompoundAttributeQuery(parsedQuery);
+
+        if (!isValid) {
+          request.log.warn('Invalid compound attribute query');
+        }
+
+        // as long as the query is valid every authenticated user is authorized
+        // to execute the query or subscribe to it. The user will receive a result
+        // set which will reflect the users authorization.
+        // In the current implementation this is handled in the following way:
+        // If there might be change which might match the users query subscription the
+        // users client receives a simple ping and will then execute the query.
+        return isValid;
+      } catch (ex: any) {
+        request.log.warn(`Unexpected error in verifying query subscription: ${ex?.message}`);
+        return false;
+      }
+    }
+
     if (process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING'] && readToken) {
       try {
         const secret = new TextEncoder().encode(`${process.env['SHORT_LIVED_ACCESS_TOKEN_SIGNING']}`);
@@ -72,8 +104,53 @@ class WSAccessControl {
   }
 }
 
+export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAttributeQuerySubscribers[]> {
+  const queryUserMap: Record<string, string[]> = {};
+  [...(await getAllChannels())]
+    .filter((channel) => channel.startsWith('query-sub:'))
+    .forEach((channel) => {
+      const match = channel.replace(/^query-sub:/, '').match(/^(.*?):(.*)$/);
+
+      if (!match || !match[1] || !match[2]) {
+        logger.warn(`Unexpected error parsing query in query subscription list (could not determine user of subscription): ${channel}`);
+        return;
+      }
+
+      const userId = match[1].trim();
+      const queryString = match[2].trim();
+
+      if (!queryUserMap[queryString]) {
+        queryUserMap[queryString] = [];
+      }
+
+      queryUserMap[queryString].push(userId);
+    });
+
+  return Object.entries(queryUserMap).flatMap(([queryString, userIds]) => {
+    try {
+      const query = JSON.parse(queryString);
+      return { query, userIds };
+    } catch (ex) {
+      logger.warn(`Unexpected error parsing query in query subscription list (could not parse query): ${queryString}`);
+      return [];
+    }
+  });
+}
+
+export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery, userId) {
+  if (!sendMessage) {
+    throw new Error('sending messages does not work yet, sendMessage is not initialized');
+  }
+
+  if (!isValidCompoundAttributeQuery(query)) {
+    throw new Error(`invalid query: ${JSON.stringify(query)}`);
+  }
+
+  sendMessage(`query-sub:${userId}:${JSON.stringify(query)}`, { type: 'resultMightHaveChanged' });
+}
+
 export default async function mountServiceBus(httpServer, app) {
-  const sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
+  sendMessage = await clientServerBus(httpServer, app, new WSAccessControl(app), async (attributeId, change, request, userId) => {
     const logger = request.log as unknown as IsLogger;
     const attribute = getAttributeByMessage(attributeId, change, logger);
 

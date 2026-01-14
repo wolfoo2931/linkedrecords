@@ -1,4 +1,3 @@
-/* eslint-disable import/no-cycle */
 import AbstractPaymentProvider from './abstract_provider';
 import PaddlePaymentProvider from './paddle';
 

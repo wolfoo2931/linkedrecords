@@ -1,6 +1,5 @@
-/* eslint-disable import/no-cycle */
 import { Request, Response } from 'express';
-import { QuotaEvent } from '../quota';
+import type { QuotaEvent } from '../quota';
 
 export default abstract class AbstractPaymentProvider {
   static paymentProviderId: string;

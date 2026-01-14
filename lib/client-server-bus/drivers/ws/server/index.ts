@@ -8,6 +8,9 @@ import SerializedChangeWithMetadata from '../../../../../src/attributes/abstract
 import IsSerializable from '../../../../../src/attributes/abstract/is_serializable';
 
 const connections = {};
+const channels = new Set<string>();
+
+const channelsResolver = Promise.withResolvers();
 
 type MessageHandler<ChangeType extends IsSerializable> = (
   channel: string,
@@ -33,6 +36,11 @@ export interface AccessControl {
     channel: string,
     request: http.IncomingMessage,
   ): Promise<boolean>;
+}
+
+export async function getAllChannels(): Promise<Set<string>> {
+  await channelsResolver.promise;
+  return channels;
 }
 
 export default async function clientServerBus(
@@ -67,6 +75,20 @@ export default async function clientServerBus(
       sseChannel: channel,
     });
   };
+
+  io.fetchSockets().then((sockets) => {
+    sockets.forEach((socket) => {
+      socket.rooms.forEach((room) => channels.add(room));
+    });
+
+    console.log(`found ${channels.size} socket.io channels`);
+    channelsResolver.resolve(undefined);
+  }).catch((ex) => {
+    channelsResolver.reject(ex);
+  });
+
+  io.of('/').adapter.on('create-room', (room) => channels.add(room));
+  io.of('/').adapter.on('delete-room', (room) => channels.delete(room));
 
   io.on('connection', async (socket) => {
     const request = socket?.request;
