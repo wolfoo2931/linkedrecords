@@ -401,6 +401,39 @@ export default class Fact {
       .join(' INTERSECT ');
   }
 
+  static async refreshFactBoxPlacements(facts: Fact[], logger: IsLogger) {
+    if (facts.length === 0) return;
+
+    const pool = new PgPoolWithLog(logger);
+
+    // Query by the fact triples to get the current fact_box_id and graph_id
+    const conditions = facts
+      .map((_, i) => `(subject = $${i * 3 + 1} AND predicate = $${i * 3 + 2} AND object = $${i * 3 + 3})`)
+      .join(' OR ');
+    const params = facts.flatMap((f) => [f.subject, f.predicate, f.object]);
+
+    const result = await pool.query(
+      `SELECT subject, predicate, object, fact_box_id, graph_id FROM facts WHERE ${conditions}`,
+      params,
+    );
+
+    // Build a map of "subject|predicate|object" -> FactBox
+    const factToFactBox = new Map<string, FactBox>();
+    result.rows.forEach((row) => {
+      const key = `${row.subject.trim()}|${row.predicate.trim()}|${row.object.trim()}`;
+      factToFactBox.set(key, new FactBox(row.fact_box_id, row.graph_id));
+    });
+
+    // Update each fact with its final fact box placement from the database
+    facts.forEach((fact) => {
+      const key = `${fact.subject}|${fact.predicate}|${fact.object}`;
+      const finalFactBox = factToFactBox.get(key);
+      if (finalFactBox) {
+        fact.setFactBox(finalFactBox);
+      }
+    });
+  }
+
   static async saveAllWithoutAuthCheck(
     facts: Fact[],
     userid: string,
@@ -493,8 +526,6 @@ export default class Fact {
             ],
           );
 
-          facts.forEach((f) => { f.setFactBox(factPlacement); });
-
           if (factBox) {
             promises.push(insertPromise);
           } else {
@@ -504,6 +535,9 @@ export default class Fact {
       }
 
       await Promise.all(promises);
+
+      // Refresh fact box placements after merges may have occurred
+      await Fact.refreshFactBoxPlacements(facts, logger);
     }
 
     const subPreds: [string, string][] = [];
