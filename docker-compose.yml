@@ -1,0 +1,49 @@
+# LinkedRecords Local Development Stack
+# Usage: docker compose up
+# Test accounts: alice@example.com, bob@example.com, charlie@example.com (one-click login)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: linkedrecords
+      POSTGRES_PASSWORD: linkedrecords
+      POSTGRES_DB: linkedrecords
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U linkedrecords"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  linkedrecords:
+    image: ghcr.io/wolfoo2931/linkedrecords:latest
+    # build: .  # Uncomment for local development
+    ports:
+      - "6543:6543"
+    environment:
+      PORT: 6543
+      PGHOST: postgres
+      PGUSER: linkedrecords
+      PGPASSWORD: linkedrecords
+      PGDATABASE: linkedrecords
+      FRONTEND_BASE_URL: http://localhost:6543
+      SERVER_BASE_URL: http://localhost:6543
+      ALLOW_HTTP_AUTHENTICATION_HEADER: "true"
+      AUTH_DEV_MODE: "true"
+      AUTH_ISSUER_BASE_URL: http://localhost:6543/dev-oidc
+      AUTH_TOKEN_AUDIENCE: linkedrecords-dev
+      AUTH_CLIENT_ID: linkedrecords-dev
+      DEFAULT_STORAGE_SIZE_QUOTA: 500
+      QUOTA_COUNT_KV_ATTRIBUTES: "true"
+      QUOTA_COUNT_LT_ATTRIBUTES: "true"
+      CORS_ORIGIN: '*'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
