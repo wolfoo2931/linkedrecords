@@ -113,6 +113,15 @@ async function createApp(httpServer: https.Server) {
   app.use(pino({ redact: ['req.headers', 'res.headers'] }));
   app.use('/payment_events', quotaUpgrade());
   app.use(express.json());
+
+  // Dev OIDC provider (only in dev mode)
+  if (process.env['AUTH_DEV_MODE'] === 'true') {
+    // eslint-disable-next-line global-require
+    const devOidc = require('../dev-oidc');
+    await devOidc.initializeKeys();
+    app.use('/dev-oidc', devOidc.default);
+  }
+
   app.get('/oidc/discovery', (req, res) => oidcController.discovery(req, res));
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());

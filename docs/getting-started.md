@@ -4,14 +4,36 @@ layout: home
 nav_order: 2
 ---
 
-This page guides you through the process of implementing a small "Hello World"
+# Quick Start
+
+Start the LinkedRecords backend locally with a single command (requires [Docker](https://docs.docker.com/get-docker/)):
+
+```bash
+docker compose -f https://github.com/wolfoo2931/linkedrecords.git#main:docker-compose.yml up
+```
+
+{: .warning }
+This docker-compose.yml is for local development only. It uses a built-in mock OIDC provider with one-click test logins and is not suitable for production use.
+
+This starts PostgreSQL and LinkedRecords on port 6543. Once you see `LinkedRecords is running on port 6543`, the backend is ready.
+
+**Test accounts** (one-click login, no password):
+- alice@example.com
+- bob@example.com
+- charlie@example.com
+
+---
+
+# Building Your First App
+
+This section guides you through implementing a small "Hello World"
 single-page application to get to know the main LinkedRecords features.
 
 The example uses Vite and React, but LinkedRecords is not limited to these tools.
 
-# Initialize a new Project
+## Initialize a new Project
 
-## Setup React Using Vite
+### Setup React Using Vite
 
 Vite is a modern TypeScript/JavaScript build system which bundles our code and prepares it
 for deployment. During development it updates the app in the browser as we change the code
@@ -30,7 +52,7 @@ npm run dev
 You will see a URL in your terminal (e.g. http://localhost:5173/). When you open it
 in your browser you will see the small scaffold application in action.
 
-## Clean up Scaffold App
+### Clean up Scaffold App
 
 Next, we clean up the scaffold app a little to have a greenfield to start from.
 
@@ -61,7 +83,7 @@ You can also empty the file `src/index.css` <strong>but do not delete it</strong
 If you switch back to your browser, the app should look much simpler now.
 You should only see "LinkedRecords Hello World".
 
-## Install NPM Packages
+### Install NPM Packages
 
 To use LinkedRecords in our React single page application, we need to install the npm package:
 
