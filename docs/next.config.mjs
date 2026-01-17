@@ -8,7 +8,7 @@ const config = {
   output: 'export',
   trailingSlash: true,
   images: { unoptimized: true },
-  basePath: process.env.NODE_ENV === 'production' ? '/linkedrecords' : '',
+  basePath: '',
 };
 
 export default withMDX(config);
