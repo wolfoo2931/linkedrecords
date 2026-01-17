@@ -35,6 +35,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             nav={{
               title: 'LinkedRecords',
             }}
+            sidebar={{ hideSearch: true }}
             githubUrl="https://github.com/wolfoo2931/linkedrecords"
           >
             {children}
