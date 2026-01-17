@@ -19,11 +19,6 @@ This docker-compose.yml is for local development only. It uses a built-in mock O
 
 This starts LinkedRecords on port 6543. Once you see `LinkedRecords is running on port 6543`, the backend is ready.
 
-**Test accounts** (one-click login, no password):
-- alice@example.com
-- bob@example.com
-- charlie@example.com
-
 ---
 
 ## Building Your First App
@@ -277,7 +272,7 @@ Next, we are going to implement a share button. Once a user clicks that button, 
 be prompted to provide an email address of the person with whom they want to share the todo.
 
 <Callout type="info">
-As of the current state of the implementation, the user must already be signed up.
+The user you want to share with must have signed up first. If you're using the dev setup with Docker Compose, open the app in an incognito window or a different browser, go through the login flow, and select one of the test accounts (alice@example.com, bob@example.com, or charlie@example.com) or enter a custom email address. Only after completing the login flow can you invite that user.
 </Callout>
 
 To implement the feature, once again we patch the TodoList component with the following few lines:
