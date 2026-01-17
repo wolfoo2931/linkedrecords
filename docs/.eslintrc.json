@@ -1,0 +1,8 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "import/order": "off",
+    "import/extensions": "off",
+    "import/prefer-default-export": "off"
+  }
+}

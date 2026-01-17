@@ -1,10 +1,11 @@
 ---
 title: Getting Started
-layout: home
-nav_order: 2
+description: Build your first LinkedRecords application
 ---
 
-# Quick Start
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Quick Start
 
 Start the LinkedRecords backend locally with a single command (requires [Docker](https://docs.docker.com/get-docker/)):
 
@@ -12,10 +13,11 @@ Start the LinkedRecords backend locally with a single command (requires [Docker]
 docker compose -f https://github.com/wolfoo2931/linkedrecords.git#main:docker-compose.yml up
 ```
 
-{: .warning }
+<Callout type="warn">
 This docker-compose.yml is for local development only. It uses a built-in mock OIDC provider with one-click test logins and is not suitable for production use.
+</Callout>
 
-This starts PostgreSQL and LinkedRecords on port 6543. Once you see `LinkedRecords is running on port 6543`, the backend is ready.
+This starts LinkedRecords on port 6543. Once you see `LinkedRecords is running on port 6543`, the backend is ready.
 
 **Test accounts** (one-click login, no password):
 - alice@example.com
@@ -24,16 +26,16 @@ This starts PostgreSQL and LinkedRecords on port 6543. Once you see `LinkedRecor
 
 ---
 
-# Building Your First App
+## Building Your First App
 
 This section guides you through implementing a small "Hello World"
 single-page application to get to know the main LinkedRecords features.
 
 The example uses Vite and React, but LinkedRecords is not limited to these tools.
 
-## Initialize a new Project
+### Initialize a new Project
 
-### Setup React Using Vite
+#### Setup React Using Vite
 
 Vite is a modern TypeScript/JavaScript build system which bundles our code and prepares it
 for deployment. During development it updates the app in the browser as we change the code
@@ -52,7 +54,7 @@ npm run dev
 You will see a URL in your terminal (e.g. http://localhost:5173/). When you open it
 in your browser you will see the small scaffold application in action.
 
-### Clean up Scaffold App
+#### Clean up Scaffold App
 
 Next, we clean up the scaffold app a little to have a greenfield to start from.
 
@@ -78,12 +80,12 @@ function App() {
 export default App
 ```
 
-You can also empty the file `src/index.css` <strong>but do not delete it</strong>.
+You can also empty the file `src/index.css` **but do not delete it**.
 
 If you switch back to your browser, the app should look much simpler now.
 You should only see "LinkedRecords Hello World".
 
-### Install NPM Packages
+#### Install NPM Packages
 
 To use LinkedRecords in our React single page application, we need to install the npm package:
 
@@ -92,11 +94,12 @@ npm install https://github.com/wolfoo2931/linkedrecords-react --save
 npm install react-use --save
 ```
 
-{: .note }
+<Callout type="info">
 You can also use LinkedRecords outside of React applications. The linkedrecords-react
 module provides some handy hooks which make our lives easier.
+</Callout>
 
-# Implement a Simple todo App
+## Implement a Simple todo App
 
 Next we are going to implement a simple todo list application using LinkedRecords.
 
@@ -207,7 +210,7 @@ we can open in our browser. Once we open the URL in the browser, we notice that 
 In the next sections we will extend the app to learn about a few other LinkedRecords features. Especially
 how multiple users can collaborate on the same todos.
 
-# Add an "Archive" feature
+## Add an "Archive" feature
 
 This section adds a button next to each todo which allows to archive a todo. Archived todos will
 then be listed in a second list and can be unarchived again.
@@ -268,13 +271,14 @@ We also need to declare two more terms in the main `App` component:
        ]);
 ```
 
-# Add a "Share" feature
+## Add a "Share" feature
 
 Next, we are going to implement a share button. Once a user clicks that button, they will
 be prompted to provide an email address of the person with whom they want to share the todo.
 
-{: .note }
+<Callout type="info">
 As of the current state of the implementation, the user must already be signed up.
+</Callout>
 
 To implement the feature, once again we patch the TodoList component with the following few lines:
 

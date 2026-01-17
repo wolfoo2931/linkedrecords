@@ -4,18 +4,12 @@ on:
   pull_request:
     branches: ["main"]
     paths:
-    - docs/**
+      - docs/**
 
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,18 +17,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          working-directory: docs
-          ruby-version: '3.3'
-          bundler-cache: true
-          cache-version: 0
-      - name: Setup Pages
-        id: pages
-        uses: actions/configure-pages@v5
-      - name: Build with Jekyll
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
         working-directory: docs
-        run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
+        run: npm ci
+
+      - name: Build with Next.js
+        working-directory: docs
+        run: npm run build
         env:
-          JEKYLL_ENV: production
+          NODE_ENV: production
