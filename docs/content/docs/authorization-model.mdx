@@ -1,0 +1,301 @@
+---
+title: Authorization Model
+description: Understanding LinkedRecords' built-in permission system
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+LinkedRecords has a unique authorization model where **the user who creates data
+decides who can access it**. Instead of centralized access control rules defined
+in the backend, permissions are expressed as facts in the triplestore.
+
+## Core Principle
+
+By default, data you create is **private to you**. To share data with others,
+you create facts that grant specific permissions.
+
+```typescript
+// Only you can see this document
+const doc = await lr.Attribute.createKeyValue({ title: 'My Notes' });
+
+// Now alice can read it
+await lr.Fact.createAll([
+  [aliceId, '$canRead', doc.id],
+]);
+```
+
+## Reserved Predicates
+
+All authorization predicates start with `$`. These are the available predicates:
+
+### $isAccountableFor
+
+Indicates ownership and accountability for an attribute. The accountable party
+is responsible for the storage quota used by the attribute.
+
+```typescript
+[userId, '$isAccountableFor', attributeId]
+```
+
+<Callout type="info">
+When you create an attribute, a `$isAccountableFor` fact linking you to it is
+automatically created. You don't need to add this manually.
+</Callout>
+
+### $isMemberOf
+
+Grants membership in a group, inheriting the group's access permissions.
+
+```typescript
+[userId, '$isMemberOf', teamId]
+```
+
+Members can:
+- Read and write attributes the group has `$canAccess` to
+- Read attributes the group has `$canRead` to
+- Use subjects the group has `$canRefine` permission for
+- Use objects the group has `$canReferTo` permission for
+
+### $isHostOf
+
+Grants host privileges for a group. Hosts can invite new members.
+
+```typescript
+[userId, '$isHostOf', teamId]
+```
+
+Hosts have all member permissions, plus:
+- Can add new members to the group (`$isMemberOf`)
+- Can make other users hosts (`$isHostOf`)
+- Can remove members
+
+### $canRead
+
+Grants read-only access to an attribute.
+
+```typescript
+[userId, '$canRead', attributeId]
+// or for a group:
+[teamId, '$canRead', attributeId]
+```
+
+### $canAccess
+
+Grants read and write access to an attribute.
+
+```typescript
+[userId, '$canAccess', attributeId]
+// or for a group:
+[teamId, '$canAccess', attributeId]
+```
+
+### $canRefine
+
+Grants permission to use an attribute as the **subject** in facts (conceptor permission).
+
+```typescript
+[teamId, '$canRefine', attributeId]
+```
+
+This allows team members to create facts like `[attributeId, 'somePredicate', someOtherAttributeId]`.
+
+### $canReferTo
+
+Grants permission to use an attribute as the **object** in facts (referrer permission).
+
+```typescript
+[teamId, '$canReferTo', attributeId]
+```
+
+This allows team members to create facts like `[otherId, 'somePredicate', attributeId]`.
+
+## Permission Hierarchy
+
+### Creator Permissions
+
+When you create an attribute, you automatically get full permissions:
+- You become accountable for it
+- You can read and write it
+- You can use it as subject or object in facts
+- You can grant permissions to others
+
+### Group Permissions
+
+Permissions can be granted to groups (teams), which then flow to all members:
+
+```typescript
+// Create a team
+const team = await lr.Attribute.createKeyValue({ name: 'Engineering' }, [
+  ['$it', 'isA', 'Team'],
+]);
+
+// Create a document with team access
+const doc = await lr.Attribute.createKeyValue({ title: 'Spec' }, [
+  ['$it', 'isA', 'Document'],
+  [team.id, '$canAccess', '$it'],  // Team can read/write
+]);
+
+// Add a user to the team
+const userId = await lr.getUserIdByEmail('engineer@example.com');
+await lr.Fact.createAll([
+  [userId, '$isMemberOf', team.id],
+]);
+// Now this user can access the document
+```
+
+## Authorization Rules
+
+### Who Can Create Facts?
+
+| Predicate | Who Can Create |
+|-----------|----------------|
+| `$isATermFor` | Anyone (terms are public) |
+| `$isAccountableFor` | Auto-created for creator; you can transfer by making another entity accountable for something you're accountable for |
+| `$isMemberOf` | Creator or host of the group |
+| `$isHostOf` | Creator or host of the group |
+| `$canRead` | Anyone accountable for the object |
+| `$canAccess` | Anyone accountable for the object |
+| `$canRefine` | Anyone accountable for the object |
+| `$canReferTo` | Anyone accountable for the object |
+| Custom predicates | Anyone with `$canRefine` on subject AND `$canReferTo` on object |
+
+### Who Can Delete Facts?
+
+Generally, you can delete facts you created or have appropriate authorization over:
+
+- Term facts can only be deleted by their creator
+- Membership facts can be deleted by hosts or the member themselves
+- Permission facts can be deleted by the accountable party
+
+## Practical Examples
+
+### Private Data (Default)
+
+```typescript
+// This is only visible to you
+const myNotes = await lr.Attribute.createKeyValue({
+  title: 'Personal Notes',
+  content: 'Secret stuff...',
+});
+```
+
+### Share with a Specific User
+
+```typescript
+// Share read access with alice
+const aliceId = await lr.getUserIdByEmail('alice@example.com');
+await lr.Fact.createAll([
+  [aliceId, '$canRead', myNotes.id],
+]);
+
+// Or share read+write access
+await lr.Fact.createAll([
+  [aliceId, '$canAccess', myNotes.id],
+]);
+```
+
+### Share with a Team
+
+```typescript
+// Create a team and share with it
+const team = await lr.Attribute.createKeyValue({ name: 'Marketing' }, [
+  ['$it', 'isA', 'Team'],
+]);
+
+await lr.Attribute.createKeyValue(
+  { title: 'Campaign Plan' },
+  [
+    ['$it', 'isA', 'Document'],
+    [team.id, '$canAccess', '$it'],
+  ]
+);
+
+// Add team members
+const member1 = await lr.getUserIdByEmail('member1@example.com');
+const member2 = await lr.getUserIdByEmail('member2@example.com');
+
+await lr.Fact.createAll([
+  [member1, '$isMemberOf', team.id],
+  [member2, '$isMemberOf', team.id],
+]);
+```
+
+### Revoke Access
+
+```typescript
+// Remove user from team
+await lr.Fact.deleteAll([
+  [userId, '$isMemberOf', teamId],
+]);
+
+// Remove direct access
+await lr.Fact.deleteAll([
+  [userId, '$canRead', documentId],
+]);
+```
+
+## Security Considerations
+
+### Users Cannot Self-Promote
+
+A user cannot grant themselves permissions they don't have:
+
+```typescript
+// This will fail - nemo can't add himself to a team
+await nemo.Fact.createAll([
+  [nemoId, '$isMemberOf', teamId],
+]);
+
+// Only the team creator or a host can add members
+await teamCreator.Fact.createAll([
+  [nemoId, '$isMemberOf', teamId],
+]);
+```
+
+### Members Cannot Invite Others (Only Hosts)
+
+Being a member doesn't grant invitation rights:
+
+```typescript
+// Aquaman creates a team and adds Nemo as a member
+await aquaman.Fact.createAll([[nemoId, '$isMemberOf', teamId]]);
+
+// Nemo tries to invite Manni - this fails
+await nemo.Fact.createAll([[manniId, '$isMemberOf', teamId]]);
+
+// Only works if Nemo is made a host first
+await aquaman.Fact.createAll([[nemoId, '$isHostOf', teamId]]);
+await nemo.Fact.createAll([[manniId, '$isMemberOf', teamId]]); // Now works
+```
+
+### Custom Predicates Cannot Start with $
+
+The `$` prefix is reserved for system predicates:
+
+```typescript
+// This fact will be silently ignored
+await lr.Fact.createAll([
+  [docId, '$myCustomPredicate', 'value'],
+]);
+
+// Use predicates without $
+await lr.Fact.createAll([
+  [docId, 'myCustomPredicate', 'value'],
+]);
+```
+
+## Verifying Fact Creation
+
+Since unauthorized fact creations are silently ignored, check the return value:
+
+```typescript
+const created = await lr.Fact.createAll([
+  [userId, '$isMemberOf', teamId],
+]);
+
+if (created.length === 0) {
+  console.log('Not authorized to add user to team');
+}
+```

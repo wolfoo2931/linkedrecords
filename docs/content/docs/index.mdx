@@ -1,37 +1,375 @@
 ---
 title: Introduction
-description: LinkedRecords - A BaaS for single-page applications
+description: LinkedRecords - A Backend-as-a-Service for collaborative web applications
 ---
 
-You can think of LinkedRecords as a NoSQL database that you can connect to directly
-from your single-page application - no backend code required.
+# LinkedRecords
 
-- You can use any OpenID Connect provider for authentication, so you don't need
-  to implement login, password reset, or similar features. Currently, automated
-  tests run against Auth0, but other providers should work as well.
-- A flexible authorization model is built into LinkedRecords. No need to write
-  and deploy authorization rules into your backend.
-- It supports real-time collaboration to build multi player tools like Notion,
-  Miro, Google docs, ...
+LinkedRecords is a Backend-as-a-Service that you can connect to directly from your single-page application - no backend code required. Think of it as a database you can call directly from your React app, with authorization built in and real-time collaboration out of the box.
 
-## Concept
+```tsx
+// Query data with facts - updates automatically when anything changes
+const todos = useKeyValueAttributes([['$it', 'isA', 'Todo']]);
+```
 
-You can think of LinkedRecords as a bucket where anyone can sign up and insert data.
-As long as you don't share this data with other users or groups, only you can access
-what you've written into it.
+You can use any OpenID Connect provider (Auth0, Keycloak, etc.) for authentication, so you don't need to implement login flows. Authorization is built into the data model itself - when you create data, you specify who can access it. And real-time collaboration uses CRDT and Operational Transform, so concurrent edits merge instead of overwriting each other.
 
-In theory, any user could use the LinkedRecords API directly to write and retrieve data.
-However, this would be inconvenient - just as you wouldn't expect your users to write SQL
-queries, you wouldn't expect them to interact with the LinkedRecords API. A LinkedRecords
-app is a specialized frontend that hides the API and provides a convenient user interface
-for accomplishing their tasks.
+## What Makes It Different
 
-In the traditional SQL world, inconvenience isn't the only reason you don't let users
-access the database directly - authorization concerns are an even stronger reason.
-With LinkedRecords, this is no longer an issue: authorization is built directly into
-the API. This requires a small mindset shift: Instead of defining universal authorization
-rules in the backend for all records, the user who inserts a data record specifies who
-can access it.
+What if your users could choose where their data lives - on their own infrastructure, in their own jurisdiction? What if AI coding assistants couldn't accidentally create security holes because authorization is baked into every operation? What if multiple apps could work with the same data without any integration work?
 
-Think of it as SQL you can call directly from your React app without worrying about
-permissions; it is easier to read than SQL and provides live updates.
+LinkedRecords makes all of this possible. It's not just another BaaS - it's a fundamentally different architecture for building collaborative applications.
+
+## Not Local-First, But Server-Sovereign
+
+If you've heard of **local-first** tools like Automerge, Yjs, or Replicache - LinkedRecords is different. The key distinction is where data lives and who enforces authorization.
+
+| Aspect | Local-First | LinkedRecords |
+|--------|-------------|---------------|
+| **Data lives** | On the client | On the server |
+| **Works offline** | Yes | No |
+| **Authorization** | Client-side or sync-layer | Server-enforced |
+
+**Choose local-first** when users need to work offline or instant local response is critical.
+
+**Choose LinkedRecords** when you need server-enforced authorization, central governance over data, the BYOB model where customers control their backend, or audit trails that require server-side logging.
+
+The difference is conceptual: local-first optimizes for offline capability, while LinkedRecords optimizes for a server-authoritative state with built-in authorization - making it well suited for enterprise SaaS.
+
+## Cloud Sovereignty
+
+Traditional SaaS has a problem: **the vendor controls your data**.
+
+When you use a typical SaaS application, the vendor operates the complete stack - the frontend, the backend, and the database where your data lives. Your business data sits on infrastructure you don't control, in a jurisdiction you might not have chosen.
+
+LinkedRecords enables a different model: **Bring Your Own Backend (BYOB)**.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Traditional SaaS                         │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │            SaaS Vendor Infrastructure               │    │
+│  │  ┌─────────────┐    ┌─────────────────────────┐     │    │
+│  │  │  Frontend   │ +  │  Backend + Your Data    │     │    │
+│  │  └─────────────┘    └─────────────────────────┘     │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│               LinkedRecords BYOB Model                      │
+│  ┌──────────────────────┐    ┌──────────────────────────┐   │
+│  │    SaaS Vendor       │    │   Customer-Controlled    │   │
+│  │  ┌────────────────┐  │    │  ┌────────────────────┐  │   │
+│  │  │ SPA via CDN    │  │───▶│  │ LinkedRecords      │  │   │
+│  │  │ (frontend only)│  │    │  │ Backend + Data     │  │   │
+│  │  └────────────────┘  │    │  └────────────────────┘  │   │
+│  └──────────────────────┘    └──────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+- SaaS vendors build their application as a single-page application
+- The frontend is distributed via CDN - just static files
+- When users open the application, the app can ask the user which LinkedRecords backend to use
+- All data is stored on the endpoint the user chose - data never leaves the customer's infrastructure
+- The SaaS vendor and the LinkedRecords provider never need to communicate - the API is intentionally minimalistic, providing just a few primitives (facts and attributes) that applications build upon. This minimal surface area is also the foundation for backwards compatibility: different versions of a SaaS application can work with different versions of LinkedRecords without coordination
+
+**Why this matters:**
+- **Data residency compliance** - Keep data in your jurisdiction (GDPR, industry regulations)
+- **No vendor lock-in** - Your data is in a database you control
+- **Enterprise adoption** - Sensitive data stays on-premises
+- **True ownership** - You can export, backup, and migrate freely
+- **Still get SaaS benefits** - The application is still managed, hosted, and updated by the vendor. You get new features, bug fixes, and improvements automatically - only the data storage is under your control
+
+## Built for AI-Assisted Development
+
+As AI coding assistants become standard development tools, the architecture of your backend determines how safely and effectively these tools can work with it.
+
+### Authorization That's Harder to Misconfigure
+
+Traditional BaaS platforms separate authorization from data operations:
+
+```typescript
+// Traditional approach: Two separate concerns
+// 1. Create the data
+await db.collection('documents').add({ content: 'Secret report' });
+
+// 2. Remember to configure rules in a separate file
+// firestore.rules, RLS policies, etc.
+// Easy to forget. Easy to misconfigure. Hard to keep in sync.
+```
+
+LinkedRecords embeds authorization directly in data operations:
+
+```typescript
+// LinkedRecords: Authorization is part of the same operation
+const doc = await client.Attribute.createKeyValue(
+  { content: 'Secret report' },
+  [
+    ['$it', 'isA', 'Document'],
+    [teamId, '$canAccess', '$it']  // Permission is explicit
+  ]
+);
+```
+
+**The secure default is automatic.** If you don't specify permissions, only you (the creator) can access the data. There's no separate rules file to forget about.
+
+This means:
+- No forgetting to add rules for new collections
+- No accidental overly-permissive policies
+- No drift between code and authorization configuration
+- Security is co-located with the code that creates data
+
+### RDF-Inspired Facts: Natural for LLMs
+
+The triplestore pattern uses `(subject, predicate, object)` - the same structure as natural language sentences:
+
+| Natural Language | LinkedRecords Fact |
+|------------------|-------------------|
+| "Alice is a member of Engineering" | `[alice, '$isMemberOf', engineering]` |
+| "The document belongs to Project X" | `[document, 'belongsTo', projectX]` |
+| "Marketing can read the report" | `[marketing, '$canRead', report]` |
+| "Bob is accountable for this file" | `[bob, '$isAccountableFor', file]` |
+
+This semantic structure has potential benefits for AI-assisted development:
+
+- **Readable**: LLMs may understand and generate correct facts more reliably
+- **Flexible vocabulary**: Use any predicate for your domain (`belongsTo`, `assignedTo`, `partOf`) - only `$`-prefixed predicates are reserved for authorization
+- **Predictable authorization**: The limited set of `$` predicates (`$canRead`, `$canAccess`, `$isMemberOf`, etc.) reduces the surface area for security errors
+- **Self-documenting**: Relationships are visible in the code, not hidden in configuration
+- **Verifiable**: An AI can reason about who has access by reading the facts
+
+When an AI assistant works with LinkedRecords, it can understand and verify permissions directly from the code - no need to cross-reference separate rule files.
+
+### Simpler Codebase, Fewer Tokens
+
+With LinkedRecords, your entire application is frontend code. No backend routes, no database queries, no sync logic, no state management boilerplate. You create facts, create attributes, query attributes - everything is reactive and declarative.
+
+This matters for AI agents:
+
+- **Less code to understand** - Agents read fewer files and consume fewer tokens to grasp your application
+- **Locality of behavior** - Authorization, data creation, and business logic live in one place. No jumping between frontend and backend codebases to understand what's happening
+- **No hidden complexity** - There's no separate backend where authorization rules, API endpoints, or database schemas might contradict what the frontend expects
+
+Traditional full-stack applications split logic across frontend components, API routes, database models, and authorization config files. An AI agent must read and correlate all of these to make safe changes. With LinkedRecords, the relevant code is co-located - what you see is what you get.
+
+*Note: While the alignment between triple-based facts and natural language structure suggests advantages for LLM comprehension, this remains a hypothesis based on the semantic similarities. Real-world validation through broader adoption and systematic evaluation will determine the actual impact on AI-assisted development workflows.*
+
+## Real-Time Collaboration That Actually Works
+
+Most BaaS platforms offer "real-time sync" - but they use last-write-wins conflict resolution. When two users edit the same data simultaneously, one person's changes are silently overwritten.
+
+LinkedRecords provides **true collaborative editing**:
+
+| Data Type | Algorithm | What It Means |
+|-----------|-----------|---------------|
+| KeyValue (JSON) | CRDT | Concurrent edits to different fields merge automatically |
+| LongText | Operational Transform | Character-by-character collaboration like Google Docs |
+| Blob | Versioned | Binary files maintain version history |
+
+```typescript
+// Multiple users editing simultaneously
+// All changes are preserved and merged
+attr.subscribe((change) => {
+  // Called when the attribute changes
+  // Reflects merged state from all collaborators
+});
+```
+
+This enables building applications like:
+- Collaborative document editors (Notion, Google Docs)
+- Real-time whiteboards (Miro, Figma)
+- Multiplayer productivity tools
+- Any application where users work together on shared data
+
+## No More Data Fetching Boilerplate
+
+Building a collaborative React application traditionally requires significant infrastructure:
+
+**What you need to build yourself:**
+- Backend API with CRUD endpoints
+- Database schema and queries
+- WebSocket server for real-time updates
+- Client-side state management (Redux, Zustand, React Query, etc.)
+- Cache invalidation logic
+- Optimistic updates with rollback
+- Conflict resolution when users edit simultaneously
+- Multi-tab synchronization via BroadcastChannel or storage events
+- Authentication and authorization middleware
+
+**With LinkedRecords, you skip all of that.**
+
+```tsx
+// LinkedRecords: query data with facts, get real-time updates automatically
+function TodoList() {
+  const { lr } = useLinkedRecords();
+  const todos = useKeyValueAttributes([['$it', 'isA', 'Todo']]);
+
+  const addTodo = () => {
+    lr.Attribute.createKeyValue(
+      { title: 'New task', completed: false },
+      [['$it', 'isA', 'Todo']]
+    );
+  };
+
+  return (
+    <div>
+      <button onClick={addTodo}>Add Todo</button>
+      {todos.map((todo) => <div key={todo._id}>{todo.title}</div>)}
+    </div>
+  );
+}
+```
+
+The `useKeyValueAttributes` hook handles everything:
+- **Queries by facts** - Declaratively specify what data you need
+- **Persistence** - Data is stored on the LinkedRecords backend
+- **Real-time sync** - Changes from any user appear instantly
+- **Multi-tab sync** - All browser tabs stay consistent
+- **Conflict resolution** - Concurrent edits merge automatically (CRDT)
+
+To create or modify data:
+
+```tsx
+const { lr } = useLinkedRecords();
+
+// Create a new todo - automatically appears in all useKeyValueAttributes queries
+await lr.Attribute.createKeyValue(
+  { title: 'Buy groceries', completed: false },
+  [['$it', 'isA', 'Todo']]
+);
+
+// Update an existing todo
+const todoAttr = await lr.Attribute.find(todoId);
+const todo = await todoAttr.getValue();
+todoAttr.set({ ...todo, completed: true });
+
+// Emit facts for state changes
+await lr.Fact.createAll([[todoId, 'stateIs', 'Archived']]);
+```
+
+**No backend to build. No API endpoints. No state management library. No WebSocket code.**
+
+Your React components simply declare what data they need using facts. LinkedRecords handles persistence, synchronization, real-time updates, and multi-user collaboration.
+
+## Users Control Their Own Sharing
+
+In most systems, a developer defines universal rules that apply to all users. In LinkedRecords, **users define who can access their own data**.
+
+```typescript
+// The user creating this document decides who can see it
+const myDoc = await client.Attribute.createKeyValue(
+  { content: 'My private notes' },
+  [
+    ['$it', 'isA', 'Document'],
+    // Only I can access this - no one else
+  ]
+);
+
+// Later, I decide to share with my team
+await client.Fact.createAll([
+  [teamId, '$canRead', myDoc.id]
+]);
+
+// Or share with a specific person
+await client.Fact.createAll([
+  [colleagueId, '$canAccess', myDoc.id]
+]);
+```
+
+This model:
+- Puts users in control of their own data
+- Eliminates the need for complex centralized rule systems
+- Scales naturally - each user manages their own sharing
+- Matches how people think about sharing ("I'll share this with you")
+
+## Data Belongs to Teams, Not Applications
+
+In traditional architectures, data is siloed by application. Your project management app has its own database. Your document editor has another. Your calendar has a third. Even if they're all about the same project and the same team, the data doesn't connect.
+
+LinkedRecords flips this model: **data is scoped to teams, not applications**.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Traditional: Data Silos                    │
+│                                                             │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐       │
+│   │  App A      │   │  App B      │   │  App C      │       │
+│   │  ┌───────┐  │   │  ┌───────┐  │   │  ┌───────┐  │       │
+│   │  │ Data  │  │   │  │ Data  │  │   │  │ Data  │  │       │
+│   │  └───────┘  │   │  └───────┘  │   │  └───────┘  │       │
+│   └─────────────┘   └─────────────┘   └─────────────┘       │
+│        ↑                  ↑                 ↑               │
+│        └──────────────────┼─────────────────┘               │
+│                      Same team,                             │
+│                   different data silos                      │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│             LinkedRecords: Team-Centric Data                │
+│                                                             │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐       │
+│   │  App A      │   │  App B      │   │  App C      │       │
+│   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘       │
+│          │                 │                 │              │
+│          └─────────────────┼─────────────────┘              │
+│                            ▼                                │
+│                ┌───────────────────────┐                    │
+│                │  Team's LinkedRecords │                    │
+│                │  ┌─────────────────┐  │                    │
+│                │  │  All team data  │  │                    │
+│                │  └─────────────────┘  │                    │
+│                └───────────────────────┘                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**What this enables:**
+
+Multiple applications can connect to the same LinkedRecords instance and work with the same data:
+
+```typescript
+// A project management app creates a project
+await lr.Attribute.createKeyValue(
+  { name: 'Website Redesign', status: 'active' },
+  [['$it', 'isA', 'Project']]
+);
+
+// A time tracking app queries the same projects
+const projects = useKeyValueAttributes([['$it', 'isA', 'Project']]);
+
+// A reporting dashboard shows project metrics
+// A mobile app lets you update status on the go
+// All working with the same underlying data
+```
+
+**Reusable components across applications:**
+
+Since data follows a consistent pattern (facts and attributes), you can build components that work in any application:
+
+```tsx
+// A profile component that works in ANY app connected to your LinkedRecords
+function UserProfile({ userId }) {
+  const [profile] = useKeyValueAttributes([
+    ['$it', 'isA', 'UserProfile'],
+    [userId, '$isAccountableFor', '$it'],
+  ]);
+
+  return <div>{profile?.displayName}</div>;
+}
+
+// Use the same component in your chat app, your project tool, your wiki...
+```
+
+**Why this matters:**
+
+- **No more data duplication** - Create your profile once, use it everywhere
+- **Applications become views** - Different apps are just different ways to interact with your data
+- **True interoperability** - Apps from different vendors can work together on shared data
+- **User agency** - You choose which apps can access your data, and switch apps without losing anything
+- **Composable software** - Mix and match specialized apps instead of using monolithic suites
+
+This is a fundamentally different way of thinking about applications. Instead of each app being a walled garden with its own data, apps become lenses through which you view and manipulate your data. The data is yours, stored on your LinkedRecords instance, accessible to whatever tools you choose to use.
+
+---
+
+**Ready to try it?** [Get Started](/docs/getting-started)

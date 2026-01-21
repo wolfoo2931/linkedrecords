@@ -1,0 +1,313 @@
+---
+title: Accountability
+description: Understanding ownership, quotas, and accountability transfer
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+Accountability in LinkedRecords determines who "owns" an attribute in terms of
+storage quota usage. The accountable party's quota is charged for the storage
+used by the attribute.
+
+## Automatic Accountability
+
+When you create an attribute, you automatically become accountable for it:
+
+```typescript
+const doc = await lr.Attribute.createKeyValue({ title: 'My Doc' });
+// A fact [yourUserId, '$isAccountableFor', doc.id] is automatically created
+```
+
+This means:
+- The storage counts against your quota
+- You have full control over the attribute
+- You can grant permissions to others
+
+## Quota Management
+
+Each user and organization has storage quotas. Check current usage:
+
+```typescript
+// Get your own quota
+const myQuota = await lr.getQuota();
+console.log(myQuota.usedStorage);
+console.log(myQuota.totalStorageAvailable);
+console.log(myQuota.remainingStorageAvailable);
+
+// Get an organization's quota
+const orgQuota = await lr.getQuota(organizationId);
+```
+
+Quota includes:
+- Storage size for attribute values
+- Count limits for different attribute types
+
+## Transferring Accountability
+
+Transfer accountability to an organization so storage counts against the
+organization's quota instead of the individual:
+
+```typescript
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Company Document' },
+  [
+    ['$it', 'isA', 'Document'],
+    [organizationId, '$isAccountableFor', '$it'],  // Org is accountable
+  ]
+);
+```
+
+<Callout type="warn">
+You can only transfer accountability to groups where you are a member, host, or
+accountable party. You cannot transfer accountability to individual users.
+</Callout>
+
+## Accountability Transfer Rules
+
+Exactly one entity can be accountable for a resource at any time. When you create
+a new `$isAccountableFor` fact, the system automatically deletes the previous
+accountability fact. This ensures consistent quota tracking - the old accountable
+party loses accountability, and the new one takes over.
+
+### Valid Transfers
+
+Accountability can be transferred to:
+- A group you created
+- A group where you're a member or host
+- A group that has `$canRefine` permission on your group
+
+```typescript
+// Transfer to an org you belong to
+await lr.Fact.createAll([
+  [orgId, '$isAccountableFor', documentId],
+]);
+```
+
+### Invalid Transfers
+
+These transfers will fail:
+- To another individual user
+- To a group you have no relationship with
+- From yourself (creator accountability can't be deleted)
+
+```typescript
+// This fails - can't transfer to another user
+await lr.Fact.createAll([
+  [otherUserId, '$isAccountableFor', documentId],  // Won't work
+]);
+
+// This fails - can't delete your own accountability
+await lr.Fact.deleteAll([
+  [myUserId, '$isAccountableFor', documentId],  // Won't work
+]);
+```
+
+## Organization Accountability Pattern
+
+The recommended pattern for organizations is to make the organization
+accountable for all shared resources:
+
+```typescript
+async function createOrganization(lr, name: string) {
+  const { org, team, resourceCollection } = await lr.Attribute.createAll({
+    org: {
+      type: 'KeyValueAttribute',
+      value: { name },
+      facts: [['$it', 'isA', 'Organization']],
+    },
+    team: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'Team'],
+        ['{{org}}', '$isAccountableFor', '$it'],  // Org accountable for team
+      ],
+    },
+    resourceCollection: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'ResourceCollection'],
+        ['{{org}}', '$isAccountableFor', '$it'],  // Org accountable for collection
+        ['{{team}}', '$canAccess', '$it'],
+      ],
+    },
+  });
+
+  return { org, team, resourceCollection };
+}
+```
+
+## Adding Resources to an Organization
+
+When team members create resources, transfer accountability to the org:
+
+```typescript
+async function createOrgDocument(lr, org: { id: string, team: { id: string } }, title: string) {
+  return lr.Attribute.createKeyValue(
+    { title, createdAt: Date.now() },
+    [
+      ['$it', 'isA', 'Document'],
+      [org.id, '$isAccountableFor', '$it'],     // Org pays for storage
+      [org.team.id, '$canAccess', '$it'],       // Team can access
+      ['$it', '$isMemberOf', org.resourceCollection.id],  // Part of collection
+    ]
+  );
+}
+```
+
+## Accountability and Access
+
+Accountability is separate from access permissions:
+
+| Concept | Predicate | Purpose |
+|---------|-----------|---------|
+| Accountability | `$isAccountableFor` | Storage quota, ultimate ownership |
+| Read Access | `$canRead` | Permission to view |
+| Read-Write Access | `$canAccess` | Permission to view and modify |
+
+```typescript
+// Org is accountable, but team has access
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Shared Doc' },
+  [
+    ['$it', 'isA', 'Document'],
+    [orgId, '$isAccountableFor', '$it'],  // Accountability
+    [teamId, '$canAccess', '$it'],        // Access permission
+  ]
+);
+```
+
+## Finding Accountable Resources
+
+Query for resources you're accountable for:
+
+```typescript
+// Find all resources I'm accountable for
+const { myResources } = await lr.Attribute.findAll({
+  myResources: [
+    [myUserId, '$isAccountableFor', '$it'],
+  ],
+});
+
+// Find all resources an org is accountable for
+const { orgResources } = await lr.Attribute.findAll({
+  orgResources: [
+    [orgId, '$isAccountableFor', '$it'],
+  ],
+});
+```
+
+## Cascading Accountability
+
+When you transfer accountability of a group, consider the resources within:
+
+```typescript
+// Transfer org accountability to a parent org
+await lr.Fact.createAll([
+  [parentOrgId, '$isAccountableFor', childOrgId],
+]);
+
+// Note: This doesn't automatically transfer resources within childOrg
+// Each resource has its own accountability fact
+```
+
+## Quota Violation Handling
+
+When quota is exceeded, operations may fail:
+
+```typescript
+lr.setQuotaViolationErrorHandler((response) => {
+  console.log('Storage quota exceeded');
+  // Show user a message or upgrade prompt
+});
+
+try {
+  await lr.Attribute.createKeyValue({ /* large data */ });
+} catch (error) {
+  // Handle quota violation
+}
+```
+
+## Practical Example: Personal vs Organization Storage
+
+```typescript
+// Personal document (counts against user's quota)
+const personalDoc = await lr.Attribute.createKeyValue(
+  { title: 'My Personal Notes' },
+  [['$it', 'isA', 'Document']]
+);
+
+// Work document (counts against org's quota)
+const workDoc = await lr.Attribute.createKeyValue(
+  { title: 'Project Specification' },
+  [
+    ['$it', 'isA', 'Document'],
+    [workOrgId, '$isAccountableFor', '$it'],
+    [workTeamId, '$canAccess', '$it'],
+  ]
+);
+```
+
+## Best Practices
+
+1. **Transfer accountability to organizations** for shared resources to avoid
+   individual quota limits
+
+2. **Set up organization accountability in [blueprints](/blueprint-pattern)** to ensure consistent
+   quota management
+
+3. **Query by accountability** to find all resources belonging to an entity
+
+4. **Monitor quota usage** using `getQuota()` to prevent surprises
+
+5. **Plan quota allocation** - decide upfront which entity should be accountable
+   for different types of resources
+
+6. **Don't try to delete creator accountability** - transfer it instead
+
+## Common Gotchas
+
+### Can't Delete Own Accountability
+
+```typescript
+// This won't work
+await lr.Fact.deleteAll([
+  [myUserId, '$isAccountableFor', myDocId],
+]);
+
+// Instead, transfer to another entity
+await lr.Fact.createAll([
+  [orgId, '$isAccountableFor', myDocId],
+]);
+```
+
+### Can't Transfer to Users
+
+```typescript
+// This won't work
+await lr.Fact.createAll([
+  [otherUserId, '$isAccountableFor', docId],
+]);
+
+// Transfer to groups/orgs instead
+await lr.Fact.createAll([
+  [teamId, '$isAccountableFor', docId],
+]);
+```
+
+### Accountability Doesn't Grant Access
+
+```typescript
+// Being accountable doesn't automatically mean team members can access
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Doc' },
+  [
+    [orgId, '$isAccountableFor', '$it'],
+    // Need to explicitly grant access:
+    [teamId, '$canAccess', '$it'],
+  ]
+);
+```

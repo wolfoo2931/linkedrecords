@@ -1,0 +1,289 @@
+---
+title: Long Text Attributes
+description: Large text storage with Operational Transformation
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+Long Text Attributes are designed for storing and collaboratively editing large
+text content. They use **Operational Transformation (OT)** for real-time
+collaboration, allowing multiple users to edit the same document simultaneously.
+
+## When to Use Long Text
+
+Use Long Text Attributes when you need:
+- Large text documents (notes, articles, code)
+- Real-time collaborative text editing
+- Character-by-character synchronization
+
+Use Key-Value Attributes instead when:
+- You have structured data (JSON objects)
+- Text is relatively short and rarely edited collaboratively
+- You need to update specific fields independently
+
+## Creating Long Text Attributes
+
+### Using createLongText()
+
+```typescript
+const notes = await lr.Attribute.createLongText(
+  'Initial content of the document',
+  [['$it', 'isA', 'Notes']]
+);
+```
+
+### Using create()
+
+```typescript
+const article = await lr.Attribute.create(
+  'longText',
+  'Article content goes here...',
+  [['$it', 'isA', 'Article']]
+);
+```
+
+### In Blueprint Pattern
+
+```typescript
+const { doc, notes } = await lr.Attribute.createAll({
+  doc: {
+    type: 'KeyValueAttribute',
+    value: { title: 'My Document', metadata: {} },
+    facts: [['$it', 'isA', 'Document']],
+  },
+  notes: {
+    type: 'LongTextAttribute',
+    value: 'Detailed notes for the document...',
+    facts: [
+      ['$it', 'isA', 'DocumentNotes'],
+      ['$it', 'belongsTo', '{{doc}}'],
+    ],
+  },
+});
+```
+
+## Reading Content
+
+```typescript
+const notes = await lr.Attribute.find(notesId);
+const content = await notes.getValue();
+console.log(content);  // Returns the full text content
+```
+
+## Updating Content
+
+### Replace Entire Content
+
+```typescript
+const notes = await lr.Attribute.find(notesId);
+await notes.set('Completely new content');
+```
+
+<Callout type="warn">
+Using `set()` replaces the entire text content. For collaborative editing,
+use the real-time editing approach with `load()`.
+</Callout>
+
+## Real-Time Collaboration
+
+### Enabling Real-Time Updates
+
+```typescript
+const notes = await lr.Attribute.find(notesId);
+
+// The attribute now syncs with the server
+// Changes from other users are automatically merged
+// Whenever you call notes.getValue() you will get the most up to date value
+```
+
+### Editing with OT
+
+Once loaded, edits are automatically synchronized:
+
+```typescript
+// Get current content
+let content = await notes.getValue();
+
+// Make changes (this would typically be done through a text editor)
+// The OT system handles merging concurrent edits
+```
+
+## Querying Long Text Attributes
+
+### By Type
+
+```typescript
+const { notes } = await lr.Attribute.findAll({
+  notes: [
+    ['$it', '$hasDataType', 'LongTextAttribute'],
+    ['$it', 'isA', 'Notes'],
+  ],
+});
+```
+
+### By Relationship
+
+```typescript
+const { docNotes } = await lr.Attribute.findAll({
+  docNotes: [
+    ['$it', '$hasDataType', 'LongTextAttribute'],
+    ['$it', 'belongsTo', documentId],
+  ],
+});
+```
+
+## Integration with Text Editors
+
+Long Text Attributes work well with text editor libraries. Here's a conceptual
+example:
+
+```tsx
+function CollaborativeEditor({ attributeId }) {
+  const { lr } = useLinkedRecords();
+  const [content, setContent] = useState('');
+  const [attribute, setAttribute] = useState(null);
+
+  useEffect(() => {
+    let attr;
+
+    async function setupAttribute() {
+      attr = await lr.Attribute.find(attributeId);
+      if (attr) {
+        // Subscribe to receive real-time changes from other users
+        await attr.subscribe(async () => {
+          setContent(await attr.getValue());
+        });
+        setAttribute(attr);
+        setContent(await attr.getValue());
+      }
+    }
+
+    setupAttribute();
+
+    return () => {
+      attr?.unload();
+    };
+  }, [attributeId, lr]);
+
+  const handleChange = async (newContent) => {
+    setContent(newContent);
+    await attribute?.set(newContent);
+  };
+
+  return (
+    <textarea
+      value={content}
+      onChange={(e) => handleChange(e.target.value)}
+    />
+  );
+}
+```
+
+## Common Patterns
+
+### Meeting Notes
+
+```typescript
+// Create meeting notes linked to a meeting
+const meetingNotes = await lr.Attribute.createLongText(
+  `# Meeting Notes - ${new Date().toLocaleDateString()}
+
+## Attendees
+-
+
+## Agenda
+-
+
+## Discussion
+-
+
+## Action Items
+- `,
+  [
+    ['$it', 'isA', 'MeetingNotes'],
+    ['$it', 'belongsTo', meetingId],
+    [teamId, '$canAccess', '$it'],
+  ]
+);
+```
+
+### Documentation
+
+```typescript
+const { doc, content } = await lr.Attribute.createAll({
+  doc: {
+    type: 'KeyValueAttribute',
+    value: {
+      title: 'API Documentation',
+      version: '1.0.0',
+      lastUpdated: Date.now(),
+    },
+    facts: [['$it', 'isA', 'Documentation']],
+  },
+  content: {
+    type: 'LongTextAttribute',
+    value: '# API Documentation\n\n## Introduction\n\n...',
+    facts: [
+      ['$it', 'isA', 'DocumentContent'],
+      ['$it', 'belongsTo', '{{doc}}'],
+    ],
+  },
+});
+```
+
+### Code Snippets
+
+```typescript
+const snippet = await lr.Attribute.createLongText(
+  `function greet(name) {
+  return \`Hello, \${name}!\`;
+}`,
+  [
+    ['$it', 'isA', 'CodeSnippet'],
+    ['$it', 'language', 'JavaScript'],
+    ['$it', 'belongsTo', projectId],
+  ]
+);
+```
+
+## Permissions
+
+Long Text Attributes follow the same authorization model as other attributes:
+
+```typescript
+// Create with team access
+const sharedDoc = await lr.Attribute.createLongText(
+  'Shared content',
+  [
+    ['$it', 'isA', 'SharedDocument'],
+    [teamId, '$canAccess', '$it'],  // Team can read and write
+  ]
+);
+
+// Create with read-only sharing
+const readOnlyDoc = await lr.Attribute.createLongText(
+  'Published content',
+  [
+    ['$it', 'isA', 'PublishedDocument'],
+    [viewerTeamId, '$canRead', '$it'],  // Viewers can only read
+  ]
+);
+```
+
+## Limitations
+
+1. **No partial updates** - Unlike Key-Value Attributes, you can't update
+   specific portions through the API (OT handles this internally during real-time)
+
+2. **Text only** - No binary content, use Blob Attributes for files
+
+## Best Practices
+
+1. **Use for prose content** - Long Text is ideal for documents, notes, and articles
+
+2. **Clean up subscriptions** - Always call `unload()` when done to free resources
+
+3. **Combine with Key-Value** - Use Key-Value for metadata (title, author, tags)
+   and Long Text for the content body

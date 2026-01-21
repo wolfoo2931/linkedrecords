@@ -1,4 +1,24 @@
 {
   "title": "Documentation",
-  "pages": ["index", "getting-started"]
+  "pages": [
+    "index",
+    "getting-started",
+    "---Core Concepts---",
+    "facts-and-triples",
+    "terms",
+    "authorization-model",
+    "accountability",
+    "quotas",
+    "---Attribute Types---",
+    "key-value-attributes",
+    "long-text-attributes",
+    "blob-attributes",
+    "---Patterns---",
+    "blueprint-pattern",
+    "team-patterns",
+    "query-patterns",
+    "sharing-patterns",
+    "---Reference---",
+    "configuration"
+  ]
 }

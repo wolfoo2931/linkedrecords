@@ -1,0 +1,344 @@
+---
+title: Team Patterns
+description: Managing groups, roles, and hierarchies
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+Teams (or groups) are a fundamental pattern in LinkedRecords for managing access
+to shared resources. This guide covers how to create teams, manage membership,
+and implement role-based hierarchies.
+
+## Creating a Team
+
+A team is simply an attribute with the appropriate permission facts:
+
+```typescript
+// Declare the term first
+await lr.Fact.createAll([
+  ['Team', '$isATermFor', 'A group of users working together'],
+]);
+
+// Create the team
+const team = await lr.Attribute.createKeyValue(
+  { name: 'Engineering', description: 'Engineering team' },
+  [['$it', 'isA', 'Team']]
+);
+```
+
+## Members vs Hosts
+
+There are two levels of team participation:
+
+### Members ($isMemberOf)
+
+Members can access resources shared with the team but cannot invite others:
+
+```typescript
+const userId = await lr.getUserIdByEmail('developer@example.com');
+await lr.Fact.createAll([
+  [userId, '$isMemberOf', team.id],
+]);
+```
+
+### Hosts ($isHostOf)
+
+Hosts have all member permissions plus the ability to manage membership:
+
+```typescript
+const managerId = await lr.getUserIdByEmail('manager@example.com');
+await lr.Fact.createAll([
+  [managerId, '$isHostOf', team.id],
+]);
+```
+
+<Callout type="info">
+The team creator automatically has full permissions and can add members or hosts.
+</Callout>
+
+## Invitation Flow
+
+Only the team creator or a host can invite new members:
+
+```typescript
+// Creator invites first host
+const host1Id = await lr.getUserIdByEmail('host1@example.com');
+await creator.Fact.createAll([
+  [host1Id, '$isHostOf', team.id],
+]);
+
+// Host1 can now invite members
+const member1Id = await host1.getUserIdByEmail('member1@example.com');
+await host1.Fact.createAll([
+  [member1Id, '$isMemberOf', team.id],
+]);
+
+// But members cannot invite others
+const member2Id = await member1.getUserIdByEmail('member2@example.com');
+await member1.Fact.createAll([
+  [member2Id, '$isMemberOf', team.id],  // This will fail silently
+]);
+```
+
+## Self-Invitation Prevention
+
+Users cannot add themselves to teams:
+
+```typescript
+// This will fail - users cannot invite themselves
+const myId = await nemo.getActorId();
+await nemo.Fact.createAll([
+  [myId, '$isMemberOf', team.id],
+]);
+```
+
+## Revoking Membership
+
+### Removing Members
+
+Hosts can remove members:
+
+```typescript
+await host.Fact.deleteAll([
+  [memberId, '$isMemberOf', team.id],
+]);
+```
+
+### Members Leaving
+
+Members can remove their own membership:
+
+```typescript
+const myId = await member.getActorId();
+await member.Fact.deleteAll([
+  [myId, '$isMemberOf', team.id],
+]);
+```
+
+### Removing Hosts
+
+The creator can remove host status:
+
+```typescript
+await creator.Fact.deleteAll([
+  [hostId, '$isHostOf', team.id],
+]);
+```
+
+<Callout type="warn">
+Removing host status also removes access to team resources (unless they're
+also a regular member).
+</Callout>
+
+## Role Hierarchies
+
+For more sophisticated access control, create multiple teams representing
+different roles:
+
+```typescript
+const { org, adminTeam, editorTeam, viewerTeam } = await lr.Attribute.createAll({
+  org: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Acme Inc' },
+    facts: [['$it', 'isA', 'Organization']],
+  },
+
+  adminTeam: {
+    type: 'KeyValueAttribute',
+    value: { role: 'admin' },
+    facts: [
+      ['$it', 'isA', 'AdminTeam'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+      // Admins can manage other teams
+      ['$it', '$isHostOf', '{{editorTeam}}'],
+      ['$it', '$isHostOf', '{{viewerTeam}}'],
+      ['$it', '$isHostOf', '$it'],
+    ],
+  },
+
+  editorTeam: {
+    type: 'KeyValueAttribute',
+    value: { role: 'editor' },
+    facts: [
+      ['$it', 'isA', 'EditorTeam'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+      // Editors can add viewers
+      ['$it', '$isHostOf', '{{viewerTeam}}'],
+    ],
+  },
+
+  viewerTeam: {
+    type: 'KeyValueAttribute',
+    value: { role: 'viewer' },
+    facts: [
+      ['$it', 'isA', 'ViewerTeam'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+      // Viewers have no management permissions
+    ],
+  },
+});
+```
+
+### Granting Role-Based Access
+
+```typescript
+// Create a document with different access levels
+const document = await lr.Attribute.createKeyValue(
+  { title: 'Project Plan', content: '...' },
+  [
+    ['$it', 'isA', 'Document'],
+    [adminTeam.id, '$canAccess', '$it'],   // Full access
+    [editorTeam.id, '$canAccess', '$it'],  // Full access
+    [viewerTeam.id, '$canRead', '$it'],    // Read-only
+  ]
+);
+```
+
+## Organization Pattern
+
+A complete organization structure with teams:
+
+```typescript
+async function createOrganization(lr, name: string) {
+  await lr.Fact.createAll([
+    ['Organization', '$isATermFor', 'A business entity'],
+    ['AdminTeam', '$isATermFor', 'Administrative team'],
+    ['MemberTeam', '$isATermFor', 'Regular members'],
+    ['GuestTeam', '$isATermFor', 'External collaborators'],
+  ]);
+
+  return lr.Attribute.createAll({
+    org: {
+      type: 'KeyValueAttribute',
+      value: { name },
+      facts: [['$it', 'isA', 'Organization']],
+    },
+
+    adminTeam: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'AdminTeam'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+        ['$it', '$canAccess', '{{org}}'],
+        ['$it', '$canRefine', '{{org}}'],
+        ['$it', '$isHostOf', '{{memberTeam}}'],
+        ['$it', '$isHostOf', '{{guestTeam}}'],
+        ['$it', '$isHostOf', '$it'],
+      ],
+    },
+
+    memberTeam: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'MemberTeam'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+        ['$it', '$canAccess', '{{org}}'],
+        ['$it', '$isHostOf', '{{guestTeam}}'],
+      ],
+    },
+
+    guestTeam: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'GuestTeam'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+        ['$it', '$canRead', '{{org}}'],
+      ],
+    },
+  });
+}
+```
+
+## Listing Team Members
+
+To get the list of members in a team:
+
+```typescript
+const members = await lr.getMembersOf(teamId);
+// Returns: [{ id: 'user123', username: 'alice@example.com' }, ...]
+```
+
+<Callout type="info">
+`getMembersOf()` only works if you have appropriate access to the team.
+</Callout>
+
+## Checking Authorization
+
+To verify if you can see a team's membership:
+
+```typescript
+const canViewMembers = await lr.isAuthorizedToSeeMemberOf(teamId);
+
+if (canViewMembers) {
+  const members = await lr.getMembersOf(teamId);
+  // Display member list
+} else {
+  // Show access denied message
+}
+```
+
+## Common Gotchas
+
+### 1. Members Can't Invite
+
+```typescript
+// Wrong: Member trying to invite
+await member.Fact.createAll([
+  [newUserId, '$isMemberOf', teamId],
+]); // Silently fails
+
+// Right: Host or creator must invite
+await host.Fact.createAll([
+  [newUserId, '$isMemberOf', teamId],
+]); // Works
+```
+
+### 2. Verifying Fact Creation
+
+```typescript
+const created = await lr.Fact.createAll([
+  [userId, '$isMemberOf', teamId],
+]);
+
+if (created.length === 0) {
+  throw new Error('Not authorized to add user to team');
+}
+```
+
+### 3. Host vs Member Access
+
+Being a host grants access through the team, but membership permissions
+are more explicit about what's allowed:
+
+```typescript
+// Explicit member permission for clarity
+await creator.Fact.createAll([
+  [managerId, '$isHostOf', team.id],
+  [managerId, '$isMemberOf', team.id],  // Optional but explicit
+]);
+```
+
+## Best Practices
+
+1. **Create clear role hierarchies** - Define distinct teams for different
+   permission levels
+
+2. **Use hosts sparingly** - Only give host permissions to users who need
+   to manage team membership
+
+3. **Check fact creation results** - Always verify that permission-related
+   facts were created successfully
+
+4. **Document your permission model** - Complex team hierarchies benefit
+   from documentation
+
+5. **Consider accountability** - Decide which entity (org or team) should
+   be accountable for resources to manage quotas effectively
+
+6. **Test access patterns** - Verify that users at each level have exactly
+   the access they need
