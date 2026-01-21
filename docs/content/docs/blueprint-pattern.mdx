@@ -1,0 +1,301 @@
+---
+title: Blueprint Pattern
+description: Creating multiple related attributes atomically
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+The Blueprint Pattern allows you to create multiple related attributes in a single
+atomic operation using `Attribute.createAll()`. This is essential when you need
+to set up interconnected data structures where attributes reference each other.
+
+## Why Use Blueprints?
+
+Without blueprints, creating related attributes requires multiple steps:
+
+```typescript
+// Without blueprint - requires multiple calls and manual reference management
+const org = await lr.Attribute.createKeyValue({ name: 'Acme Inc' });
+const team = await lr.Attribute.createKeyValue({ name: 'Admin Team' });
+await lr.Fact.createAll([
+  [org.id, '$isAccountableFor', team.id],
+  [team.id, '$canRefine', org.id],
+]);
+```
+
+With blueprints, you declare everything in one operation:
+
+```typescript
+// With blueprint - single atomic operation
+const { org, team } = await lr.Attribute.createAll({
+  org: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Acme Inc' },
+    facts: [['$it', 'isA', 'Organization']],
+  },
+  team: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Admin Team' },
+    facts: [
+      ['$it', 'isA', 'Team'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+      ['$it', '$canRefine', '{{org}}'],
+    ],
+  },
+});
+```
+
+## Basic Syntax
+
+```typescript
+const result = await lr.Attribute.createAll({
+  attributeName: {
+    type: 'KeyValueAttribute',  // or 'LongTextAttribute', 'BlobAttribute'
+    value: { /* initial value */ },
+    facts: [
+      ['subject', 'predicate', 'object'],
+      // ...more facts
+    ],
+  },
+  // ...more attributes
+});
+```
+
+## The Reference Syntax
+
+Use `{{attributeName}}` syntax to reference another attribute being created in the same
+blueprint. This is replaced with the actual ID after creation:
+
+```typescript
+const { parent, child } = await lr.Attribute.createAll({
+  parent: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Parent' },
+    facts: [['$it', 'isA', 'Parent']],
+  },
+  child: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Child' },
+    facts: [
+      ['$it', 'isA', 'Child'],
+      ['$it', 'belongsTo', '{{parent}}'],     // References parent
+      ['{{parent}}', '$canAccess', '$it'],    // Parent group can access child
+    ],
+  },
+});
+```
+
+## Organization Blueprint Example
+
+This comprehensive example creates an organization with multiple teams and
+proper permission hierarchies:
+
+```typescript
+async function createOrganization(lr, orgName: string) {
+  // First declare all terms
+  await lr.Fact.createAll([
+    ['Organization', '$isATermFor', 'A business organization'],
+    ['AdminTeam', '$isATermFor', 'Team with admin privileges'],
+    ['MemberTeam', '$isATermFor', 'Team with regular member access'],
+    ['TodoList', '$isATermFor', 'A collection of todo items'],
+    ['ListOfTodoLists', '$isATermFor', 'Container for todo lists'],
+    ['ArchivedState', '$isATermFor', 'Indicates archived status'],
+  ]);
+
+  // Create the organization structure
+  return lr.Attribute.createAll({
+    org: {
+      type: 'KeyValueAttribute',
+      value: { name: orgName },
+      facts: [
+        ['$it', 'isA', 'Organization'],
+      ],
+    },
+
+    todoLists: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'ListOfTodoLists'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+      ],
+    },
+
+    archivedState: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'ArchivedState'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+      ],
+    },
+
+    adminTeam: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'AdminTeam'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+        ['$it', '$canRead', '{{todoLists}}'],
+        ['$it', '$canReferTo', '{{todoLists}}'],
+        ['$it', '$canRefine', '{{todoLists}}'],
+        ['$it', '$canRefine', '{{org}}'],
+        ['$it', '$canRead', '{{org}}'],
+        ['$it', '$canRead', '{{archivedState}}'],
+        ['$it', '$canReferTo', '{{archivedState}}'],
+        ['$it', '$isHostOf', '{{memberTeam}}'], // Can manage member team
+        ['$it', '$isHostOf', '$it'], // Can add other admins
+      ],
+    },
+
+    memberTeam: {
+      type: 'KeyValueAttribute',
+      value: {},
+      facts: [
+        ['$it', 'isA', 'MemberTeam'],
+        ['{{org}}', '$isAccountableFor', '$it'],
+        // Member permissions (read-only to org structure)
+        ['$it', '$canRead', '{{todoLists}}'],
+        ['$it', '$canReferTo', '{{todoLists}}'],
+        ['$it', '$canRead', '{{org}}'],
+        ['$it', '$canRead', '{{archivedState}}'],
+      ],
+    },
+  });
+}
+
+// Usage
+const { org, adminTeam, memberTeam, todoLists, archivedState } =
+  await createOrganization(lr, 'Acme Inc');
+```
+
+## Adding Items to a Blueprint Structure
+
+Once you have the structure, you can add items:
+
+```typescript
+// Create a todo list in the organization
+const { list } = await lr.Attribute.createAll({
+  list: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Shopping List', tasks: {} },
+    facts: [
+      ['$it', 'isA', 'TodoList'],
+      ['$it', '$isMemberOf', todoLists.id],  // Add to org's list collection
+      [org.id, '$isAccountableFor', '$it'],   // Org pays for storage
+    ],
+  },
+});
+```
+
+## Type Options
+
+The `type` field accepts these values:
+
+| Type | Description |
+|------|-------------|
+| `'KeyValueAttribute'` | JSON document with CRDT support |
+| `'LongTextAttribute'` | Large text with OT collaboration |
+| `'BlobAttribute'` | Binary file storage |
+
+```typescript
+const { doc, notes, attachment } = await lr.Attribute.createAll({
+  doc: {
+    type: 'KeyValueAttribute',
+    value: { title: 'Report', metadata: {} },
+    facts: [['$it', 'isA', 'Document']],
+  },
+  notes: {
+    type: 'LongTextAttribute',
+    value: 'Initial notes content...',
+    facts: [
+      ['$it', 'isA', 'Notes'],
+      ['$it', 'belongsTo', '{{doc}}'],
+    ],
+  },
+  attachment: {
+    type: 'BlobAttribute',
+    value: null,  // Set later with actual blob data
+    facts: [
+      ['$it', 'isA', 'Attachment'],
+      ['$it', 'belongsTo', '{{doc}}'],
+    ],
+  },
+});
+```
+
+## Error Handling
+
+Blueprint creation is atomic - if any part fails, the entire operation fails:
+
+```typescript
+try {
+  const result = await lr.Attribute.createAll({
+    // ... blueprint definition
+  });
+} catch (error) {
+  console.error('Failed to create blueprint:', error.message);
+  // No partial data was created
+}
+```
+
+<Callout type="info">
+If any fact in the blueprint fails authorization, the entire `createAll()`
+operation will throw an error. Ensure all referenced terms are declared and
+you have appropriate permissions.
+</Callout>
+
+## Common Permission Patterns
+
+### Read-Only Access for a Team
+
+```typescript
+['{{team}}', '$canRead', '$it']
+```
+
+### Read-Write Access for a Team
+
+```typescript
+['{{team}}', '$canAccess', '$it']
+```
+
+### Allow Team to Create Related Facts
+
+```typescript
+['{{team}}', '$canRefine', '$it'],   // Can use as subject
+['{{team}}', '$canReferTo', '$it'],  // Can use as object
+```
+
+### Transfer Accountability to Organization
+
+```typescript
+['{{org}}', '$isAccountableFor', '$it']
+```
+
+### Allow Team to Manage Membership
+
+```typescript
+['{{adminTeam}}', '$isHostOf', '{{memberTeam}}']
+```
+
+## Best Practices
+
+1. **Declare terms first** - Always declare terms before creating blueprints
+   that use them
+
+2. **Use meaningful names** - Choose descriptive attribute names in the blueprint
+   for clarity
+
+3. **Plan permissions carefully** - Think through who needs what access before
+   implementing
+
+4. **Keep blueprints focused** - Create separate blueprints for distinct concepts
+   rather than one massive blueprint
+
+5. **Document your blueprints** - Complex blueprints benefit from comments
+   explaining the permission model
+
+6. **Test permission flows** - Verify that users at each level have exactly the
+   access they need

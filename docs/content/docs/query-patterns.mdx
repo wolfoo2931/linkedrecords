@@ -1,0 +1,389 @@
+---
+title: Query Patterns
+description: Advanced querying with $hasDataType, $latest, and $not
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+LinkedRecords provides powerful query capabilities using special predicates and
+operators. This guide covers advanced querying techniques for filtering and
+finding attributes.
+
+## Basic Query Structure
+
+Queries are expressed as objects where each key defines a named result set:
+
+```typescript
+const result = await lr.Attribute.findAll({
+  tasks: [
+    ['$it', 'isA', 'Task'],
+  ],
+  projects: [
+    ['$it', 'isA', 'Project'],
+  ],
+});
+
+// result.tasks is an array of Task attributes
+// result.projects is an array of Project attributes
+```
+
+## Query Predicates
+
+### $hasDataType
+
+Filter by attribute type (KeyValueAttribute, LongTextAttribute, or BlobAttribute):
+
+```typescript
+const { documents } = await lr.Attribute.findAll({
+  documents: [
+    ['$it', '$hasDataType', 'KeyValueAttribute'],
+    ['$it', 'isA', 'Document'],
+  ],
+});
+
+const { notes } = await lr.Attribute.findAll({
+  notes: [
+    ['$it', '$hasDataType', 'LongTextAttribute'],
+    ['$it', 'belongsTo', projectId],
+  ],
+});
+
+const { files } = await lr.Attribute.findAll({
+  files: [
+    ['$it', '$hasDataType', 'BlobAttribute'],
+    ['$it', 'isA', 'Attachment'],
+  ],
+});
+```
+
+### $latest(predicate)
+
+Get the most recent value for a predicate. This is essential for state tracking:
+
+```typescript
+const { activeTasks } = await lr.Attribute.findAll({
+  activeTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', activeStateId],
+  ],
+});
+```
+
+<Callout type="info">
+`$latest()` is used when you track state changes over time by creating new facts
+rather than deleting old ones. It returns attributes where the most recent fact
+with that predicate matches the specified value.
+</Callout>
+
+### $not(value)
+
+Negation operator - find attributes where a predicate does NOT have a specific value:
+
+```typescript
+const { incompleteTasks } = await lr.Attribute.findAll({
+  incompleteTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', `$not(${completedStateId})`],
+  ],
+});
+```
+
+### Combining $latest and $not
+
+The most common pattern is combining these for filtering by state:
+
+```typescript
+const { activeItems } = await lr.Attribute.findAll({
+  activeItems: [
+    ['$it', 'isA', 'TodoList'],
+    ['$it', '$latest(stateIs)', `$not(${archivedStateId})`],
+  ],
+});
+```
+
+## Query by Attribute ID
+
+Query specific attributes by their ID:
+
+```typescript
+// Single attribute
+const { doc } = await lr.Attribute.findAll({
+  doc: documentId,  // Just pass the ID as a string
+});
+
+// Multiple specific attributes
+const { doc1, doc2 } = await lr.Attribute.findAll({
+  doc1: 'kv-abc123',
+  doc2: 'kv-def456',
+});
+```
+
+## Compound Queries
+
+Combine multiple criteria to narrow results:
+
+```typescript
+const { results } = await lr.Attribute.findAll({
+  results: [
+    ['$it', '$hasDataType', 'KeyValueAttribute'],
+    ['$it', 'isA', 'TodoList'],
+    ['$it', '$isMemberOf', collectionId],
+    ['$it', '$latest(stateIs)', `$not(${archivedStateId})`],
+    [orgId, '$isAccountableFor', '$it'],
+  ],
+});
+```
+
+This query finds:
+- KeyValue attributes
+- Classified as TodoList
+- That are members of a specific collection
+- Not archived (based on latest state)
+- Where a specific organization is accountable
+
+## Relationship Queries
+
+### Find by Membership
+
+```typescript
+const { listItems } = await lr.Attribute.findAll({
+  listItems: [
+    ['$it', '$isMemberOf', listId],
+  ],
+});
+```
+
+### Find by Custom Relationships
+
+```typescript
+const { authoredDocuments } = await lr.Attribute.findAll({
+  authoredDocuments: [
+    ['$it', 'isA', 'Document'],
+    ['$it', 'authoredBy', authorId],
+  ],
+});
+
+const { projectTasks } = await lr.Attribute.findAll({
+  projectTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', projectId],
+  ],
+});
+```
+
+### Find by Accountability
+
+```typescript
+const { orgResources } = await lr.Attribute.findAll({
+  orgResources: [
+    [organizationId, '$isAccountableFor', '$it'],
+  ],
+});
+```
+
+## State Management Pattern
+
+A common pattern is using separate state attributes to track item status.
+
+### Why Attributes Instead of Terms?
+
+You might wonder: why create attributes for states instead of using terms directly
+(e.g., `[taskId, 'stateIs', 'Completed']`)? The answer is **permission control**.
+
+When states are attributes, you can use `$canReferTo` to control which users or
+teams can set which states:
+
+```typescript
+// Only managers can archive items
+await lr.Fact.createAll([
+  [managersTeamId, '$canReferTo', archivedState.id],
+]);
+
+// All team members can mark items as completed
+await lr.Fact.createAll([
+  [allMembersTeamId, '$canReferTo', completedState.id],
+]);
+```
+
+This enables granular workflows where different roles have different state
+transition permissions.
+
+### Implementation
+
+```typescript
+// 1. Define state terms
+await lr.Fact.createAll([
+  ['ActiveState', '$isATermFor', 'Indicates item is active'],
+  ['ArchivedState', '$isATermFor', 'Indicates item is archived'],
+  ['CompletedState', '$isATermFor', 'Indicates item is completed'],
+]);
+
+// 2. Create state attributes
+const { activeState, archivedState, completedState } = await lr.Attribute.createAll({
+  activeState: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [['$it', 'isA', 'ActiveState']],
+  },
+  archivedState: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [['$it', 'isA', 'ArchivedState']],
+  },
+  completedState: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [['$it', 'isA', 'CompletedState']],
+  },
+});
+
+// 3. Set state on an item
+await lr.Fact.createAll([
+  [taskId, 'stateIs', activeState.id],
+]);
+
+// 4. Insert a newer state fact
+await lr.Fact.createAll([
+  [taskId, 'stateIs', completedState.id],
+]);
+
+// 5. Query by state
+const { completedTasks } = await lr.Attribute.findAll({
+  completedTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', completedState.id],
+  ],
+});
+
+const { pendingTasks } = await lr.Attribute.findAll({
+  pendingTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', `$not(${completedState.id})`],
+  ],
+});
+```
+
+## Alternative: String-Based States
+
+For simpler state tracking, you can use term values directly:
+
+```typescript
+// Set state with string
+await lr.Fact.createAll([
+  [taskId, 'stateIs', 'Completed'],
+]);
+
+// Query (note: $latest still works with term values)
+const { active } = await lr.Attribute.findAll({
+  active: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', '$not(Completed)'],
+  ],
+});
+```
+
+Note: "Completed" must be declared as a term
+
+## Multiple Result Sets
+
+Fetch different categories in a single query:
+
+```typescript
+const {
+  activeTasks,
+  completedTasks,
+  archivedTasks,
+  projects,
+} = await lr.Attribute.findAll({
+  activeTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', `$not(${completedId})`],
+    ['$it', '$latest(stateIs)', `$not(${archivedId})`],
+  ],
+  completedTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', completedId],
+  ],
+  archivedTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', archivedId],
+  ],
+  projects: [
+    ['$it', 'isA', 'Project'],
+  ],
+});
+```
+
+## Access Control in Queries
+
+Queries automatically respect authorization - you only see attributes you have
+access to:
+
+```typescript
+// User A creates a private document
+await userA.Attribute.createKeyValue(
+  { title: 'Secret' },
+  [['$it', 'isA', 'Document']]
+);
+
+// User B queries for documents
+const { docs } = await userB.Attribute.findAll({
+  docs: [['$it', 'isA', 'Document']],
+});
+// docs is empty - User B can't see User A's private document
+```
+
+## Loading Attribute Values
+
+After querying, you can get attribute values:
+
+```typescript
+const { tasks } = await lr.Attribute.findAll({
+  tasks: [['$it', 'isA', 'Task']],
+});
+
+for (const task of tasks) {
+  const value = await task.getValue();
+  console.log(value.title);
+}
+```
+
+Or use `findAndLoadAll()` for batch loading:
+
+```typescript
+const { tasks } = await lr.Attribute.findAndLoadAll({
+  tasks: [['$it', 'isA', 'Task']],
+});
+
+// Values are pre-loaded
+for (const task of tasks) {
+  const value = await task.getValue(); // No additional network request
+  console.log(value.title);
+}
+```
+
+## Query Performance Tips
+
+1. **Be specific** - Include type filters (`isA`) to narrow results quickly
+
+2. **Use accountability filters** - Filter by `$isAccountableFor` to scope to
+   specific organizations
+
+3. **Combine criteria** - Multiple criteria help the query engine optimize
+
+4. **Avoid fetching everything** - Query for what you need rather than loading
+   all attributes and filtering client-side
+
+## Best Practices
+
+1. **Use $latest for state tracking** instead of deleting old state facts
+
+2. **Create dedicated state attributes** for reusable state markers
+
+3. **Combine $latest and $not** for filtering out unwanted states
+
+4. **Use meaningful predicate names** that describe the relationship
+
+5. **Structure queries logically** with the most selective criteria first

@@ -1,0 +1,208 @@
+---
+title: Facts and Triples
+description: Understanding LinkedRecords' triplestore foundation
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+LinkedRecords uses a **triplestore pattern** as its data foundation. Every relationship
+in the system is expressed as a **fact** consisting of three parts:
+
+```
+(subject, predicate, object)
+```
+
+For example:
+- `(document123, isA, Report)` - A document is classified as a Report
+- `(user456, $isMemberOf, team789)` - A user belongs to a team
+- `(task001, belongsTo, project002)` - A task belongs to a project
+
+This simple structure provides powerful flexibility for modeling any domain.
+
+## The $it Placeholder
+
+When creating attributes with associated facts, use `$it` as a placeholder that
+refers to the attribute being created:
+
+```typescript
+await lr.Attribute.createKeyValue(
+  { title: 'My Document' },
+  [
+    ['$it', 'isA', 'Document'],      // This document is a Document
+    ['$it', 'belongsTo', projectId], // This document belongs to a project
+  ]
+);
+```
+
+The `$it` placeholder is replaced with the actual attribute ID after creation.
+
+## Creating Facts
+
+### With Attribute Creation
+
+The most common way to create facts is when creating an attribute:
+
+```typescript
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Quarterly Report', content: '...' },
+  [
+    ['$it', 'isA', 'Report'],
+    ['$it', 'quarter', 'Q4-2024'],
+  ]
+);
+```
+
+### Standalone Facts
+
+You can also create facts independently using `Fact.createAll()`:
+
+```typescript
+await lr.Fact.createAll([
+  [documentId, 'stateIs', 'Published'],
+  [documentId, 'reviewedBy', userId],
+]);
+```
+
+<Callout type="info">
+`Fact.createAll()` returns an array of the facts that were successfully created.
+If a fact creation fails due to authorization, it will be silently excluded from
+the result. Always check the return value if you need to confirm fact creation.
+</Callout>
+
+## Querying Facts
+
+### Finding Attributes by Facts
+
+Use `Attribute.findAll()` to query attributes based on their associated facts:
+
+```typescript
+// Find all documents
+const { documents } = await lr.Attribute.findAll({
+  documents: [
+    ['$it', 'isA', 'Document'],
+  ],
+});
+
+// Find documents in a specific project
+const { projectDocs } = await lr.Attribute.findAll({
+  projectDocs: [
+    ['$it', 'isA', 'Document'],
+    ['$it', 'belongsTo', projectId],
+  ],
+});
+```
+
+### Finding Facts Directly
+
+Use `Fact.findAll()` to query facts themselves:
+
+```typescript
+// Find all facts with a specific predicate
+const termFacts = await lr.Fact.findAll({
+  predicate: ['$isATermFor'],
+});
+
+// Find facts about a specific subject
+const docFacts = await lr.Fact.findAll({
+  subject: [
+    ['isA', 'Document'],
+  ],
+});
+```
+
+## Deleting Facts
+
+Remove facts using `Fact.deleteAll()`:
+
+```typescript
+await lr.Fact.deleteAll([
+  [documentId, 'stateIs', 'Draft'],
+]);
+```
+
+<Callout type="warn">
+Fact deletion requires appropriate authorization. You can only delete facts
+that you created or have permission to modify.
+</Callout>
+
+## Fact Types
+
+### Custom Facts
+
+Custom facts use predicates without a `$` prefix. You can define any predicate
+that makes sense for your domain:
+
+```typescript
+await lr.Fact.createAll([
+  [bookId, 'writtenBy', authorId],
+  [bookId, 'publishedIn', '2024'],
+  [bookId, 'genre', 'Science Fiction'],
+]);
+```
+
+### System Facts (Reserved Predicates)
+
+Predicates starting with `$` are reserved for system use and have special
+authorization semantics. See the [Authorization Model](/docs/authorization-model)
+for details on predicates like `$isAccountableFor`, `$isMemberOf`, `$canAccess`, etc.
+
+## Practical Example
+
+Here's a complete example showing facts in action:
+
+```typescript
+// 1. Declare the terms we'll use
+// Terms must be declared before using them as objects in facts (e.g., in 'isA' facts)
+// This is idempotent - if facts already exist, they won't be created again
+await lr.Fact.createAll([
+  ['Project', '$isATermFor', 'A collection of related work'],
+  ['Task', '$isATermFor', 'A unit of work to be completed'],
+  ['Completed', '$isATermFor', 'State indicating completion'],
+]);
+
+// 2. Create a project
+const project = await lr.Attribute.createKeyValue(
+  { name: 'Website Redesign', deadline: '2024-12-31' },
+  [['$it', 'isA', 'Project']]
+);
+
+// 3. Create tasks linked to the project
+const task1 = await lr.Attribute.createKeyValue(
+  { title: 'Design mockups', assignee: 'alice@example.com' },
+  [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', project.id],
+  ]
+);
+
+// 4. Mark a task as completed
+await lr.Fact.createAll([
+  [task1.id, 'stateIs', 'Completed'],
+]);
+
+// 5. Query incomplete tasks
+const { incompleteTasks } = await lr.Attribute.findAll({
+  incompleteTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', project.id],
+    ['$it', '$latest(stateIs)', '$not(Completed)'],
+  ],
+});
+```
+
+## Best Practices
+
+1. **Use meaningful predicates** - Choose predicates that clearly express the
+   relationship (e.g., `belongsTo`, `createdBy`, `stateIs`)
+
+2. **Declare terms first** - Before using a term as an object in `isA` facts,
+   declare it using `$isATermFor`. See [Terms](/docs/terms) for details.
+
+3. **Keep facts atomic** - Each fact should represent one relationship. Avoid
+   encoding multiple pieces of information in a single fact.
+
+4. **Use system predicates correctly** - Reserved predicates (starting with `$`)
+   have specific authorization implications. Review the [Authorization Model](/docs/authorization-model)
+   before using them.

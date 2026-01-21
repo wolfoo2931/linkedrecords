@@ -1,0 +1,603 @@
+---
+title: SDK Reference
+description: Complete Browser SDK API documentation
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Installation
+
+```bash
+npm install https://github.com/wolfoo2931/linkedrecords-react --save
+```
+
+For React applications, also install the React bindings:
+
+```bash
+npm install linkedrecords-react react-use --save
+```
+
+## LinkedRecords Client
+
+### Constructor
+
+```typescript
+import LinkedRecords from 'linkedrecords';
+
+// Confidential client mode (same domain, uses cookies)
+const lr = new LinkedRecords(new URL('https://your-backend.com'));
+
+// Public client mode (cross-domain, uses OIDC)
+const lr = new LinkedRecords(
+  new URL('https://your-backend.com'),
+  {
+    client_id: 'your-client-id',
+    redirect_uri: window.location.origin + '/callback'
+  }
+);
+```
+
+### Static Methods
+
+#### getPublicClient
+
+Get or create a cached public client instance:
+
+```typescript
+const lr = LinkedRecords.getPublicClient('https://your-backend.com');
+```
+
+### Instance Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `serverURL` | `URL` | The LinkedRecords backend URL |
+| `clientId` | `string` | Unique client identifier |
+| `Attribute` | `AttributesRepository` | Attribute operations |
+| `Fact` | `FactsRepository` | Fact operations |
+| `KeyValueChange` | `class` | Class for creating key-value changes |
+
+### Authentication Methods
+
+#### login()
+
+Initiate OIDC login flow (public client mode only):
+
+```typescript
+await lr.login();
+```
+
+#### logout()
+
+Log out the current user:
+
+```typescript
+await lr.logout();
+```
+
+#### isAuthenticated()
+
+Check if the user is authenticated:
+
+```typescript
+const isAuth = await lr.isAuthenticated();
+```
+
+#### getUser()
+
+Get the current user's information:
+
+```typescript
+const user = await lr.getUser();
+```
+
+#### getAccessToken()
+
+Get the current access token (for API calls):
+
+```typescript
+const token = await lr.getAccessToken();
+```
+
+### User Methods
+
+#### getUserIdByEmail(email)
+
+Look up a user's ID by their email:
+
+```typescript
+const userId = await lr.getUserIdByEmail('user@example.com');
+// Returns: string | undefined
+```
+
+#### getActorId()
+
+Get the current user's ID:
+
+```typescript
+const myId = await lr.ensureUserIdIsKnown();
+// Or directly access after initialization:
+const myId = lr.actorId;
+```
+
+### Quota Methods
+
+#### getQuota(nodeId?)
+
+Get quota information for a user or organization:
+
+```typescript
+// Your own quota
+const myQuota = await lr.getQuota();
+
+// Organization's quota
+const orgQuota = await lr.getQuota(organizationId);
+
+// Returns: { storageUsed: number, storageLimit: number, ... }
+```
+
+### Member Methods
+
+#### getMembersOf(nodeId)
+
+Get members of a team/group:
+
+```typescript
+const members = await lr.getMembersOf(teamId);
+// Returns: [{ id: string, username: string }, ...]
+```
+
+#### isAuthorizedToSeeMemberOf(nodeId)
+
+Check if you can view a team's membership:
+
+```typescript
+const canView = await lr.isAuthorizedToSeeMemberOf(teamId);
+```
+
+### Error Handlers
+
+#### setLoginHandler(handler)
+
+Handle authentication required events:
+
+```typescript
+lr.setLoginHandler(() => {
+  // Redirect to login page or show login modal
+  window.location.href = '/login';
+});
+```
+
+#### setConnectionLostHandler(handler)
+
+Handle connection errors:
+
+```typescript
+lr.setConnectionLostHandler((error) => {
+  console.error('Connection lost:', error);
+  // Show reconnection UI
+});
+```
+
+#### setUnknownServerErrorHandler(handler)
+
+Handle unexpected server errors:
+
+```typescript
+lr.setUnknownServerErrorHandler((response) => {
+  console.error('Server error:', response.status);
+});
+```
+
+#### setQuotaViolationErrorHandler(handler)
+
+Handle quota exceeded errors:
+
+```typescript
+lr.setQuotaViolationErrorHandler((response) => {
+  alert('Storage quota exceeded. Please upgrade.');
+});
+```
+
+---
+
+## AttributesRepository (lr.Attribute)
+
+### Creating Attributes
+
+#### createKeyValue(value, facts?)
+
+Create a key-value attribute:
+
+```typescript
+const attr = await lr.Attribute.createKeyValue(
+  { title: 'My Doc', content: '' },
+  [['$it', 'isA', 'Document']]
+);
+```
+
+#### createLongText(value, facts?)
+
+Create a long text attribute:
+
+```typescript
+const attr = await lr.Attribute.createLongText(
+  'Initial text content',
+  [['$it', 'isA', 'Notes']]
+);
+```
+
+#### createBlob(value, facts?)
+
+Create a blob attribute:
+
+```typescript
+const attr = await lr.Attribute.createBlob(
+  file,  // File or Blob object
+  [['$it', 'isA', 'Attachment']]
+);
+```
+
+#### create(type, value, facts?)
+
+Generic creation method:
+
+```typescript
+const attr = await lr.Attribute.create('keyValue', { data: 'value' }, facts);
+const attr = await lr.Attribute.create('longText', 'content', facts);
+const attr = await lr.Attribute.create('blob', blobData, facts);
+```
+
+#### createAll(blueprint)
+
+Create multiple attributes atomically:
+
+```typescript
+const { parent, child } = await lr.Attribute.createAll({
+  parent: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Parent' },
+    facts: [['$it', 'isA', 'Parent']],
+  },
+  child: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Child' },
+    facts: [
+      ['$it', 'isA', 'Child'],
+      ['$it', 'belongsTo', '{{parent}}'],
+    ],
+  },
+});
+```
+
+### Querying Attributes
+
+#### find(attributeId, ignoreCache?)
+
+Find a single attribute by ID:
+
+```typescript
+const attr = await lr.Attribute.find('kv-abc123');
+// Returns: AbstractAttributeClient | undefined
+```
+
+#### findAll(query, ignoreCache?)
+
+Query for multiple attributes:
+
+```typescript
+const { tasks, projects } = await lr.Attribute.findAll({
+  tasks: [['$it', 'isA', 'Task']],
+  projects: [['$it', 'isA', 'Project']],
+});
+// Returns: { tasks: KeyValueAttribute[], projects: KeyValueAttribute[] }
+```
+
+#### findAndLoadAll(query)
+
+Query and pre-load attribute values:
+
+```typescript
+const { tasks } = await lr.Attribute.findAndLoadAll({
+  tasks: [['$it', 'isA', 'Task']],
+});
+// Values are pre-loaded, no additional network request needed
+```
+
+### Subscriptions
+
+#### subscribeToQuery(query, onChange)
+
+Subscribe to query result changes:
+
+```typescript
+const unsubscribe = await lr.Attribute.subscribeToQuery(
+  { docs: [['$it', 'isA', 'Document']] },
+  (results) => {
+    console.log('Documents changed:', results.docs);
+  }
+);
+
+// Later: stop subscription
+unsubscribe();
+```
+
+---
+
+## FactsRepository (lr.Fact)
+
+### Creating Facts
+
+#### createAll(facts)
+
+Create multiple facts:
+
+```typescript
+const created = await lr.Fact.createAll([
+  ['Term', '$isATermFor', 'Description'],
+  [docId, 'isA', 'Document'],
+  [teamId, '$canAccess', docId],
+]);
+// Returns: array of created facts (empty array if none created)
+```
+
+<Callout type="info">
+Facts that fail authorization are silently excluded from the result.
+Always check the returned array length to verify success.
+</Callout>
+
+### Deleting Facts
+
+#### deleteAll(facts)
+
+Delete multiple facts:
+
+```typescript
+await lr.Fact.deleteAll([
+  [userId, '$isMemberOf', teamId],
+  [docId, 'stateIs', 'Draft'],
+]);
+```
+
+### Querying Facts
+
+#### findAll(query)
+
+Query facts directly:
+
+```typescript
+// Find by predicate
+const termFacts = await lr.Fact.findAll({
+  predicate: ['$isATermFor'],
+});
+
+// Find by subject
+const docFacts = await lr.Fact.findAll({
+  subject: [['isA', 'Document']],
+});
+```
+
+---
+
+## KeyValueAttribute
+
+### Methods
+
+#### getValue()
+
+Get the current value:
+
+```typescript
+const value = await attr.getValue();
+```
+
+#### set(newValue)
+
+Replace the entire value:
+
+```typescript
+await attr.set({ title: 'New Title', content: 'New content' });
+```
+
+#### patch(partialValue)
+
+Merge changes with existing value:
+
+```typescript
+await attr.patch({ title: 'Updated Title' });
+```
+
+#### change(keyValueChange)
+
+Apply fine-grained changes:
+
+```typescript
+await attr.change(new lr.KeyValueChange([
+  { key: 'title', value: 'New Title' },
+  { key: 'metadata.updated', value: Date.now() },
+]));
+```
+
+#### load()
+
+Subscribe to real-time updates:
+
+```typescript
+await attr.load();
+```
+
+#### unload()
+
+Stop receiving updates:
+
+```typescript
+attr.unload();
+```
+
+#### getId()
+
+Get the attribute ID:
+
+```typescript
+const id = await attr.getId();
+```
+
+---
+
+## LongTextAttribute
+
+### Methods
+
+#### getValue()
+
+Get the current text:
+
+```typescript
+const text = await attr.getValue();
+```
+
+#### set(newValue)
+
+Replace the entire text:
+
+```typescript
+await attr.set('New text content');
+```
+
+#### load()
+
+Subscribe to real-time updates with OT:
+
+```typescript
+await attr.load();
+```
+
+#### unload()
+
+Stop receiving updates:
+
+```typescript
+attr.unload();
+```
+
+---
+
+## BlobAttribute
+
+### Methods
+
+#### getValue()
+
+Get the blob data:
+
+```typescript
+const blob = await attr.getValue();
+```
+
+#### set(newValue)
+
+Replace the blob:
+
+```typescript
+await attr.set(newFile);
+```
+
+---
+
+## KeyValueChange
+
+Create granular changes for key-value attributes:
+
+```typescript
+const change = new lr.KeyValueChange([
+  { key: 'field', value: 'new value' },
+  { key: 'nested.field', value: 123 },
+  { key: 'array.0', value: 'first element' },
+  { key: 'toDelete', value: null },  // Deletes the field
+]);
+
+await attr.change(change);
+```
+
+---
+
+## React Hooks
+
+### LinkedRecordsProvider
+
+Wrap your app to provide the LinkedRecords context:
+
+```tsx
+import { LinkedRecordsProvider } from 'linkedrecords-react';
+
+<LinkedRecordsProvider serverUrl="http://localhost:6543">
+  <App />
+</LinkedRecordsProvider>
+```
+
+### useLinkedRecords()
+
+Access the LinkedRecords client:
+
+```tsx
+import { useLinkedRecords } from 'linkedrecords-react';
+
+function MyComponent() {
+  const { lr } = useLinkedRecords();
+
+  // Use lr.Attribute, lr.Fact, etc.
+}
+```
+
+### useKeyValueAttributes(query)
+
+Subscribe to a query for key-value attributes:
+
+```tsx
+import { useKeyValueAttributes } from 'linkedrecords-react';
+
+function TaskList() {
+  const tasks = useKeyValueAttributes([
+    ['$it', 'isA', 'Task'],
+  ]);
+
+  return (
+    <ul>
+      {tasks.map(task => (
+        <li key={task._id}>{task.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## Type Definitions
+
+### FactQuery
+
+```typescript
+type FactQuery = [string, string, string?];
+// [subject, predicate, object?]
+```
+
+### CompoundAttributeQuery
+
+```typescript
+type CompoundAttributeQuery = {
+  [key: string]: string | FactQuery[];
+};
+```
+
+### CompositionCreationRequest
+
+```typescript
+type CompositionCreationRequest = {
+  [key: string]: {
+    type?: 'KeyValueAttribute' | 'LongTextAttribute' | 'BlobAttribute';
+    value?: any;
+    facts?: FactQuery[];
+  };
+};
+```

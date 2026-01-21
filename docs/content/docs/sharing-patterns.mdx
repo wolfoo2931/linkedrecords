@@ -1,0 +1,280 @@
+---
+title: Sharing Patterns
+description: Direct user sharing, team-based sharing, and permission levels
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+LinkedRecords provides flexible sharing mechanisms ranging from direct user
+sharing to team-based access control. This guide covers various sharing patterns
+and when to use each.
+
+## Permission Levels
+
+There are two main permission levels:
+
+| Permission | Predicate | Capabilities |
+|------------|-----------|--------------|
+| Read-Only | `$canRead` | View attribute values |
+| Read-Write | `$canAccess` | View and modify attribute values |
+
+## Direct User Sharing
+
+### Share with a Specific User
+
+The simplest sharing pattern is granting direct access to another user:
+
+```typescript
+// Get the user's ID
+const recipientId = await lr.getUserIdByEmail('colleague@example.com');
+
+// Grant read-only access
+await lr.Fact.createAll([
+  [recipientId, '$canRead', documentId],
+]);
+
+// Or grant read-write access
+await lr.Fact.createAll([
+  [recipientId, '$canAccess', documentId],
+]);
+```
+
+<Callout type="info">
+`getUserIdByEmail` only works if the user has logged in to your application at
+least once. They must be signed up in your LinkedRecords backend before you can
+look up their ID by email.
+</Callout>
+
+### Revoke Direct Access
+
+```typescript
+// Remove read-only access
+await lr.Fact.deleteAll([
+  [recipientId, '$canRead', documentId],
+]);
+
+// Remove read-write access
+await lr.Fact.deleteAll([
+  [recipientId, '$canAccess', documentId],
+]);
+```
+
+## Team-Based Sharing
+
+### Share with a Team
+
+Grant access to a team, and all members inherit that access:
+
+```typescript
+// Create a document shared with a team
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Team Document' },
+  [
+    ['$it', 'isA', 'Document'],
+    [teamId, '$canAccess', '$it'],  // Team gets read-write access
+  ]
+);
+```
+
+### Share an Existing Attribute with a Team
+
+```typescript
+await lr.Fact.createAll([
+  [teamId, '$canAccess', existingDocumentId],
+]);
+```
+
+### Different Access Levels for Different Teams
+
+```typescript
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Quarterly Report' },
+  [
+    ['$it', 'isA', 'Document'],
+    [editorTeamId, '$canAccess', '$it'],  // Editors can modify
+    [viewerTeamId, '$canRead', '$it'],    // Viewers can only read
+  ]
+);
+```
+
+## Sharing with Fact Permissions
+
+Beyond reading and writing attribute values, you can share the ability to
+create facts about an attribute:
+
+### Allow Creating Facts with Attribute as Subject
+
+```typescript
+// Allow team members to add classifications to this attribute
+await lr.Fact.createAll([
+  [teamId, '$canRefine', documentId],
+]);
+
+// Now team members can create facts like:
+await member.Fact.createAll([
+  [documentId, 'category', 'Engineering'],
+  [documentId, 'status', 'In Review'],
+]);
+```
+
+### Allow Creating Facts with Attribute as Object
+
+```typescript
+// Allow team members to reference this attribute in facts
+await lr.Fact.createAll([
+  [teamId, '$canReferTo', projectId],
+]);
+
+// Now team members can create facts like:
+await member.Fact.createAll([
+  [theirDocId, 'belongsTo', projectId],
+]);
+```
+
+## Organization Sharing Pattern
+
+A complete sharing setup for an organization:
+
+```typescript
+async function createSharedDocument(lr, title: string, org: OrgStructure) {
+  return lr.Attribute.createAll({
+    doc: {
+      type: 'KeyValueAttribute',
+      value: {
+        title,
+        content: '',
+        createdAt: Date.now(),
+      },
+      facts: [
+        ['$it', 'isA', 'Document'],
+        // Org is accountable (for quota management)
+        [org.id, '$isAccountableFor', '$it'],
+        // Admins can do everything
+        [org.adminTeam.id, '$canAccess', '$it'],
+        [org.adminTeam.id, '$canRefine', '$it'],
+        // Editors can modify content
+        [org.editorTeam.id, '$canAccess', '$it'],
+        // Viewers can only read
+        [org.viewerTeam.id, '$canRead', '$it'],
+      ],
+    },
+  });
+}
+```
+
+## User-Initiated Sharing
+
+Implement a share button in your UI:
+
+```typescript
+async function shareDocument(lr, documentId: string, email: string, readOnly: boolean) {
+  // Find the user
+  const userId = await lr.getUserIdByEmail(email);
+
+  if (!userId) {
+    throw new Error('User not found. They must sign up first.');
+  }
+
+  // Grant appropriate permission
+  const predicate = readOnly ? '$canRead' : '$canAccess';
+  const created = await lr.Fact.createAll([
+    [userId, predicate, documentId],
+  ]);
+
+  if (created.length === 0) {
+    throw new Error('Not authorized to share this document');
+  }
+
+  return true;
+}
+```
+
+## Sharing via Team Membership
+
+Another approach is adding users to teams rather than sharing individual items:
+
+```typescript
+async function inviteToTeam(lr, teamId: string, email: string, asHost: boolean = false) {
+  const userId = await lr.getUserIdByEmail(email);
+
+  if (!userId) {
+    throw new Error('User not found');
+  }
+
+  const predicate = asHost ? '$isHostOf' : '$isMemberOf';
+  const created = await lr.Fact.createAll([
+    [userId, predicate, teamId],
+  ]);
+
+  if (created.length === 0) {
+    throw new Error('Not authorized to add users to this team');
+  }
+}
+```
+
+<Callout type="info">
+Team-based sharing is more scalable - users automatically get access to all
+team resources without individual sharing operations.
+</Callout>
+
+## List Shared Items
+
+Query for items shared with you:
+
+```typescript
+// Find all documents I can access
+const { myDocs } = await lr.Attribute.findAll({
+  myDocs: [
+    ['$it', 'isA', 'Document'],
+  ],
+});
+// This automatically only returns documents you have access to
+```
+
+## Sharing Best Practices
+
+1. **Use teams for groups** - Easier to manage than individual permissions
+
+2. **Use accountability for billing** - Transfer accountability to organizations
+   for quota management
+
+3. **Implement unsharing** - Always provide a way to revoke access
+
+## Common Gotchas
+
+### User Must Exist
+
+```typescript
+const userId = await lr.getUserIdByEmail('new@example.com');
+if (!userId) {
+  // The user hasn't signed up yet
+  console.log('User must create an account first');
+  return;
+}
+```
+
+### Verify Authorization
+
+```typescript
+const created = await lr.Fact.createAll([
+  [userId, '$canRead', documentId],
+]);
+
+if (created.length === 0) {
+  // You don't have permission to share this document
+  console.log('Sharing failed - not authorized');
+}
+```
+
+### Removing All Access
+
+When removing a user's access, check for both permission types:
+
+```typescript
+await lr.Fact.deleteAll([
+  [userId, '$canRead', documentId],
+  [userId, '$canAccess', documentId],
+]);
+```

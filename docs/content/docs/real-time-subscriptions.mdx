@@ -1,0 +1,343 @@
+---
+title: Real-Time Subscriptions
+description: Live updates and collaborative features
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+LinkedRecords provides real-time updates through WebSocket connections, enabling
+collaborative applications where changes by one user instantly appear for others.
+
+## Attribute Subscriptions
+
+### Loading and Subscribing
+
+When you call `load()` on an attribute, it subscribes to real-time updates:
+
+```typescript
+const doc = await lr.Attribute.find(documentId);
+await doc.load();
+
+// The attribute now receives live updates
+// Any changes made by other users will be reflected automatically
+```
+
+### Getting Current Value
+
+After loading, `getValue()` returns the latest state:
+
+```typescript
+// Initial load
+await doc.load();
+const value = await doc.getValue();
+
+// Later, after other users made changes
+const updatedValue = await doc.getValue();  // Reflects all changes
+```
+
+### Unsubscribing
+
+To stop receiving updates and free resources:
+
+```typescript
+doc.unload();
+```
+
+<Callout type="info">
+Always call `unload()` when you're done with an attribute to prevent memory
+leaks and unnecessary network traffic.
+</Callout>
+
+## Query Subscriptions
+
+Subscribe to changes in query results - get notified when attributes matching
+your query are created, modified, or deleted:
+
+```typescript
+const unsubscribe = await lr.Attribute.subscribeToQuery(
+  { documents: [['$it', 'isA', 'Document']] },
+  (results) => {
+    console.log('Documents updated:', results.documents);
+    // results.documents is an array of attributes matching the query
+  }
+);
+```
+
+### How Query Subscriptions Work
+
+1. Initial callback fires immediately with current results
+2. Subsequent callbacks fire when:
+   - A new attribute is created that matches the query
+   - An existing attribute's facts change (affecting query match)
+   - A matching attribute's value changes
+   - A fact is deleted that affects query results
+
+### Unsubscribing from Queries
+
+```typescript
+// Store the unsubscribe function
+const unsubscribe = await lr.Attribute.subscribeToQuery(query, callback);
+
+// Later, when no longer needed
+unsubscribe();
+```
+
+## React Integration
+
+The `linkedrecords-react` package provides hooks for easy real-time integration:
+
+### useKeyValueAttributes Hook
+
+Automatically subscribes to and updates with query results:
+
+```tsx
+import { useKeyValueAttributes } from 'linkedrecords-react';
+
+function TaskList() {
+  // Automatically subscribes to real-time updates
+  const tasks = useKeyValueAttributes([
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', '$not(Completed)'],
+  ]);
+
+  return (
+    <ul>
+      {tasks.map(task => (
+        <li key={task._id as string}>
+          {task.title as string}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Manual Subscription in React
+
+For more control, use the `useLinkedRecords` hook:
+
+```tsx
+import { useEffect, useState } from 'react';
+import { useLinkedRecords } from 'linkedrecords-react';
+
+function DocumentViewer({ documentId }) {
+  const { lr } = useLinkedRecords();
+  const [content, setContent] = useState(null);
+
+  useEffect(() => {
+    let doc;
+
+    async function loadDocument() {
+      doc = await lr.Attribute.find(documentId);
+      if (doc) {
+        await doc.load();
+        setContent(await doc.getValue());
+
+        // Set up a polling interval to check for updates
+        // (load() handles the subscription, but getValue() needs to be called)
+        const interval = setInterval(async () => {
+          setContent(await doc.getValue());
+        }, 1000);
+
+        return () => {
+          clearInterval(interval);
+          doc?.unload();
+        };
+      }
+    }
+
+    loadDocument();
+
+    return () => {
+      doc?.unload();
+    };
+  }, [documentId, lr]);
+
+  if (!content) return <div>Loading...</div>;
+
+  return <div>{content.title}</div>;
+}
+```
+
+## Authorization and Subscriptions
+
+Subscriptions respect authorization rules:
+
+### Private Attributes
+
+Only the owner sees updates to private attributes:
+
+```typescript
+// User A creates a private document
+const doc = await userA.Attribute.createKeyValue({ title: 'Private' });
+
+// User B subscribes to documents
+await userB.Attribute.subscribeToQuery(
+  { docs: [['$it', 'isA', 'Document']] },
+  (results) => {
+    // User B will NOT see User A's private document
+  }
+);
+```
+
+### Shared Attributes
+
+Team members see updates to shared attributes:
+
+```typescript
+// User A creates a shared document
+const doc = await userA.Attribute.createKeyValue(
+  { title: 'Shared' },
+  [
+    ['$it', 'isA', 'Document'],
+    [teamId, '$canAccess', '$it'],
+  ]
+);
+
+// User B (team member) subscribes
+await userB.Attribute.subscribeToQuery(
+  { docs: [['$it', 'isA', 'Document']] },
+  (results) => {
+    // User B WILL see the shared document (if they're a team member)
+  }
+);
+```
+
+### Access Revocation
+
+When access is revoked, users stop seeing updates:
+
+```typescript
+// Remove user from team
+await lr.Fact.deleteAll([
+  [userId, '$isMemberOf', teamId],
+]);
+
+// User's subscription will no longer receive updates for team documents
+// and their current results will be updated to exclude team documents
+```
+
+## Multiple Concurrent Subscriptions
+
+You can have multiple subscriptions active simultaneously:
+
+```typescript
+// Subscribe to documents
+const unsubDocs = await lr.Attribute.subscribeToQuery(
+  { items: [['$it', 'isA', 'Document']] },
+  (results) => console.log('Documents:', results.items.length)
+);
+
+// Subscribe to tasks
+const unsubTasks = await lr.Attribute.subscribeToQuery(
+  { items: [['$it', 'isA', 'Task']] },
+  (results) => console.log('Tasks:', results.items.length)
+);
+
+// Clean up both when done
+unsubDocs();
+unsubTasks();
+```
+
+## Subscription Notifications
+
+Subscriptions are triggered by relevant changes:
+
+| Change Type | Triggers Notification? |
+|-------------|----------------------|
+| New attribute created matching query | Yes |
+| Attribute value updated | Yes |
+| New fact created with query predicate | Yes |
+| Fact deleted affecting query match | Yes |
+| Fact created with unrelated predicate | No |
+| Private attribute by other user | No |
+
+## Building Collaborative Features
+
+### Shared Todo List
+
+```tsx
+function SharedTodoList({ listId }) {
+  const { lr } = useLinkedRecords();
+  const todos = useKeyValueAttributes([
+    ['$it', 'isA', 'TodoItem'],
+    ['$it', '$isMemberOf', listId],
+  ]);
+
+  const addTodo = async (title) => {
+    await lr.Attribute.createKeyValue(
+      { title, completed: false },
+      [
+        ['$it', 'isA', 'TodoItem'],
+        ['$it', '$isMemberOf', listId],
+      ]
+    );
+    // No need to manually refresh - subscription handles it
+  };
+
+  const toggleTodo = async (todo) => {
+    const attr = await lr.Attribute.find(todo._id);
+    await attr.patch({ completed: !todo.completed });
+  };
+
+  return (
+    <div>
+      <AddTodoForm onAdd={addTodo} />
+      <ul>
+        {todos.map(todo => (
+          <TodoItem
+            key={todo._id}
+            todo={todo}
+            onToggle={() => toggleTodo(todo)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### Presence Indicator
+
+Track which users are currently viewing a document:
+
+```typescript
+async function updatePresence(lr, documentId, userId) {
+  // Create/update a presence attribute
+  const presenceKey = `presence-${userId}`;
+
+  await lr.Fact.createAll([
+    [userId, 'viewing', documentId],
+  ]);
+
+  // Clean up on unload
+  return () => {
+    lr.Fact.deleteAll([
+      [userId, 'viewing', documentId],
+    ]);
+  };
+}
+```
+
+## Best Practices
+
+1. **Always unsubscribe** - Clean up subscriptions to prevent memory leaks
+
+2. **Use React hooks** - The `linkedrecords-react` package handles subscription
+   lifecycle automatically
+
+3. **Design for offline** - Handle connection interruptions gracefully
+
+4. **Minimize subscriptions** - Subscribe only to data you need
+
+5. **Consider query scope** - More specific queries mean fewer irrelevant updates
+
+6. **Handle errors** - Set up error handlers for connection issues:
+
+```typescript
+lr.setConnectionLostHandler((error) => {
+  console.log('Connection lost, attempting to reconnect...');
+});
+```

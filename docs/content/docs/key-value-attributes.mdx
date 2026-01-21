@@ -1,0 +1,305 @@
+---
+title: Key-Value Attributes
+description: Working with JSON document storage using CRDT
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+Key-Value Attributes are the primary data storage type in LinkedRecords. They store
+JSON documents and use **CRDT (Conflict-free Replicated Data Types)** for concurrent
+editing support.
+
+## Creating Key-Value Attributes
+
+### Simple Creation
+
+```typescript
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'My Document', content: 'Hello world' },
+  [['$it', 'isA', 'Document']]
+);
+```
+
+### Using create() Method
+
+```typescript
+const doc = await lr.Attribute.create('keyValue',
+  { title: 'My Document', content: 'Hello world' },
+  [['$it', 'isA', 'Document']]
+);
+```
+
+### With Multiple Facts
+
+```typescript
+const task = await lr.Attribute.createKeyValue(
+  {
+    title: 'Complete report',
+    priority: 'high',
+    assignee: 'alice@example.com'
+  },
+  [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', projectId],
+    [teamId, '$canAccess', '$it'],
+  ]
+);
+```
+
+## Reading Values
+
+### Get Current Value
+
+```typescript
+const attr = await lr.Attribute.find(attributeId);
+const value = await attr.getValue();
+console.log(value); // { title: 'My Document', ... }
+```
+
+### Find by Query
+
+```typescript
+const { tasks } = await lr.Attribute.findAll({
+  tasks: [['$it', 'isA', 'Task']],
+});
+
+for (const task of tasks) {
+  const value = await task.getValue();
+  console.log(value.title);
+}
+```
+
+## Updating Values
+
+### set() - Replace Entire Value
+
+The `set()` method replaces the entire document:
+
+```typescript
+const doc = await lr.Attribute.find(docId);
+await doc.set({
+  title: 'Updated Title',
+  content: 'New content',
+  updatedAt: Date.now()
+});
+```
+
+<Callout type="warn">
+`set()` replaces the entire document. Any fields not included in the new value
+will be removed.
+</Callout>
+
+### patch() - Merge Changes
+
+The `patch()` method merges changes with the existing document:
+
+```typescript
+const doc = await lr.Attribute.find(docId);
+
+// Only updates the 'title' field, keeps other fields unchanged
+await doc.patch({ title: 'Updated Title' });
+```
+
+### change() - Fine-Grained Updates
+
+The `change()` method allows precise control over individual fields using
+`KeyValueChange`:
+
+```typescript
+const doc = await lr.Attribute.find(docId);
+
+await doc.change(new lr.KeyValueChange([
+  { key: 'title', value: 'New Title' },
+  { key: 'metadata.lastModified', value: Date.now() },
+  { key: 'tags.0', value: 'important' },
+]));
+```
+
+#### Nested Path Updates
+
+Use dot notation for nested updates:
+
+```typescript
+// Update nested object field
+await doc.change(new lr.KeyValueChange([
+  { key: 'author.name', value: 'Alice' },
+  { key: 'author.email', value: 'alice@example.com' },
+]));
+```
+
+#### Delete Fields
+
+Set a field to `null` to delete it:
+
+```typescript
+await doc.change(new lr.KeyValueChange([
+  { key: 'temporaryField', value: null },  // Removes this field
+]));
+```
+
+## Concurrency Handling
+
+Key-Value Attributes handle concurrent edits. When multiple users
+edit different fields simultaneously, changes are automatically merged:
+
+```typescript
+// User A and User B both have the document open
+// Initial: { title: 'Doc', status: 'draft' }
+
+// User A updates title
+await docA.change(new lr.KeyValueChange([
+  { key: 'title', value: 'Updated by A' },
+]));
+
+// User B updates status (at the same time)
+await docB.change(new lr.KeyValueChange([
+  { key: 'status', value: 'published' },
+]));
+
+// Result: { title: 'Updated by A', status: 'published' }
+// Both changes are preserved
+```
+
+<Callout type="warn">
+**Array Gotcha:** Arrays are completely overwritten on concurrent updates (last
+write wins). CRDT merging does NOT work for array elements. If you need
+collaborative array editing, consider using separate attributes for array items
+or using facts to represent relationships.
+</Callout>
+
+### Working with Arrays Safely
+
+Instead of storing items in an array:
+
+```typescript
+// AVOID: Arrays don't merge well
+const list = await lr.Attribute.createKeyValue({
+  name: 'Shopping List',
+  items: ['Milk', 'Bread', 'Eggs']  // Concurrent edits may lose data
+});
+```
+
+Use nested objects with IDs:
+
+```typescript
+// BETTER: Use objects with unique keys
+const list = await lr.Attribute.createKeyValue({
+  name: 'Shopping List',
+  items: {
+    'item-1': { text: 'Milk', completed: false },
+    'item-2': { text: 'Bread', completed: false },
+    'item-3': { text: 'Eggs', completed: false },
+  }
+});
+
+// Safe concurrent updates
+await list.change(new lr.KeyValueChange([
+  { key: 'items.item-2.completed', value: true },
+]));
+```
+
+Or use separate attributes connected by facts:
+
+```typescript
+// BEST for complex items: Separate attributes
+const list = await lr.Attribute.createKeyValue({ name: 'Shopping List' });
+
+const item1 = await lr.Attribute.createKeyValue(
+  { text: 'Milk', completed: false },
+  [['$it', 'isIncludedIn', list.id]]
+);
+```
+
+## Common Patterns
+
+### Task Manager
+
+```typescript
+// Create a task list
+const list = await lr.Attribute.createKeyValue({
+  name: 'Sprint Tasks',
+  tasks: {}
+}, [['$it', 'isA', 'TaskList']]);
+
+// Add a task
+const taskId = crypto.randomUUID();
+await list.change(new lr.KeyValueChange([
+  {
+    key: `tasks.${taskId}`,
+    value: {
+      title: 'Implement feature',
+      done: false,
+      createdAt: Date.now()
+    }
+  },
+]));
+
+// Toggle task completion
+await list.change(new lr.KeyValueChange([
+  { key: `tasks.${taskId}.done`, value: true },
+]));
+
+// Delete a task
+await list.change(new lr.KeyValueChange([
+  { key: `tasks.${taskId}`, value: null },
+]));
+```
+
+### User Profile
+
+```typescript
+const profile = await lr.Attribute.createKeyValue({
+  displayName: 'Alice Smith',
+  bio: '',
+  preferences: {
+    theme: 'dark',
+    notifications: true,
+    language: 'en'
+  },
+  social: {
+    twitter: '',
+    github: ''
+  }
+}, [['$it', 'isA', 'UserProfile']]);
+
+// Update specific preference
+await profile.change(new lr.KeyValueChange([
+  { key: 'preferences.theme', value: 'light' },
+]));
+```
+
+### Document with Metadata
+
+```typescript
+const doc = await lr.Attribute.createKeyValue({
+  title: 'Quarterly Report',
+  content: '...',
+  metadata: {
+    version: 1,
+    createdAt: Date.now(),
+    lastModifiedAt: Date.now(),
+    author: userId,
+    tags: ['report', 'Q4', '2024']
+  }
+}, [
+  ['$it', 'isA', 'Document'],
+  ['$it', 'belongsTo', projectId]
+]);
+
+// Increment version and update timestamp
+const current = await doc.getValue();
+await doc.change(new lr.KeyValueChange([
+  { key: 'metadata.version', value: current.metadata.version + 1 },
+  { key: 'metadata.lastModifiedAt', value: Date.now() },
+]));
+```
+
+## Best Practices
+
+1. **Use objects instead of arrays** for collections that need concurrent editing
+
+2. **Use change() for partial updates** instead of set() to preserve other fields
+
+3. **Flatten when possible** - Deeply nested structures are harder to update

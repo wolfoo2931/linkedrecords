@@ -1,0 +1,212 @@
+---
+title: Quotas
+description: Storage limits and quota management
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+Quotas control how much storage each user or organization can consume. When a user
+or organization reaches their quota limit, further attribute creation or modification
+is blocked until storage is freed or the quota is upgraded.
+
+Quotas are tied to [accountability](/docs/accountability) - the accountable entity's
+quota is charged for storage used by an attribute.
+
+## Default Quotas
+
+Every user receives a default storage quota when they sign up. This is configured
+via the `DEFAULT_STORAGE_SIZE_QUOTA` environment variable (in megabytes):
+
+```bash
+# Default is 500 MB if not specified
+DEFAULT_STORAGE_SIZE_QUOTA=500
+```
+
+Organizations and groups start with zero quota by default - they must be explicitly
+assigned a quota through the payment system or database configuration.
+
+## Checking Quota Usage
+
+Use `getQuota()` to retrieve quota information:
+
+```typescript
+// Get your own quota
+const myQuota = await lr.getQuota();
+
+console.log(myQuota.totalStorageAvailable);      // Total bytes available
+console.log(myQuota.usedStorage);                // Bytes currently used
+console.log(myQuota.remainingStorageAvailable);  // Bytes remaining
+console.log(myQuota.isUpgraded);                 // Whether quota was upgraded via payment
+
+// Get an organization's quota (must be member, host, or accountable)
+const orgQuota = await lr.getQuota(organizationId);
+```
+
+<Callout type="info">
+You can only check quotas for entities you have a relationship with (member, host,
+or accountable). Attempting to check another user's quota returns an empty object.
+</Callout>
+
+## Quota Enforcement
+
+When storage quota is exceeded:
+
+1. **Attribute creation is blocked** - New attributes cannot be created
+2. **Attribute modification is blocked** - Existing attributes cannot be updated
+3. **The operation fails silently** - The change is not persisted
+
+```typescript
+// Handle quota violations
+lr.setQuotaViolationErrorHandler((response) => {
+  console.log('Storage quota exceeded');
+  // Show upgrade prompt or warning to user
+});
+
+try {
+  await lr.Attribute.createKeyValue({ /* large data */ });
+} catch (error) {
+  // Handle quota violation
+}
+```
+
+## Upgrading Quotas
+
+Quotas can be upgraded through payment providers. Currently, **Paddle** is the
+only implemented payment provider.
+
+### How Quota Upgrades Work
+
+1. User initiates a subscription through Paddle checkout
+2. Paddle sends a webhook notification to your LinkedRecords server
+3. LinkedRecords creates a quota event that increases the user's storage limit
+4. The `isUpgraded` flag becomes `true` in quota responses
+
+### Paddle Integration
+
+Configure Paddle via environment variables:
+
+```bash
+PADDLE_API_KEY=your_paddle_api_key
+PADDLE_API_URL=https://api.paddle.com
+PADDLE_NOTIFICATION_SECRET=your_webhook_secret
+```
+
+Paddle webhook notifications are sent to `/payment_events/paddle`. The webhook
+payload must include:
+
+- `custom_data.nodeId` - The user ID or organization ID to upgrade
+- `custom_data.total_storage_available` in the product - The new storage limit in bytes
+
+Example product configuration in Paddle:
+
+```json
+{
+  "custom_data": {
+    "total_storage_available": "5242880000"
+  }
+}
+```
+
+### Subscription Events
+
+LinkedRecords handles these Paddle subscription events:
+
+| Event | Effect |
+|-------|--------|
+| `subscription.created` | Increases quota to the subscribed amount |
+| `subscription.updated` (with cancel) | Reverts quota to default when subscription ends |
+| `subscription.canceled` | Reverts quota to default |
+
+### Management URLs
+
+The accountable party can access Paddle subscription management URLs through
+the quota response:
+
+```typescript
+const quota = await lr.getQuota(organizationId);
+
+// Only available to the accountable party
+const urls = quota.accounteeInformation?.data?.management_urls;
+if (urls) {
+  console.log(urls.cancel);                // URL to cancel subscription
+  console.log(urls.update_payment_method); // URL to update payment
+}
+```
+
+<Callout type="warn">
+Management URLs are only visible to the accountable party, not to members or
+hosts of the organization.
+</Callout>
+
+## Quotas and Organizations
+
+When users create resources for an organization, transfer accountability to
+ensure storage counts against the organization's quota:
+
+```typescript
+// Personal document (counts against user's quota)
+const personalDoc = await lr.Attribute.createKeyValue(
+  { title: 'My Notes' },
+  [['$it', 'isA', 'Document']]
+);
+
+// Organization document (counts against org's quota)
+const orgDoc = await lr.Attribute.createKeyValue(
+  { title: 'Project Spec' },
+  [
+    ['$it', 'isA', 'Document'],
+    [organizationId, '$isAccountableFor', '$it'],
+  ]
+);
+```
+
+This pattern allows organizations to purchase larger quotas and have team
+members' work count against the shared quota rather than individual limits.
+
+## Quota Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEFAULT_STORAGE_SIZE_QUOTA` | Default storage for new users (MB) | 500 |
+| `QUOTA_COUNT_KV_ATTRIBUTES` | Count KeyValue attributes in quota | false |
+| `QUOTA_COUNT_LT_ATTRIBUTES` | Count LongText attributes in quota | false |
+
+<Callout type="info">
+Blob attributes are always counted in quota calculations when S3 storage is
+configured.
+</Callout>
+
+### Database-Level Quota Assignment
+
+For administrative purposes, quotas can be assigned directly in the database:
+
+```sql
+INSERT INTO quota_events (node_id, total_storage_available, valid_from)
+VALUES ('us-user-id-here', 1073741824, NOW());  -- 1 GB
+```
+
+This is useful for:
+- Testing quota behavior
+- Granting quotas outside the payment flow
+- Administrative overrides
+
+## Best Practices
+
+1. **Set appropriate defaults** - Configure `DEFAULT_STORAGE_SIZE_QUOTA` based
+   on your expected usage patterns
+
+2. **Use organization quotas** - For team features, assign quotas to organizations
+   rather than individual users
+
+3. **Handle violations gracefully** - Use `setQuotaViolationErrorHandler` to
+   show helpful messages when users hit limits
+
+4. **Monitor usage** - Periodically check quota usage to identify users who may
+   need upgrades
+
+5. **Transfer accountability** - Ensure team resources are accountable to the
+   organization so quota is correctly tracked

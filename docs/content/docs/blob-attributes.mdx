@@ -1,0 +1,365 @@
+---
+title: Blob Attributes
+description: Binary file storage with S3/MinIO integration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+Blob Attributes store binary data such as images, documents, audio, video,
+and other files. They integrate with S3-compatible storage (AWS S3, MinIO)
+for efficient large file handling.
+
+## When to Use Blob Attributes
+
+Use Blob Attributes for:
+- Images and photos
+- PDF documents
+- Audio and video files
+- Any binary data that needs to be stored and retrieved
+
+Use Key-Value Attributes instead for:
+- Text content
+- JSON data
+- Small metadata
+
+## Creating Blob Attributes
+
+### From a File Input
+
+```typescript
+const fileInput = document.getElementById('fileInput');
+const file = fileInput.files[0];
+
+const attachment = await lr.Attribute.createBlob(
+  file,
+  [
+    ['$it', 'isA', 'Attachment'],
+    ['$it', 'belongsTo', documentId],
+  ]
+);
+```
+
+### From a Blob Object
+
+```typescript
+const blob = new Blob(['Hello, World!'], { type: 'text/plain' });
+
+const textFile = await lr.Attribute.createBlob(
+  blob,
+  [['$it', 'isA', 'TextFile']]
+);
+```
+
+### Using create()
+
+```typescript
+const file = await lr.Attribute.create('blob', blobData, [
+  ['$it', 'isA', 'Image'],
+]);
+```
+
+### In Blueprint Pattern
+
+Currently not usable in blueprint pattern must be created and linked separately.
+
+## Reading Blob Content
+
+```typescript
+const attachment = await lr.Attribute.find(attachmentId);
+const blob = await attachment.getValue();
+
+// Create a URL for display
+const url = URL.createObjectURL(blob);
+
+// Clean up when done
+URL.revokeObjectURL(url);
+```
+
+### Displaying an Image
+
+```tsx
+function ImageDisplay({ attributeId }) {
+  const { lr } = useLinkedRecords();
+  const [imageUrl, setImageUrl] = useState(null);
+
+  useEffect(() => {
+    async function loadImage() {
+      const attr = await lr.Attribute.find(attributeId);
+      const blob = await attr?.getValue();
+      if (blob) {
+        setImageUrl(URL.createObjectURL(blob));
+      }
+    }
+
+    loadImage();
+
+    return () => {
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+      }
+    };
+  }, [attributeId]);
+
+  if (!imageUrl) return <div>Loading...</div>;
+
+  return <img src={imageUrl} alt="Uploaded image" />;
+}
+```
+
+## Updating Blob Content
+
+```typescript
+const attachment = await lr.Attribute.find(attachmentId);
+await attachment.set(newFileBlob);
+```
+
+<Callout type="info">
+Blob updates replace the entire file. There's no partial update mechanism
+for binary data.
+</Callout>
+
+## Querying Blob Attributes
+
+### Find All Blobs
+
+```typescript
+const { files } = await lr.Attribute.findAll({
+  files: [
+    ['$it', '$hasDataType', 'BlobAttribute'],
+  ],
+});
+```
+
+### Find by Type
+
+```typescript
+const { images } = await lr.Attribute.findAll({
+  images: [
+    ['$it', '$hasDataType', 'BlobAttribute'],
+    ['$it', 'isA', 'Image'],
+  ],
+});
+```
+
+### Find by Relationship
+
+```typescript
+const { docAttachments } = await lr.Attribute.findAll({
+  docAttachments: [
+    ['$it', '$hasDataType', 'BlobAttribute'],
+    ['$it', 'belongsTo', documentId],
+  ],
+});
+```
+
+## Common Patterns
+
+### Document with Attachments
+
+```typescript
+async function createDocumentWithAttachment(lr, title, file) {
+  // First create the document
+  const doc = await lr.Attribute.createKeyValue(
+    {
+      title,
+      createdAt: Date.now(),
+      attachmentCount: 1,
+    },
+    [['$it', 'isA', 'Document']]
+  );
+
+  // Then create the attachment
+  const attachment = await lr.Attribute.createBlob(
+    file,
+    [
+      ['$it', 'isA', 'Attachment'],
+      ['$it', 'belongsTo', doc.id],
+    ]
+  );
+
+  return { doc, attachment };
+}
+```
+
+### Profile Picture
+
+```typescript
+async function uploadProfilePicture(lr, userId, imageFile) {
+  // Create or update profile picture
+  const picture = await lr.Attribute.createBlob(
+    imageFile,
+    [
+      ['$it', 'isA', 'ProfilePicture'],
+      ['$it', 'belongsTo', userId],
+    ]
+  );
+
+  return picture;
+}
+```
+
+### File Gallery
+
+```typescript
+async function createGalleryImage(lr, galleryId, imageFile, metadata) {
+  const image = await lr.Attribute.createBlob(
+    imageFile,
+    [
+      ['$it', 'isA', 'GalleryImage'],
+      ['$it', '$isMemberOf', galleryId],
+    ]
+  );
+
+  // Store metadata separately for easy querying
+  const imageMeta = await lr.Attribute.createKeyValue(
+    {
+      filename: metadata.filename,
+      size: imageFile.size,
+      mimeType: imageFile.type,
+      uploadedAt: Date.now(),
+      ...metadata,
+    },
+    [
+      ['$it', 'isA', 'ImageMetadata'],
+      ['$it', 'describedBy', image.id],
+    ]
+  );
+
+  return { image, imageMeta };
+}
+```
+
+## File Upload Component
+
+```tsx
+function FileUploader({ onUpload }) {
+  const { lr } = useLinkedRecords();
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileSelect = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const attachment = await lr.Attribute.createBlob(
+        file,
+        [
+          ['$it', 'isA', 'Attachment'],
+        ]
+      );
+
+      onUpload(attachment);
+    } catch (error) {
+      console.error('Upload failed:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="file"
+        onChange={handleFileSelect}
+        disabled={uploading}
+      />
+      {uploading && <span>Uploading...</span>}
+    </div>
+  );
+}
+```
+
+## Storage Configuration
+
+Blob Attributes can be stored in:
+
+1. **S3/MinIO** (recommended for production)
+2. **PostgreSQL** (fallback, for small files)
+
+Configure S3 storage via environment variables:
+
+```bash
+S3_ENDPOINT=https://s3.amazonaws.com
+S3_BUCKET=your-bucket-name
+S3_ACCESS_KEY=your-access-key
+S3_SECRET_KEY=your-secret-key
+S3_USE_SSL=true
+```
+
+<Callout type="info">
+If S3 is not configured, blobs are stored in PostgreSQL. This works for
+development but is not recommended for production with large files.
+</Callout>
+
+## Permissions
+
+Blob Attributes use the same authorization model:
+
+```typescript
+// Private file (only creator can access)
+const privateFile = await lr.Attribute.createBlob(file);
+
+// Shared with team
+const sharedFile = await lr.Attribute.createBlob(
+  file,
+  [
+    ['$it', 'isA', 'SharedFile'],
+    [teamId, '$canAccess', '$it'],
+  ]
+);
+
+// Read-only sharing
+const publicFile = await lr.Attribute.createBlob(
+  file,
+  [
+    ['$it', 'isA', 'PublicFile'],
+    [viewerTeamId, '$canRead', '$it'],
+  ]
+);
+```
+
+## Quota Considerations
+
+Blob storage counts against storage quotas. Large files can quickly consume
+available storage:
+
+```typescript
+// Check quota before uploading
+const quota = await lr.getQuota();
+
+if (file.size > quota.storageLimit - quota.storageUsed) {
+  alert('Not enough storage space');
+  return;
+}
+
+// Upload file
+await lr.Attribute.createBlob(file, facts);
+```
+
+## Best Practices
+
+1. **Store metadata separately** - Use Key-Value Attributes for searchable
+   file metadata (name, type, size) and Blob for the actual content
+
+2. **Check quota before upload** - Prevent failed uploads due to quota limits
+
+3. **Clean up object URLs** - Call `URL.revokeObjectURL()` when done displaying
+   files to prevent memory leaks
+
+4. **Use appropriate storage** - Configure S3 for production deployments with
+   large files
+
+5. **Consider file size limits** - Set reasonable upload limits in your UI
+
+6. **Transfer accountability** - For organization files, transfer accountability
+   to the organization for proper quota management
+
+## Limitations
+
+1. **No partial updates** - Files must be replaced entirely
+2. **No real-time collaboration** - Unlike Long Text, blobs don't support OT
+3. **Size limits** - Very large files may be impractical depending on storage
+   configuration

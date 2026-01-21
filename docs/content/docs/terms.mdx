@@ -1,0 +1,236 @@
+---
+title: Terms
+description: Declaring vocabulary with $isATermFor
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## What Are Terms?
+
+Terms are the vocabulary of your LinkedRecords application. Before you can use a
+term as an object in any fact, you must **declare the term** first.
+
+Think of terms as defining the "types" or "categories" in your data model.
+
+## Declaring Terms
+
+Use the `$isATermFor` predicate to declare a new term:
+
+```typescript
+await lr.Fact.createAll([
+  ['Document', '$isATermFor', 'A file or record containing information'],
+  ['Project', '$isATermFor', 'A collection of related work items'],
+  ['Task', '$isATermFor', 'A unit of work to be completed'],
+]);
+```
+
+<Callout type="warn">
+**Critical:** You MUST declare a term before using it as an object in any fact.
+If you skip this step, the fact creation will fail silently.
+</Callout>
+
+## Using Declared Terms
+
+Once declared, you can use terms to classify your attributes:
+
+```typescript
+// First declare the term
+await lr.Fact.createAll([
+  ['Invoice', '$isATermFor', 'A billing document'],
+]);
+
+// Now you can use it
+const invoice = await lr.Attribute.createKeyValue(
+  { number: 'INV-001', amount: 1500 },
+  [['$it', 'isA', 'Invoice']]
+);
+```
+
+## Terms Are Public
+
+Unlike most data in LinkedRecords, **terms are visible to all users**. This allows:
+
+- Different users to classify their own data using the same vocabulary
+- Shared understanding of data types across an organization
+- Queries that work across user boundaries (when combined with proper access grants)
+
+```typescript
+// User A declares a term
+await userA.Fact.createAll([
+  ['BlogPost', '$isATermFor', 'A blog article'],
+]);
+
+// User B can also use this term (after it's been declared)
+await userB.Attribute.createKeyValue(
+  { title: 'My First Post' },
+  [['$it', 'isA', 'BlogPost']]
+);
+```
+
+## Term Uniqueness
+
+Each term can only be declared once. Attempting to declare the same term
+multiple times has no effect - only the first declaration counts:
+
+```typescript
+// First declaration succeeds
+await lr.Fact.createAll([
+  ['Customer', '$isATermFor', 'A paying customer'],
+]);
+
+// Second declaration is ignored (no error, but no effect)
+await lr.Fact.createAll([
+  ['Customer', '$isATermFor', 'A different description'],
+]);
+
+// Only one term fact exists
+const terms = await lr.Fact.findAll({
+  predicate: ['$isATermFor'],
+});
+// terms will contain only one 'Customer' fact
+```
+
+## Declaring Multiple Terms
+
+It's efficient to declare all your application's terms at startup:
+
+```typescript
+async function initializeTerms(lr) {
+  await lr.Fact.createAll([
+    // Organization structure
+    ['Organization', '$isATermFor', 'A business or group'],
+    ['Team', '$isATermFor', 'A group of users working together'],
+    ['AdminTeam', '$isATermFor', 'Team with administrative privileges'],
+
+    // Content types
+    ['Document', '$isATermFor', 'A file or record'],
+    ['TodoList', '$isATermFor', 'A list of tasks'],
+    ['Task', '$isATermFor', 'An individual work item'],
+
+    // States
+    ['ActiveState', '$isATermFor', 'Indicates an item is active'],
+    ['ArchivedState', '$isATermFor', 'Indicates an item is archived'],
+    ['CompletedState', '$isATermFor', 'Indicates an item is completed'],
+  ]);
+}
+```
+
+<Callout type="info">
+Calling this function multiple times is safe - duplicate declarations are ignored.
+This makes it suitable for app initialization code that may run on each page load.
+</Callout>
+
+## Querying by Terms
+
+Find all attributes of a specific type:
+
+```typescript
+const { tasks } = await lr.Attribute.findAll({
+  tasks: [
+    ['$it', 'isA', 'Task'],
+  ],
+});
+```
+
+Find attributes of multiple types:
+
+```typescript
+const { items } = await lr.Attribute.findAll({
+  documents: [['$it', 'isA', 'Document']],
+  projects: [['$it', 'isA', 'Project']],
+  tasks: [['$it', 'isA', 'Task']],
+});
+```
+
+## Deleting Terms
+
+Only the user who created a term can delete it:
+
+```typescript
+// User A creates a term
+await userA.Fact.createAll([
+  ['Draft', '$isATermFor', 'An unpublished document'],
+]);
+
+// User B cannot delete it
+await userB.Fact.deleteAll([
+  ['Draft', '$isATermFor', 'An unpublished document'],
+]);
+// ^ This has no effect
+
+// User A can delete it
+await userA.Fact.deleteAll([
+  ['Draft', '$isATermFor', 'An unpublished document'],
+]);
+// ^ This succeeds
+```
+
+## Common Gotchas
+
+### 1. Forgetting to Declare Terms
+
+```typescript
+// WRONG: Using a term without declaring it
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Report' },
+  [['$it', 'isA', 'Report']]  // This fact won't be created!
+);
+
+// CORRECT: Declare first, then use
+await lr.Fact.createAll([
+  ['Report', '$isATermFor', 'A formal document'],
+]);
+const doc = await lr.Attribute.createKeyValue(
+  { title: 'Report' },
+  [['$it', 'isA', 'Report']]  // Now this works
+);
+```
+
+### 2. Term Description is Required but Not Validated
+
+The third part of a term declaration (the description) is required but not
+actively validated. However, you should still provide meaningful descriptions:
+future versions of LinkedRecords will use these descriptions to automatically
+generate Model Context Protocol (MCP) APIs. This means AI agents will be able
+to work with your LinkedRecords application out of the box - you get MCP
+support for free just by describing your terms.
+
+```typescript
+// Provide meaningful descriptions for future MCP support
+await lr.Fact.createAll([
+  ['Widget', '$isATermFor', 'A reusable UI component that can be placed on dashboards'],
+  ['Gadget', '$isATermFor', 'A small interactive tool for quick actions'],
+]);
+```
+
+### 3. Terms Don't Grant Access
+
+Declaring a term doesn't give you access to other users' data. Terms just
+establish shared vocabulary:
+
+```typescript
+// User A creates a private document
+await userA.Attribute.createKeyValue(
+  { secret: 'data' },
+  [['$it', 'isA', 'Document']]
+);
+
+// User B can query for Documents, but won't see User A's private doc
+const { docs } = await userB.Attribute.findAll({
+  docs: [['$it', 'isA', 'Document']],
+});
+// docs is empty (unless User A explicitly shared access)
+```
+
+## Best Practices
+
+1. **Declare all terms at app startup** - This ensures terms are available
+   before any user actions
+
+2. **Use descriptive names** - Terms should clearly indicate what they represent
+
+3. **Document your terms** - Even though descriptions aren't displayed anywhere,
+   they serve as documentation for your data model
+
+4. **Keep terms consistent** - Use the same terms across your entire application
+   for a coherent data model

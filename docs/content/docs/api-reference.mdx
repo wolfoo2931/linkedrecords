@@ -1,0 +1,490 @@
+---
+title: API Reference
+description: HTTP endpoints for direct integration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+While most interactions should use the Browser SDK, LinkedRecords also exposes
+HTTP endpoints for direct integration. This is useful for server-to-server
+communication or building custom clients.
+
+## Authentication
+
+All API requests require authentication via:
+
+- **Cookie-based auth** (confidential client mode)
+- **Bearer token** (public client mode)
+
+```bash
+# Bearer token
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  https://api.example.com/endpoint
+```
+
+## Base URL
+
+All endpoints are relative to your LinkedRecords server URL:
+
+```
+https://your-linkedrecords-server.com
+```
+
+---
+
+## Attributes
+
+### Get Attribute
+
+Retrieve a single attribute by ID.
+
+```
+GET /attributes/:id
+```
+
+**Parameters:**
+- `id` - Attribute ID (e.g., `kv-abc123`)
+- `clientId` - Client identifier (query parameter)
+
+**Response:**
+```json
+{
+  "id": "kv-abc123",
+  "type": "KeyValueAttribute",
+  "value": { "title": "My Document" }
+}
+```
+
+### Query Attributes
+
+Find attributes matching a query.
+
+```
+GET /attributes
+```
+
+**Parameters:**
+- `query` - JSON-encoded query object
+
+**Example:**
+```bash
+curl "https://api.example.com/attributes?query=%7B%22docs%22%3A%5B%5B%22%24it%22%2C%22isA%22%2C%22Document%22%5D%5D%7D"
+```
+
+**Query format:**
+```json
+{
+  "docs": [["$it", "isA", "Document"]],
+  "tasks": [["$it", "isA", "Task"]]
+}
+```
+
+**Response:**
+```json
+{
+  "docs": [
+    { "id": "kv-abc123", "type": "KeyValueAttribute", "value": {...} }
+  ],
+  "tasks": [
+    { "id": "kv-def456", "type": "KeyValueAttribute", "value": {...} }
+  ]
+}
+```
+
+### Create Attribute
+
+Create a new attribute.
+
+```
+POST /attributes
+```
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Body:**
+```json
+{
+  "type": "keyValue",
+  "value": { "title": "New Document" },
+  "facts": [
+    ["$it", "isA", "Document"]
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "id": "kv-newid123",
+  "type": "KeyValueAttribute",
+  "value": { "title": "New Document" }
+}
+```
+
+### Update Attribute
+
+Update an attribute's value.
+
+```
+PATCH /attributes/:id
+```
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Body:**
+```json
+{
+  "value": { "title": "Updated Title" }
+}
+```
+
+### Create Multiple Attributes (Blueprint)
+
+Create multiple related attributes atomically.
+
+```
+POST /attribute-compositions
+```
+
+**Parameters:**
+- `clientId` - Client identifier (query parameter)
+
+**Body:**
+```json
+{
+  "parent": {
+    "type": "KeyValueAttribute",
+    "value": { "name": "Parent" },
+    "facts": [["$it", "isA", "Parent"]]
+  },
+  "child": {
+    "type": "KeyValueAttribute",
+    "value": { "name": "Child" },
+    "facts": [
+      ["$it", "isA", "Child"],
+      ["{{parent}}", "$isAccountableFor", "$it"]
+    ]
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "parent": { "id": "kv-parent123", ... },
+  "child": { "id": "kv-child456", ... }
+}
+```
+
+---
+
+## Facts
+
+### Query Facts
+
+Find facts matching criteria.
+
+```
+GET /facts
+```
+
+**Parameters:**
+- `predicate` - Filter by predicate (JSON array)
+- `subject` - Filter by subject criteria (JSON array)
+
+**Example:**
+```bash
+# Find all term definitions
+curl "https://api.example.com/facts?predicate=%5B%22%24isATermFor%22%5D"
+```
+
+**Response:**
+```json
+[
+  {
+    "subject": "Document",
+    "predicate": "$isATermFor",
+    "object": "A file or record"
+  }
+]
+```
+
+### Create Facts
+
+Create new facts.
+
+```
+POST /facts
+```
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Body:**
+```json
+{
+  "facts": [
+    ["Document", "$isATermFor", "A file or record"],
+    ["user123", "$isMemberOf", "team456"]
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "created": [
+    ["Document", "$isATermFor", "A file or record"],
+    ["user123", "$isMemberOf", "team456"]
+  ]
+}
+```
+
+<Callout type="info">
+Facts that fail authorization are silently excluded from the `created` array.
+Check the response to verify which facts were actually created.
+</Callout>
+
+### Delete Facts
+
+Remove existing facts.
+
+```
+DELETE /facts
+```
+
+**Headers:**
+- `Content-Type: application/json`
+
+**Body:**
+```json
+{
+  "facts": [
+    ["user123", "$isMemberOf", "team456"]
+  ]
+}
+```
+
+---
+
+## User Information
+
+### Get User Info
+
+Get the current user's information.
+
+```
+GET /userinfo
+```
+
+**Response:**
+```json
+{
+  "userId": "user-abc123",
+  "email": "user@example.com"
+}
+```
+
+### Look Up User by Email
+
+Find a user's ID by their email address.
+
+```
+GET /userinfo?email=user@example.com
+```
+
+**Response:**
+```json
+{
+  "id": "user-abc123"
+}
+```
+
+---
+
+## Quota
+
+### Get Quota
+
+Get storage quota for a user or organization.
+
+```
+GET /quota/:nodeId
+```
+
+**Parameters:**
+- `nodeId` - User ID or organization ID
+
+**Response:**
+```json
+{
+  "storageUsed": 1048576,
+  "storageLimit": 104857600,
+  "attributeCounts": {
+    "keyValue": 150,
+    "longText": 25,
+    "blob": 10
+  }
+}
+```
+
+---
+
+## Members
+
+### Get Team Members
+
+Get the list of members in a team.
+
+```
+GET /attributes/:nodeId/members
+```
+
+**Parameters:**
+- `nodeId` - Team/group attribute ID
+- `clientId` - Client identifier (query parameter)
+
+**Response:**
+```json
+[
+  { "id": "user-123", "username": "alice@example.com" },
+  { "id": "user-456", "username": "bob@example.com" }
+]
+```
+
+**Error Response (unauthorized):**
+```json
+{
+  "notVisibleToUser": true
+}
+```
+
+---
+
+## OIDC Discovery
+
+### Get OIDC Configuration
+
+Get OIDC provider configuration for public client setup.
+
+```
+GET /oidc/discovery
+```
+
+**Response:**
+```json
+{
+  "issuer": "https://auth.example.com/",
+  "authorization_endpoint": "https://auth.example.com/authorize",
+  "token_endpoint": "https://auth.example.com/oauth/token",
+  "userinfo_endpoint": "https://auth.example.com/userinfo"
+}
+```
+
+---
+
+## Real-Time Updates
+
+Real-time updates are handled via WebSocket/Socket.IO connections. The SDK
+manages these connections automatically, but for custom implementations:
+
+### Subscribe to Attribute Changes
+
+```
+WebSocket: /attributes/:id/changes?clientId=xxx
+```
+
+### Subscribe to Query Changes
+
+```
+WebSocket: /query-sub
+Channel: query-sub:{userId}:{queryJson}
+```
+
+---
+
+## Error Responses
+
+### 401 Unauthorized
+
+Authentication required or session expired.
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Authentication required"
+}
+```
+
+### 403 Forbidden
+
+Quota exceeded or permission denied.
+
+```json
+{
+  "error": "Forbidden",
+  "message": "Storage quota exceeded"
+}
+```
+
+### 404 Not Found
+
+Resource not found or not accessible.
+
+```json
+{
+  "error": "Not Found",
+  "message": "Attribute not found"
+}
+```
+
+### 500 Internal Server Error
+
+Server-side error.
+
+```json
+{
+  "error": "Internal Server Error",
+  "message": "An unexpected error occurred"
+}
+```
+
+---
+
+## Content Types
+
+All JSON requests should include:
+```
+Content-Type: application/json
+Accept: application/json
+```
+
+For blob uploads:
+```
+Content-Type: application/octet-stream
+```
+or use multipart form data.
+
+---
+
+## Rate Limiting
+
+<Callout type="warn">
+Rate limits may apply depending on your deployment configuration. Check with
+your LinkedRecords administrator for specific limits.
+</Callout>
+
+---
+
+## CORS
+
+For cross-origin requests, ensure your origin is included in the `CORS_ORIGIN`
+environment variable configuration on the server:
+
+```bash
+CORS_ORIGIN='["https://your-app.com"]'
+```
