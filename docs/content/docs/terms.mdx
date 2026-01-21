@@ -135,7 +135,7 @@ const { tasks } = await lr.Attribute.findAll({
 Find attributes of multiple types:
 
 ```typescript
-const { items } = await lr.Attribute.findAll({
+const { documents, projects, tasks } = await lr.Attribute.findAll({
   documents: [['$it', 'isA', 'Document']],
   projects: [['$it', 'isA', 'Project']],
   tasks: [['$it', 'isA', 'Task']],

@@ -324,20 +324,7 @@ const publicFile = await lr.Attribute.createBlob(
 ## Quota Considerations
 
 Blob storage counts against storage quotas. Large files can quickly consume
-available storage:
-
-```typescript
-// Check quota before uploading
-const quota = await lr.getQuota();
-
-if (file.size > quota.storageLimit - quota.storageUsed) {
-  alert('Not enough storage space');
-  return;
-}
-
-// Upload file
-await lr.Attribute.createBlob(file, facts);
-```
+available storage.
 
 ## Best Practices
 
