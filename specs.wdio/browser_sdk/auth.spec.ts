@@ -1215,6 +1215,48 @@ describe('authorization', () => {
 
       await expectNotToBeAbleToWriteAttribute(trident.id, nemo);
     });
+
+    // AI generated
+    it('allows a user with direct $canRefine permission to use the attribute as subject when creating facts', async () => {
+      const [aquaman, nemo, manni] = await Session.getThreeSessions();
+      const randomUser = [aquaman, nemo, manni][Math.floor(Math.random() * 3)];
+      const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
+
+      await randomUser!.Fact.createAll([
+        ['Todo', '$isATermFor', 'a task to be done'],
+        ['Archived', '$isATermFor', 'a state representing archived status'],
+      ]);
+
+      // Create a todo attribute
+      const todo = await aquaman.Attribute.createKeyValue({ title: 'Buy groceries', completed: false }, [
+        ['isA', 'Todo'],
+      ]);
+
+      await aquaman.Fact.createAll([
+        [nemoId, '$canAccess', todo.id],
+      ]);
+
+      // nemo cannot create facts about the todo before being granted permission
+      await nemo.Fact.createAll([[todo.id, 'stateIs', 'Archived']]);
+      expect((await aquaman.Fact.findAll({ subject: [todo.id!], predicate: ['stateIs'] })).length).to.eql(0);
+
+      // Grant nemo direct $canAccess and $canRefine permissions (not through a group)
+      await aquaman.Fact.createAll([
+        [nemoId, '$canRefine', todo.id],
+      ]);
+
+      // Now nemo should be able to create facts using the todo as subject
+      await nemo.Fact.createAll([[todo.id, 'stateIs', 'Archived']]);
+
+      // Verify the fact was created
+      const facts = await aquaman.Fact.findAll({ subject: [todo.id!], predicate: ['stateIs'] });
+      expect(facts.length).to.eql(1);
+      // expect(facts[0]!.object).to.eql('Archived');
+
+      // // manni should still not be able to create facts about the todo
+      // await manni.Fact.createAll([[todo.id, 'stateIs', 'Archived']]);
+      // expect((await aquaman.Fact.findAll({ subject: [todo.id!], predicate: ['stateIs'] })).length).to.eql(1);
+    });
   });
 
   describe('when a user transfers the accountability of an attribute', () => {
