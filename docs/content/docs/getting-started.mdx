@@ -372,7 +372,7 @@ To fix this, update the `shareTodo` function to also grant `$canRefine`:
     }
 
     await lr.Fact.createAll([
-      [userId, '$isMemberOf', id],
+      [userId, '$canAccess', id],
       [userId, '$canRefine', id], // [!code highlight]
     ]);
   }, [ lr.Fact ]);
