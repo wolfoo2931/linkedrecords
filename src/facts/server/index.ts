@@ -1108,7 +1108,7 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(logger);
 
-    const result = await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
+    const result = await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [trimmedNode]);
 
     if (result) {
       cache.set(`isKnownTerm/${trimmedNode}`, result);
