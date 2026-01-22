@@ -1098,8 +1098,9 @@ export default class Fact {
     return hasSubjectAccess && hasObjectAccess;
   }
 
-  static async isKnownTerm(node: string, logger: IsLogger) {
-    const hit = cache.get(`isKnownTerm/${node.trim()}`);
+  static async isKnownTerm(node: string, logger: IsLogger): Promise<boolean> {
+    const trimmedNode = node.trim();
+    const hit = cache.get(`isKnownTerm/${trimmedNode}`);
 
     if (hit) {
       return hit;
@@ -1107,10 +1108,10 @@ export default class Fact {
 
     const pool = new PgPoolWithLog(logger);
 
-    const result = pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
+    const result = await pool.findAny("SELECT subject FROM facts WHERE subject=$1 AND predicate='$isATermFor'", [node]);
 
     if (result) {
-      cache.set(`isKnownTerm/${node}`, result);
+      cache.set(`isKnownTerm/${trimmedNode}`, result);
     }
 
     return result;

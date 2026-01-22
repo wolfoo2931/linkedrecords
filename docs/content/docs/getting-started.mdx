@@ -210,60 +210,58 @@ how multiple users can collaborate on the same todos.
 This section adds a button next to each todo which allows to archive a todo. Archived todos will
 then be listed in a second list and can be unarchived again.
 
-This can be done by applying the following changes to the TodoList component:
+Replace the `TodoList` component with the following code (highlighted lines are new):
 
-```diff
-diff --git a/src/App.tsx b/src/App.tsx
-index 3195cf6..0ae9803 100644
---- a/src/App.tsx
-+++ b/src/App.tsx
-@@ -26,6 +26,12 @@ function TodoList() {
-   const { lr } = useLinkedRecords();
-   const todos = useKeyValueAttributes([
-     ['$it', 'isA', 'Todo'],
-+    ['$it', '$latest(stateIs)', '$not(Archived)'],
-+  ]);
-+
-+  const archivedTodos = useKeyValueAttributes([
-+    ['$it', 'isA', 'Todo'],
-+    ['$it', '$latest(stateIs)', 'Archived'],
-   ]);
+```tsx
+function TodoList() {
+  const { lr } = useLinkedRecords();
+  const todos = useKeyValueAttributes([
+    ['$it', 'isA', 'Todo'],
+    ['$it', '$latest(stateIs)', '$not(Archived)'], // [!code highlight]
+  ]);
 
-   const [ , onCompleted ] = useAsyncFn(async (id: string, checked) => {
-@@ -35,11 +41,23 @@ function TodoList() {
-     todoAttr?.set({ ...todoObj, completed: checked });
-   }, [ lr.Fact ]);
+  const archivedTodos = useKeyValueAttributes([ // [!code highlight]
+    ['$it', 'isA', 'Todo'], // [!code highlight]
+    ['$it', '$latest(stateIs)', 'Archived'], // [!code highlight]
+  ]); // [!code highlight]
 
-+  const [ , setTodoState ] = useAsyncFn(async (id: string, state: 'Archived' | 'Active') => {
-+    await lr.Fact.createAll([[id, 'stateIs', state]]);
-+  }, [ lr.Fact ]);
-+
-   return <div>
-     {todos
-       .map((todo) => <div key={todo._id as string}>
-         <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
-         {typeof todo.title === 'string' ? todo.title : 'untitled'}
-+        <button onClick={() => setTodoState(todo._id as string, 'Archived')}>Archive</button>
-+    </div>)}
-+
-+    Archived:
-+    {archivedTodos
-+      .map((todo) => <div key={todo._id as string}>
-+        {typeof todo.title === 'string' ? todo.title : 'untitled'}
-+        <button onClick={() => setTodoState(todo._id as string, 'Active')}>Unarchive</button>
-     </div>)}
-   </div>
- }
+  const [ , onCompleted ] = useAsyncFn(async (id: string, checked) => {
+    const todoAttr = await lr.Attribute.find(id);
+    const todoObj = await todoAttr?.getValue();
+
+    todoAttr?.set({ ...todoObj, completed: checked });
+  }, [ lr.Fact ]);
+
+  const [ , setTodoState ] = useAsyncFn(async (id: string, state: 'Archived' | 'Active') => { // [!code highlight]
+    await lr.Fact.createAll([[id, 'stateIs', state]]); // [!code highlight]
+  }, [ lr.Fact ]); // [!code highlight]
+
+  return <div>
+    {todos
+      .map((todo) => <div key={todo._id as string}>
+        <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
+        {typeof todo.title === 'string' ? todo.title : 'untitled'}
+        <button onClick={() => setTodoState(todo._id as string, 'Archived')}>Archive</button> {/* [!code highlight] */}
+    </div>)}
+
+    Archived: {/* [!code highlight] */}
+    {archivedTodos // [!code highlight]
+      .map((todo) => <div key={todo._id as string}> {/* [!code highlight] */}
+        {typeof todo.title === 'string' ? todo.title : 'untitled'} {/* [!code highlight] */}
+        <button onClick={() => setTodoState(todo._id as string, 'Active')}>Unarchive</button> {/* [!code highlight] */}
+    </div>)} {/* [!code highlight] */}
+  </div>
+}
 ```
 
-We also need to declare two more terms in the main `App` component:
+We also need to declare two more terms in the main `App` component. Update the `lr.Fact.createAll` call in the `useEffect` hook (highlighted lines are new):
 
-```diff
-       await lr.Fact.createAll([
-         ['Todo', '$isATermFor', 'A list of things which needs to be done'],
-+        ['Archived', '$isATermFor', 'A state which represent that the subject is archived and is not needed anymore for day-to-day operation'],
-+        ['Active', '$isATermFor', 'A state which represents that the subject is active and used for day-to-day operation'],
-       ]);
+```tsx
+      await lr.Fact.createAll([
+        ['Todo', '$isATermFor', 'A list of things that need to be done'],
+        ['Archived', '$isATermFor', 'A state which represents that the subject is archived'], // [!code highlight]
+        ['Active', '$isATermFor', 'A state which represents that the subject is active'], // [!code highlight]
+      ]);
 ```
 
 ## Add a "Share" feature
@@ -275,42 +273,119 @@ be prompted to provide an email address of the person with whom they want to sha
 The user you want to share with must have signed up first. If you're using the dev setup with Docker Compose, open the app in an incognito window or a different browser, go through the login flow, and select one of the test accounts (alice@example.com, bob@example.com, or charlie@example.com) or enter a custom email address. Only after completing the login flow can you invite that user.
 </Callout>
 
-To implement the feature, once again we patch the TodoList component with the following few lines:
+To implement the feature, add the `shareTodo` function and Share button to the `TodoList` component (highlighted lines are new):
 
-```diff
-diff --git a/src/App.tsx b/src/App.tsx
-index 0ae9803..bb91614 100644
---- a/src/App.tsx
-+++ b/src/App.tsx
-@@ -45,12 +45,30 @@ function TodoList() {
-     await lr.Fact.createAll([[id, 'stateIs', state]]);
-   }, [ lr.Fact ]);
+```tsx
+function TodoList() {
+  const { lr } = useLinkedRecords();
+  const todos = useKeyValueAttributes([
+    ['$it', 'isA', 'Todo'],
+    ['$it', '$latest(stateIs)', '$not(Archived)'],
+  ]);
 
-+  const [ , shareTodo ] = useAsyncFn(async (id: string) => {
-+    const email = prompt('enter email');
-+
-+    if (!email) {
-+      return alert('insert valid email');
-+    }
-+
-+    const userId = await lr.getUserIdByEmail(email);
-+
-+    if (!userId) {
-+      return alert('user not found');
-+    }
-+
-+     await lr.Fact.createAll([[userId, '$isMemberOf', id]]);
-+
-+  }, [ lr.Fact ]);
-+
-   return <div>
-     {todos
-       .map((todo) => <div key={todo._id as string}>
-         <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
-         {typeof todo.title === 'string' ? todo.title : 'untitled'}
-         <button onClick={() => setTodoState(todo._id as string, 'Archived')}>Archive</button>
-+        <button onClick={() => shareTodo(todo._id as string)}>Share</button>
-     </div>)}
+  const archivedTodos = useKeyValueAttributes([
+    ['$it', 'isA', 'Todo'],
+    ['$it', '$latest(stateIs)', 'Archived'],
+  ]);
 
-     Archived:
+  const [ , onCompleted ] = useAsyncFn(async (id: string, checked) => {
+    const todoAttr = await lr.Attribute.find(id);
+    const todoObj = await todoAttr?.getValue();
+
+    todoAttr?.set({ ...todoObj, completed: checked });
+  }, [ lr.Fact ]);
+
+  const [ , setTodoState ] = useAsyncFn(async (id: string, state: 'Archived' | 'Active') => {
+    await lr.Fact.createAll([[id, 'stateIs', state]]);
+  }, [ lr.Fact ]);
+
+  const [ , shareTodo ] = useAsyncFn(async (id: string) => { // [!code highlight]
+    const email = prompt('enter email'); // [!code highlight]
+    // [!code highlight]
+    if (!email) { // [!code highlight]
+      return alert('insert valid email'); // [!code highlight]
+    } // [!code highlight]
+    // [!code highlight]
+    const userId = await lr.getUserIdByEmail(email); // [!code highlight]
+    // [!code highlight]
+    if (!userId) { // [!code highlight]
+      return alert('user not found'); // [!code highlight]
+    } // [!code highlight]
+    // [!code highlight]
+    await lr.Fact.createAll([[userId, '$canAccess', id]]); // [!code highlight]
+  }, [ lr.Fact ]); // [!code highlight]
+
+  return <div>
+    {todos
+      .map((todo) => <div key={todo._id as string}>
+        <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
+        {typeof todo.title === 'string' ? todo.title : 'untitled'}
+        <button onClick={() => setTodoState(todo._id as string, 'Archived')}>Archive</button>
+        <button onClick={() => shareTodo(todo._id as string)}>Share</button> {/* [!code highlight] */}
+    </div>)}
+
+    Archived:
+    {archivedTodos
+      .map((todo) => <div key={todo._id as string}>
+        {typeof todo.title === 'string' ? todo.title : 'untitled'}
+        <button onClick={() => setTodoState(todo._id as string, 'Active')}>Unarchive</button>
+    </div>)}
+  </div>
+}
 ```
+
+### Understanding Permission Limitations
+
+If you test the share functionality now, you'll notice something interesting: the user you shared the todo with can see it and even check/uncheck the completed checkbox, but they **cannot archive or unarchive** the todo. Try it—the archive button will silently fail for them.
+
+Why does this happen? This is because of how LinkedRecords handles different types of permissions:
+
+- **`$isMemberOf`** grants access to read and modify the **attribute's content** (the JSON data like `title` and `completed`)
+- However, archiving requires creating a **fact** like `[todoId, 'stateIs', 'Archived']` - this uses the todo as the **subject** of a fact
+
+To create facts where an entity is the subject, a user needs the **`$canRefine`** permission. Think of it as the difference between:
+- Editing what's *inside* a document (`$canAccess`)
+- Adding *metadata about* the document (`$canRefine`)
+
+<Callout type="info">
+**LinkedRecords Permission Model:**
+- `$canAccess` — Read and write the attribute's value
+- `$canRead` — Read-only access to the attribute's value
+- `$canRefine` — Create facts where this entity is the **subject** (e.g., `[entity, 'stateIs', 'Archived']`)
+- `$canReferTo` — Create facts where this entity is the **object** (e.g., `[something, 'belongsTo', entity]`)
+</Callout>
+
+To fix this, update the `shareTodo` function to also grant `$canRefine`:
+
+```tsx
+  const [ , shareTodo ] = useAsyncFn(async (id: string) => {
+    const email = prompt('enter email');
+
+    if (!email) {
+      return alert('insert valid email');
+    }
+
+    const userId = await lr.getUserIdByEmail(email);
+
+    if (!userId) {
+      return alert('user not found');
+    }
+
+    await lr.Fact.createAll([
+      [userId, '$isMemberOf', id],
+      [userId, '$canRefine', id], // [!code highlight]
+    ]);
+  }, [ lr.Fact ]);
+```
+
+Now the shared user can archive and unarchive todos too. This pattern of combining permissions is common in LinkedRecords—you grant exactly the capabilities each user needs, no more, no less.
+
+<Callout type="warn">
+**Already shared todos won't be fixed automatically!**
+
+Updating your code only affects *future* shares. Todos you've already shared are still missing the `$canRefine` permission because that fact was never created for them.
+
+To fix an existing share, the user would need to unshare the todo and share it again — this time the updated code will create both permission facts.
+
+This is an important concept: permissions in LinkedRecords are stored as facts in the database, not derived from code. Changing your code changes what happens *next time*, but doesn't retroactively update existing data.
+</Callout>
