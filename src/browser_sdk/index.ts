@@ -325,6 +325,7 @@ export default class LinkedRecords {
   public handleExpiredLoginSession() {
     LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     this.cachedUserEmail = undefined;
+    this.actorId = undefined;
 
     if (this.loginHandler) {
       this.loginHandler();
@@ -408,6 +409,7 @@ export default class LinkedRecords {
 
     LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     this.cachedUserEmail = undefined;
+    this.actorId = undefined;
 
     await this.oidcManager.login();
   }
@@ -422,6 +424,7 @@ export default class LinkedRecords {
 
     LinkedRecords.ensureUserIdIsKnownPromise = undefined;
     this.cachedUserEmail = undefined;
+    this.actorId = undefined;
 
     await this.oidcManager.logout();
   }
