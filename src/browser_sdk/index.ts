@@ -388,11 +388,11 @@ export default class LinkedRecords {
   public async getCurrentUserEmail(): Promise<string> {
     const userInfo = await this.fetchUserInfo();
 
-    if (!userInfo['email']) {
+    if (!userInfo['userEmail']) {
       throw new Error('Error fetching user info');
     }
 
-    return userInfo['email'];
+    return userInfo['userEmail'];
   }
 
   // OIDC Auth methods for public client mode
