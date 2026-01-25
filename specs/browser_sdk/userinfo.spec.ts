@@ -11,7 +11,7 @@ describe('User Info', () => {
 
       const email = await client.getCurrentUserEmail();
 
-      expect(email).to.equal('testuser-1-id@example.com');
+      expect(email).to.equal('testuser-1@example.com');
     });
   });
 });
