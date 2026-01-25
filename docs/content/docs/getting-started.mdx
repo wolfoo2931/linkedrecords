@@ -44,7 +44,7 @@ We can use `npm` to create a Vite + TypeScript + React scaffold by running the f
 commands in our terminal:
 
 ```sh
-npm create vite@latest lr-getting-started --- --template react-ts
+npm create vite@latest lr-getting-started -- --template react-ts
 cd lr-getting-started
 npm install
 ```
@@ -316,7 +316,8 @@ function App() {
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="max-w-md mx-auto px-4">
         <h1 className="text-2xl font-bold text-gray-800 mb-6">My Todos</h1>
-        <UserInfo /> {/* [!code highlight] */}
+        {/* [!code highlight:1] */}
+        <UserInfo />
         <NewTodo />
         <TodoList />
       </div>
