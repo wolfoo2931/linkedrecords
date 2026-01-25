@@ -18,6 +18,7 @@ export default {
         res.status(200).send({
           userId: uid(req),
           userPicture: req?.oidc?.user?.picture,
+          userEmail: req?.oidc?.user?.email,
         });
       }
     });
