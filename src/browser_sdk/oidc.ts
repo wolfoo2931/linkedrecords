@@ -83,7 +83,7 @@ export class OIDCManager {
       post_logout_redirect_uri: postLogoutRedirectUri,
       scope: scope || 'openid profile email',
       response_type: responseType || 'code',
-      userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+      userStore: new WebStorageStateStore({ store: window.localStorage }),
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew: automaticSilentRenew ?? true,
       extraQueryParams: {
