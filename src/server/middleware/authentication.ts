@@ -40,6 +40,8 @@ function assignWhenAuthenticatedFunction(req, res) {
   };
 }
 
+// This is the user info endpoint provided by the OIDC provider not the
+// linkedrecords user info endpoint
 async function getUserInfoEndpoint(): Promise<string> {
   const issuerUrl = process.env['AUTH_ISSUER_BASE_URL']?.replace(/\/$/, '');
 
@@ -160,6 +162,7 @@ async function httpAuthHeaderMiddleware(req, res, next) {
           user: {
             sub: cachedToken.userInfo.sub,
             picture: cachedToken.userInfo.picture,
+            email: cachedToken.userInfo.email,
           },
           isAuthenticated: () => !!cachedToken.userInfo.sub?.trim(),
         };
@@ -200,6 +203,7 @@ async function httpAuthHeaderMiddleware(req, res, next) {
       user: {
         sub: userInfo.sub,
         picture: userInfo.picture,
+        email: userInfo.email,
       },
       isAuthenticated: () => !!userInfo.sub?.trim(),
     };

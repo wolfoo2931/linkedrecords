@@ -54,6 +54,8 @@ export default class LinkedRecords {
 
   actorId: string | undefined;
 
+  private cachedUserEmail: string | undefined;
+
   Attribute: AttributesRepository;
 
   Fact: FactsRepository;
@@ -363,6 +365,9 @@ export default class LinkedRecords {
           }
 
           const responseBody = await response.json();
+          if (responseBody.userEmail) {
+            this.cachedUserEmail = responseBody.userEmail;
+          }
           return responseBody.userId;
         });
     }
@@ -375,7 +380,26 @@ export default class LinkedRecords {
     }
   }
 
-  // OIDC Auth methods
+  public async getCurrentUserEmail(): Promise<string | undefined> {
+    if (this.cachedUserEmail) {
+      return this.cachedUserEmail;
+    }
+
+    // In public client mode, try to get from local OIDC user first
+    if (this.oidcManager) {
+      const user = await this.oidcManager.getUser();
+      if (user?.profile?.email) {
+        this.cachedUserEmail = user.profile.email;
+        return this.cachedUserEmail;
+      }
+    }
+
+    // Fallback: fetch from server (handles confidential mode)
+    await this.ensureUserIdIsKnown();
+    return this.cachedUserEmail;
+  }
+
+  // OIDC Auth methods for public client mode
   public async login() {
     if (!this.oidcManager) throw new Error('OIDC not configured');
     await this.oidcManager.login();
