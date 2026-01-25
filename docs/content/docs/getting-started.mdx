@@ -265,6 +265,68 @@ With the dev server still running, open the URL from your terminal (e.g. http://
 In the next sections we will extend the app to learn about a few other LinkedRecords features. Especially
 how multiple users can collaborate on the same todos.
 
+## Display the Logged-in User
+
+Most applications display who is currently logged in. This helps users confirm they're using the correct account and provides a familiar navigation element.
+
+LinkedRecords provides a method to retrieve the current user's email address. Let's add a `UserInfo` component that displays this information.
+
+Add this new component above the `App` component:
+
+```tsx
+function UserInfo() {
+  const { lr } = useLinkedRecords();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    lr.getCurrentUserEmail()
+      .then(setEmail)
+      .catch(() => setEmail(null));
+  }, [lr]);
+
+  if (!email) return null;
+
+  return (
+    <div className="text-sm text-gray-500 mb-4">
+      Logged in as: <span className="font-medium text-gray-700">{email}</span>
+    </div>
+  );
+}
+```
+
+Then update the `App` component to include it (highlighted line is new):
+
+```tsx
+function App() {
+  const { lr } = useLinkedRecords();
+
+  useEffect(() => {
+    lr.isAuthenticated().then(async (isAuthenticated) => {
+      if (!isAuthenticated) {
+        await lr.login();
+      }
+
+      await lr.Fact.createAll([
+        ['Todo', '$isATermFor', 'A list of things that need to be done'],
+      ]);
+    });
+  }, [ lr ]);
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-8">
+      <div className="max-w-md mx-auto px-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">My Todos</h1>
+        <UserInfo /> {/* [!code highlight] */}
+        <NewTodo />
+        <TodoList />
+      </div>
+    </div>
+  );
+}
+```
+
+Now when you open the app, you'll see the email address of the currently logged-in user displayed at the top. If you open the app in a different browser and log in as another user, you can easily tell which account you're using in each window.
+
 ## Add an "Archive" feature
 
 This section adds a button next to each todo which allows to archive a todo. Archived todos will
