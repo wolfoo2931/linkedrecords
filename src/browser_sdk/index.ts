@@ -32,7 +32,7 @@ export {
 const publicClients: Record<string, LinkedRecords> = {};
 
 export default class LinkedRecords {
-  static ensureUserIdIsKnownPromise;
+  static fetchUserInfoPromise;
 
   KeyValueChange: typeof KeyValueChange = KeyValueChange;
 
@@ -53,8 +53,6 @@ export default class LinkedRecords {
   clientId: string;
 
   actorId: string | undefined;
-
-  private cachedUserEmail: string | undefined;
 
   Attribute: AttributesRepository;
 
@@ -323,10 +321,6 @@ export default class LinkedRecords {
   }
 
   public handleExpiredLoginSession() {
-    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
-    this.cachedUserEmail = undefined;
-    this.actorId = undefined;
-
     if (this.loginHandler) {
       this.loginHandler();
     }
@@ -356,61 +350,52 @@ export default class LinkedRecords {
     }
   }
 
-  async ensureUserIdIsKnown(): Promise<string | undefined> {
-    if (this.actorId && typeof this.actorId === 'string') {
-      return this.actorId;
-    }
-
-    if (!LinkedRecords.ensureUserIdIsKnownPromise) {
-      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
+  async fetchUserInfo(): Promise<Record<string, string>> {
+    if (!LinkedRecords.fetchUserInfoPromise) {
+      LinkedRecords.fetchUserInfoPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
         .then(async (response) => {
           if (!response || response.status === 401) {
             this.handleExpiredLoginSession();
           }
 
           const responseBody = await response.json();
-          if (responseBody.userEmail) {
-            this.cachedUserEmail = responseBody.userEmail;
-          }
-          return responseBody.userId;
+          return responseBody;
         });
     }
 
     try {
-      this.actorId = await LinkedRecords.ensureUserIdIsKnownPromise;
-      return this.actorId;
+      const ui = await LinkedRecords.fetchUserInfoPromise;
+      return ui;
     } finally {
-      LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+      // we only cached this so we have one request in flight at the same time
+      LinkedRecords.fetchUserInfoPromise = undefined;
     }
   }
 
-  public async getCurrentUserEmail(): Promise<string | undefined> {
-    if (this.cachedUserEmail) {
-      return this.cachedUserEmail;
+  async ensureUserIdIsKnown(): Promise<string | undefined> {
+    if (this.actorId && typeof this.actorId === 'string') {
+      return this.actorId;
     }
 
-    // In public client mode, try to get from local OIDC user first
-    if (this.oidcManager) {
-      const user = await this.oidcManager.getUser();
-      if (user?.profile?.email) {
-        this.cachedUserEmail = user.profile.email;
-        return this.cachedUserEmail;
-      }
+    const userInfo = await this.fetchUserInfo();
+    this.actorId = userInfo['actorId'];
+
+    return this.actorId;
+  }
+
+  public async getCurrentUserEmail(): Promise<string> {
+    const userInfo = await this.fetchUserInfo();
+
+    if (!userInfo['email']) {
+      throw new Error('Error fetching user info');
     }
 
-    // Fallback: fetch from server (handles confidential mode)
-    await this.ensureUserIdIsKnown();
-    return this.cachedUserEmail;
+    return userInfo['email'];
   }
 
   // OIDC Auth methods for public client mode
   public async login() {
     if (!this.oidcManager) throw new Error('OIDC not configured');
-
-    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
-    this.cachedUserEmail = undefined;
-    this.actorId = undefined;
-
     await this.oidcManager.login();
   }
 
@@ -421,11 +406,6 @@ export default class LinkedRecords {
 
   public async logout() {
     if (!this.oidcManager) throw new Error('OIDC not configured');
-
-    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
-    this.cachedUserEmail = undefined;
-    this.actorId = undefined;
-
     await this.oidcManager.logout();
   }
 
