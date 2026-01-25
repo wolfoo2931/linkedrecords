@@ -420,7 +420,7 @@ function TodoList() {
     const userId = await lr.getUserIdByEmail(email); // [!code highlight]
     // [!code highlight]
     if (!userId) { // [!code highlight]
-      return alert('User not found'); // [!code highlight]
+      return alert('User not found. The user must sign up first.'); // [!code highlight]
     } // [!code highlight]
     // [!code highlight]
     await lr.Fact.createAll([[userId, '$canAccess', id]]); // [!code highlight]
@@ -507,16 +507,16 @@ To fix this, update the `shareTodo` function to also grant `$canRefine`:
 
 ```tsx
   const [ , shareTodo ] = useAsyncFn(async (id: string) => {
-    const email = prompt('enter email');
+    const email = prompt('Enter email address to share with:');
 
     if (!email) {
-      return alert('insert valid email');
+      return alert('Please enter a valid email');
     }
 
     const userId = await lr.getUserIdByEmail(email);
 
     if (!userId) {
-      return alert('user not found');
+      return alert('User not found. The user must sign up first.');
     }
 
     await lr.Fact.createAll([

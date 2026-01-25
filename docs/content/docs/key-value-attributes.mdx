@@ -113,7 +113,6 @@ const doc = await lr.Attribute.find(docId);
 await doc.change(new lr.KeyValueChange([
   { key: 'title', value: 'New Title' },
   { key: 'metadata.lastModified', value: Date.now() },
-  { key: 'tags.0', value: 'important' },
 ]));
 ```
 
