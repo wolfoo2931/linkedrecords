@@ -1,7 +1,14 @@
 ---
 title: Introduction
-description: LinkedRecords - A Backend-as-a-Service for collaborative web applications
+description: LinkedRecords - A Backend-as-a-Service for collaborative SaaS applications
 ---
+
+* What if writing a production-ready SaaS application is [as easy as a React.js hello world tutorial](/getting-started)?
+* What if your users could choose where their data lives - on their own infrastructure, in their own jurisdiction?
+* What if AI coding assistants couldn't accidentally create security holes because authorization is baked into every operation?
+* What if multiple apps could work with the same data without any integration work?
+
+LinkedRecords makes all of this possible. It's not just another BaaS - it's a fundamentally different architecture for building collaborative applications.
 
 # LinkedRecords
 
@@ -13,12 +20,6 @@ const todos = useKeyValueAttributes([['$it', 'isA', 'Todo']]);
 ```
 
 You can use any OpenID Connect provider (Auth0, Keycloak, etc.) for authentication, so you don't need to implement login flows. Authorization is built into the data model itself - when you create data, you specify who can access it. And real-time collaboration uses CRDT and Operational Transform, so concurrent edits merge instead of overwriting each other.
-
-## What Makes It Different
-
-What if your users could choose where their data lives - on their own infrastructure, in their own jurisdiction? What if AI coding assistants couldn't accidentally create security holes because authorization is baked into every operation? What if multiple apps could work with the same data without any integration work?
-
-LinkedRecords makes all of this possible. It's not just another BaaS - it's a fundamentally different architecture for building collaborative applications.
 
 ## Not Local-First, But Server-Sovereign
 

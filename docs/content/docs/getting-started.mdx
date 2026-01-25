@@ -5,12 +5,16 @@ description: Build your first LinkedRecords application
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
+<Callout type="info">
+By the end of this tutorial, you will have a working application with authentication enabled, authorization out of the box, the ability to share data between users, and persistent storage - all without writing any backend code.
+</Callout>
+
 ## Quick Start
 
 Start the LinkedRecords backend locally with a single command (requires [Docker](https://docs.docker.com/get-docker/)):
 
 ```bash
-docker compose -f https://github.com/wolfoo2931/linkedrecords.git#main:docker-compose.yml up
+docker compose -p linkedrecords -f https://github.com/wolfoo2931/linkedrecords.git#main:docker-compose.yml up
 ```
 
 <Callout type="warn">
@@ -43,11 +47,7 @@ commands in our terminal:
 npm create vite@latest lr-getting-started --- --template react-ts
 cd lr-getting-started
 npm install
-npm run dev
 ```
-
-You will see a URL in your terminal (e.g. http://localhost:5173/). When you open it
-in your browser you will see the small scaffold application in action.
 
 #### Clean up Scaffold App
 
@@ -75,11 +75,6 @@ function App() {
 export default App
 ```
 
-You can also empty the file `src/index.css` **but do not delete it**.
-
-If you switch back to your browser, the app should look much simpler now.
-You should only see "LinkedRecords Hello World".
-
 #### Install NPM Packages
 
 To use LinkedRecords in our React single page application, we need to install the npm package:
@@ -93,6 +88,46 @@ npm install react-use --save
 You can also use LinkedRecords outside of React applications. The linkedrecords-react
 module provides some handy hooks which make our lives easier.
 </Callout>
+
+#### Add Tailwind CSS
+
+To make our app look polished, we'll add Tailwind CSS:
+
+```sh
+npm install tailwindcss @tailwindcss/vite --save-dev
+```
+
+Update `vite.config.ts` to include the Tailwind plugin:
+
+```ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+})
+```
+
+Replace the content of `src/index.css` with:
+
+```css
+@import "tailwindcss";
+```
+
+#### Start the Development Server
+
+Now that all dependencies and configuration are in place, start the Vite development server:
+
+```sh
+npm run dev
+```
+
+<Callout type="info">
+If you already started the dev server earlier, restart it now (Ctrl+C and run `npm run dev` again) to pick up the Tailwind and Vite configuration changes.
+</Callout>
+
+You will see a URL in your terminal (e.g. http://localhost:5173/). Keep the server running—Vite will automatically reload the app as you make changes in the following sections.
 
 ## Implement a Simple todo App
 
@@ -141,10 +176,23 @@ function NewTodo() {
     ]);
   }, [ lr.Attribute, title ]);
 
-  return <div>
-    <input value={title} onChange={(e) => setTitle(e.target.value)}></input>
-    <button disabled={state.loading} onClick={onClick}>{state.loading ? 'Saving ...' : 'Save'}</button>
-  </div>
+  return (
+    <div className="flex gap-2 mb-4">
+      <input
+        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        placeholder="What needs to be done?"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <button
+        className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+        disabled={state.loading}
+        onClick={onClick}
+      >
+        {state.loading ? 'Saving...' : 'Add'}
+      </button>
+    </div>
+  );
 }
 
 function TodoList() {
@@ -160,13 +208,23 @@ function TodoList() {
     todoAttr?.set({ ...todoObj, completed: checked });
   }, [ lr.Fact ]);
 
-  return <div>
-    {todos
-      .map((todo) => <div key={todo._id as string}>
-        <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
-        {typeof todo.title === 'string' ? todo.title : 'untitled'}
-    </div>)}
-  </div>
+  return (
+    <ul className="space-y-2">
+      {todos.map((todo) => (
+        <li key={todo._id as string} className="flex items-center gap-3 p-3 bg-white rounded-lg shadow">
+          <input
+            type="checkbox"
+            className="w-5 h-5 rounded border-gray-300"
+            checked={!!todo.completed}
+            onChange={(e) => onCompleted(todo._id as string, e.target.checked)}
+          />
+          <span className={todo.completed ? 'line-through text-gray-400' : ''}>
+            {typeof todo.title === 'string' ? todo.title : 'untitled'}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function App() {
@@ -185,9 +243,12 @@ function App() {
   }, [ lr ]);
 
   return (
-    <div>
-      <NewTodo/>
-      <TodoList/>
+    <div className="min-h-screen bg-gray-100 py-8">
+      <div className="max-w-md mx-auto px-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">My Todos</h1>
+        <NewTodo />
+        <TodoList />
+      </div>
     </div>
   );
 }
@@ -195,8 +256,7 @@ function App() {
 export default App
 ```
 
-If we start this app in the terminal by running `npm run dev`, Vite should display a local URL which
-we can open in our browser. Once we open the URL in the browser, we notice that with very little code:
+With the dev server still running, open the URL from your terminal (e.g. http://localhost:5173/) in your browser. You'll notice that with very little code:
 
 - We will be prompted to login. The LinkedRecords backend takes care of user management.
 - If we reload the page, all todos are persisted.
@@ -210,7 +270,35 @@ how multiple users can collaborate on the same todos.
 This section adds a button next to each todo which allows to archive a todo. Archived todos will
 then be listed in a second list and can be unarchived again.
 
-Replace the `TodoList` component with the following code (highlighted lines are new):
+### Declare the New Terms First
+
+Before we can use `'Archived'` and `'Active'` as values in our facts, we need to declare them as terms. This is a key LinkedRecords concept: any term you reference in a fact must be declared first using `$isATermFor`.
+
+Update the `lr.Fact.createAll` call in the `useEffect` hook of the `App` component (highlighted lines are new):
+
+```tsx
+      await lr.Fact.createAll([
+        ['Todo', '$isATermFor', 'A list of things that need to be done'],
+        ['Archived', '$isATermFor', 'A state which represents that the subject is archived'], // [!code highlight]
+        ['Active', '$isATermFor', 'A state which represents that the subject is active'], // [!code highlight]
+      ]);
+```
+
+<Callout type="info">
+**Why do we need to declare terms?**
+
+When you create a fact like `[todoId, 'stateIs', 'Archived']`, LinkedRecords checks permissions:
+- You need `$canRefine` permission on the **subject** (`todoId`)
+- You need `$canReferTo` permission on the **object** (`'Archived'`)
+
+Terms are special: once declared with `$isATermFor`, **any user can refer to them** as an object in facts—but no one can use a term as a subject. This makes terms ideal for shared vocabulary like state names, types, and categories.
+
+If you skip this step, archiving will silently fail because `'Archived'` won't be a recognized term that users can refer to.
+</Callout>
+
+### Update the TodoList Component
+
+Now replace the `TodoList` component with the following code (highlighted lines are new):
 
 ```tsx
 function TodoList() {
@@ -236,32 +324,55 @@ function TodoList() {
     await lr.Fact.createAll([[id, 'stateIs', state]]); // [!code highlight]
   }, [ lr.Fact ]); // [!code highlight]
 
-  return <div>
-    {todos
-      .map((todo) => <div key={todo._id as string}>
-        <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
-        {typeof todo.title === 'string' ? todo.title : 'untitled'}
-        <button onClick={() => setTodoState(todo._id as string, 'Archived')}>Archive</button> {/* [!code highlight] */}
-    </div>)}
+  return (
+    <div className="space-y-6">
+      <ul className="space-y-2">
+        {todos.map((todo) => (
+          <li key={todo._id as string} className="flex items-center gap-3 p-3 bg-white rounded-lg shadow">
+            <input
+              type="checkbox"
+              className="w-5 h-5 rounded border-gray-300"
+              checked={!!todo.completed}
+              onChange={(e) => onCompleted(todo._id as string, e.target.checked)}
+            />
+            <span className={`flex-1 ${todo.completed ? 'line-through text-gray-400' : ''}`}>
+              {typeof todo.title === 'string' ? todo.title : 'untitled'}
+            </span>
+            {/* [!code highlight:6] */}
+            <button
+              className="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+              onClick={() => setTodoState(todo._id as string, 'Archived')}
+            >
+              Archive
+            </button>
+          </li>
+        ))}
+      </ul>
 
-    Archived: {/* [!code highlight] */}
-    {archivedTodos // [!code highlight]
-      .map((todo) => <div key={todo._id as string}> {/* [!code highlight] */}
-        {typeof todo.title === 'string' ? todo.title : 'untitled'} {/* [!code highlight] */}
-        <button onClick={() => setTodoState(todo._id as string, 'Active')}>Unarchive</button> {/* [!code highlight] */}
-    </div>)} {/* [!code highlight] */}
-  </div>
+      {archivedTodos.length > 0 && ( /* [!code highlight] */
+        /* [!code highlight:20] */
+        <div>
+          <h2 className="text-lg font-semibold text-gray-600 mb-2">Archived</h2>
+          <ul className="space-y-2 opacity-60">
+            {archivedTodos.map((todo) => (
+              <li key={todo._id as string} className="flex items-center gap-3 p-3 bg-white rounded-lg shadow">
+                <span className="flex-1 text-gray-400">
+                  {typeof todo.title === 'string' ? todo.title : 'untitled'}
+                </span>
+                <button
+                  className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded hover:bg-blue-100"
+                  onClick={() => setTodoState(todo._id as string, 'Active')}
+                >
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
-```
-
-We also need to declare two more terms in the main `App` component. Update the `lr.Fact.createAll` call in the `useEffect` hook (highlighted lines are new):
-
-```tsx
-      await lr.Fact.createAll([
-        ['Todo', '$isATermFor', 'A list of things that need to be done'],
-        ['Archived', '$isATermFor', 'A state which represents that the subject is archived'], // [!code highlight]
-        ['Active', '$isATermFor', 'A state which represents that the subject is active'], // [!code highlight]
-      ]);
 ```
 
 ## Add a "Share" feature
@@ -300,37 +411,74 @@ function TodoList() {
   }, [ lr.Fact ]);
 
   const [ , shareTodo ] = useAsyncFn(async (id: string) => { // [!code highlight]
-    const email = prompt('enter email'); // [!code highlight]
+    const email = prompt('Enter email address to share with:'); // [!code highlight]
     // [!code highlight]
     if (!email) { // [!code highlight]
-      return alert('insert valid email'); // [!code highlight]
+      return alert('Please enter a valid email'); // [!code highlight]
     } // [!code highlight]
     // [!code highlight]
     const userId = await lr.getUserIdByEmail(email); // [!code highlight]
     // [!code highlight]
     if (!userId) { // [!code highlight]
-      return alert('user not found'); // [!code highlight]
+      return alert('User not found. The user must sign up first.'); // [!code highlight]
     } // [!code highlight]
     // [!code highlight]
     await lr.Fact.createAll([[userId, '$canAccess', id]]); // [!code highlight]
   }, [ lr.Fact ]); // [!code highlight]
 
-  return <div>
-    {todos
-      .map((todo) => <div key={todo._id as string}>
-        <input onChange={(e) => onCompleted(todo._id as string, e.target.checked)} type="checkbox" checked={!!todo.completed}></input>
-        {typeof todo.title === 'string' ? todo.title : 'untitled'}
-        <button onClick={() => setTodoState(todo._id as string, 'Archived')}>Archive</button>
-        <button onClick={() => shareTodo(todo._id as string)}>Share</button> {/* [!code highlight] */}
-    </div>)}
+  return (
+    <div className="space-y-6">
+      <ul className="space-y-2">
+        {todos.map((todo) => (
+          <li key={todo._id as string} className="flex items-center gap-3 p-3 bg-white rounded-lg shadow">
+            <input
+              type="checkbox"
+              className="w-5 h-5 rounded border-gray-300"
+              checked={!!todo.completed}
+              onChange={(e) => onCompleted(todo._id as string, e.target.checked)}
+            />
+            <span className={`flex-1 ${todo.completed ? 'line-through text-gray-400' : ''}`}>
+              {typeof todo.title === 'string' ? todo.title : 'untitled'}
+            </span>
+            <button
+              className="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
+              onClick={() => setTodoState(todo._id as string, 'Archived')}
+            >
+              Archive
+            </button>
+            {/* [!code highlight:6] */}
+            <button
+              className="px-3 py-1 text-sm text-green-600 bg-green-50 rounded hover:bg-green-100"
+              onClick={() => shareTodo(todo._id as string)}
+            >
+              Share
+            </button>
+          </li>
+        ))}
+      </ul>
 
-    Archived:
-    {archivedTodos
-      .map((todo) => <div key={todo._id as string}>
-        {typeof todo.title === 'string' ? todo.title : 'untitled'}
-        <button onClick={() => setTodoState(todo._id as string, 'Active')}>Unarchive</button>
-    </div>)}
-  </div>
+      {archivedTodos.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold text-gray-600 mb-2">Archived</h2>
+          <ul className="space-y-2 opacity-60">
+            {archivedTodos.map((todo) => (
+              <li key={todo._id as string} className="flex items-center gap-3 p-3 bg-white rounded-lg shadow">
+                <span className="flex-1 text-gray-400">
+                  {typeof todo.title === 'string' ? todo.title : 'untitled'}
+                </span>
+                <button
+                  className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded hover:bg-blue-100"
+                  onClick={() => setTodoState(todo._id as string, 'Active')}
+                >
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 ```
 
@@ -340,7 +488,7 @@ If you test the share functionality now, you'll notice something interesting: th
 
 Why does this happen? This is because of how LinkedRecords handles different types of permissions:
 
-- **`$isMemberOf`** grants access to read and modify the **attribute's content** (the JSON data like `title` and `completed`)
+- **`$canAccess`** grants access to read and modify the **attribute's content** (the JSON data like `title` and `completed`)
 - However, archiving requires creating a **fact** like `[todoId, 'stateIs', 'Archived']` - this uses the todo as the **subject** of a fact
 
 To create facts where an entity is the subject, a user needs the **`$canRefine`** permission. Think of it as the difference between:
@@ -359,16 +507,16 @@ To fix this, update the `shareTodo` function to also grant `$canRefine`:
 
 ```tsx
   const [ , shareTodo ] = useAsyncFn(async (id: string) => {
-    const email = prompt('enter email');
+    const email = prompt('Enter email address to share with:');
 
     if (!email) {
-      return alert('insert valid email');
+      return alert('Please enter a valid email');
     }
 
     const userId = await lr.getUserIdByEmail(email);
 
     if (!userId) {
-      return alert('user not found');
+      return alert('User not found. The user must sign up first.');
     }
 
     await lr.Fact.createAll([
@@ -385,7 +533,7 @@ Now the shared user can archive and unarchive todos too. This pattern of combini
 
 Updating your code only affects *future* shares. Todos you've already shared are still missing the `$canRefine` permission because that fact was never created for them.
 
-To fix an existing share, the user would need to unshare the todo and share it again — this time the updated code will create both permission facts.
+To fix an existing share, the user would need to share it again — this time the updated code will create both permission facts.
 
 This is an important concept: permissions in LinkedRecords are stored as facts in the database, not derived from code. Changing your code changes what happens *next time*, but doesn't retroactively update existing data.
 </Callout>
