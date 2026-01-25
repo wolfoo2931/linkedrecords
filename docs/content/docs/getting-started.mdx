@@ -5,6 +5,10 @@ description: Build your first LinkedRecords application
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
+<Callout type="info">
+By the end of this tutorial, you will have a working application with authentication enabled, authorization out of the box, the ability to share data between users, and persistent storage - all without writing any backend code.
+</Callout>
+
 ## Quick Start
 
 Start the LinkedRecords backend locally with a single command (requires [Docker](https://docs.docker.com/get-docker/)):
@@ -334,7 +338,7 @@ function TodoList() {
             <span className={`flex-1 ${todo.completed ? 'line-through text-gray-400' : ''}`}>
               {typeof todo.title === 'string' ? todo.title : 'untitled'}
             </span>
-            // [!code highlight:6]
+            {/* [!code highlight:6] */}
             <button
               className="px-3 py-1 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200"
               onClick={() => setTodoState(todo._id as string, 'Archived')}
@@ -345,8 +349,8 @@ function TodoList() {
         ))}
       </ul>
 
-      {archivedTodos.length > 0 && ( // [!code highlight]
-        // [!code highlight:20]
+      {archivedTodos.length > 0 && ( /* [!code highlight] */
+        /* [!code highlight:20] */
         <div>
           <h2 className="text-lg font-semibold text-gray-600 mb-2">Archived</h2>
           <ul className="space-y-2 opacity-60">
@@ -529,7 +533,7 @@ Now the shared user can archive and unarchive todos too. This pattern of combini
 
 Updating your code only affects *future* shares. Todos you've already shared are still missing the `$canRefine` permission because that fact was never created for them.
 
-To fix an existing share, the user would need to unshare the todo and share it again — this time the updated code will create both permission facts.
+To fix an existing share, the user would need to share it again — this time the updated code will create both permission facts.
 
 This is an important concept: permissions in LinkedRecords are stored as facts in the database, not derived from code. Changing your code changes what happens *next time*, but doesn't retroactively update existing data.
 </Callout>
