@@ -32,7 +32,7 @@ export {
 const publicClients: Record<string, LinkedRecords> = {};
 
 export default class LinkedRecords {
-  static ensureUserIdIsKnownPromise;
+  static fetchUserInfoPromise;
 
   KeyValueChange: typeof KeyValueChange = KeyValueChange;
 
@@ -350,32 +350,58 @@ export default class LinkedRecords {
     }
   }
 
+  async fetchUserInfo(): Promise<Record<string, string> | undefined> {
+    if (!LinkedRecords.fetchUserInfoPromise) {
+      LinkedRecords.fetchUserInfoPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
+        .then(async (response) => {
+          if (!response || response.status === 401) {
+            this.handleExpiredLoginSession();
+            return undefined;
+          }
+
+          const responseBody = await response.json();
+          return responseBody;
+        });
+    }
+
+    try {
+      const ui = await LinkedRecords.fetchUserInfoPromise;
+      return ui;
+    } finally {
+      // we only cached this so we have one request in flight at the same time
+      // once the request is done we delete it so next time this method is called
+      // we fetch up to date information
+      LinkedRecords.fetchUserInfoPromise = undefined;
+    }
+  }
+
   async ensureUserIdIsKnown(): Promise<string | undefined> {
     if (this.actorId && typeof this.actorId === 'string') {
       return this.actorId;
     }
 
-    if (!LinkedRecords.ensureUserIdIsKnownPromise) {
-      LinkedRecords.ensureUserIdIsKnownPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
-        .then(async (response) => {
-          if (!response || response.status === 401) {
-            this.handleExpiredLoginSession();
-          }
+    const userInfo = await this.fetchUserInfo();
 
-          const responseBody = await response.json();
-          return responseBody.userId;
-        });
+    if (!userInfo) {
+      return undefined;
     }
 
-    try {
-      this.actorId = await LinkedRecords.ensureUserIdIsKnownPromise;
-      return this.actorId;
-    } finally {
-      LinkedRecords.ensureUserIdIsKnownPromise = undefined;
-    }
+    this.actorId = userInfo['userId'];
+
+    return this.actorId;
   }
 
-  // OIDC Auth methods
+  public async getCurrentUserEmail(): Promise<string> {
+    const userInfo = await this.fetchUserInfo();
+
+    if (!userInfo || !userInfo['userEmail']) {
+      throw new Error('Error fetching user info');
+    }
+
+    return userInfo['userEmail'];
+  }
+
+  // OIDC Auth methods for public client mode
   public async login() {
     if (!this.oidcManager) throw new Error('OIDC not configured');
     await this.oidcManager.login();
