@@ -368,6 +368,8 @@ export default class LinkedRecords {
       return ui;
     } finally {
       // we only cached this so we have one request in flight at the same time
+      // once the request is done we delete it so next time this method is called
+      // we fetch up to date information
       LinkedRecords.fetchUserInfoPromise = undefined;
     }
   }
@@ -378,7 +380,7 @@ export default class LinkedRecords {
     }
 
     const userInfo = await this.fetchUserInfo();
-    this.actorId = userInfo['actorId'];
+    this.actorId = userInfo['userId'];
 
     return this.actorId;
   }
