@@ -402,6 +402,10 @@ export default class LinkedRecords {
   // OIDC Auth methods for public client mode
   public async login() {
     if (!this.oidcManager) throw new Error('OIDC not configured');
+
+    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+    this.cachedUserEmail = undefined;
+
     await this.oidcManager.login();
   }
 
@@ -412,6 +416,10 @@ export default class LinkedRecords {
 
   public async logout() {
     if (!this.oidcManager) throw new Error('OIDC not configured');
+
+    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+    this.cachedUserEmail = undefined;
+
     await this.oidcManager.logout();
   }
 
