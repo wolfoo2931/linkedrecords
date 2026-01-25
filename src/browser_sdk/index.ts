@@ -323,6 +323,9 @@ export default class LinkedRecords {
   }
 
   public handleExpiredLoginSession() {
+    LinkedRecords.ensureUserIdIsKnownPromise = undefined;
+    this.cachedUserEmail = undefined;
+
     if (this.loginHandler) {
       this.loginHandler();
     }
