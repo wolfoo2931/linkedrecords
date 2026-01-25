@@ -14,6 +14,7 @@ export interface OIDCConfig {
   response_type?: string;
   silent_redirect_uri?: string;
   automaticSilentRenew?: boolean;
+  useSessionStorage?: boolean; // use sessionStorage instead of localStorage (useful for tests)
 }
 
 export class OIDCManager {
@@ -50,6 +51,7 @@ export class OIDCManager {
       response_type: responseType,
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew,
+      useSessionStorage,
     } = config;
 
     let authority = providedAuthority;
@@ -83,7 +85,7 @@ export class OIDCManager {
       post_logout_redirect_uri: postLogoutRedirectUri,
       scope: scope || 'openid profile email',
       response_type: responseType || 'code',
-      userStore: new WebStorageStateStore({ store: window.sessionStorage }),
+      userStore: new WebStorageStateStore({ store: useSessionStorage ? window.sessionStorage : window.localStorage }),
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew: automaticSilentRenew ?? true,
       extraQueryParams: {

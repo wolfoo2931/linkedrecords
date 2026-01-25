@@ -83,6 +83,7 @@ export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]
     redirect_uri: 'http://localhost:9876/callback',
     scope: 'openid profile email',
     response_type: 'code',
+    useSessionStorage: true,
   };
 
   const client = new LinkedRecords(new URL('http://localhost:3000'), oidcConfig);
