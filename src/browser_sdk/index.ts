@@ -350,12 +350,13 @@ export default class LinkedRecords {
     }
   }
 
-  async fetchUserInfo(): Promise<Record<string, string>> {
+  async fetchUserInfo(): Promise<Record<string, string> | undefined> {
     if (!LinkedRecords.fetchUserInfoPromise) {
       LinkedRecords.fetchUserInfoPromise = this.fetch('/userinfo', { skipWaitForUserId: true })
         .then(async (response) => {
           if (!response || response.status === 401) {
             this.handleExpiredLoginSession();
+            return undefined;
           }
 
           const responseBody = await response.json();
@@ -380,6 +381,11 @@ export default class LinkedRecords {
     }
 
     const userInfo = await this.fetchUserInfo();
+
+    if (!userInfo) {
+      return undefined;
+    }
+
     this.actorId = userInfo['userId'];
 
     return this.actorId;
@@ -388,7 +394,7 @@ export default class LinkedRecords {
   public async getCurrentUserEmail(): Promise<string> {
     const userInfo = await this.fetchUserInfo();
 
-    if (!userInfo['userEmail']) {
+    if (!userInfo || !userInfo['userEmail']) {
       throw new Error('Error fetching user info');
     }
 
