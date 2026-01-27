@@ -102,7 +102,7 @@ export default class Controller {
       if (err instanceof UnauthorizedFactsError) {
         req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(err.facts)}`);
 
-        res.status(401);
+        res.status(403);
         res.send({ unauthorizedFacts: err.facts });
       } else {
         throw err;
@@ -154,7 +154,7 @@ export default class Controller {
     if (unauthorizedFacts.length) {
       req.log.info(`Attribute was not saved because the request contained unauthorized facts: ${JSON.stringify(unauthorizedFacts)}`);
 
-      res.status(401);
+      res.status(403);
       res.send({ unauthorizedFacts });
       return;
     }

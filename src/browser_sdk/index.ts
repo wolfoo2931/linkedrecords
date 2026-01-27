@@ -48,6 +48,8 @@ export default class LinkedRecords {
 
   quotaViolationErrorHandler?: (response) => void;
 
+  authorizationErrorHandler?: (response?) => void;
+
   attributeClientIdSuffix: number = 0;
 
   clientId: string;
@@ -88,6 +90,8 @@ export default class LinkedRecords {
 
       if (needsVerification) {
         console.log('the user must verify its email address.');
+      } else {
+        linkedRecords.login();
       }
 
       console.log('login required, set a login handler which prompts the user to login via linkedRecords.setLoginHandler');
@@ -270,8 +274,6 @@ export default class LinkedRecords {
     if (response.status === 401) {
       console.error(`Authorization Error when calling ${method} ${url} ${await response.text()}`);
 
-      // TODO: Throw an error here so the program code does not just move on as nothing happened.
-
       if (!doNotHandleExpiredSessions) {
         this.handleExpiredLoginSession();
       }
@@ -280,7 +282,15 @@ export default class LinkedRecords {
     }
 
     if (response.status === 403) {
-      this.handleQuotaViolationError(response);
+      const clonedResponse = response.clone();
+      const responseText = await clonedResponse.text();
+
+      if (responseText.startsWith('Not enough storage space')) {
+        this.handleQuotaViolationError(response);
+      } else {
+        this.handleAuthorizationError(response);
+      }
+
       return false;
     }
 
@@ -347,6 +357,18 @@ export default class LinkedRecords {
       this.quotaViolationErrorHandler(response);
     } else {
       this.handleUnknownServerError(response);
+    }
+  }
+
+  public setAuthorizationErrorHandler(handler: (response) => void) {
+    this.authorizationErrorHandler = handler;
+  }
+
+  public handleAuthorizationError(response?) {
+    if (this.authorizationErrorHandler) {
+      this.authorizationErrorHandler(response);
+    } else {
+      throw new Error('User is not allowed to perform operation');
     }
   }
 

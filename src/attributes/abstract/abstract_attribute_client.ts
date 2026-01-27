@@ -304,7 +304,11 @@ export default abstract class AbstractAttributeClient <Type, TypedChange extends
       return true;
     } catch (ex: any) {
       if (ex.message && ex.message.match && ex.message.match(/unauthorized/)) {
-        this.linkedRecords.handleExpiredLoginSession();
+        if (this.linkedRecords.authorizationErrorHandler) {
+          this.linkedRecords.authorizationErrorHandler();
+        } else {
+          throw new Error('User is not allowed to perform operation');
+        }
       } else {
         this.linkedRecords.handleConnectionError(ex);
       }

@@ -32,7 +32,7 @@ export default {
     const containsUnauthorizedFacts = authorizedChecks.some((x) => !x);
 
     if (containsUnauthorizedFacts) {
-      res.status(401);
+      res.status(403);
       res.send({});
     } else {
       await Fact.saveAllWithoutAuthCheck(facts, req.hashedUserID, undefined, req.log);
@@ -57,7 +57,7 @@ export default {
     const containsUnauthorizedFacts = authorizedChecks.some((x) => !x);
 
     if (containsUnauthorizedFacts) {
-      res.status(401);
+      res.status(403);
       res.send({});
     } else {
       for (let i = 0; i < facts.length; i += 1) {
