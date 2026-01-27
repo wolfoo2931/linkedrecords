@@ -65,7 +65,7 @@ async function withAuth(req, res, controllerAction) {
       await uploadWrappedControllerAction(req, res);
     } catch (ex: any) {
       if (ex instanceof AuthorizationError) {
-        res.sendStatus(401);
+        res.sendStatus(403);
       } else if (ex?.message?.startsWith('Not enough storage space available')) {
         res.status(403).send('Not enough storage space available');
       } else { // TODO: this should be moved into the error handler

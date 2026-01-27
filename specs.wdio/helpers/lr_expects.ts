@@ -56,7 +56,7 @@ export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
   );
 
   expect(authorizedContent).to.eql(200);
-  expect(unauthorizedContent).to.eql(401);
+  expect(unauthorizedContent).to.eql(403);
 }
 
 export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, client) {
@@ -94,7 +94,7 @@ export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, clien
   );
 
   expect(authorizedContent).to.match(/anAttributeWithAccess/);
-  expect(unauthorizedContent).to.match(/Unauthorized/);
+  expect(unauthorizedContent).to.match(/Forbidden/);
 
   await expectNotToBeAbleToWriteAttribute(attributeId, client);
 }
