@@ -89,6 +89,11 @@ export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]
   const client = new LinkedRecords(new URL('http://localhost:3000'), oidcConfig);
   await client.ensureUserIdIsKnown();
   clients.push(client);
+
+  // when the majority of the test were written
+  // the default handler which throws an exception
+  // was not implemented yet
+  client.setAuthorizationErrorHandler(() => {});
   await new Promise((r) => { setTimeout(r, 100); });
   const csb = await client.getClientServerBus();
   return [client, csb];
