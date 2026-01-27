@@ -85,7 +85,9 @@ export class OIDCManager {
       post_logout_redirect_uri: postLogoutRedirectUri,
       scope: scope || 'openid profile email',
       response_type: responseType || 'code',
-      userStore: new WebStorageStateStore({ store: useSessionStorage ? window.sessionStorage : window.localStorage }),
+      userStore: new WebStorageStateStore({
+        store: useSessionStorage ? window.sessionStorage : window.localStorage
+      }),
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew: automaticSilentRenew ?? true,
       extraQueryParams: {
@@ -102,6 +104,7 @@ export class OIDCManager {
       return;
     }
 
+    await this.userManager.removeUser();
     const returnTo = window.location.pathname + window.location.search + window.location.hash;
     window.sessionStorage.setItem('lr_return_to', returnTo);
 
@@ -124,6 +127,7 @@ export class OIDCManager {
 
   async logout(): Promise<void> {
     await this.ready;
+    await this.userManager.removeUser();
     await this.userManager.signoutRedirect();
   }
 
