@@ -86,7 +86,7 @@ export class OIDCManager {
       scope: scope || 'openid profile email',
       response_type: responseType || 'code',
       userStore: new WebStorageStateStore({
-        store: useSessionStorage ? window.sessionStorage : window.localStorage
+        store: useSessionStorage ? window.sessionStorage : window.localStorage,
       }),
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew: automaticSilentRenew ?? true,
