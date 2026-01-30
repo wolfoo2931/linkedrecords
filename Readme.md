@@ -2,11 +2,24 @@
 
 LinkedRecords is a NoSQL database that you can connect to directly from your single-page application - no backend code required.
 
-- You can use any OpenID Connect provider for authentication, so you don’t need to implement login, password reset, or similar features. Currently, automated tests run against Auth0, but other providers should work as well.
+---
+
+## 📚 Getting Started
+
+**Want to build apps with LinkedRecords?** Check out the documentation website:
+
+- **[Introduction](https://linkedrecords.com)** - Learn what LinkedRecords is and how it works
+- **[Getting Started Guide](https://linkedrecords.com/getting-started)** - Step-by-step guide to build your first app
+
+---
+
+## Features
+
+- You can use any OpenID Connect provider for authentication, so you don't need to implement login, password reset, or similar features. Currently, automated tests run against Auth0, but other providers should work as well.
 - A flexible authorization model is built into LinkedRecords.
 - It supports real-time collaboration, using a simple conflict-free replicated data type (CRDT) for key-value documents and operational transformation (OT) for large text under the hood.
 
-Developer documentation follows. Curious readers can explore the `specs.wdio/tinytodo` directory for a simple usage example.
+For a simple usage example, explore the `specs.wdio/tinytodo` directory.
 
 # Concept
 
