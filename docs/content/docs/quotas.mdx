@@ -11,7 +11,7 @@ Quotas control how much storage each user or organization can consume. When a us
 or organization reaches their quota limit, further attribute creation or modification
 is blocked until storage is freed or the quota is upgraded.
 
-Quotas are tied to [accountability](/docs/accountability) - the accountable entity's
+Quotas are tied to [accountability](/accountability) - the accountable entity's
 quota is charged for storage used by an attribute.
 
 ## Default Quotas
@@ -62,11 +62,18 @@ When storage quota is exceeded:
 lr.setQuotaViolationErrorHandler((response) => {
   console.log('Storage quota exceeded');
   // Show upgrade prompt or warning to user
+
+  // If you do not throw an error here the create command
+  // will not throw either.
+
+  // You can decide not to throw and handle all violations here.
+  throw new Error('Quota exceeded')
 });
 
 try {
   await lr.Attribute.createKeyValue({ /* large data */ });
 } catch (error) {
+  // This is the error you throw in the QuotaViolationErrorHandler
   // Handle quota violation
 }
 ```

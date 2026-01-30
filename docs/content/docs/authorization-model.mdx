@@ -44,6 +44,45 @@ When you create an attribute, a `$isAccountableFor` fact linking you to it is
 automatically created. You don't need to add this manually.
 </Callout>
 
+**Transferring accountability:** You can transfer accountability to a group by creating a new `$isAccountableFor` fact with the group as the subject. Once transferred, you are no longer accountable—the group is. This matters because accountability determines who pays for storage quota. For example, if you're a member of an organization and create documents for it, you likely want the organization to be accountable for the storage costs, not you personally.
+
+```typescript
+// Transfer accountability to your organization
+await lr.Fact.createAll([
+  [orgId, '$isAccountableFor', doc.id],
+]);
+// The org now "owns" this document for quota purposes
+// In order for this to work you need to be a member
+// of the org and accountable for the doc. After this
+// command is executed you will no longer be accountable
+// for this doc and you will not be able to perform this
+// operation a second time.
+```
+
+<Callout type="warn">
+You can only transfer accountability to a group you're a member of - not to other users or arbitrary entities. See [Accountability Transfer Rules](#accountability-transfer-rules) for details.
+</Callout>
+
+<Callout type="info">
+**What is a group?** There is no special "group" concept in LinkedRecords. A group is simply an attribute (typically a KeyValue attribute) that you use as a node for memberships. You create an attribute, and then use its ID as the target of `$isMemberOf` facts. You don't need to tag it with `isA` or assign any terms - any attribute can serve as a group.
+
+```typescript
+// Create a simple attribute - this becomes your "group"
+const team = await lr.Attribute.createKeyValue({ name: 'Engineering' });
+
+// Use its ID to assign memberships
+await lr.Fact.createAll([
+  [userId, '$isMemberOf', team.id],
+]);
+
+// Grant the group access to another attribute
+await lr.Fact.createAll([
+  [team.id, '$canAccess', documentId],
+]);
+// Now all members of the team can read and write the document
+```
+</Callout>
+
 ### $isMemberOf
 
 Grants membership in a group, inheriting the group's access permissions.
@@ -60,7 +99,7 @@ Members can:
 
 ### $isHostOf
 
-Grants host privileges for a group. Hosts can invite new members.
+Grants host privileges for a group. Hosts can add new members.
 
 ```typescript
 [userId, '$isHostOf', teamId]
@@ -70,6 +109,10 @@ Hosts have all member permissions, plus:
 - Can add new members to the group (`$isMemberOf`)
 - Can make other users hosts (`$isHostOf`)
 - Can remove members
+
+<Callout type="info">
+To create a `$isHostOf` fact, you must either be accountable for the group or be a host of it.
+</Callout>
 
 ### $canRead
 
@@ -126,10 +169,8 @@ When you create an attribute, you automatically get full permissions:
 Permissions can be granted to groups (teams), which then flow to all members:
 
 ```typescript
-// Create a team
-const team = await lr.Attribute.createKeyValue({ name: 'Engineering' }, [
-  ['$it', 'isA', 'Team'],
-]);
+// Create a team. A team is just an attribute.
+const team = await lr.Attribute.createKeyValue({ name: 'Engineering' });
 
 // Create a document with team access
 const doc = await lr.Attribute.createKeyValue({ title: 'Spec' }, [
@@ -151,15 +192,17 @@ await lr.Fact.createAll([
 
 | Predicate | Who Can Create |
 |-----------|----------------|
-| `$isATermFor` | Anyone (terms are public) |
-| `$isAccountableFor` | Auto-created for creator; you can transfer by making another entity accountable for something you're accountable for |
-| `$isMemberOf` | Creator or host of the group |
-| `$isHostOf` | Creator or host of the group |
-| `$canRead` | Anyone accountable for the object |
-| `$canAccess` | Anyone accountable for the object |
-| `$canRefine` | Anyone accountable for the object |
-| `$canReferTo` | Anyone accountable for the object |
-| Custom predicates | Anyone with `$canRefine` on subject AND `$canReferTo` on object |
+| `$isATermFor` | Anyone (terms are public domain). If a term already exists it will not be created again. |
+| `$isAccountableFor` | Auto-created for creator; can transfer to a group you're a member of (not to users directly) |
+| `$isMemberOf` | Creator/accountable of the group, or anyone with `$isHostOf` on the group |
+| `$isHostOf` | Creator/accountable of the group, or anyone with `$isHostOf` on the group |
+| `$canRead` | Anyone accountable for the object, or hosts of groups with `$canAccess` to the object |
+| `$canAccess` | Anyone accountable for the object, or hosts of groups with `$canAccess` to the object |
+| `$canRefine` | Anyone accountable for the object, or hosts of groups with `$canAccess` to the object |
+| `$canReferTo` | Anyone accountable for the object, or hosts of groups with `$canAccess` to the object |
+| Custom predicates | Anyone with `$canRefine` on subject AND `$canReferTo` on object (includes group members with `$canAccess`) |
+
+All the above relations are not transitive.
 
 ### Who Can Delete Facts?
 
@@ -285,6 +328,50 @@ await lr.Fact.createAll([
   [docId, 'myCustomPredicate', 'value'],
 ]);
 ```
+
+### Accountability Transfer Rules
+
+Accountability (`$isAccountableFor`) has specific transfer rules:
+
+- You can only transfer accountability to a **group you're a member of** (not to individual users or arbitrary entities)
+- Accountability cannot be deleted, only transferred
+- You cannot transfer accountability to terms or random strings
+
+```typescript
+// Create an org and become a member
+const org = await lr.Attribute.createKeyValue({ name: 'Acme' }, [
+  ['$it', 'isA', 'Organization'],
+]);
+await lr.Fact.createAll([[myUserId, '$isMemberOf', org.id]]);
+
+// Now you can transfer accountability of your document to the org
+await lr.Fact.createAll([[org.id, '$isAccountableFor', doc.id]]);
+
+// This would fail - can't transfer to a user directly
+await lr.Fact.createAll([[otherUserId, '$isAccountableFor', doc.id]]);
+```
+
+### Derived Permissions from Group Membership
+
+When a group has `$canAccess` to an attribute, members of that group inherit implicit permissions:
+
+- **Read and write access** to the attribute's payload
+- **Implicit `$canRefine`** - can use the attribute as subject in custom facts (if group has `$canRefine`)
+- **Implicit `$canReferTo`** - can use the attribute as object in custom facts (if group has `$canReferTo`)
+
+```typescript
+// Team has $canAccess to the project
+await lr.Fact.createAll([[teamId, '$canAccess', projectId]]);
+
+// Team member can now create custom facts using the project
+// (because $canAccess implies ability to refine and refer)
+await teamMember.Fact.createAll([
+  [projectId, 'status', 'active'],  // Works - can use projectId as subject
+  [taskId, 'belongsTo', projectId], // Works - can use projectId as object
+]);
+```
+
+This means that for creating custom predicates, users with `$canAccess` through group membership effectively have `$canRefine` and `$canReferTo` permissions on those attributes.
 
 ## Verifying Fact Creation
 

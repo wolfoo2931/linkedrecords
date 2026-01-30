@@ -145,7 +145,7 @@ await lr.Fact.createAll([
 ### System Facts (Reserved Predicates)
 
 Predicates starting with `$` are reserved for system use and have special
-authorization semantics. See the [Authorization Model](/docs/authorization-model)
+authorization semantics. See the [Authorization Model](/authorization-model)
 for details on predicates like `$isAccountableFor`, `$isMemberOf`, `$canAccess`, etc.
 
 ## Practical Example
@@ -198,11 +198,16 @@ const { incompleteTasks } = await lr.Attribute.findAll({
    relationship (e.g., `belongsTo`, `createdBy`, `stateIs`)
 
 2. **Declare terms first** - Before using a term as an object in `isA` facts,
-   declare it using `$isATermFor`. See [Terms](/docs/terms) for details.
+   declare it using `$isATermFor`. See [Terms](/terms) for details.
 
 3. **Keep facts atomic** - Each fact should represent one relationship. Avoid
    encoding multiple pieces of information in a single fact.
 
 4. **Use system predicates correctly** - Reserved predicates (starting with `$`)
-   have specific authorization implications. Review the [Authorization Model](/docs/authorization-model)
+   have specific authorization implications. Review the [Authorization Model](/authorization-model)
    before using them.
+
+## Related
+
+- [Query Language](/query-language) - Complete reference for querying facts and attributes
+- [Terms](/terms) - Declaring terms before using them in facts
