@@ -42,7 +42,6 @@ const orgQuota = await lr.getQuota(organizationId);
 
 Quota includes:
 - Storage size for attribute values
-- Count limits for different attribute types
 
 ## Transferring Accountability
 
@@ -224,11 +223,7 @@ lr.setQuotaViolationErrorHandler((response) => {
   // Show user a message or upgrade prompt
 });
 
-try {
-  await lr.Attribute.createKeyValue({ /* large data */ });
-} catch (error) {
-  // Handle quota violation
-}
+await lr.Attribute.createKeyValue({ /* large data */ });
 ```
 
 ## Practical Example: Personal vs Organization Storage

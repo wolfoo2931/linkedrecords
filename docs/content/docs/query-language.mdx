@@ -1,0 +1,519 @@
+---
+title: Query Language
+description: Complete reference for the LinkedRecords query syntax
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+LinkedRecords provides a declarative query language for finding attributes and
+facts. Queries are expressed as patterns that match against the triplestore.
+
+There are two main query methods:
+- `Attribute.findAll()` - Find attributes matching fact patterns
+- `Fact.findAll()` - Find facts directly
+
+## The Triple Pattern
+
+Every query is built from **triple patterns** - conditions that match facts in
+the triplestore:
+
+```
+[subject, predicate, object]
+```
+
+For example:
+- `['$it', 'isA', 'Document']` - Match attributes that are Documents
+- `[userId, '$isMemberOf', '$it']` - Match attributes the user is a member of
+- `['$it', 'belongsTo', projectId]` - Match attributes belonging to a project
+
+## Attribute.findAll()
+
+The primary way to query for attributes. Returns attributes matching your patterns.
+
+### Basic Structure
+
+```typescript
+const result = await lr.Attribute.findAll({
+  queryName: [
+    [subject, predicate, object],
+    [subject, predicate, object],
+    // ... more patterns (AND logic)
+  ],
+});
+// result.queryName is an array of matching attributes
+```
+
+Each named query group returns an array of attributes that match **all** patterns
+in that group (AND logic).
+
+### Multiple Query Groups
+
+You can run multiple independent queries in one call:
+
+```typescript
+const { tasks, projects, users } = await lr.Attribute.findAll({
+  tasks: [
+    ['$it', 'isA', 'Task'],
+  ],
+  projects: [
+    ['$it', 'isA', 'Project'],
+  ],
+  users: [
+    ['$it', 'isA', 'User'],
+  ],
+});
+// Each group queries independently
+```
+
+### Direct ID Lookup
+
+Pass an attribute ID directly to fetch a specific attribute:
+
+```typescript
+const { doc, author } = await lr.Attribute.findAll({
+  doc: 'kv-abc123',           // Direct ID lookup
+  author: [                    // Pattern-based query
+    ['$it', 'isA', 'Author'],
+  ],
+});
+// doc is a single attribute (or undefined if not found/accessible)
+// author is an array of attributes
+```
+
+## The $it Placeholder
+
+`$it` is a special placeholder representing "the attribute being queried."
+
+### As Subject (Finding Attributes by Their Facts)
+
+The most common pattern - find attributes that have specific facts:
+
+```typescript
+// Find all Documents
+{ docs: [['$it', 'isA', 'Document']] }
+
+// Find Documents belonging to a project
+{
+  docs: [
+    ['$it', 'isA', 'Document'],
+    ['$it', 'belongsTo', projectId],
+  ]
+}
+```
+
+### As Object (Finding Attributes Referenced by Facts)
+
+Find attributes that appear as objects in facts:
+
+```typescript
+// Find teams that a user is a member of
+{
+  userTeams: [
+    ['$it', 'isA', 'Team'],
+    [userId, '$isMemberOf', '$it'],  // userId is member of $it
+  ]
+}
+
+// Find resources an organization is accountable for
+{
+  orgResources: [
+    [orgId, '$isAccountableFor', '$it'],
+  ]
+}
+```
+
+### Combined Subject and Object Patterns
+
+Use `$it` in multiple positions to express complex relationships:
+
+```typescript
+// Find teams where both Alice and Bob are members
+{
+  commonTeams: [
+    ['$it', 'isA', 'Team'],
+    [aliceId, '$isMemberOf', '$it'],
+    [bobId, '$isMemberOf', '$it'],
+  ]
+}
+
+// Find documents that belong to projects Alice can access
+{
+  docs: [
+    ['$it', 'isA', 'Document'],
+    ['$it', 'belongsTo', projectId],
+    [aliceId, '$canAccess', '$it'],
+  ]
+}
+```
+
+## Query Modifiers
+
+### $hasDataType
+
+Filter by attribute type:
+
+```typescript
+// Find only KeyValue attributes
+{
+  kvDocs: [
+    ['$it', '$hasDataType', 'KeyValueAttribute'],
+    ['$it', 'isA', 'Document'],
+  ]
+}
+
+// Find only LongText attributes
+{
+  notes: [
+    ['$it', '$hasDataType', 'LongTextAttribute'],
+  ]
+}
+
+// Find only Blob attributes
+{
+  files: [
+    ['$it', '$hasDataType', 'BlobAttribute'],
+  ]
+}
+```
+
+Valid types: `KeyValueAttribute`, `LongTextAttribute`, `BlobAttribute`
+
+### $latest(predicate)
+
+Match the most recent fact for a predicate. Essential for state tracking where
+you add new facts rather than deleting old ones:
+
+```typescript
+// Find tasks where the latest stateIs fact is 'active'
+{
+  activeTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', '$latest(stateIs)', activeStateId],
+  ]
+}
+```
+
+<Callout type="info">
+`$latest()` uses the fact creation timestamp to determine which fact is most
+recent. This lets you track state history by adding new facts instead of
+deleting old ones.
+</Callout>
+
+### $not(value)
+
+Negation - match attributes that do NOT have a specific fact value:
+
+```typescript
+// Find books that are NOT deleted
+{
+  activeBooks: [
+    ['$it', 'isA', 'Book'],
+    ['$it', 'status', '$not(deleted)'],
+  ]
+}
+```
+
+### Combining $latest and $not
+
+The most powerful pattern for state filtering:
+
+```typescript
+// Find non-archived items (latest stateIs is NOT archivedStateId)
+{
+  activeItems: [
+    ['$it', 'isA', 'TodoList'],
+    ['$it', '$latest(stateIs)', `$not(${archivedStateId})`],
+  ]
+}
+
+// Find items not in trash
+{
+  visibleItems: [
+    ['$it', '$latest(deletionState)', '$not(inTrash)'],
+  ]
+}
+```
+
+## Transitive Predicates
+
+Add `*` to a predicate to make it transitive - queries follow chains of relationships:
+
+```typescript
+// Set up a type hierarchy
+await lr.Fact.createAll([
+  ['Biography', 'isA*', 'Book'],
+  ['Autobiography', 'isA*', 'Biography'],
+]);
+
+// Query all Books (includes Books, Biographies, AND Autobiographies)
+{
+  allBooks: [
+    ['$it', 'isA*', 'Book'],
+  ]
+}
+```
+
+## Fact.findAll()
+
+Query facts directly instead of attributes.
+
+### Basic Structure
+
+```typescript
+const facts = await lr.Fact.findAll({
+  subject?: SubjectQuery[],
+  predicate?: string[],
+  object?: SubjectQuery[],
+});
+```
+
+### Query by Subject
+
+```typescript
+// Find all facts about a specific attribute
+const facts = await lr.Fact.findAll({
+  subject: [attributeId],
+});
+
+// Find facts about attributes matching a pattern
+const facts = await lr.Fact.findAll({
+  subject: [['isA', 'Document']],  // All Documents
+});
+```
+
+### Query by Predicate
+
+```typescript
+// Find all 'isA' facts
+const facts = await lr.Fact.findAll({
+  predicate: ['isA'],
+});
+
+// Find facts with multiple predicates
+const facts = await lr.Fact.findAll({
+  predicate: ['isA', 'belongsTo'],
+});
+```
+
+### Query by Object
+
+```typescript
+// Find all facts pointing to a specific attribute
+const facts = await lr.Fact.findAll({
+  object: [attributeId],
+});
+
+// Find facts pointing to Documents
+const facts = await lr.Fact.findAll({
+  object: [['isA', 'Document']],
+});
+```
+
+### Combined Queries
+
+```typescript
+// Find 'belongsTo' facts between Documents and Projects
+const facts = await lr.Fact.findAll({
+  subject: [['isA', 'Document']],
+  predicate: ['belongsTo'],
+  object: [['isA', 'Project']],
+});
+```
+
+### Multiple Query Sets (OR Logic)
+
+Pass an array to combine queries with OR logic:
+
+```typescript
+const facts = await lr.Fact.findAll([
+  {
+    subject: [['isA', 'Document']],
+    predicate: ['createdBy'],
+  },
+  {
+    subject: [['isA', 'Project']],
+    predicate: ['ownedBy'],
+  },
+]);
+// Returns facts matching EITHER query
+```
+
+## Authorization Filtering
+
+All queries automatically filter results based on the current user's permissions.
+You only see attributes and facts you have access to:
+
+```typescript
+// Alice creates a private document
+await alice.Attribute.createKeyValue(
+  { title: 'Private' },
+  [['$it', 'isA', 'Document']]
+);
+
+// Bob queries for documents
+const { docs } = await bob.Attribute.findAll({
+  docs: [['$it', 'isA', 'Document']],
+});
+// docs is empty - Bob cannot see Alice's private document
+```
+
+## Loading Values
+
+`findAll()` returns attribute handles. Call `getValue()` to load the data:
+
+```typescript
+const { tasks } = await lr.Attribute.findAll({
+  tasks: [['$it', 'isA', 'Task']],
+});
+
+for (const task of tasks) {
+  const value = await task.getValue();
+  console.log(value.title);
+}
+```
+
+Use `findAndLoadAll()` to pre-load values in a single request:
+
+```typescript
+const { tasks } = await lr.Attribute.findAndLoadAll({
+  tasks: [['$it', 'isA', 'Task']],
+});
+
+// Values already loaded - no additional network requests
+for (const task of tasks) {
+  console.log(task.value.title);
+}
+```
+
+## Real-Time Subscriptions
+
+Subscribe to query results for live updates:
+
+```typescript
+await lr.Attribute.subscribeToQuery(
+  {
+    tasks: [
+      ['$it', 'isA', 'Task'],
+      ['$it', 'belongsTo', projectId],
+    ],
+  },
+  ({ tasks }) => {
+    // Called whenever results change
+    console.log('Tasks updated:', tasks.length);
+  }
+);
+```
+
+## Complete Example
+
+Here's a comprehensive example showing various query features:
+
+```typescript
+// Set up terms
+await lr.Fact.createAll([
+  ['Project', '$isATermFor', 'A project'],
+  ['Task', '$isATermFor', 'A task'],
+  ['CompletedState', '$isATermFor', 'Completed state'],
+  ['ArchivedState', '$isATermFor', 'Archived state'],
+]);
+
+// Create state markers
+// You could also use terms as state markers but this way you
+// can restrict who can assign what state.
+const { completedState, archivedState } = await lr.Attribute.createAll({
+  completedState: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [
+      ['$it', 'isA', 'CompletedState'],
+      [orgId, '$isAccountableFor', '$it'],
+      [team.id, '$canReferTo', '$it'],
+      [adminTeam.id, '$canReferTo', '$it']
+    ],
+  },
+  archivedState: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [
+      ['$it', 'isA', 'ArchivedState'],
+      [orgId, '$isAccountableFor', '$it'],
+      [adminTeam.id, '$canReferTo', '$it']
+    ],
+  },
+});
+
+// Create a project with tasks
+const project = await lr.Attribute.createKeyValue(
+  { name: 'Website Redesign' },
+  [['$it', 'isA', 'Project']]
+);
+
+const task1 = await lr.Attribute.createKeyValue(
+  { title: 'Design mockups' },
+  [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', project.id],
+  ]
+);
+
+// Mark task1 as completed
+await lr.Fact.createAll([
+  [task1.id, 'stateIs', completedState.id],
+]);
+
+// Query examples
+const {
+  allTasks,
+  completedTasks,
+  pendingTasks,
+  myProjects,
+} = await lr.Attribute.findAll({
+  // All tasks in the project
+  allTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', project.id],
+  ],
+
+  // Only completed tasks
+  completedTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', project.id],
+    ['$it', '$latest(stateIs)', completedState.id],
+  ],
+
+  // Non-completed, non-archived tasks
+  pendingTasks: [
+    ['$it', 'isA', 'Task'],
+    ['$it', 'belongsTo', project.id],
+    ['$it', '$latest(stateIs)', `$not(${completedState.id})`],
+    ['$it', '$latest(stateIs)', `$not(${archivedState.id})`],
+  ],
+
+  // Projects I'm accountable for
+  myProjects: [
+    ['$it', 'isA', 'Project'],
+    [myUserId, '$isAccountableFor', '$it'],
+  ],
+});
+```
+
+## Quick Reference
+
+| Pattern | Meaning |
+|---------|---------|
+| `['$it', 'isA', 'Type']` | Attributes of a specific type |
+| `['$it', 'belongsTo', id]` | Attributes belonging to something |
+| `[userId, '$isMemberOf', '$it']` | Attributes the user is a member of |
+| `[id, '$isAccountableFor', '$it']` | Attributes something is accountable for |
+| `['$it', '$hasDataType', 'KeyValueAttribute']` | Only KeyValue attributes |
+| `['$it', '$latest(pred)', value]` | Latest fact value matches |
+| `['$it', 'pred', '$not(value)']` | Fact value does NOT match |
+| `['$it', '$latest(pred)', '$not(value)']` | Latest value does NOT match |
+| `['$it', 'isA*', 'Type']` | Transitive type matching |
+
+## Related
+
+- [Facts and Triples](/facts-and-triples) - Understanding the triplestore
+- [Query Patterns](/query-patterns) - Advanced patterns and use cases
