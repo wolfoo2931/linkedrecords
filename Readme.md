@@ -21,6 +21,12 @@ LinkedRecords is a NoSQL database that you can connect to directly from your sin
 
 For a simple usage example, explore the `specs.wdio/tinytodo` directory.
 
+## Performance
+
+The chart below shows the performance of core operations as the database grows. This is automatically updated after each merge to main.
+
+![Load Test Performance Chart](.github/assets/load-test-chart.png)
+
 # Concept
 
 You can think of LinkedRecords as a bucket where anyone can sign up and insert data.
