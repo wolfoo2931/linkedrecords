@@ -25,6 +25,8 @@ For a simple usage example, explore the `specs.wdio/tinytodo` directory.
 
 The chart below shows the performance of core operations as the database grows. This is automatically updated after each merge to main.
 
+The load test simulates a realistic document management scenario. Each **createDocument** operation creates a blueprint of 8 attributes (7 KeyValueAttributes + 1 LongTextAttribute) including the document content, collaborator/reader groups, comments, references, and configuration. The **fetchDocuments** operation lists all documents for a user, while **fetchDocument** retrieves a single document with all its associated attributes.
+
 ![Load Test Performance Chart](.github/assets/load-test-chart.png)
 
 # Concept
