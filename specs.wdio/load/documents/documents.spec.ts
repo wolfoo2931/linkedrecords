@@ -290,8 +290,8 @@ describe('Many Documents', function () {
   this.timeout(4 * hour);
   beforeEach(Session.truncateDB);
   afterEach(Session.afterEach);
-  after(Session.deleteBrowsers);
   after(async function () {
+    await Session.deleteBrowsers();
     if (process.env['RUN_LOAD_TEST'] === 'true') {
       console.log('Rendering chart to image...');
       await renderChartToImage();
