@@ -234,7 +234,7 @@ async function renderChartToImage() {
     capabilities: {
       browserName: 'chrome',
       'goog:chromeOptions': {
-        args: ['headless', 'disable-gpu', 'window-size=1200,800'],
+        args: ['--headless'],
       },
     },
   });
