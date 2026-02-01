@@ -58,7 +58,7 @@ jobs:
           npm run wdio:load
       - name: Create PR with load test chart
         if: success()
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "Update load test performance chart [skip-load-test]"
           title: "Update load test performance chart [skip-load-test]"
