@@ -16,7 +16,7 @@ const capabilities = {
   // restores v8 performance characteristics.
   'wdio:enforceWebDriverClassic': true,
   'goog:chromeOptions': {
-    args: ['headless'],
+    args: ['--headless'],
   },
 };
 

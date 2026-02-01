@@ -8,6 +8,7 @@ import chai, { expect } from 'chai';
 import chaiAsPromised from 'chai-as-promised';
 import path from 'path';
 import pg from 'pg';
+import { remote } from 'webdriverio';
 import Session from '../../helpers/session';
 import Timer from '../../helpers/timer';
 
@@ -219,6 +220,53 @@ function addChartDataTo(chartData, file) {
   return fs.writeFileSync(file, JSON.stringify(existing));
 }
 
+async function renderChartToImage() {
+  const chartHtmlPath = path.join(__dirname, '.chart', 'chart.html');
+  const outputPath = path.resolve(__dirname, '../../../.github/assets/load-test-chart.png');
+
+  // Ensure output directory exists
+  const outputDir = path.dirname(outputPath);
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const browser = await remote({
+    capabilities: {
+      browserName: 'chrome',
+      'goog:chromeOptions': {
+        args: ['--headless'],
+      },
+    },
+  });
+
+  try {
+    // Navigate to the chart HTML file
+    await browser.url(`file://${chartHtmlPath}`);
+
+    // Wait for Plotly to render the chart
+    await browser.waitUntil(
+      async () => {
+        const plotExists = await browser.execute(() => {
+          const plotDiv = document.getElementById('myDiv');
+          // Check if Plotly has rendered (it adds svg elements)
+          return plotDiv && plotDiv.querySelector('.plot-container') !== null;
+        });
+        return plotExists;
+      },
+      { timeout: 10000, timeoutMsg: 'Chart did not render within 10 seconds' },
+    );
+
+    // Small delay to ensure chart is fully rendered
+    await browser.pause(500);
+
+    // Take screenshot and save to file
+    await browser.saveScreenshot(outputPath);
+    console.log(`Chart screenshot saved to: ${outputPath}`);
+  } finally {
+    await browser.deleteSession();
+  }
+}
+
 async function getRandomContentIds(client, accountee, n) {
   const { content } = await client.Attribute.findAll({
     content: [
@@ -242,7 +290,13 @@ describe('Many Documents', function () {
   this.timeout(4 * hour);
   beforeEach(Session.truncateDB);
   afterEach(Session.afterEach);
-  after(Session.deleteBrowsers);
+  after(async function () {
+    await Session.deleteBrowsers();
+    if (process.env['RUN_LOAD_TEST'] === 'true') {
+      console.log('Rendering chart to image...');
+      await renderChartToImage();
+    }
+  });
 
   it('allows to insert a lot of documents', async function () {
     if (process.env['RUN_LOAD_TEST'] !== 'true') {

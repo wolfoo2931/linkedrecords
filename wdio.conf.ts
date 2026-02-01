@@ -31,7 +31,7 @@ exports.config = {
     // restores v8 performance characteristics.
     'wdio:enforceWebDriverClassic': true,
     'goog:chromeOptions': {
-      args: ['headless'], // this will not change the headless mode of the different user sessions.
+      args: ['--headless'], // this will not change the headless mode of the different user sessions.
     },
   }],
 

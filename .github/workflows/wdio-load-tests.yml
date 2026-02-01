@@ -1,8 +1,7 @@
 name: WDIO Tests
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
 
 on:
   workflow_dispatch:
@@ -55,3 +54,11 @@ jobs:
           AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
         run: |
           npm run wdio:load
+      - name: Commit and push load test chart
+        if: success()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/assets/load-test-chart.png
+          git diff --staged --quiet || git commit -m "Update load test performance chart [skip ci]"
+          git push
