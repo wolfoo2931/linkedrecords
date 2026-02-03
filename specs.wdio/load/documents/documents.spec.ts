@@ -291,7 +291,12 @@ describe('Many Documents', function () {
   beforeEach(Session.truncateDB);
   afterEach(Session.afterEach);
   after(async function () {
-    await Session.deleteBrowsers();
+    try {
+      await Session.deleteBrowsers();
+    } catch (ex) {
+      console.log('delete all browsers');
+    }
+
     if (process.env['RUN_LOAD_TEST'] === 'true') {
       console.log('Rendering chart to image...');
       await renderChartToImage();
@@ -316,15 +321,13 @@ describe('Many Documents', function () {
 
     await ensureTerminologyIsDefined(user1);
 
-    for (let index = 0; index < 1000; index++) {
+    for (let index = 0; index < 10000; index++) {
       await timer.timeIt('createDocument', () => createDocument(user1));
 
       if (index % createDocumentForOrgUnderTestEvery === 0) {
         const user2docs = await fetchDocuments(user2);
         if (maxDocumentsForOrgUnderTest > user2docs.length) {
           await timer.timeIt('createDocument', () => createDocument(user2));
-        } else {
-          console.log('............ skip creation of documents for user2');
         }
       }
 
