@@ -310,7 +310,7 @@ describe('Many Documents', function () {
 
     const [user1, user2, user3] = await Session.getThreeSessions();
     const orgUnderTestId = await user2.getActorId();
-    const maxDocumentsForOrgUnderTest = 300;
+    const maxDocumentsForOrgUnderTest = 3000;
     const createDocumentForOrgUnderTestEvery = 10;
 
     const timer = new Timer(async () => {
