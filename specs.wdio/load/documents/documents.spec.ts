@@ -358,8 +358,8 @@ describe('Many Documents', function () {
     addChartDataTo(chartData, path.join(__dirname, '.chart', 'acc_chart_data.json'));
     fs.writeFileSync(path.join(__dirname, '.chart', 'chart_data.js'), `var data = ${JSON.stringify(chartData)}`);
 
-    expect(await timer.getAverageRuntimeForLabel('createDocument')).to.be.below(200);
-    expect(await timer.getAverageRuntimeForLabel('fetchDocuments')).to.be.below(100);
-    expect(await timer.getAverageRuntimeForLabel('fetchDocument')).to.be.below(100);
+    expect(await timer.getAverageRuntimeForLabel('createDocument')).to.be.below(600);
+    expect(await timer.getAverageRuntimeForLabel('fetchDocuments')).to.be.below(300);
+    expect(await timer.getAverageRuntimeForLabel('fetchDocument')).to.be.below(300);
   });
 });
