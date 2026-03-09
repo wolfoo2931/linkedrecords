@@ -1,10 +1,11 @@
-FROM node:24-alpine as builder
+FROM node:24-alpine AS builder
 WORKDIR /usr/src/app
 RUN apk update && apk add git openssh python3 g++ make libpq-dev
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --ignore-scripts
 COPY . .
 RUN npm run build
+RUN npm prune --omit=dev
 
 FROM node:24-alpine
 WORKDIR /usr/src/app
