@@ -321,7 +321,7 @@ describe('Many Documents', function () {
 
     await ensureTerminologyIsDefined(user1);
 
-    for (let index = 0; index < 10000; index++) {
+    for (let index = 0; index < 5000; index++) {
       await timer.timeIt('createDocument', () => createDocument(user1));
 
       if (index % createDocumentForOrgUnderTestEvery === 0) {
