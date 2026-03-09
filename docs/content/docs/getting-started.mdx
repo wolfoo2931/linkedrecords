@@ -80,24 +80,17 @@ export default App
 To use LinkedRecords in our React single page application, we need to install the npm package:
 
 ```sh
-npm install https://github.com/wolfoo2931/linkedrecords-react --save
-npm install react-use --save
+npm install @linkedrecords/react react-use tailwindcss @tailwindcss/vite --save
 ```
 
 <Callout type="info">
-You can also use LinkedRecords outside of React applications. The linkedrecords-react
+You can also use LinkedRecords outside of React applications. The @linkedrecords/react
 module provides some handy hooks which make our lives easier.
 </Callout>
 
 #### Add Tailwind CSS
 
-To make our app look polished, we'll add Tailwind CSS:
-
-```sh
-npm install tailwindcss @tailwindcss/vite --save-dev
-```
-
-Update `vite.config.ts` to include the Tailwind plugin:
+To make our app look polished, we'll add Tailwind CSS. Update `vite.config.ts` to include the Tailwind plugin:
 
 ```ts
 import { defineConfig } from 'vite'
@@ -141,7 +134,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import { LinkedRecordsProvider } from 'linkedrecords-react'
+import { LinkedRecordsProvider } from '@linkedrecords/react'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -160,7 +153,7 @@ For the actual app we replace the content of `src/App.tsx` with the following:
 ```tsx
 import { useEffect, useState } from 'react';
 import { useAsyncFn } from 'react-use';
-import { useLinkedRecords, useKeyValueAttributes } from 'linkedrecords-react';
+import { useLinkedRecords, useKeyValueAttributes } from '@linkedrecords/react';
 
 function NewTodo() {
   const { lr } = useLinkedRecords();
