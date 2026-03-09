@@ -25,7 +25,7 @@ The load test simulates a realistic document management scenario. Each **createD
 
 The test simulates a multi-tenant environment with three users:
 
-- **User 1** continuously creates documents (in the current test configuration 10,000 iterations).
+- **User 1** continuously creates documents (in the current test configuration 5,000 iterations).
 - **User 2** is the "user under test" who crates up to **3000 documents**. At 3000 documents the creation of documents for this user stops
 - **User 3** creates documents occasionally (every 1,000 iterations)
 
