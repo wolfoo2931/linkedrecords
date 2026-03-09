@@ -310,8 +310,8 @@ describe('Many Documents', function () {
 
     const [user1, user2, user3] = await Session.getThreeSessions();
     const orgUnderTestId = await user2.getActorId();
-    const maxDocumentsForOrgUnderTest = 3000;
-    const createDocumentForOrgUnderTestEvery = 1;
+    const maxDocumentsForOrgUnderTest = 300;
+    const createDocumentForOrgUnderTestEvery = 10;
 
     const timer = new Timer(async () => {
       const result = await pgPool.query("SELECT count(*) as count FROM facts WHERE predicate='isA' and object='documentContent';");

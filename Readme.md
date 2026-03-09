@@ -26,7 +26,7 @@ The load test simulates a realistic document management scenario. Each **createD
 The test simulates a multi-tenant environment with three users:
 
 - **User 1** continuously creates documents (in the current test configuration 5,000 iterations).
-- **User 2** is the "user under test" who crates up to **3000 documents**. At 3000 documents the creation of documents for this user stops
+- **User 2** is the "user under test" who creates one document for every 10 documents User 1 creates, up to **300 documents**. At 300 documents, the creation of documents for this user stops.
 - **User 3** creates documents occasionally (every 1,000 iterations)
 
 The x-axis shows the **total number of documents in the database** (owned by all users combined). The y-axis shows the response time in milliseconds.
@@ -36,7 +36,7 @@ The x-axis shows the **total number of documents in the database** (owned by all
 | Operation | Description |
 |-----------|-------------|
 | `createDocument` | Time to create a new document with all related attributes (content, config, comments, references, collaborator/reader groups). You can see that `createDocument` is independent of the total amount of documents in the database as well as the amount of documents visible to the user.|
-| `fetchDocuments` | Time to fetch User 2's document list (up to 3000 documents they see). You can see that this time depends on the amount of documents visible to the user but not on the total amount of documents (the graph flattens around 3000 documents) |
+| `fetchDocuments` | Time to fetch User 2's document list (up to 300 documents they see). You can see that this time depends on the amount of documents visible to the user but not on the total amount of documents (the graph flattens around 3000 documents) |
 | `fetchDocument` | Time to fetch a single document with all related data (content, comments, groups, activity state, references). You can see that this time depends on the amount of documents visible to the user but not on the total amount of documents (the graph flattens around 3000 documents) |
 
 
