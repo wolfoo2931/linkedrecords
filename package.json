@@ -1,6 +1,6 @@
 {
   "name": "@linkedrecords/browser",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A BaaS (Backend-as-a-Service) solution for web applications",
   "main": "./dist/browser_sdk.js",
   "engines": {
