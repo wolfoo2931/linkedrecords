@@ -1,6 +1,6 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
-import FileType from 'file-type';
+import { fileTypeFromBuffer } from 'file-type';
 import assert from 'assert';
 import { Readable } from 'stream';
 import streamToBlob from 'stream-to-blob';
@@ -139,7 +139,7 @@ BlobChange
         return blob;
       }
 
-      const typeFromBinary = await FileType.fromBuffer(await blob.arrayBuffer());
+      const typeFromBinary = await fileTypeFromBuffer(await blob.arrayBuffer());
 
       if (!typeFromBinary || !typeFromBinary.mime) {
         return blob;
@@ -167,7 +167,7 @@ BlobChange
 
     if (!mimetype || mimetype === 'application/octet-stream') {
       try {
-        const typeFromBinary = await FileType.fromBuffer(data);
+        const typeFromBinary = await fileTypeFromBuffer(data);
         if (typeFromBinary && typeFromBinary.mime) {
           mimetype = typeFromBinary.mime;
         }
