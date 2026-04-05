@@ -5,7 +5,7 @@
 **LinkedRecords** is a Backend-as-a-Service (BaaS) that provides a NoSQL database you can connect to directly from single-page applications - no backend code required.
 
 - **Repository:** https://github.com/wolfoo2931/linkedrecords
-- **License:** AGPL-3.0
+- **License:** MIT
 - **Version:** 0.1.0
 - **Author:** Oliver Wolf
 
