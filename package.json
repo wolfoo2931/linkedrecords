@@ -42,7 +42,7 @@
     "serverless"
   ],
   "author": "Oliver Wolf",
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/wolfoo2931/linkedrecords/issues"
   },
