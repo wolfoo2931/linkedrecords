@@ -40,7 +40,7 @@ export async function changeUserContext(userId: string) {
       code: 'test-code',
       client_id: 'test-client',
       client_secret: 'test-secret',
-      redirect_uri: 'http://localhost:9876/callback',
+      redirect_uri: 'http://localhost:8080/callback',
       user_id: userId,
     }),
   });
@@ -80,7 +80,7 @@ export async function createClient(): Promise<[ LinkedRecords, ClientServerBus ]
   const oidcConfig = {
     authority: 'http://localhost:3002',
     client_id: 'test-client',
-    redirect_uri: 'http://localhost:9876/callback',
+    redirect_uri: 'http://localhost:8080/callback',
     scope: 'openid profile email',
     response_type: 'code',
     useSessionStorage: true,

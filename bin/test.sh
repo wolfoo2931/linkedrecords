@@ -44,8 +44,8 @@ fi
 
 echo "Node server is running with PID ${SERVER_PID}"
 
-# Run karma tests
-npx karma start
+# Run browser SDK tests
+npx vitest run --config vitest.browser.config.ts
 
 # Cleanup
 kill $SERVER_PID

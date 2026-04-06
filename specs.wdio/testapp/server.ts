@@ -8,7 +8,7 @@ createServer({ transportDriver: http }).then((server) => {
   server.listen(process.env['PORT'] || 3000, 'localhost');
 });
 
-// TODO: this is only needed for the karma test, can be removed once all tests are migrated to wdio
+// TODO: this is only needed for the browser test.
 http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
