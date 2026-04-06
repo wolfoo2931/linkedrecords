@@ -44,9 +44,12 @@ fi
 
 echo "Node server is running with PID ${SERVER_PID}"
 
-# Run karma tests
-npx karma start
+# Ensure cleanup happens even on failure
+cleanup() {
+  kill $SERVER_PID 2>/dev/null || true
+  kill $OIDC_PID 2>/dev/null || true
+}
+trap cleanup EXIT
 
-# Cleanup
-kill $SERVER_PID
-kill $OIDC_PID
+# Run browser SDK tests
+npx vitest run --config vitest.browser.config.ts
