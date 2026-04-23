@@ -1,10 +1,26 @@
 import { Pool } from 'pg';
 import IsLogger from '../is_logger';
+import { createPgliteClient } from './pglite-adapter';
 
-const pool: Pool = new Pool({
-  max: 3,
-  connectionTimeoutMillis: 2000,
-});
+type DbClient = {
+  query(...args: [string, any[]?]): Promise<{ rows: any[]; rowCount: number | null; command?: string }>;
+};
+
+let _pool: DbClient | null = null;
+
+function getPool(): DbClient {
+  if (_pool) return _pool;
+
+  if (process.env['PGLITE_DATA_DIR'] !== undefined || process.env['USE_PGLITE'] === 'true') {
+    _pool = createPgliteClient(process.env['PGLITE_DATA_DIR']);
+  } else {
+    _pool = new Pool({ max: 3, connectionTimeoutMillis: 2000 });
+  }
+
+  return _pool;
+}
+
+export { getPool };
 
 export default class PgPoolWithLog {
   logger?: IsLogger;
@@ -41,7 +57,7 @@ export default class PgPoolWithLog {
     const startTime = Date.now();
 
     try {
-      pgresult = await pool.query(...args);
+      pgresult = await getPool().query(...args);
     } catch (ex) {
       console.error('\x1b[33m Error Executing query: \x1b[0m', args[0]);
       this.logger?.warn(`\x1b[33m Error Executing query: \x1b[0m ${args[0]}`);

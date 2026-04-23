@@ -83,6 +83,9 @@
     "stream-to-blob": "^2.0.1",
     "uuidv7": "^0.6.3"
   },
+  "optionalDependencies": {
+    "@electric-sql/pglite": "^0.2.0"
+  },
   "devDependencies": {
     "@types/chai": "^4.3.3",
     "@types/chai-as-promised": "^7.1.8",

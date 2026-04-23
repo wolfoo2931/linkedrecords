@@ -7,6 +7,8 @@ import AttributesRepository from '../../src/browser_sdk/attributes_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
 
 const pgPool = new pg.Pool({ max: 2 });
+const testHelperBase = 'http://localhost:3001';
+const usePglite = process.env['USE_PGLITE'] === 'true' || process.env['PGLITE_DATA_DIR'] !== undefined;
 const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
 const capabilities = {
@@ -151,16 +153,20 @@ export default class Session {
 
   static async truncateDB() {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
-      await pgPool.query('TRUNCATE facts;');
-      await pgPool.query('TRUNCATE users_fact_boxes;');
-      await pgPool.query('TRUNCATE quota_events;');
+      if (usePglite) {
+        await fetch(`${testHelperBase}/deleteFacts`);
+      } else {
+        await pgPool.query('TRUNCATE facts;');
+        await pgPool.query('TRUNCATE users_fact_boxes;');
+        await pgPool.query('TRUNCATE quota_events;');
+      }
     }
   }
 
   static async getFactCount() {
-    const result = await pgPool.query('SELECT count(*) as count FROM facts;');
-
-    return parseInt(result.rows[0].count, 10);
+    const res = await fetch(`${testHelperBase}/getFactCount`);
+    const { count } = await res.json() as { count: number };
+    return count;
   }
 
   static async afterEach() {

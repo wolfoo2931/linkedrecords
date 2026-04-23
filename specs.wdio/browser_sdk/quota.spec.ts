@@ -1,16 +1,15 @@
 import { expect } from 'chai';
-import pg from 'pg';
 import Session from '../helpers/session';
 
-const pgPool = new pg.Pool({ max: 2 });
 const mb = 1048576;
+const testHelperBase = 'http://localhost:3001';
 
 async function setQuota(nodeId, totalStorageAvailable) {
-  await pgPool.query('INSERT INTO quota_events (node_id, total_storage_available, valid_from) VALUES ($1, $2, $3)', [
-    nodeId,
-    totalStorageAvailable,
-    new Date(),
-  ]);
+  await fetch(testHelperBase + '/insertQuotaEvent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nodeId, totalStorageAvailable, validFrom: new Date().toISOString() }),
+  });
 
   await browser.pause(5000);
 }
