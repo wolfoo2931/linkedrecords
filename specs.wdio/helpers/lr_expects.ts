@@ -1,22 +1,14 @@
 /* eslint-disable no-await-in-loop */
 import { expect } from 'chai';
-
-const testHelperBase = 'http://localhost:3001';
-
-async function queryFactCount(fact: [string, string, string]): Promise<number> {
-  const params = new URLSearchParams({ subject: fact[0], predicate: fact[1], object: fact[2] });
-  const res = await fetch(`${testHelperBase}/queryFacts?${params}`);
-  const { count } = await res.json() as { count: number };
-  return count;
-}
+import { queryFactCount } from './testapp_client';
 
 // eslint-disable-next-line import/prefer-default-export
 export async function expectFactToExists(fact: [string, string, string]) {
-  expect(await queryFactCount(fact)).to.be.greaterThan(0);
+  expect(await queryFactCount(fact[0], fact[1], fact[2])).to.be.greaterThan(0);
 }
 
 export async function expectFactToNotExists(fact: [string, string, string]) {
-  const count = await queryFactCount(fact);
+  const count = await queryFactCount(fact[0], fact[1], fact[2]);
   if (count !== 0) {
     console.error('expectFactToNotExists but it does:', fact);
   }

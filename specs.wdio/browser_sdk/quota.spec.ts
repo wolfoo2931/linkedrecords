@@ -1,16 +1,11 @@
 import { expect } from 'chai';
 import Session from '../helpers/session';
+import { insertQuotaEvent } from '../helpers/testapp_client';
 
 const mb = 1048576;
-const testHelperBase = 'http://localhost:3001';
 
 async function setQuota(nodeId, totalStorageAvailable) {
-  await fetch(testHelperBase + '/insertQuotaEvent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nodeId, totalStorageAvailable, validFrom: new Date().toISOString() }),
-  });
-
+  await insertQuotaEvent(nodeId, totalStorageAvailable);
   await browser.pause(5000);
 }
 

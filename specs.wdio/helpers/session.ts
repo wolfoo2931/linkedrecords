@@ -1,14 +1,11 @@
 /* eslint-disable max-classes-per-file */
 /* eslint-disable no-eval */
 import { multiremote } from 'webdriverio';
-import pg from 'pg';
 import WdioRemote from './wdio_remote';
 import AttributesRepository from '../../src/browser_sdk/attributes_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
+import * as testappClient from './testapp_client';
 
-const pgPool = new pg.Pool({ max: 2 });
-const testHelperBase = 'http://localhost:3001';
-const usePglite = process.env['USE_PGLITE'] === 'true' || process.env['PGLITE_DATA_DIR'] !== undefined;
 const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
 const capabilities = {
@@ -153,20 +150,12 @@ export default class Session {
 
   static async truncateDB() {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
-      if (usePglite) {
-        await fetch(`${testHelperBase}/deleteFacts`);
-      } else {
-        await pgPool.query('TRUNCATE facts;');
-        await pgPool.query('TRUNCATE users_fact_boxes;');
-        await pgPool.query('TRUNCATE quota_events;');
-      }
+      await testappClient.deleteFacts();
     }
   }
 
   static async getFactCount() {
-    const res = await fetch(`${testHelperBase}/getFactCount`);
-    const { count } = await res.json() as { count: number };
-    return count;
+    return testappClient.getFactCount();
   }
 
   static async afterEach() {
