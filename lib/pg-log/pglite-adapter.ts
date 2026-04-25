@@ -1,15 +1,26 @@
 import type { DbClient } from './index';
 
 let instance: DbClient | null = null;
+let instanceDataDir: string | undefined;
 
 export default async function createPgliteClient(dataDir?: string): Promise<DbClient> {
-  if (instance) return instance;
+  if (instance) {
+    if (dataDir !== instanceDataDir) {
+      throw new Error(
+        `createPgliteClient: existing PGlite instance was created with dataDir=${JSON.stringify(instanceDataDir)} `
+        + `but is now requested with dataDir=${JSON.stringify(dataDir)}. `
+        + 'Set PGLITE_DATA_DIR before the first query and do not change it at runtime.',
+      );
+    }
+    return instance;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { PGlite } = await import('@electric-sql/pglite');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { prepareValue } = await import('pg/lib/utils');
 
+  instanceDataDir = dataDir;
   const db = dataDir !== undefined ? new PGlite(dataDir) : new PGlite();
 
   instance = {
