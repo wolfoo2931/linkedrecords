@@ -1,12 +1,11 @@
 /* eslint-disable max-classes-per-file */
 /* eslint-disable no-eval */
 import { multiremote } from 'webdriverio';
-import pg from 'pg';
 import WdioRemote from './wdio_remote';
 import AttributesRepository from '../../src/browser_sdk/attributes_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
+import * as testappClient from './testapp_client';
 
-const pgPool = new pg.Pool({ max: 2 });
 const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
 const capabilities = {
@@ -151,16 +150,12 @@ export default class Session {
 
   static async truncateDB() {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
-      await pgPool.query('TRUNCATE facts;');
-      await pgPool.query('TRUNCATE users_fact_boxes;');
-      await pgPool.query('TRUNCATE quota_events;');
+      await testappClient.deleteFacts();
     }
   }
 
   static async getFactCount() {
-    const result = await pgPool.query('SELECT count(*) as count FROM facts;');
-
-    return parseInt(result.rows[0].count, 10);
+    return testappClient.getFactCount();
   }
 
   static async afterEach() {

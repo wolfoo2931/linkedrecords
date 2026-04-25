@@ -1,17 +1,11 @@
 import { expect } from 'chai';
-import pg from 'pg';
 import Session from '../helpers/session';
+import { insertQuotaEvent } from '../helpers/testapp_client';
 
-const pgPool = new pg.Pool({ max: 2 });
 const mb = 1048576;
 
 async function setQuota(nodeId, totalStorageAvailable) {
-  await pgPool.query('INSERT INTO quota_events (node_id, total_storage_available, valid_from) VALUES ($1, $2, $3)', [
-    nodeId,
-    totalStorageAvailable,
-    new Date(),
-  ]);
-
+  await insertQuotaEvent(nodeId, totalStorageAvailable);
   await browser.pause(5000);
 }
 

@@ -29,7 +29,14 @@ export default class AttributeStorage implements IsAttributeStorage {
       FROM information_schema.tables
       WHERE replace(replace(table_name, '_', '-'), 'var-', '') IN (${filteredNodes.map((n) => `'${n}'`).join(',')});`;
 
-    const result = await this.pgPool.query(createQuery);
+    let result;
+
+    try {
+      result = await this.pgPool.query(createQuery);
+    } catch (err) {
+      this.logger?.warn(`pg_total_relation_size unavailable, returning 0 for storage size: ${err}`);
+      return 0;
+    }
 
     if (!result?.rows[0]) {
       throw new Error('There was a problem getting the size of all accountable attributes');

@@ -30,9 +30,9 @@ jobs:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
@@ -47,6 +47,38 @@ jobs:
           PGPASSWORD: postgres
           PGDATABASE: ci_db_test
           PGPORT: ${{ job.services.postgres.ports[5432] }}
+          TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
+          COOKIE_DOMAIN: localhost
+          FRONTEND_BASE_URL: http://localhost:3001
+          SERVER_BASE_URL: http://localhost:6543
+          AUTH_ISSUER_BASE_URL: https://dev-onljhxvyw71o4mbs.us.auth0.com/
+          AUTH_CLIENT_ID:  Yimcn7S0Dq8bwKPsWsg7W6T7LZSjDLYZ
+          AUTH_CLIENT_SECRET: ${{ secrets.AUTH_CLIENT_SECRET }}
+          AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
+          PADDLE_API_URL: https://sandbox-api.paddle.com
+          PADDLE_NOTIFICATION_SECRET: ${{ secrets.PADDLE_NOTIFICATION_SECRET }}
+          PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
+          QUOTA_COUNT_KV_ATTRIBUTES: true
+          QUOTA_COUNT_LT_ATTRIBUTES: true
+        run: |
+          npm run wdio:fast
+
+  wdio-tests-pglite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+      - name: Install dependencies
+        run: npm install
+      - name: WDIO Tests (PGlite)
+        env:
+          USE_PGLITE: 'true'
           TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
           COOKIE_DOMAIN: localhost
           FRONTEND_BASE_URL: http://localhost:3001

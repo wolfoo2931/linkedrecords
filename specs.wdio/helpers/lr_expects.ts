@@ -1,22 +1,18 @@
 /* eslint-disable no-await-in-loop */
-import pg from 'pg';
 import { expect } from 'chai';
-
-const pgPool = new pg.Pool({ max: 2 });
+import { queryFactCount } from './testapp_client';
 
 // eslint-disable-next-line import/prefer-default-export
 export async function expectFactToExists(fact: [string, string, string]) {
-  const results = await pgPool.query('SELECT * FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', fact);
-
-  expect(results.rows.length).to.be.greaterThan(0);
+  expect(await queryFactCount(fact[0], fact[1], fact[2])).to.be.greaterThan(0);
 }
 
 export async function expectFactToNotExists(fact: [string, string, string]) {
-  const results = await pgPool.query('SELECT * FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3', fact);
-  if (results.rows.length !== 0) {
+  const count = await queryFactCount(fact[0], fact[1], fact[2]);
+  if (count !== 0) {
     console.error('expectFactToNotExists but it does:', fact);
   }
-  expect(results.rows.length).to.eq(0);
+  expect(count).to.eq(0);
 }
 
 export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
