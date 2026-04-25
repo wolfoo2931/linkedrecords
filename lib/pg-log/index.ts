@@ -6,18 +6,21 @@ export type DbClient = {
   query(...args: [string, any[]?]): Promise<{ rows: any[]; rowCount: number | null; command?: string }>;
 };
 
-let _pool: DbClient | null = null;
+let _poolPromise: Promise<DbClient> | null = null;
 
-async function getPool(): Promise<DbClient> {
-  if (_pool) return _pool;
+function getPool(): Promise<DbClient> {
+  if (_poolPromise) return _poolPromise;
 
   if (process.env['PGLITE_DATA_DIR'] !== undefined || process.env['USE_PGLITE'] === 'true') {
-    _pool = await createPgliteClient(process.env['PGLITE_DATA_DIR']);
+    _poolPromise = createPgliteClient(process.env['PGLITE_DATA_DIR']).catch((err) => {
+      _poolPromise = null;
+      throw err;
+    });
   } else {
-    _pool = new Pool({ max: 3, connectionTimeoutMillis: 2000 });
+    _poolPromise = Promise.resolve(new Pool({ max: 3, connectionTimeoutMillis: 2000 }));
   }
 
-  return _pool;
+  return _poolPromise;
 }
 
 export { getPool };
