@@ -33,8 +33,8 @@ export default class AttributeStorage implements IsAttributeStorage {
 
     try {
       result = await this.pgPool.query(createQuery);
-    } catch {
-      this.logger?.warn('pg_total_relation_size unavailable, returning 0 for storage size');
+    } catch (err) {
+      this.logger?.warn(`pg_total_relation_size unavailable, returning 0 for storage size: ${err}`);
       return 0;
     }
 
