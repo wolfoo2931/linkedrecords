@@ -1,4 +1,4 @@
-/* eslint-disable class-methods-use-this */
+/* eslint-disable class-methods-use-this, import/no-cycle */
 
 import { Client } from 'minio';
 import { text } from 'stream/consumers';
