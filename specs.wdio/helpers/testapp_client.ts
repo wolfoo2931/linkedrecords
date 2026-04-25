@@ -1,7 +1,11 @@
 const BASE = 'http://localhost:3001';
 
 export async function deleteFacts(): Promise<void> {
-  await fetch(`${BASE}/deleteFacts`);
+  const res = await fetch(`${BASE}/deleteFacts`);
+
+  if (!res.ok) {
+    throw new Error(`deleteFacts failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 export async function getFactCount(): Promise<number> {
@@ -25,9 +29,13 @@ export async function insertQuotaEvent(
   nodeId: string,
   totalStorageAvailable: number,
 ): Promise<void> {
-  await fetch(`${BASE}/insertQuotaEvent`, {
+  const res = await fetch(`${BASE}/insertQuotaEvent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ nodeId, totalStorageAvailable, validFrom: new Date().toISOString() }),
   });
+
+  if (!res.ok) {
+    throw new Error(`insertQuotaEvent failed: ${res.status} ${await res.text()}`);
+  }
 }
