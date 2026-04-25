@@ -32,7 +32,7 @@ export default async function createPgliteClient(dataDir?: string): Promise<DbCl
         const last = results[results.length - 1] ?? { rows: [], affectedRows: 0 };
         return {
           rows: last.rows,
-          rowCount: last.affectedRows ?? last.rows.length,
+          rowCount: last.affectedRows ?? null,
           command: undefined,
         };
       }
@@ -42,7 +42,7 @@ export default async function createPgliteClient(dataDir?: string): Promise<DbCl
       const result = await db.query(text, prepared);
       return {
         rows: result.rows,
-        rowCount: result.affectedRows ?? result.rows.length,
+        rowCount: result.affectedRows ?? null,
         command: undefined,
       };
     },
