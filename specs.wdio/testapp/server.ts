@@ -10,21 +10,29 @@ createServer({ transportDriver: http }).then((server) => {
 http.createServer(async (req, res) => {
   if (req.url === '/deleteFacts') {
     if (process.env['NO_DB_TRUNCATE_ON_TEST'] !== 'true') {
-      await getPool().query('TRUNCATE facts;');
-      await getPool().query('TRUNCATE users_fact_boxes;');
-      await getPool().query('TRUNCATE quota_events;');
+      await (await getPool()).query('TRUNCATE facts;');
+      await (await getPool()).query('TRUNCATE users_fact_boxes;');
+      await (await getPool()).query('TRUNCATE quota_events;');
       console.log('TRUNCATE facts done');
     }
   } else if (req.url === '/getFactCount') {
-    const result = await getPool().query('SELECT count(*) as count FROM facts;');
+    const result = await (await getPool()).query('SELECT count(*) as count FROM facts;');
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ count: parseInt(result.rows[0].count, 10) }));
     return;
   } else if (req.url === '/insertQuotaEvent') {
     const chunks: Buffer[] = [];
+
+    // eslint-disable-next-line no-restricted-syntax
     for await (const chunk of req) chunks.push(chunk);
-    const { nodeId, totalStorageAvailable, validFrom } = JSON.parse(Buffer.concat(chunks).toString());
-    await getPool().query(
+
+    const {
+      nodeId,
+      totalStorageAvailable,
+      validFrom,
+    } = JSON.parse(Buffer.concat(chunks).toString());
+
+    await (await getPool()).query(
       'INSERT INTO quota_events (node_id, total_storage_available, valid_from) VALUES ($1, $2, $3)',
       [nodeId, totalStorageAvailable, validFrom],
     );
@@ -34,7 +42,7 @@ http.createServer(async (req, res) => {
   } else if (req.url?.startsWith('/queryFacts?')) {
     const params = new URLSearchParams(req.url.slice('/queryFacts?'.length));
     const [subject, predicate, object] = [params.get('subject'), params.get('predicate'), params.get('object')];
-    const result = await getPool().query(
+    const result = await (await getPool()).query(
       'SELECT * FROM facts WHERE subject=$1 AND predicate=$2 AND object=$3',
       [subject, predicate, object],
     );
