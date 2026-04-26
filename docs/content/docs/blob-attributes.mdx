@@ -1,5 +1,5 @@
 ---
-title: Blob Attributes
+title: Blob Records
 description: Binary file storage with S3/MinIO integration
 ---
 
@@ -7,24 +7,24 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-Blob Attributes store binary data such as images, documents, audio, video,
+Blob Records store binary data such as images, documents, audio, video,
 and other files. They integrate with S3-compatible storage (AWS S3, MinIO)
 for efficient large file handling.
 
-## When to Use Blob Attributes
+## When to Use Blob Records
 
-Use Blob Attributes for:
+Use Blob Records for:
 - Images and photos
 - PDF documents
 - Audio and video files
 - Any binary data that needs to be stored and retrieved
 
-Use Key-Value Attributes instead for:
+Use Key-Value Records instead for:
 - Text content
 - JSON data
 - Small metadata
 
-## Creating Blob Attributes
+## Creating Blob Records
 
 ### From a File Input
 
@@ -32,7 +32,7 @@ Use Key-Value Attributes instead for:
 const fileInput = document.getElementById('fileInput');
 const file = fileInput.files[0];
 
-const attachment = await lr.Attribute.createBlob(
+const attachment = await lr.Record.createBlob(
   file,
   [
     ['$it', 'isA', 'Attachment'],
@@ -46,7 +46,7 @@ const attachment = await lr.Attribute.createBlob(
 ```typescript
 const blob = new Blob(['Hello, World!'], { type: 'text/plain' });
 
-const textFile = await lr.Attribute.createBlob(
+const textFile = await lr.Record.createBlob(
   blob,
   [['$it', 'isA', 'TextFile']]
 );
@@ -55,7 +55,7 @@ const textFile = await lr.Attribute.createBlob(
 ### Using create()
 
 ```typescript
-const file = await lr.Attribute.create('blob', blobData, [
+const file = await lr.Record.create('blob', blobData, [
   ['$it', 'isA', 'Image'],
 ]);
 ```
@@ -67,7 +67,7 @@ Currently not usable in the blueprint pattern. Must be created and linked separa
 ## Reading Blob Content
 
 ```typescript
-const attachment = await lr.Attribute.find(attachmentId);
+const attachment = await lr.Record.find(attachmentId);
 const blob = await attachment.getValue();
 
 // Create a URL for display
@@ -80,13 +80,13 @@ URL.revokeObjectURL(url);
 ### Displaying an Image
 
 ```tsx
-function ImageDisplay({ attributeId }) {
+function ImageDisplay({ recordId }) {
   const { lr } = useLinkedRecords();
   const [imageUrl, setImageUrl] = useState(null);
 
   useEffect(() => {
     async function loadImage() {
-      const attr = await lr.Attribute.find(attributeId);
+      const attr = await lr.Record.find(recordId);
       const blob = await attr?.getValue();
       if (blob) {
         setImageUrl(URL.createObjectURL(blob));
@@ -100,7 +100,7 @@ function ImageDisplay({ attributeId }) {
         URL.revokeObjectURL(imageUrl);
       }
     };
-  }, [attributeId]);
+  }, [recordId]);
 
   if (!imageUrl) return <div>Loading...</div>;
 
@@ -111,7 +111,7 @@ function ImageDisplay({ attributeId }) {
 ## Updating Blob Content
 
 ```typescript
-const attachment = await lr.Attribute.find(attachmentId);
+const attachment = await lr.Record.find(attachmentId);
 await attachment.set(newFileBlob);
 ```
 
@@ -120,12 +120,12 @@ Blob updates replace the entire file. There's no partial update mechanism
 for binary data.
 </Callout>
 
-## Querying Blob Attributes
+## Querying Blob Records
 
 ### Find All Blobs
 
 ```typescript
-const { files } = await lr.Attribute.findAll({
+const { files } = await lr.Record.findAll({
   files: [
     ['$it', '$hasDataType', 'BlobAttribute'],
   ],
@@ -135,7 +135,7 @@ const { files } = await lr.Attribute.findAll({
 ### Find by Type
 
 ```typescript
-const { images } = await lr.Attribute.findAll({
+const { images } = await lr.Record.findAll({
   images: [
     ['$it', '$hasDataType', 'BlobAttribute'],
     ['$it', 'isA', 'Image'],
@@ -146,7 +146,7 @@ const { images } = await lr.Attribute.findAll({
 ### Find by Relationship
 
 ```typescript
-const { docAttachments } = await lr.Attribute.findAll({
+const { docAttachments } = await lr.Record.findAll({
   docAttachments: [
     ['$it', '$hasDataType', 'BlobAttribute'],
     ['$it', 'belongsTo', documentId],
@@ -161,7 +161,7 @@ const { docAttachments } = await lr.Attribute.findAll({
 ```typescript
 async function createDocumentWithAttachment(lr, title, file) {
   // First create the document
-  const doc = await lr.Attribute.createKeyValue(
+  const doc = await lr.Record.createKeyValue(
     {
       title,
       createdAt: Date.now(),
@@ -171,7 +171,7 @@ async function createDocumentWithAttachment(lr, title, file) {
   );
 
   // Then create the attachment
-  const attachment = await lr.Attribute.createBlob(
+  const attachment = await lr.Record.createBlob(
     file,
     [
       ['$it', 'isA', 'Attachment'],
@@ -188,7 +188,7 @@ async function createDocumentWithAttachment(lr, title, file) {
 ```typescript
 async function uploadProfilePicture(lr, userId, imageFile) {
   // Create or update profile picture
-  const picture = await lr.Attribute.createBlob(
+  const picture = await lr.Record.createBlob(
     imageFile,
     [
       ['$it', 'isA', 'ProfilePicture'],
@@ -204,7 +204,7 @@ async function uploadProfilePicture(lr, userId, imageFile) {
 
 ```typescript
 async function createGalleryImage(lr, galleryId, imageFile, metadata) {
-  const image = await lr.Attribute.createBlob(
+  const image = await lr.Record.createBlob(
     imageFile,
     [
       ['$it', 'isA', 'GalleryImage'],
@@ -213,7 +213,7 @@ async function createGalleryImage(lr, galleryId, imageFile, metadata) {
   );
 
   // Store metadata separately for easy querying
-  const imageMeta = await lr.Attribute.createKeyValue(
+  const imageMeta = await lr.Record.createKeyValue(
     {
       filename: metadata.filename,
       size: imageFile.size,
@@ -244,7 +244,7 @@ function FileUploader({ onUpload }) {
 
     setUploading(true);
     try {
-      const attachment = await lr.Attribute.createBlob(
+      const attachment = await lr.Record.createBlob(
         file,
         [
           ['$it', 'isA', 'Attachment'],
@@ -274,7 +274,7 @@ function FileUploader({ onUpload }) {
 
 ## Storage Configuration
 
-Blob Attributes can be stored in:
+Blob Records can be stored in:
 
 1. **S3/MinIO** (recommended for production)
 2. **PostgreSQL** (fallback, for small files)
@@ -296,14 +296,14 @@ development but is not recommended for production with large files.
 
 ## Permissions
 
-Blob Attributes use the same authorization model:
+Blob Records use the same authorization model:
 
 ```typescript
 // Private file (only creator can access)
-const privateFile = await lr.Attribute.createBlob(file);
+const privateFile = await lr.Record.createBlob(file);
 
 // Shared with team
-const sharedFile = await lr.Attribute.createBlob(
+const sharedFile = await lr.Record.createBlob(
   file,
   [
     ['$it', 'isA', 'SharedFile'],
@@ -312,7 +312,7 @@ const sharedFile = await lr.Attribute.createBlob(
 );
 
 // Read-only sharing
-const publicFile = await lr.Attribute.createBlob(
+const publicFile = await lr.Record.createBlob(
   file,
   [
     ['$it', 'isA', 'PublicFile'],
@@ -323,12 +323,12 @@ const publicFile = await lr.Attribute.createBlob(
 
 ## Quota Considerations
 
-Blob storage counts against storage quotas. Large files can quickly consume
+Blob record storage counts against storage quotas. Large files can quickly consume
 available storage.
 
 ## Best Practices
 
-1. **Store metadata separately** - Use Key-Value Attributes for searchable
+1. **Store metadata separately** - Use Key-Value Records for searchable
    file metadata (name, type, size) and Blob for the actual content
 
 2. **Check quota before upload** - Prevent failed uploads due to quota limits
@@ -347,6 +347,6 @@ available storage.
 ## Limitations
 
 1. **No partial updates** - Files must be replaced entirely
-2. **No real-time collaboration** - Unlike Long Text, blobs don't support OT
+2. **No real-time collaboration** - Unlike Long Text Records, blobs don't support OT
 3. **Size limits** - Very large files may be impractical depending on storage
    configuration

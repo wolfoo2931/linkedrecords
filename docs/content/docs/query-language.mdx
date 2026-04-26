@@ -7,11 +7,11 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-LinkedRecords provides a declarative query language for finding attributes and
+LinkedRecords provides a declarative query language for finding records and
 facts. Queries are expressed as patterns that match against the triplestore.
 
 There are two main query methods:
-- `Attribute.findAll()` - Find attributes matching fact patterns
+- `Record.findAll()` - Find records matching fact patterns
 - `Fact.findAll()` - Find facts directly
 
 ## The Triple Pattern
@@ -24,28 +24,28 @@ the triplestore:
 ```
 
 For example:
-- `['$it', 'isA', 'Document']` - Match attributes that are Documents
-- `[userId, '$isMemberOf', '$it']` - Match attributes the user is a member of
-- `['$it', 'belongsTo', projectId]` - Match attributes belonging to a project
+- `['$it', 'isA', 'Document']` - Match records that are Documents
+- `[userId, '$isMemberOf', '$it']` - Match records the user is a member of
+- `['$it', 'belongsTo', projectId]` - Match records belonging to a project
 
-## Attribute.findAll()
+## Record.findAll()
 
-The primary way to query for attributes. Returns attributes matching your patterns.
+The primary way to query for records. Returns records matching your patterns.
 
 ### Basic Structure
 
 ```typescript
-const result = await lr.Attribute.findAll({
+const result = await lr.Record.findAll({
   queryName: [
     [subject, predicate, object],
     [subject, predicate, object],
     // ... more patterns (AND logic)
   ],
 });
-// result.queryName is an array of matching attributes
+// result.queryName is an array of matching records
 ```
 
-Each named query group returns an array of attributes that match **all** patterns
+Each named query group returns an array of records that match **all** patterns
 in that group (AND logic).
 
 ### Multiple Query Groups
@@ -53,7 +53,7 @@ in that group (AND logic).
 You can run multiple independent queries in one call:
 
 ```typescript
-const { tasks, projects, users } = await lr.Attribute.findAll({
+const { tasks, projects, users } = await lr.Record.findAll({
   tasks: [
     ['$it', 'isA', 'Task'],
   ],
@@ -69,26 +69,26 @@ const { tasks, projects, users } = await lr.Attribute.findAll({
 
 ### Direct ID Lookup
 
-Pass an attribute ID directly to fetch a specific attribute:
+Pass a record ID directly to fetch a specific record:
 
 ```typescript
-const { doc, author } = await lr.Attribute.findAll({
+const { doc, author } = await lr.Record.findAll({
   doc: 'kv-abc123',           // Direct ID lookup
   author: [                    // Pattern-based query
     ['$it', 'isA', 'Author'],
   ],
 });
-// doc is a single attribute (or undefined if not found/accessible)
-// author is an array of attributes
+// doc is a single record (or undefined if not found/accessible)
+// author is an array of records
 ```
 
 ## The $it Placeholder
 
-`$it` is a special placeholder representing "the attribute being queried."
+`$it` is a special placeholder representing "the record being queried."
 
-### As Subject (Finding Attributes by Their Facts)
+### As Subject (Finding Records by Their Facts)
 
-The most common pattern - find attributes that have specific facts:
+The most common pattern - find records that have specific facts:
 
 ```typescript
 // Find all Documents
@@ -103,9 +103,9 @@ The most common pattern - find attributes that have specific facts:
 }
 ```
 
-### As Object (Finding Attributes Referenced by Facts)
+### As Object (Finding Records Referenced by Facts)
 
-Find attributes that appear as objects in facts:
+Find records that appear as objects in facts:
 
 ```typescript
 // Find teams that a user is a member of
@@ -152,10 +152,10 @@ Use `$it` in multiple positions to express complex relationships:
 
 ### $hasDataType
 
-Filter by attribute type:
+Filter by record type:
 
 ```typescript
-// Find only KeyValue attributes
+// Find only KeyValue records
 {
   kvDocs: [
     ['$it', '$hasDataType', 'KeyValueAttribute'],
@@ -163,14 +163,14 @@ Filter by attribute type:
   ]
 }
 
-// Find only LongText attributes
+// Find only LongText records
 {
   notes: [
     ['$it', '$hasDataType', 'LongTextAttribute'],
   ]
 }
 
-// Find only Blob attributes
+// Find only Blob records
 {
   files: [
     ['$it', '$hasDataType', 'BlobAttribute'],
@@ -203,7 +203,7 @@ deleting old ones.
 
 ### $not(value)
 
-Negation - match attributes that do NOT have a specific fact value:
+Negation - match records that do NOT have a specific fact value:
 
 ```typescript
 // Find books that are NOT deleted
@@ -257,7 +257,7 @@ await lr.Fact.createAll([
 
 ## Fact.findAll()
 
-Query facts directly instead of attributes.
+Query facts directly instead of records.
 
 ### Basic Structure
 
@@ -272,12 +272,12 @@ const facts = await lr.Fact.findAll({
 ### Query by Subject
 
 ```typescript
-// Find all facts about a specific attribute
+// Find all facts about a specific record
 const facts = await lr.Fact.findAll({
   subject: [attributeId],
 });
 
-// Find facts about attributes matching a pattern
+// Find facts about records matching a pattern
 const facts = await lr.Fact.findAll({
   subject: [['isA', 'Document']],  // All Documents
 });
@@ -300,7 +300,7 @@ const facts = await lr.Fact.findAll({
 ### Query by Object
 
 ```typescript
-// Find all facts pointing to a specific attribute
+// Find all facts pointing to a specific record
 const facts = await lr.Fact.findAll({
   object: [attributeId],
 });
@@ -343,17 +343,17 @@ const facts = await lr.Fact.findAll([
 ## Authorization Filtering
 
 All queries automatically filter results based on the current user's permissions.
-You only see attributes and facts you have access to:
+You only see records and facts you have access to:
 
 ```typescript
 // Alice creates a private document
-await alice.Attribute.createKeyValue(
+await alice.Record.createKeyValue(
   { title: 'Private' },
   [['$it', 'isA', 'Document']]
 );
 
 // Bob queries for documents
-const { docs } = await bob.Attribute.findAll({
+const { docs } = await bob.Record.findAll({
   docs: [['$it', 'isA', 'Document']],
 });
 // docs is empty - Bob cannot see Alice's private document
@@ -361,10 +361,10 @@ const { docs } = await bob.Attribute.findAll({
 
 ## Loading Values
 
-`findAll()` returns attribute handles. Call `getValue()` to load the data:
+`findAll()` returns record handles. Call `getValue()` to load the data:
 
 ```typescript
-const { tasks } = await lr.Attribute.findAll({
+const { tasks } = await lr.Record.findAll({
   tasks: [['$it', 'isA', 'Task']],
 });
 
@@ -374,14 +374,14 @@ for (const task of tasks) {
 }
 ```
 
-Use `findAndLoadAll()` to pre-load values in a single request:
+Use `findAndLoadAll()` to pre-load record values in a single request:
 
 ```typescript
-const { tasks } = await lr.Attribute.findAndLoadAll({
+const { tasks } = await lr.Record.findAndLoadAll({
   tasks: [['$it', 'isA', 'Task']],
 });
 
-// Values already loaded - no additional network requests
+// Record values already loaded - no additional network requests
 for (const task of tasks) {
   console.log(task.value.title);
 }
@@ -392,7 +392,7 @@ for (const task of tasks) {
 Subscribe to query results for live updates:
 
 ```typescript
-await lr.Attribute.subscribeToQuery(
+await lr.Record.subscribeToQuery(
   {
     tasks: [
       ['$it', 'isA', 'Task'],
@@ -422,7 +422,7 @@ await lr.Fact.createAll([
 // Create state markers
 // You could also use terms as state markers but this way you
 // can restrict who can assign what state.
-const { completedState, archivedState } = await lr.Attribute.createAll({
+const { completedState, archivedState } = await lr.Record.createAll({
   completedState: {
     type: 'KeyValueAttribute',
     value: {},
@@ -445,12 +445,12 @@ const { completedState, archivedState } = await lr.Attribute.createAll({
 });
 
 // Create a project with tasks
-const project = await lr.Attribute.createKeyValue(
+const project = await lr.Record.createKeyValue(
   { name: 'Website Redesign' },
   [['$it', 'isA', 'Project']]
 );
 
-const task1 = await lr.Attribute.createKeyValue(
+const task1 = await lr.Record.createKeyValue(
   { title: 'Design mockups' },
   [
     ['$it', 'isA', 'Task'],
@@ -469,7 +469,7 @@ const {
   completedTasks,
   pendingTasks,
   myProjects,
-} = await lr.Attribute.findAll({
+} = await lr.Record.findAll({
   // All tasks in the project
   allTasks: [
     ['$it', 'isA', 'Task'],
@@ -503,11 +503,11 @@ const {
 
 | Pattern | Meaning |
 |---------|---------|
-| `['$it', 'isA', 'Type']` | Attributes of a specific type |
-| `['$it', 'belongsTo', id]` | Attributes belonging to something |
-| `[userId, '$isMemberOf', '$it']` | Attributes the user is a member of |
-| `[id, '$isAccountableFor', '$it']` | Attributes something is accountable for |
-| `['$it', '$hasDataType', 'KeyValueAttribute']` | Only KeyValue attributes |
+| `['$it', 'isA', 'Type']` | Records of a specific type |
+| `['$it', 'belongsTo', id]` | Records belonging to something |
+| `[userId, '$isMemberOf', '$it']` | Records the user is a member of |
+| `[id, '$isAccountableFor', '$it']` | Records something is accountable for |
+| `['$it', '$hasDataType', 'KeyValueAttribute']` | Only KeyValue records |
 | `['$it', '$latest(pred)', value]` | Latest fact value matches |
 | `['$it', 'pred', '$not(value)']` | Fact value does NOT match |
 | `['$it', '$latest(pred)', '$not(value)']` | Latest value does NOT match |
@@ -516,4 +516,4 @@ const {
 ## Related
 
 - [Facts and Triples](/facts-and-triples) - Understanding the triplestore
-- [Query Patterns](/query-patterns) - Advanced patterns and use cases
+- [Query Patterns](/query-patterns) - Advanced patterns and use cases for records

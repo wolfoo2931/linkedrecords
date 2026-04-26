@@ -1,24 +1,24 @@
 ---
 title: Blueprint Pattern
-description: Creating multiple related attributes atomically
+description: Creating multiple related records atomically
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-The Blueprint Pattern allows you to create multiple related attributes in a single
-atomic operation using `Attribute.createAll()`. This is essential when you need
-to set up interconnected data structures where attributes reference each other.
+The Blueprint Pattern allows you to create multiple related records in a single
+atomic operation using `Record.createAll()`. This is essential when you need
+to set up interconnected data structures where records reference each other.
 
 ## Why Use Blueprints?
 
-Without blueprints, creating related attributes requires multiple steps:
+Without blueprints, creating related records requires multiple steps:
 
 ```typescript
 // Without blueprint - requires multiple calls and manual reference management
-const org = await lr.Attribute.createKeyValue({ name: 'Acme Inc' });
-const team = await lr.Attribute.createKeyValue({ name: 'Admin Team' });
+const org = await lr.Record.createKeyValue({ name: 'Acme Inc' });
+const team = await lr.Record.createKeyValue({ name: 'Admin Team' });
 await lr.Fact.createAll([
   [org.id, '$isAccountableFor', team.id],
   [team.id, '$canRefine', org.id],
@@ -29,7 +29,7 @@ With blueprints, you declare everything in one operation:
 
 ```typescript
 // With blueprint - single atomic operation
-const { org, team } = await lr.Attribute.createAll({
+const { org, team } = await lr.Record.createAll({
   org: {
     type: 'KeyValueAttribute',
     value: { name: 'Acme Inc' },
@@ -50,8 +50,8 @@ const { org, team } = await lr.Attribute.createAll({
 ## Basic Syntax
 
 ```typescript
-const result = await lr.Attribute.createAll({
-  attributeName: {
+const result = await lr.Record.createAll({
+  recordName: {
     type: 'KeyValueAttribute',  // or 'LongTextAttribute', 'BlobAttribute'
     value: { /* initial value */ },
     facts: [
@@ -59,17 +59,17 @@ const result = await lr.Attribute.createAll({
       // ...more facts
     ],
   },
-  // ...more attributes
+  // ...more records
 });
 ```
 
 ## The Reference Syntax
 
-Use `{{attributeName}}` syntax to reference another attribute being created in the same
+Use `{{recordName}}` syntax to reference another record being created in the same
 blueprint. This is replaced with the actual ID after creation:
 
 ```typescript
-const { parent, child } = await lr.Attribute.createAll({
+const { parent, child } = await lr.Record.createAll({
   parent: {
     type: 'KeyValueAttribute',
     value: { name: 'Parent' },
@@ -105,7 +105,7 @@ async function createOrganization(lr, orgName: string) {
   ]);
 
   // Create the organization structure
-  return lr.Attribute.createAll({
+  return lr.Record.createAll({
     org: {
       type: 'KeyValueAttribute',
       value: { name: orgName },
@@ -177,7 +177,7 @@ Once you have the structure, you can add items:
 
 ```typescript
 // Create a todo list in the organization
-const { list } = await lr.Attribute.createAll({
+const { list } = await lr.Record.createAll({
   list: {
     type: 'KeyValueAttribute',
     value: { name: 'Shopping List', tasks: {} },
@@ -196,12 +196,12 @@ The `type` field accepts these values:
 
 | Type | Description |
 |------|-------------|
-| `'KeyValueAttribute'` | JSON document with CRDT support |
-| `'LongTextAttribute'` | Large text with OT collaboration |
-| `'BlobAttribute'` | Binary file storage |
+| `'KeyValueAttribute'` | JSON document with CRDT support (KeyValue Record) |
+| `'LongTextAttribute'` | Large text with OT collaboration (LongText Record) |
+| `'BlobAttribute'` | Binary file storage (Blob Record) |
 
 ```typescript
-const { doc, notes, attachment } = await lr.Attribute.createAll({
+const { doc, notes, attachment } = await lr.Record.createAll({
   doc: {
     type: 'KeyValueAttribute',
     value: { title: 'Report', metadata: {} },
@@ -232,12 +232,12 @@ Blueprint creation is atomic - if any part fails, the entire operation fails:
 
 ```typescript
 try {
-  const result = await lr.Attribute.createAll({
+  const result = await lr.Record.createAll({
     // ... blueprint definition
   });
 } catch (error) {
   console.error('Failed to create blueprint:', error.message);
-  // No partial data was created
+  // No partial records were created
 }
 ```
 
@@ -285,7 +285,7 @@ you have appropriate permissions.
 1. **Declare terms first** - Always declare terms before creating blueprints
    that use them
 
-2. **Use meaningful names** - Choose descriptive attribute names in the blueprint
+2. **Use meaningful names** - Choose descriptive record names in the blueprint
    for clarity
 
 3. **Plan permissions carefully** - Think through who needs what access before

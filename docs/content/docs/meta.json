@@ -10,7 +10,7 @@
     "authorization-model",
     "accountability",
     "quotas",
-    "---Attribute Types---",
+    "---Record Types---",
     "key-value-attributes",
     "long-text-attributes",
     "blob-attributes",
