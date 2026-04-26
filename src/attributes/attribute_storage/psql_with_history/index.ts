@@ -1,4 +1,4 @@
-/* eslint-disable class-methods-use-this */
+/* eslint-disable class-methods-use-this, import/no-cycle */
 
 import IsAttributeStorage from '../../abstract/is_attribute_storage';
 import PgPoolWithLog from '../../../../lib/pg-log';

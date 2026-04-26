@@ -2,25 +2,27 @@ import { Pool } from 'pg';
 import IsLogger from '../is_logger';
 import createPgliteClient from './pglite-adapter';
 
+type QueryResult = { rows: any[]; rowCount: number | null; command?: string };
+
 export type DbClient = {
-  query(...args: [string, any[]?]): Promise<{ rows: any[]; rowCount: number | null; command?: string }>;
+  query(...args: [string, any[]?]): Promise<QueryResult>;
 };
 
-let _poolPromise: Promise<DbClient> | null = null;
+let poolPromise: Promise<DbClient> | null = null;
 
 function getPool(): Promise<DbClient> {
-  if (_poolPromise) return _poolPromise;
+  if (poolPromise) return poolPromise;
 
   if (process.env['PGLITE_DATA_DIR'] !== undefined || process.env['USE_PGLITE'] === 'true') {
-    _poolPromise = createPgliteClient(process.env['PGLITE_DATA_DIR']).catch((err) => {
-      _poolPromise = null;
+    poolPromise = createPgliteClient(process.env['PGLITE_DATA_DIR']).catch((err) => {
+      poolPromise = null;
       throw err;
     });
   } else {
-    _poolPromise = Promise.resolve(new Pool({ max: 3, connectionTimeoutMillis: 2000 }));
+    poolPromise = Promise.resolve(new Pool({ max: 3, connectionTimeoutMillis: 2000 }));
   }
 
-  return _poolPromise;
+  return poolPromise;
 }
 
 export { getPool };

@@ -1,4 +1,9 @@
 build/**
+dist/**
 example/**
 out/**
+bin/**
 webpack.config.js
+docs/**
+specs.wdio/testapp/client.packaged.js
+wdio.conf.ts
