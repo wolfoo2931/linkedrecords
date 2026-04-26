@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 /* eslint-disable import/no-cycle */
 import LinkedRecords from '.';
-import AbstractAttributeClient from '../records/abstract/abstract_record_client';
+import AbstractRecordClient from '../records/abstract/abstract_record_client';
 import IsSerializable from '../records/abstract/is_serializable';
 import LongTextRecord from '../records/long_text/client';
 import KeyValueRecord from '../records/key_value/client';
@@ -19,23 +19,23 @@ type ConcreteTypedArray<X> =
   X extends ArrayContains<X, [string, string, typeof KeyValueRecord] | [string, typeof KeyValueRecord]> ? Array<KeyValueRecord> :
     X extends ArrayContains<X, [string, string, typeof LongTextRecord] | [string, typeof LongTextRecord]> ? Array<LongTextRecord> :
       X extends ArrayContains<X, [string, string, typeof BlobRecord] | [string, typeof BlobRecord]> ? Array<BlobRecord> :
-        Array<AbstractAttributeClient<any, any>>;
+        Array<AbstractRecordClient<any, any>>;
 
 type TransformQueryRecord<X>
-  = X extends Array<FactQueryWithOptionalSubjectPlaceholder> ? ConcreteTypedArray<X> : AbstractAttributeClient<any, any>;
+  = X extends Array<FactQueryWithOptionalSubjectPlaceholder> ? ConcreteTypedArray<X> : AbstractRecordClient<any, any>;
 
-type TransformCompositionCreationResult<X extends { type?: typeof AbstractAttributeClient<any, IsSerializable> | string }> =
+type TransformCompositionCreationResult<X extends { type?: typeof AbstractRecordClient<any, IsSerializable> | string }> =
   X['type'] extends typeof KeyValueRecord ? KeyValueRecord :
     X['type'] extends typeof LongTextRecord ? LongTextRecord :
       X['type'] extends typeof BlobRecord ? BlobRecord :
-        X['type'] extends string ? AbstractAttributeClient<any, IsSerializable> :
+        X['type'] extends string ? AbstractRecordClient<any, IsSerializable> :
           KeyValueRecord;
 
 type QueryResult<T> = { [K in keyof T]: TransformQueryRecord<T[K]> };
 
 export type CompositionCreationRequest = {
   [k: string]: {
-    type?: typeof AbstractAttributeClient<any, IsSerializable> | string,
+    type?: typeof AbstractRecordClient<any, IsSerializable> | string,
     facts?: [string, string, string?][] | undefined,
     value?: any,
   }
@@ -68,7 +68,7 @@ export default class RecordsRepository {
 
   private getClientServerBus: () => Promise<ClientServerBus>;
 
-  private attributeCache: { [key: string]: AbstractAttributeClient<any, any> };
+  private attributeCache: { [key: string]: AbstractRecordClient<any, any> };
 
   static attributeTypes = [
     LongTextRecord,
@@ -83,7 +83,7 @@ export default class RecordsRepository {
   }
 
   // TODO: we should cache this
-  private async idToAttribute(id, ignoreCache: boolean = false, serverState?): Promise<AbstractAttributeClient<any, any> | undefined> {
+  private async idToAttribute(id, ignoreCache: boolean = false, serverState?): Promise<AbstractRecordClient<any, any> | undefined> {
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = RecordsRepository
       .attributeTypes
@@ -133,7 +133,7 @@ export default class RecordsRepository {
   }
 
   async create(attributeType: string, value: any, facts?: [ string, string, string? ][])
-    :Promise<AbstractAttributeClient<any, IsSerializable>> {
+    :Promise<AbstractRecordClient<any, IsSerializable>> {
     const AttributeClass = RecordsRepository
       .attributeTypes
       .find((c) => c.getDataTypeName() === attributeType);
@@ -142,7 +142,7 @@ export default class RecordsRepository {
       throw new Error(`Attribute Type ${attributeType} is unknown`);
     }
 
-    const attribute: AbstractAttributeClient<any, IsSerializable> = new AttributeClass(
+    const attribute: AbstractRecordClient<any, IsSerializable> = new AttributeClass(
       this.linkedRecords,
       await this.getClientServerBus(),
     );
@@ -169,7 +169,7 @@ export default class RecordsRepository {
 
     const resultBody = await rawResult.json();
 
-    const result: { [key: string]: AbstractAttributeClient<any, any> } = {};
+    const result: { [key: string]: AbstractRecordClient<any, any> } = {};
 
     await Promise.all(Object.entries(resultBody).map(async ([attrName, config]: [string, any]) => {
       if (config.id) {
@@ -188,7 +188,7 @@ export default class RecordsRepository {
   }
 
   async find(attributeId: string, ignoreCache: boolean = false)
-    :Promise<AbstractAttributeClient<any, IsSerializable> | undefined> {
+    :Promise<AbstractRecordClient<any, IsSerializable> | undefined> {
     const attribute = await this.idToAttribute(attributeId, ignoreCache);
 
     if (!attribute) {
@@ -238,11 +238,11 @@ export default class RecordsRepository {
     Object.keys(result).forEach((compoundName) => {
       if (result[compoundName]) {
         if (Array.isArray(result[compoundName])) {
-          (result[compoundName] as Array<AbstractAttributeClient<any, any>>).forEach((attr) => {
+          (result[compoundName] as Array<AbstractRecordClient<any, any>>).forEach((attr) => {
             promises.push(attr.load());
           });
         } else {
-          promises.push((result[compoundName] as AbstractAttributeClient<any, any>).load());
+          promises.push((result[compoundName] as AbstractRecordClient<any, any>).load());
         }
       }
     });

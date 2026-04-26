@@ -15,7 +15,7 @@ export type LoadResult<T> = {
   updatedAt: number
 };
 
-export default abstract class AbstractAttributeServer <
+export default abstract class AbstractRecordServer <
   Type,
   TypedChange extends IsSerializable,
 > {
@@ -100,7 +100,7 @@ export default abstract class AbstractAttributeServer <
 
   public static async createAll(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    attr: [AbstractAttributeServer<any, any>, any][],
+    attr: [AbstractRecordServer<any, any>, any][],
   ): Promise<string[]> {
     const result = await Promise.all(attr.map(([a, v]) => a.create(v)));
 

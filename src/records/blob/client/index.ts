@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
-import AbstractAttributeClient from '../../abstract/abstract_record_client';
+import AbstractRecordClient from '../../abstract/abstract_record_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
 
-export default class BlobRecord extends AbstractAttributeClient<Blob, BlobChange> {
+export default class BlobRecord extends AbstractRecordClient<Blob, BlobChange> {
   public static getDataTypePrefix() : string {
     return 'bl';
   }

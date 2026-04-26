@@ -3,7 +3,7 @@ import md5 from 'md5';
 import { uuidv7 as uuid } from 'uuidv7';
 import * as he from 'he';
 import QueryExecutor from '../../records/record_query';
-import AbstractAttributeServer from '../../records/abstract/abstract_record_server';
+import AbstractRecordServer from '../../records/abstract/abstract_record_server';
 import IsLogger from '../../../lib/is_logger';
 
 function getAttributeIdByRequest(req) {
@@ -32,7 +32,7 @@ function getAttributeIdByRequest(req) {
 function getAttributeByParams(
   req,
   AttributeClass,
-): AbstractAttributeServer<any, any> {
+): AbstractRecordServer<any, any> {
   const id = getAttributeIdByRequest(req);
 
   if (!AttributeClass) {
@@ -54,7 +54,7 @@ export function getAttributeByMessage(
   attributeId,
   message,
   logger: IsLogger,
-): AbstractAttributeServer<any, any> {
+): AbstractRecordServer<any, any> {
   const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(attributeId);
 
   if (!AttributeClass) {

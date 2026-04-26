@@ -4,7 +4,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import assert from 'assert';
 import { Readable } from 'stream';
 import streamToBlob from 'stream-to-blob';
-import AbstractAttributeServer, { LoadResult } from '../../abstract/abstract_record_server';
+import AbstractRecordServer, { LoadResult } from '../../abstract/abstract_record_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import BlobChange from '../blob_change';
 import IsLogger from '../../../../lib/is_logger';
@@ -13,7 +13,7 @@ import S3Storage from '../../record_storage/s3';
 import PgPoolWithLog from '../../../../lib/pg-log';
 import IsAttributeStorage from '../../abstract/is_record_storage';
 
-export default class BlobRecord extends AbstractAttributeServer<
+export default class BlobRecord extends AbstractRecordServer<
 Blob,
 BlobChange
 > {

@@ -6,7 +6,7 @@ import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
 import ClientServerBus from '../../../lib/client-server-bus/client';
 
-export default abstract class AbstractAttributeClient <Type, TypedChange extends IsSerializable > {
+export default abstract class AbstractRecordClient <Type, TypedChange extends IsSerializable > {
   linkedRecords: LinkedRecords;
 
   clientServerBus: ClientServerBus;

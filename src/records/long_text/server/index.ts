@@ -1,7 +1,7 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable no-console */
 // eslint-disable-next-line max-classes-per-file
-import AbstractAttributeServer, { LoadResult } from '../../abstract/abstract_record_server';
+import AbstractRecordServer, { LoadResult } from '../../abstract/abstract_record_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
@@ -10,7 +10,7 @@ import AttributeStorage from '../../record_storage/psql_with_history';
 
 const queue: IsQueue = QueuedTasks.create();
 
-export default class LongTextRecord extends AbstractAttributeServer<
+export default class LongTextRecord extends AbstractRecordServer<
 string,
 LongTextChange
 > {

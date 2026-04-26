@@ -5,12 +5,12 @@ import LongTextRecord from './long_text/server';
 import KeyValueRecord from './key_value/server';
 import BlobRecord from './blob/server';
 import IsLogger from '../../lib/is_logger';
-import AbstractAttributeClient from './abstract/abstract_record_client';
+import AbstractRecordClient from './abstract/abstract_record_client';
 
 export type FactQueryWithOptionalSubjectPlaceholder =
   [string, string, string?] |
-  [string, string, typeof AbstractAttributeClient<any, any>] |
-  [string, typeof AbstractAttributeClient<any, any>];
+  [string, string, typeof AbstractRecordClient<any, any>] |
+  [string, typeof AbstractRecordClient<any, any>];
 
 export type AttributeQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
 
@@ -19,17 +19,17 @@ export type CompoundAttributeQuery = {
 };
 
 /**
- * Checks if a value is an AbstractAttributeClient subclass.
+ * Checks if a value is an AbstractRecordClient subclass.
  */
 function isAttributeClientClass(value: unknown): boolean {
   if (typeof value !== 'function') {
     return false;
   }
 
-  // Check if it's one of the known attribute client classes or extends AbstractAttributeClient
+  // Check if it's one of the known attribute client classes or extends AbstractRecordClient
   let proto = value;
   while (proto && proto !== Function.prototype) {
-    if (proto === AbstractAttributeClient || proto.name === AbstractAttributeClient.name) {
+    if (proto === AbstractRecordClient || proto.name === AbstractRecordClient.name) {
       return true;
     }
     proto = Object.getPrototypeOf(proto);
@@ -42,8 +42,8 @@ function isAttributeClientClass(value: unknown): boolean {
  * Validates if a value is a valid FactQueryWithOptionalSubjectPlaceholder tuple.
  * Accepts:
  * - [string, string, string?]
- * - [string, string, AbstractAttributeClient subclass]
- * - [string, AbstractAttributeClient subclass]
+ * - [string, string, AbstractRecordClient subclass]
+ * - [string, AbstractRecordClient subclass]
  */
 function isValidFactQueryTuple(value: unknown): boolean {
   if (!Array.isArray(value)) {
@@ -59,7 +59,7 @@ function isValidFactQueryTuple(value: unknown): boolean {
     return false;
   }
 
-  // Handle [string, AbstractAttributeClient] case (2 elements)
+  // Handle [string, AbstractRecordClient] case (2 elements)
   if (value.length === 2) {
     return typeof value[1] === 'string' || isAttributeClientClass(value[1]);
   }
@@ -70,7 +70,7 @@ function isValidFactQueryTuple(value: unknown): boolean {
     return false;
   }
 
-  // Third element can be string, undefined, or AbstractAttributeClient subclass
+  // Third element can be string, undefined, or AbstractRecordClient subclass
   if (value[2] !== undefined
       && typeof value[2] !== 'string'
       && !isAttributeClientClass(value[2])) {
@@ -123,9 +123,9 @@ export function isValidCompoundAttributeQuery(value: unknown): value is Compound
 type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
 export type ResolveToAttributesResult =
   undefined |
-  AbstractAttributeClient<any, any> |
-  AbstractAttributeClient<any, any>[] |
-  { [key: string]: AbstractAttributeClient<any, any> | AbstractAttributeClient<any, any>[] };
+  AbstractRecordClient<any, any> |
+  AbstractRecordClient<any, any>[] |
+  { [key: string]: AbstractRecordClient<any, any> | AbstractRecordClient<any, any>[] };
 
 type Attribute = typeof LongTextRecord | typeof KeyValueRecord | typeof BlobRecord;
 

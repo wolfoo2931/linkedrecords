@@ -6,7 +6,7 @@ import KeyValueRecord from '../../src/records/key_value/client/index';
 import {
   createClient, cleanupClients, truncateDB, waitFor, sleep,
 } from '../helpers';
-import AbstractAttributeClient from '../../src/records/abstract/abstract_record_client';
+import AbstractRecordClient from '../../src/records/abstract/abstract_record_client';
 
 type LongTextAttribute = LongTextRecord;
 type KeyValueAttribute = KeyValueRecord;
@@ -20,8 +20,8 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      let liveBooks: AbstractAttributeClient<any, any>[] = [];
-      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+      let liveBooks: AbstractRecordClient<any, any>[] = [];
+      let liveMagazines: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
@@ -70,8 +70,8 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      let liveBooks: AbstractAttributeClient<any, any>[] = [];
-      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+      let liveBooks: AbstractRecordClient<any, any>[] = [];
+      let liveMagazines: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
@@ -118,7 +118,7 @@ describe('Attribute', () => {
       // Create attributes BEFORE subscribing
       await client.Attribute.createKeyValue({ title: 'existing book' }, [['isA', 'Book']]);
 
-      let books: AbstractAttributeClient<any, any>[] = [];
+      let books: AbstractRecordClient<any, any>[] = [];
 
       await client.Attribute.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
@@ -135,7 +135,7 @@ describe('Attribute', () => {
     it('updates when an attribute no longer matches the query due to fact deletion', async () => {
       const [client] = await createClient();
 
-      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+      let liveBooks: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A book'],
@@ -192,7 +192,7 @@ describe('Attribute', () => {
     it('updates correctly with queries using $latest and $not modifiers', async () => {
       const [client] = await createClient();
 
-      let activeBooks: AbstractAttributeClient<any, any>[] = [];
+      let activeBooks: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A book'],
@@ -228,7 +228,7 @@ describe('Attribute', () => {
       const [client] = await createClient();
 
       let callbackCount = 0;
-      let lastResult: AbstractAttributeClient<any, any>[] = [];
+      let lastResult: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Unicorn', '$isATermFor', 'A mythical creature'],

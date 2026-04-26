@@ -2,7 +2,7 @@
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 /* eslint-disable class-methods-use-this */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import AbstractAttributeServer, { LoadResult } from '../../abstract/abstract_record_server';
+import AbstractRecordServer, { LoadResult } from '../../abstract/abstract_record_server';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import KeyValueChange from '../key_value_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
@@ -12,7 +12,7 @@ import AttributeStorage from '../../record_storage/psql';
 
 const queue: IsQueue = QueuedTasks.create();
 
-export default class KeyValueRecord extends AbstractAttributeServer<
+export default class KeyValueRecord extends AbstractRecordServer<
 object,
 KeyValueChange
 > {
@@ -24,7 +24,7 @@ KeyValueChange
 
   public static async createAll(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    attr: [AbstractAttributeServer<any, any>, any][],
+    attr: [AbstractRecordServer<any, any>, any][],
   ): Promise<string[]> {
     if (!attr[0]) {
       throw new Error('invalid attribute data found when creating all attributes');

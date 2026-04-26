@@ -1,12 +1,12 @@
 /* eslint-disable import/no-cycle */
 /* eslint-disable class-methods-use-this */
 
-import AbstractAttributeClient from '../../abstract/abstract_record_client';
+import AbstractRecordClient from '../../abstract/abstract_record_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import LongTextChange from '../long_text_change';
 import ChangeBuffer from './buffer';
 
-export default class LongTextRecord extends AbstractAttributeClient<string, LongTextChange> {
+export default class LongTextRecord extends AbstractRecordClient<string, LongTextChange> {
   buffer: ChangeBuffer = new ChangeBuffer();
 
   changeInTransmission?: SerializedChangeWithMetadata<LongTextChange> = undefined;

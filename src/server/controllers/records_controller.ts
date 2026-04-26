@@ -9,7 +9,7 @@ import PgPoolWithLog from '../../../lib/pg-log';
 import Quota from '../quota';
 import AuthCache from '../../facts/server/auth_cache';
 import IsLogger from '../../../lib/is_logger';
-import AbstractAttributeServer from '../../records/abstract/abstract_record_server';
+import AbstractRecordServer from '../../records/abstract/abstract_record_server';
 
 const attributePrefixMap = {
   KeyValueAttribute: 'kv',
@@ -42,7 +42,7 @@ export default class Controller {
     await Promise.all(
       Controller.resolveToAttributesResultToFlatArray(result).map(async (record) => {
         // eslint-disable-next-line no-param-reassign
-        record.readToken = await AbstractAttributeServer.getReadToken(record, actorId);
+        record.readToken = await AbstractRecordServer.getReadToken(record, actorId);
       }),
     );
 
@@ -93,7 +93,7 @@ export default class Controller {
       await Promise.all(
         Controller.resolveToAttributesResultToFlatArray(result).map(async (record) => {
           // eslint-disable-next-line no-param-reassign
-          record.readToken = await AbstractAttributeServer.getReadToken(record, req.actorId);
+          record.readToken = await AbstractRecordServer.getReadToken(record, req.actorId);
         }),
       );
 
@@ -438,8 +438,8 @@ export default class Controller {
   }
 
   private static groupCompositionByAttributeClass(composition) {
-    type AttrClass = typeof AbstractAttributeServer<any, any>;
-    type A2CMapValue = [AbstractAttributeServer<any, any>, any][];
+    type AttrClass = typeof AbstractRecordServer<any, any>;
+    type A2CMapValue = [AbstractRecordServer<any, any>, any][];
     const attributesByAttributeClass = new Map<AttrClass, A2CMapValue>();
 
     Object.entries(composition).forEach(([attributeName, config]: [string, any]) => {

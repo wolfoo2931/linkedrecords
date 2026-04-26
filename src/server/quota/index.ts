@@ -1,5 +1,5 @@
 /* eslint-disable import/no-cycle */
-import AbstractAttributeServer from '../../records/abstract/abstract_record_server';
+import AbstractRecordServer from '../../records/abstract/abstract_record_server';
 import Fact from '../../facts/server';
 import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
@@ -237,7 +237,7 @@ export default class Quota {
 
   static async ensureStorageSpaceToSave<T>(
     actorId: string,
-    attributesAndValuesToSave: [AbstractAttributeServer<T, any>, T][],
+    attributesAndValuesToSave: [AbstractRecordServer<T, any>, T][],
     logger: IsLogger,
     factsToSave: Fact[] = [],
   ): Promise<void> {
@@ -367,13 +367,13 @@ export default class Quota {
 
   private static async getStorageRequiredByAccountee<T>(
     actorId: string,
-    attributesAndValuesToSave: [AbstractAttributeServer<T, any>, T][],
+    attributesAndValuesToSave: [AbstractRecordServer<T, any>, T][],
     accountableMap: Record<string, string>,
   ) {
     const storageRequiredByAccountee: Record<string, number> = {};
 
     await Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
-      const change = AbstractAttributeServer.isValidChange(value) ? value : false;
+      const change = AbstractRecordServer.isValidChange(value) ? value : false;
 
       const bytesRequired = change
         ? await attribute.getStorageRequiredForChange(

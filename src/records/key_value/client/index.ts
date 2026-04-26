@@ -3,12 +3,12 @@
 /* eslint-disable class-methods-use-this */
 import flatten, { unflatten } from 'flat';
 import get from 'get-value';
-import AbstractAttributeClient from '../../abstract/abstract_record_client';
+import AbstractRecordClient from '../../abstract/abstract_record_client';
 import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_metadata';
 import KeyValueChange, { AtomicChange } from '../key_value_change';
 import getAllPrefixes from '../../../../lib/utils/all_prefixes';
 
-export default class KeyValueRecord extends AbstractAttributeClient<object, KeyValueChange> {
+export default class KeyValueRecord extends AbstractRecordClient<object, KeyValueChange> {
   public static getDataTypePrefix() : string {
     return 'kv';
   }
