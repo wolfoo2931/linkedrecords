@@ -8,11 +8,11 @@ import { Callout } from 'fumadocs-ui/components/callout';
 ## Overview
 
 Quotas control how much storage each user or organization can consume. When a user
-or organization reaches their quota limit, further attribute creation or modification
+or organization reaches their quota limit, further record creation or modification
 is blocked until storage is freed or the quota is upgraded.
 
 Quotas are tied to [accountability](/accountability) - the accountable entity's
-quota is charged for storage used by an attribute.
+quota is charged for storage used by a record.
 
 ## Default Quotas
 
@@ -53,8 +53,8 @@ or accountable). Attempting to check another user's quota returns an empty objec
 
 When storage quota is exceeded:
 
-1. **Attribute creation is blocked** - New attributes cannot be created
-2. **Attribute modification is blocked** - Existing attributes cannot be updated
+1. **Record creation is blocked** - New records cannot be created
+2. **Record modification is blocked** - Existing records cannot be updated
 3. **The operation fails silently** - The change is not persisted
 
 ```typescript
@@ -71,7 +71,7 @@ lr.setQuotaViolationErrorHandler((response) => {
 });
 
 try {
-  await lr.Attribute.createKeyValue({ /* large data */ });
+  await lr.Record.createKeyValue({ /* large data */ });
 } catch (error) {
   // This is the error you throw in the QuotaViolationErrorHandler
   // Handle quota violation
@@ -154,13 +154,13 @@ ensure storage counts against the organization's quota:
 
 ```typescript
 // Personal document (counts against user's quota)
-const personalDoc = await lr.Attribute.createKeyValue(
+const personalDoc = await lr.Record.createKeyValue(
   { title: 'My Notes' },
   [['$it', 'isA', 'Document']]
 );
 
 // Organization document (counts against org's quota)
-const orgDoc = await lr.Attribute.createKeyValue(
+const orgDoc = await lr.Record.createKeyValue(
   { title: 'Project Spec' },
   [
     ['$it', 'isA', 'Document'],
@@ -179,11 +179,11 @@ members' work count against the shared quota rather than individual limits.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DEFAULT_STORAGE_SIZE_QUOTA` | Default storage for new users (MB) | 500 |
-| `QUOTA_COUNT_KV_ATTRIBUTES` | Count KeyValue attributes in quota | false |
-| `QUOTA_COUNT_LT_ATTRIBUTES` | Count LongText attributes in quota | false |
+| `QUOTA_COUNT_KV_RECORDS` | Count KeyValue records in quota | false |
+| `QUOTA_COUNT_LT_RECORDS` | Count LongText records in quota | false |
 
 <Callout type="info">
-Blob attributes are always counted in quota calculations when S3 storage is
+Blob records are always counted in quota calculations when S3 storage is
 configured.
 </Callout>
 

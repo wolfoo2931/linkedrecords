@@ -7,20 +7,20 @@ import cors from 'cors';
 import multer from 'multer';
 import pino from 'pino-http';
 import { rateLimit } from 'express-rate-limit';
-import attributeMiddleware from './middleware/attribute';
+import attributeMiddleware from './middleware/record';
 import factMiddleware from './middleware/fact';
 import errorHandler from './middleware/error_handler';
 import Fact from '../facts/server';
 import factsController from './controllers/facts_controller';
-import attributesController from './controllers/attributes_controller';
+import attributesController from './controllers/records_controller';
 import quotaController from './controllers/quota_controller';
 import userinfoController from './controllers/userinfo_controller';
 import oidcController from './controllers/oidc_controller';
 import authentication from './middleware/authentication';
 import quotaUpgrade from './middleware/quota_upgrade';
 import mountServiceBus from './service_bus_mount';
-import AuthorizationError from '../attributes/errors/authorization_error';
-import BlobAttribute from '../attributes/blob/server';
+import AuthorizationError from '../records/errors/authorization_error';
+import BlobRecord from '../records/blob/server';
 
 const blobUpload = multer().single('change');
 
@@ -31,7 +31,7 @@ const limiter = rateLimit({
 
 Fact.initDB();
 
-BlobAttribute.copyFromPSQLToS3({
+BlobRecord.copyFromPSQLToS3({
   warn: console.log,
   info: console.log,
   debug: console.log,
@@ -126,6 +126,8 @@ async function createApp(httpServer: https.Server) {
   app.use(authentication());
   app.use('/attributes', attributeMiddleware());
   app.use('/attribute-compositions', attributeMiddleware());
+  app.use('/records', attributeMiddleware());
+  app.use('/record-compositions', attributeMiddleware());
   app.use('/', factMiddleware());
 
   app.get('/userinfo', errorHandler((req, res) => userinfoController.userinfo(req, res)));
@@ -136,6 +138,12 @@ async function createApp(httpServer: https.Server) {
   app.get('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get)));
   app.get('/attributes/:attributeId/members', errorHandler((req, res) => withAuth(req, res, attributesController.getMembers)));
   app.patch('/attributes/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update)));
+  app.get('/records', errorHandler((req, res) => withAuth(req, res, attributesController.index)));
+  app.post('/records', errorHandler((req, res) => withAuth(req, res, attributesController.create)));
+  app.post('/record-compositions', errorHandler((req, res) => withAuth(req, res, attributesController.createComposition)));
+  app.get('/records/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.get)));
+  app.get('/records/:attributeId/members', errorHandler((req, res) => withAuth(req, res, attributesController.getMembers)));
+  app.patch('/records/:attributeId', errorHandler((req, res) => withAuth(req, res, attributesController.update)));
   app.get('/facts', errorHandler((req, res) => withAuth(req, res, factsController.index)));
   app.post('/facts', errorHandler((req, res) => withAuth(req, res, factsController.create)));
   app.post('/facts/delete', errorHandler((req, res) => withAuth(req, res, factsController.delete)));

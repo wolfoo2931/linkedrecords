@@ -18,7 +18,7 @@ you create facts that grant specific permissions.
 
 ```typescript
 // Only you can see this document
-const doc = await lr.Attribute.createKeyValue({ title: 'My Notes' });
+const doc = await lr.Record.createKeyValue({ title: 'My Notes' });
 
 // Now alice can read it
 await lr.Fact.createAll([
@@ -32,15 +32,15 @@ All authorization predicates start with `$`. These are the available predicates:
 
 ### $isAccountableFor
 
-Indicates ownership and accountability for an attribute. The accountable party
-is responsible for the storage quota used by the attribute.
+Indicates ownership and accountability for a record. The accountable party
+is responsible for the storage quota used by the record.
 
 ```typescript
-[userId, '$isAccountableFor', attributeId]
+[userId, '$isAccountableFor', recordId]
 ```
 
 <Callout type="info">
-When you create an attribute, a `$isAccountableFor` fact linking you to it is
+When you create a record, a `$isAccountableFor` fact linking you to it is
 automatically created. You don't need to add this manually.
 </Callout>
 
@@ -64,18 +64,18 @@ You can only transfer accountability to a group you're a member of - not to othe
 </Callout>
 
 <Callout type="info">
-**What is a group?** There is no special "group" concept in LinkedRecords. A group is simply an attribute (typically a KeyValue attribute) that you use as a node for memberships. You create an attribute, and then use its ID as the target of `$isMemberOf` facts. You don't need to tag it with `isA` or assign any terms - any attribute can serve as a group.
+**What is a group?** There is no special "group" concept in LinkedRecords. A group is simply a record (typically a KeyValue record) that you use as a node for memberships. You create a record, and then use its ID as the target of `$isMemberOf` facts. You don't need to tag it with `isA` or assign any terms - any record can serve as a group.
 
 ```typescript
-// Create a simple attribute - this becomes your "group"
-const team = await lr.Attribute.createKeyValue({ name: 'Engineering' });
+// Create a simple record - this becomes your "group"
+const team = await lr.Record.createKeyValue({ name: 'Engineering' });
 
 // Use its ID to assign memberships
 await lr.Fact.createAll([
   [userId, '$isMemberOf', team.id],
 ]);
 
-// Grant the group access to another attribute
+// Grant the group access to another record
 await lr.Fact.createAll([
   [team.id, '$canAccess', documentId],
 ]);
@@ -92,8 +92,8 @@ Grants membership in a group, inheriting the group's access permissions.
 ```
 
 Members can:
-- Read and write attributes the group has `$canAccess` to
-- Read attributes the group has `$canRead` to
+- Read and write records the group has `$canAccess` to
+- Read records the group has `$canRead` to
 - Use subjects the group has `$canRefine` permission for
 - Use objects the group has `$canReferTo` permission for
 
@@ -116,49 +116,49 @@ To create a `$isHostOf` fact, you must either be accountable for the group or be
 
 ### $canRead
 
-Grants read-only access to an attribute.
+Grants read-only access to a record.
 
 ```typescript
-[userId, '$canRead', attributeId]
+[userId, '$canRead', recordId]
 // or for a group:
-[teamId, '$canRead', attributeId]
+[teamId, '$canRead', recordId]
 ```
 
 ### $canAccess
 
-Grants read and write access to an attribute.
+Grants read and write access to a record.
 
 ```typescript
-[userId, '$canAccess', attributeId]
+[userId, '$canAccess', recordId]
 // or for a group:
-[teamId, '$canAccess', attributeId]
+[teamId, '$canAccess', recordId]
 ```
 
 ### $canRefine
 
-Grants permission to use an attribute as the **subject** in facts (conceptor permission).
+Grants permission to use a record as the **subject** in facts (conceptor permission).
 
 ```typescript
-[teamId, '$canRefine', attributeId]
+[teamId, '$canRefine', recordId]
 ```
 
-This allows team members to create facts like `[attributeId, 'somePredicate', someOtherAttributeId]`.
+This allows team members to create facts like `[recordId, 'somePredicate', someOtherRecordId]`.
 
 ### $canReferTo
 
-Grants permission to use an attribute as the **object** in facts (referrer permission).
+Grants permission to use a record as the **object** in facts (referrer permission).
 
 ```typescript
-[teamId, '$canReferTo', attributeId]
+[teamId, '$canReferTo', recordId]
 ```
 
-This allows team members to create facts like `[otherId, 'somePredicate', attributeId]`.
+This allows team members to create facts like `[otherId, 'somePredicate', recordId]`.
 
 ## Permission Hierarchy
 
 ### Creator Permissions
 
-When you create an attribute, you automatically get full permissions:
+When you create a record, you automatically get full permissions:
 - You become accountable for it
 - You can read and write it
 - You can use it as subject or object in facts
@@ -169,11 +169,11 @@ When you create an attribute, you automatically get full permissions:
 Permissions can be granted to groups (teams), which then flow to all members:
 
 ```typescript
-// Create a team. A team is just an attribute.
-const team = await lr.Attribute.createKeyValue({ name: 'Engineering' });
+// Create a team. A team is just a record.
+const team = await lr.Record.createKeyValue({ name: 'Engineering' });
 
 // Create a document with team access
-const doc = await lr.Attribute.createKeyValue({ title: 'Spec' }, [
+const doc = await lr.Record.createKeyValue({ title: 'Spec' }, [
   ['$it', 'isA', 'Document'],
   [team.id, '$canAccess', '$it'],  // Team can read/write
 ]);
@@ -218,7 +218,7 @@ Generally, you can delete facts you created or have appropriate authorization ov
 
 ```typescript
 // This is only visible to you
-const myNotes = await lr.Attribute.createKeyValue({
+const myNotes = await lr.Record.createKeyValue({
   title: 'Personal Notes',
   content: 'Secret stuff...',
 });
@@ -243,11 +243,11 @@ await lr.Fact.createAll([
 
 ```typescript
 // Create a team and share with it
-const team = await lr.Attribute.createKeyValue({ name: 'Marketing' }, [
+const team = await lr.Record.createKeyValue({ name: 'Marketing' }, [
   ['$it', 'isA', 'Team'],
 ]);
 
-await lr.Attribute.createKeyValue(
+await lr.Record.createKeyValue(
   { title: 'Campaign Plan' },
   [
     ['$it', 'isA', 'Document'],
@@ -339,7 +339,7 @@ Accountability (`$isAccountableFor`) has specific transfer rules:
 
 ```typescript
 // Create an org and become a member
-const org = await lr.Attribute.createKeyValue({ name: 'Acme' }, [
+const org = await lr.Record.createKeyValue({ name: 'Acme' }, [
   ['$it', 'isA', 'Organization'],
 ]);
 await lr.Fact.createAll([[myUserId, '$isMemberOf', org.id]]);
@@ -353,11 +353,11 @@ await lr.Fact.createAll([[otherUserId, '$isAccountableFor', doc.id]]);
 
 ### Derived Permissions from Group Membership
 
-When a group has `$canAccess` to an attribute, members of that group inherit implicit permissions:
+When a group has `$canAccess` to a record, members of that group inherit implicit permissions:
 
-- **Read and write access** to the attribute's payload
-- **Implicit `$canRefine`** - can use the attribute as subject in custom facts (if group has `$canRefine`)
-- **Implicit `$canReferTo`** - can use the attribute as object in custom facts (if group has `$canReferTo`)
+- **Read and write access** to the record's payload
+- **Implicit `$canRefine`** - can use the record as subject in custom facts (if group has `$canRefine`)
+- **Implicit `$canReferTo`** - can use the record as object in custom facts (if group has `$canReferTo`)
 
 ```typescript
 // Team has $canAccess to the project
@@ -371,7 +371,7 @@ await teamMember.Fact.createAll([
 ]);
 ```
 
-This means that for creating custom predicates, users with `$canAccess` through group membership effectively have `$canRefine` and `$canReferTo` permissions on those attributes.
+This means that for creating custom predicates, users with `$canAccess` through group membership effectively have `$canRefine` and `$canReferTo` permissions on those records.
 
 ## Verifying Fact Creation
 

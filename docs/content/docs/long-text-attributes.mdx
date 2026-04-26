@@ -1,5 +1,5 @@
 ---
-title: Long Text Attributes
+title: Long Text Records
 description: Large text storage with Operational Transformation
 ---
 
@@ -7,28 +7,28 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-Long Text Attributes are designed for storing and collaboratively editing large
+Long Text Records are designed for storing and collaboratively editing large
 text content. They use **Operational Transformation (OT)** for real-time
 collaboration, allowing multiple users to edit the same document simultaneously.
 
 ## When to Use Long Text
 
-Use Long Text Attributes when you need:
+Use Long Text Records when you need:
 - Large text documents (notes, articles, code)
 - Real-time collaborative text editing
 - Character-by-character synchronization
 
-Use Key-Value Attributes instead when:
+Use Key-Value Records instead when:
 - You have structured data (JSON objects)
 - Text is relatively short and rarely edited collaboratively
 - You need to update specific fields independently
 
-## Creating Long Text Attributes
+## Creating Long Text Records
 
 ### Using createLongText()
 
 ```typescript
-const notes = await lr.Attribute.createLongText(
+const notes = await lr.Record.createLongText(
   'Initial content of the document',
   [['$it', 'isA', 'Notes']]
 );
@@ -37,7 +37,7 @@ const notes = await lr.Attribute.createLongText(
 ### Using create()
 
 ```typescript
-const article = await lr.Attribute.create(
+const article = await lr.Record.create(
   'longText',
   'Article content goes here...',
   [['$it', 'isA', 'Article']]
@@ -47,7 +47,7 @@ const article = await lr.Attribute.create(
 ### In Blueprint Pattern
 
 ```typescript
-const { doc, notes } = await lr.Attribute.createAll({
+const { doc, notes } = await lr.Record.createAll({
   doc: {
     type: 'KeyValueAttribute',
     value: { title: 'My Document', metadata: {} },
@@ -67,7 +67,7 @@ const { doc, notes } = await lr.Attribute.createAll({
 ## Reading Content
 
 ```typescript
-const notes = await lr.Attribute.find(notesId);
+const notes = await lr.Record.find(notesId);
 const content = await notes.getValue();
 console.log(content);  // Returns the full text content
 ```
@@ -77,7 +77,7 @@ console.log(content);  // Returns the full text content
 ### Replace Entire Content
 
 ```typescript
-const notes = await lr.Attribute.find(notesId);
+const notes = await lr.Record.find(notesId);
 await notes.set('Completely new content');
 ```
 
@@ -91,9 +91,9 @@ use the real-time editing approach with `load()`.
 ### Enabling Real-Time Updates
 
 ```typescript
-const notes = await lr.Attribute.find(notesId);
+const notes = await lr.Record.find(notesId);
 
-// The attribute now syncs with the server
+// The record now syncs with the server
 // Changes from other users are automatically merged
 // Whenever you call notes.getValue() you will get the most up to date value
 ```
@@ -110,12 +110,12 @@ let content = await notes.getValue();
 // The OT system handles merging concurrent edits
 ```
 
-## Querying Long Text Attributes
+## Querying Long Text Records
 
 ### By Type
 
 ```typescript
-const { notes } = await lr.Attribute.findAll({
+const { notes } = await lr.Record.findAll({
   notes: [
     ['$it', '$hasDataType', 'LongTextAttribute'],
     ['$it', 'isA', 'Notes'],
@@ -126,7 +126,7 @@ const { notes } = await lr.Attribute.findAll({
 ### By Relationship
 
 ```typescript
-const { docNotes } = await lr.Attribute.findAll({
+const { docNotes } = await lr.Record.findAll({
   docNotes: [
     ['$it', '$hasDataType', 'LongTextAttribute'],
     ['$it', 'belongsTo', documentId],
@@ -136,40 +136,40 @@ const { docNotes } = await lr.Attribute.findAll({
 
 ## Integration with Text Editors
 
-Long Text Attributes work well with text editor libraries. Here's a conceptual
+Long Text Records work well with text editor libraries. Here's a conceptual
 example:
 
 ```tsx
-function CollaborativeEditor({ attributeId }) {
+function CollaborativeEditor({ recordId }) {
   const { lr } = useLinkedRecords();
   const [content, setContent] = useState('');
-  const [attribute, setAttribute] = useState(null);
+  const [record, setRecord] = useState(null);
 
   useEffect(() => {
     let attr;
 
-    async function setupAttribute() {
-      attr = await lr.Attribute.find(attributeId);
+    async function setupRecord() {
+      attr = await lr.Record.find(recordId);
       if (attr) {
         // Subscribe to receive real-time changes from other users
         await attr.subscribe(async () => {
           setContent(await attr.getValue());
         });
-        setAttribute(attr);
+        setRecord(attr);
         setContent(await attr.getValue());
       }
     }
 
-    setupAttribute();
+    setupRecord();
 
     return () => {
       attr?.unload();
     };
-  }, [attributeId, lr]);
+  }, [recordId, lr]);
 
   const handleChange = async (newContent) => {
     setContent(newContent);
-    await attribute?.set(newContent);
+    await record?.set(newContent);
   };
 
   return (
@@ -187,7 +187,7 @@ function CollaborativeEditor({ attributeId }) {
 
 ```typescript
 // Create meeting notes linked to a meeting
-const meetingNotes = await lr.Attribute.createLongText(
+const meetingNotes = await lr.Record.createLongText(
   `# Meeting Notes - ${new Date().toLocaleDateString()}
 
 ## Attendees
@@ -212,7 +212,7 @@ const meetingNotes = await lr.Attribute.createLongText(
 ### Documentation
 
 ```typescript
-const { doc, content } = await lr.Attribute.createAll({
+const { doc, content } = await lr.Record.createAll({
   doc: {
     type: 'KeyValueAttribute',
     value: {
@@ -236,7 +236,7 @@ const { doc, content } = await lr.Attribute.createAll({
 ### Code Snippets
 
 ```typescript
-const snippet = await lr.Attribute.createLongText(
+const snippet = await lr.Record.createLongText(
   `function greet(name) {
   return \`Hello, \${name}!\`;
 }`,
@@ -250,11 +250,11 @@ const snippet = await lr.Attribute.createLongText(
 
 ## Permissions
 
-Long Text Attributes follow the same authorization model as other attributes:
+Long Text Records follow the same authorization model as other records:
 
 ```typescript
 // Create with team access
-const sharedDoc = await lr.Attribute.createLongText(
+const sharedDoc = await lr.Record.createLongText(
   'Shared content',
   [
     ['$it', 'isA', 'SharedDocument'],
@@ -263,7 +263,7 @@ const sharedDoc = await lr.Attribute.createLongText(
 );
 
 // Create with read-only sharing
-const readOnlyDoc = await lr.Attribute.createLongText(
+const readOnlyDoc = await lr.Record.createLongText(
   'Published content',
   [
     ['$it', 'isA', 'PublishedDocument'],
@@ -274,10 +274,10 @@ const readOnlyDoc = await lr.Attribute.createLongText(
 
 ## Limitations
 
-1. **No partial updates** - Unlike Key-Value Attributes, you can't update
+1. **No partial updates** - Unlike Key-Value Records, you can't update
    specific portions through the API (OT handles this internally during real-time)
 
-2. **Text only** - No binary content, use Blob Attributes for files
+2. **Text only** - No binary content, use Blob Records for files
 
 ## Best Practices
 
@@ -285,5 +285,5 @@ const readOnlyDoc = await lr.Attribute.createLongText(
 
 2. **Clean up subscriptions** - Always call `unload()` when done to free resources
 
-3. **Combine with Key-Value** - Use Key-Value for metadata (title, author, tags)
-   and Long Text for the content body
+3. **Combine with Key-Value** - Use Key-Value Records for metadata (title, author, tags)
+   and Long Text Records for the content body

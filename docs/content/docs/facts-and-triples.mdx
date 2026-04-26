@@ -23,11 +23,11 @@ This simple structure provides powerful flexibility for modeling any domain.
 
 ## The $it Placeholder
 
-When creating attributes with associated facts, use `$it` as a placeholder that
-refers to the attribute being created:
+When creating records with associated facts, use `$it` as a placeholder that
+refers to the record being created:
 
 ```typescript
-await lr.Attribute.createKeyValue(
+await lr.Record.createKeyValue(
   { title: 'My Document' },
   [
     ['$it', 'isA', 'Document'],      // This document is a Document
@@ -36,16 +36,16 @@ await lr.Attribute.createKeyValue(
 );
 ```
 
-The `$it` placeholder is replaced with the actual attribute ID after creation.
+The `$it` placeholder is replaced with the actual record ID after creation.
 
 ## Creating Facts
 
-### With Attribute Creation
+### With Record Creation
 
-The most common way to create facts is when creating an attribute:
+The most common way to create facts is when creating a record:
 
 ```typescript
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Quarterly Report', content: '...' },
   [
     ['$it', 'isA', 'Report'],
@@ -73,20 +73,20 @@ the result. Always check the return value if you need to confirm fact creation.
 
 ## Querying Facts
 
-### Finding Attributes by Facts
+### Finding Records by Facts
 
-Use `Attribute.findAll()` to query attributes based on their associated facts:
+Use `Record.findAll()` to query records based on their associated facts:
 
 ```typescript
 // Find all documents
-const { documents } = await lr.Attribute.findAll({
+const { documents } = await lr.Record.findAll({
   documents: [
     ['$it', 'isA', 'Document'],
   ],
 });
 
 // Find documents in a specific project
-const { projectDocs } = await lr.Attribute.findAll({
+const { projectDocs } = await lr.Record.findAll({
   projectDocs: [
     ['$it', 'isA', 'Document'],
     ['$it', 'belongsTo', projectId],
@@ -163,13 +163,13 @@ await lr.Fact.createAll([
 ]);
 
 // 2. Create a project
-const project = await lr.Attribute.createKeyValue(
+const project = await lr.Record.createKeyValue(
   { name: 'Website Redesign', deadline: '2024-12-31' },
   [['$it', 'isA', 'Project']]
 );
 
 // 3. Create tasks linked to the project
-const task1 = await lr.Attribute.createKeyValue(
+const task1 = await lr.Record.createKeyValue(
   { title: 'Design mockups', assignee: 'alice@example.com' },
   [
     ['$it', 'isA', 'Task'],
@@ -183,7 +183,7 @@ await lr.Fact.createAll([
 ]);
 
 // 5. Query incomplete tasks
-const { incompleteTasks } = await lr.Attribute.findAll({
+const { incompleteTasks } = await lr.Record.findAll({
   incompleteTasks: [
     ['$it', 'isA', 'Task'],
     ['$it', 'belongsTo', project.id],
@@ -209,5 +209,5 @@ const { incompleteTasks } = await lr.Attribute.findAll({
 
 ## Related
 
-- [Query Language](/query-language) - Complete reference for querying facts and attributes
+- [Query Language](/query-language) - Complete reference for querying facts and records
 - [Terms](/terms) - Declaring terms before using them in facts

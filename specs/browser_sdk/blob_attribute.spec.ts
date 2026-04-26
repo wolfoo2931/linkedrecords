@@ -21,7 +21,7 @@ describe('Blob Attributes', () => {
     const [clientA] = await createClient();
     const accessToken = await clientA.getAccessToken();
 
-    const attribute = await clientA.Attribute.create('blob', content);
+    const attribute = await clientA.Record.create('blob', content);
 
     const response = await fetch(attribute.getDataURL(), {
       headers: {
@@ -41,13 +41,13 @@ describe('Blob Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attribute = await clientA.Attribute.create('blob', content);
+      const attribute = await clientA.Record.create('blob', content);
 
       expect(attribute.id).to.match(/^bl-.{8}-.{4}-.{4}-.{4}-.{12}$/);
 
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeFromDB = await clientB.Attribute.find(attribute.id);
+      const attributeFromDB = await clientB.Record.find(attribute.id);
       expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
       const data = await attributeFromDB!.get();
@@ -71,11 +71,11 @@ describe('Blob Attributes', () => {
         },
       };
 
-      const attributeClientA = await clientA.Attribute.create('blob', content);
+      const attributeClientA = await clientA.Record.create('blob', content);
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Record.find(attributeClientA.id);
 
       const originalData = await fetch(attributeClientA.getDataURL(), fetchOpts).then((x) => x.blob()).then((x) => x.text());
 

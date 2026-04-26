@@ -4,8 +4,8 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-streams-adapter';
-import SerializedChangeWithMetadata from '../../../../../src/attributes/abstract/serialized_change_with_metadata';
-import IsSerializable from '../../../../../src/attributes/abstract/is_serializable';
+import SerializedChangeWithMetadata from '../../../../../src/records/abstract/serialized_change_with_metadata';
+import IsSerializable from '../../../../../src/records/abstract/is_serializable';
 
 const connections = {};
 const channels = new Set<string>();

@@ -44,7 +44,7 @@ async function fetchDocuments(client, teamId?) {
   const userId = await client.getActorId();
   const accountee = teamId || userId;
 
-  const { documents } = await client.Attribute.findAll({
+  const { documents } = await client.Record.findAll({
     documents: [
       ['$it', '$hasDataType', 'KeyValueAttribute'],
       ['$it', 'isA', 'documentConfig'],
@@ -60,7 +60,7 @@ async function fetchDocuments(client, teamId?) {
 async function fetchDocument(client, contentId) {
   const userId = await client.getActorId();
 
-  return client.Attribute.findAll({
+  return client.Record.findAll({
     content: contentId,
     otherUsersComments: [
       ['$hasDataType', 'KeyValueAttribute'],
@@ -110,7 +110,7 @@ async function createDocument(client, teamId?) {
   const userId = await client.getActorId();
   const accountee = teamId || userId;
 
-  await client.Attribute.createAll({
+  await client.Record.createAll({
     documentCollaboratorGroup: {
       type: 'KeyValueAttribute',
       value: {},
@@ -268,7 +268,7 @@ async function renderChartToImage() {
 }
 
 async function getRandomContentIds(client, accountee, n) {
-  const { content } = await client.Attribute.findAll({
+  const { content } = await client.Record.findAll({
     content: [
       ['isA', 'documentContent'],
       [accountee, '$isAccountableFor', '$it'],

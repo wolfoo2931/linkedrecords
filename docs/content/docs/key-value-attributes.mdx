@@ -1,5 +1,5 @@
 ---
-title: Key-Value Attributes
+title: Key-Value Records
 description: Working with JSON document storage using CRDT
 ---
 
@@ -7,16 +7,16 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-Key-Value Attributes are the primary data storage type in LinkedRecords. They store
+Key-Value Records are the primary data storage type in LinkedRecords. They store
 JSON documents and use **CRDT (Conflict-free Replicated Data Types)** for concurrent
 editing support.
 
-## Creating Key-Value Attributes
+## Creating Key-Value Records
 
 ### Simple Creation
 
 ```typescript
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'My Document', content: 'Hello world' },
   [['$it', 'isA', 'Document']]
 );
@@ -25,7 +25,7 @@ const doc = await lr.Attribute.createKeyValue(
 ### Using create() Method
 
 ```typescript
-const doc = await lr.Attribute.create('keyValue',
+const doc = await lr.Record.create('keyValue',
   { title: 'My Document', content: 'Hello world' },
   [['$it', 'isA', 'Document']]
 );
@@ -34,7 +34,7 @@ const doc = await lr.Attribute.create('keyValue',
 ### With Multiple Facts
 
 ```typescript
-const task = await lr.Attribute.createKeyValue(
+const task = await lr.Record.createKeyValue(
   {
     title: 'Complete report',
     priority: 'high',
@@ -53,7 +53,7 @@ const task = await lr.Attribute.createKeyValue(
 ### Get Current Value
 
 ```typescript
-const attr = await lr.Attribute.find(attributeId);
+const attr = await lr.Record.find(attributeId);
 const value = await attr.getValue();
 console.log(value); // { title: 'My Document', ... }
 ```
@@ -61,7 +61,7 @@ console.log(value); // { title: 'My Document', ... }
 ### Find by Query
 
 ```typescript
-const { tasks } = await lr.Attribute.findAll({
+const { tasks } = await lr.Record.findAll({
   tasks: [['$it', 'isA', 'Task']],
 });
 
@@ -78,7 +78,7 @@ for (const task of tasks) {
 The `set()` method replaces the entire document:
 
 ```typescript
-const doc = await lr.Attribute.find(docId);
+const doc = await lr.Record.find(docId);
 await doc.set({
   title: 'Updated Title',
   content: 'New content',
@@ -96,7 +96,7 @@ will be removed.
 The `patch()` method merges changes with the existing document:
 
 ```typescript
-const doc = await lr.Attribute.find(docId);
+const doc = await lr.Record.find(docId);
 
 // Only updates the 'title' field, keeps other fields unchanged
 await doc.patch({ title: 'Updated Title' });
@@ -108,7 +108,7 @@ The `change()` method allows precise control over individual fields using
 `KeyValueChange`:
 
 ```typescript
-const doc = await lr.Attribute.find(docId);
+const doc = await lr.Record.find(docId);
 
 await doc.change(new lr.KeyValueChange([
   { key: 'title', value: 'New Title' },
@@ -140,7 +140,7 @@ await doc.change(new lr.KeyValueChange([
 
 ## Concurrency Handling
 
-Key-Value Attributes handle concurrent edits. When multiple users
+Key-Value Records handle concurrent edits. When multiple users
 edit different fields simultaneously, changes are automatically merged:
 
 ```typescript
@@ -164,7 +164,7 @@ await docB.change(new lr.KeyValueChange([
 <Callout type="warn">
 **Array Gotcha:** Arrays are completely overwritten on concurrent updates (last
 write wins). CRDT merging does NOT work for array elements. If you need
-collaborative array editing, consider using separate attributes for array items
+collaborative array editing, consider using separate records for array items
 or using facts to represent relationships.
 </Callout>
 
@@ -174,9 +174,9 @@ Instead of storing items in an array:
 
 ```typescript
 // AVOID: Arrays don't merge well
-const list = await lr.Attribute.createKeyValue({
+const list = await lr.Record.createKeyValue({
   name: 'Shopping List',
-  items: ['Milk', 'Bread', 'Eggs']  // Concurrent edits may lose data
+  items: ['Milk', 'Bread', 'Eggs'],  // Concurrent edits may lose data
 });
 ```
 
@@ -184,7 +184,7 @@ Use nested objects with IDs:
 
 ```typescript
 // BETTER: Use objects with unique keys
-const list = await lr.Attribute.createKeyValue({
+const list = await lr.Record.createKeyValue({
   name: 'Shopping List',
   items: {
     'item-1': { text: 'Milk', completed: false },
@@ -199,13 +199,13 @@ await list.change(new lr.KeyValueChange([
 ]));
 ```
 
-Or use separate attributes connected by facts:
+Or use separate records connected by facts:
 
 ```typescript
-// BEST for complex items: Separate attributes
-const list = await lr.Attribute.createKeyValue({ name: 'Shopping List' });
+// BEST for complex items: Separate records
+const list = await lr.Record.createKeyValue({ name: 'Shopping List' });
 
-const item1 = await lr.Attribute.createKeyValue(
+const item1 = await lr.Record.createKeyValue(
   { text: 'Milk', completed: false },
   [['$it', 'isIncludedIn', list.id]]
 );
@@ -217,7 +217,7 @@ const item1 = await lr.Attribute.createKeyValue(
 
 ```typescript
 // Create a task list
-const list = await lr.Attribute.createKeyValue({
+const list = await lr.Record.createKeyValue({
   name: 'Sprint Tasks',
   tasks: {}
 }, [['$it', 'isA', 'TaskList']]);
@@ -249,7 +249,7 @@ await list.change(new lr.KeyValueChange([
 ### User Profile
 
 ```typescript
-const profile = await lr.Attribute.createKeyValue({
+const profile = await lr.Record.createKeyValue({
   displayName: 'Alice Smith',
   bio: '',
   preferences: {
@@ -272,7 +272,7 @@ await profile.change(new lr.KeyValueChange([
 ### Document with Metadata
 
 ```typescript
-const doc = await lr.Attribute.createKeyValue({
+const doc = await lr.Record.createKeyValue({
   title: 'Quarterly Report',
   content: '...',
   metadata: {
@@ -301,4 +301,4 @@ await doc.change(new lr.KeyValueChange([
 
 2. **Use change() for partial updates** instead of set() to preserve other fields
 
-3. **Flatten when possible** - Deeply nested structures are harder to update
+3. **Flatten when possible** - Deeply nested structures are harder to update with Key-Value Records

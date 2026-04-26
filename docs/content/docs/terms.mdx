@@ -31,7 +31,7 @@ If you skip this step, the fact creation will fail silently.
 
 ## Using Declared Terms
 
-Once declared, you can use terms to classify your attributes:
+Once declared, you can use terms to classify your records:
 
 ```typescript
 // First declare the term
@@ -40,7 +40,7 @@ await lr.Fact.createAll([
 ]);
 
 // Now you can use it
-const invoice = await lr.Attribute.createKeyValue(
+const invoice = await lr.Record.createKeyValue(
   { number: 'INV-001', amount: 1500 },
   [['$it', 'isA', 'Invoice']]
 );
@@ -61,7 +61,7 @@ await userA.Fact.createAll([
 ]);
 
 // User B can also use this term (after it's been declared)
-await userB.Attribute.createKeyValue(
+await userB.Record.createKeyValue(
   { title: 'My First Post' },
   [['$it', 'isA', 'BlogPost']]
 );
@@ -122,20 +122,20 @@ This makes it suitable for app initialization code that may run on each page loa
 
 ## Querying by Terms
 
-Find all attributes of a specific type:
+Find all records of a specific type:
 
 ```typescript
-const { tasks } = await lr.Attribute.findAll({
+const { tasks } = await lr.Record.findAll({
   tasks: [
     ['$it', 'isA', 'Task'],
   ],
 });
 ```
 
-Find attributes of multiple types:
+Find records of multiple types:
 
 ```typescript
-const { documents, projects, tasks } = await lr.Attribute.findAll({
+const { documents, projects, tasks } = await lr.Record.findAll({
   documents: [['$it', 'isA', 'Document']],
   projects: [['$it', 'isA', 'Project']],
   tasks: [['$it', 'isA', 'Task']],
@@ -170,8 +170,8 @@ await userA.Fact.deleteAll([
 ### 1. Forgetting to Declare Terms
 
 ```typescript
-// WRONG: Using a term without declaring it
-const doc = await lr.Attribute.createKeyValue(
+// WRONG: Using a term without declaring it first
+const doc = await lr.Record.createKeyValue(
   { title: 'Report' },
   [['$it', 'isA', 'Report']]  // This fact won't be created!
 );
@@ -180,7 +180,7 @@ const doc = await lr.Attribute.createKeyValue(
 await lr.Fact.createAll([
   ['Report', '$isATermFor', 'A formal document'],
 ]);
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Report' },
   [['$it', 'isA', 'Report']]  // Now this works
 );
@@ -209,14 +209,14 @@ Declaring a term doesn't give you access to other users' data. Terms just
 establish shared vocabulary:
 
 ```typescript
-// User A creates a private document
-await userA.Attribute.createKeyValue(
+// User A creates a private document record
+await userA.Record.createKeyValue(
   { secret: 'data' },
   [['$it', 'isA', 'Document']]
 );
 
-// User B can query for Documents, but won't see User A's private doc
-const { docs } = await userB.Attribute.findAll({
+// User B can query for Documents, but won't see User A's private record
+const { docs } = await userB.Record.findAll({
   docs: [['$it', 'isA', 'Document']],
 });
 // docs is empty (unless User A explicitly shared access)

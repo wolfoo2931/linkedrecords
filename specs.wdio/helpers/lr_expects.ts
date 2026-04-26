@@ -15,8 +15,8 @@ export async function expectFactToNotExists(fact: [string, string, string]) {
   expect(count).to.eq(0);
 }
 
-export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
-  const attributeWithAccess = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
+export async function expectNotToBeAbleToWriteRecord(attributeId, client) {
+  const attributeWithAccess = await client.Record.createKeyValue({ name: 'anAttributeWithAccess' });
   const serverURL = await attributeWithAccess.getServerURL();
   const clientId = await attributeWithAccess.getClientId();
   const { actorId } = client;
@@ -55,8 +55,8 @@ export async function expectNotToBeAbleToWriteAttribute(attributeId, client) {
   expect(unauthorizedContent).to.eql(403);
 }
 
-export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, client) {
-  const attributeWithAccess = await client.Attribute.createKeyValue({ name: 'anAttributeWithAccess' });
+export async function expectNotToBeAbleToReadOrWriteRecord(attributeId, client) {
+  const attributeWithAccess = await client.Record.createKeyValue({ name: 'anAttributeWithAccess' });
   const serverURL = await attributeWithAccess.getServerURL();
   const clientId = await attributeWithAccess.getClientId();
 
@@ -68,9 +68,9 @@ export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, clien
     object: [attributeId],
   })).length).to.eql(0);
 
-  client.Attribute.clearCache();
-  const noAccessAttr = await client.Attribute.find(attributeId);
-  const accessAttr = await client.Attribute.find(attributeWithAccess.id);
+  client.Record.clearCache();
+  const noAccessAttr = await client.Record.find(attributeId);
+  const accessAttr = await client.Record.find(attributeWithAccess.id);
 
   expect(!!noAccessAttr).to.eql(false);
   expect(!!accessAttr).to.eql(true);
@@ -92,15 +92,15 @@ export async function expectNotToBeAbleToReadOrWriteAttribute(attributeId, clien
   expect(authorizedContent).to.match(/anAttributeWithAccess/);
   expect(unauthorizedContent).to.match(/Forbidden/);
 
-  await expectNotToBeAbleToWriteAttribute(attributeId, client);
+  await expectNotToBeAbleToWriteRecord(attributeId, client);
 }
 
 export async function expectNotToBeAbleToUseAsSubject(attributeId, client) {
   const relations = ['belongsTo', '$isMemberOf', '$isHostOf', '$isAccountableFor', '$isATermFor'];
 
   for (let index = 0; index < relations.length; index += 1) {
-    const attributeWithAccessA = await client.Attribute.createKeyValue({});
-    const attributeWithAccessB = await client.Attribute.createKeyValue({});
+    const attributeWithAccessA = await client.Record.createKeyValue({});
+    const attributeWithAccessB = await client.Record.createKeyValue({});
     const relation = relations[index];
 
     if (!relation) {
@@ -127,8 +127,8 @@ export async function expectNotToBeAbleToUseAsObject(attributeId, client) {
   const relations = ['belongsTo', '$isMemberOf', '$isHostOf', '$isAccountableFor', '$isATermFor'];
 
   for (let index = 0; index < relations.length; index += 1) {
-    const attributeWithAccessA = await client.Attribute.createKeyValue({});
-    const attributeWithAccessB = await client.Attribute.createKeyValue({});
+    const attributeWithAccessA = await client.Record.createKeyValue({});
+    const attributeWithAccessB = await client.Record.createKeyValue({});
     const relation = relations[index];
 
     if (!relation) {
