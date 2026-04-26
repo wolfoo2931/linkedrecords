@@ -147,14 +147,14 @@ Control storage limits per user:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DEFAULT_STORAGE_SIZE_QUOTA` | Default storage quota in MB | `500` |
-| `QUOTA_COUNT_KV_ATTRIBUTES` | Max key-value records | - |
-| `QUOTA_COUNT_LT_ATTRIBUTES` | Max long-text records | - |
+| `QUOTA_COUNT_KV_RECORDS` | Max key-value records | - |
+| `QUOTA_COUNT_LT_RECORDS` | Max long-text records | - |
 | `QUOTA_COUNT_BLOB_ATTRIBUTES` | Max blob records | - |
 
 ```bash
 DEFAULT_STORAGE_SIZE_QUOTA=500
-QUOTA_COUNT_KV_ATTRIBUTES=10000
-QUOTA_COUNT_LT_ATTRIBUTES=1000
+QUOTA_COUNT_KV_RECORDS=10000
+QUOTA_COUNT_LT_RECORDS=1000
 ```
 
 ## Payment Integration (Optional)
@@ -248,7 +248,7 @@ CORS_ORIGIN='["https://your-app.com"]'
 
 # Quotas
 DEFAULT_STORAGE_SIZE_QUOTA=1000
-QUOTA_COUNT_KV_ATTRIBUTES=100000
+QUOTA_COUNT_KV_RECORDS=100000
 
 # Performance
 ENABLE_AUTH_RULE_CACHE=true

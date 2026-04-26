@@ -314,11 +314,11 @@ export default class Quota {
 
     const storageDrivers: IsAttributeStorage[] = [];
 
-    if (process.env['QUOTA_COUNT_KV_ATTRIBUTES'] === 'true') {
+    if (process.env['QUOTA_COUNT_KV_RECORDS'] === 'true' || process.env['QUOTA_COUNT_KV_ATTRIBUTES'] === 'true') {
       storageDrivers.push(new AttributeStoragePsql(logger, 'kv'));
     }
 
-    if (process.env['QUOTA_COUNT_LT_ATTRIBUTES'] === 'true') {
+    if (process.env['QUOTA_COUNT_LT_RECORDS'] === 'true' || process.env['QUOTA_COUNT_LT_ATTRIBUTES'] === 'true') {
       storageDrivers.push(new AttributeStoragePsqlWithHistory(logger));
     }
 

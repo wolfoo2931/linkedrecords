@@ -38,8 +38,8 @@ services:
       AUTH_TOKEN_AUDIENCE: linkedrecords-dev
       AUTH_CLIENT_ID: linkedrecords-dev
       DEFAULT_STORAGE_SIZE_QUOTA: 500
-      QUOTA_COUNT_KV_ATTRIBUTES: "true"
-      QUOTA_COUNT_LT_ATTRIBUTES: "true"
+      QUOTA_COUNT_KV_RECORDS: "true"
+      QUOTA_COUNT_LT_RECORDS: "true"
       CORS_ORIGIN: '*'
     depends_on:
       postgres:

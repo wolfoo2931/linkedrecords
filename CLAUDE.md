@@ -368,8 +368,8 @@ Environment variables:
 
 ### Quotas
 - `DEFAULT_STORAGE_SIZE_QUOTA` - MB per user
-- `QUOTA_COUNT_KV_ATTRIBUTES`
-- `QUOTA_COUNT_LT_ATTRIBUTES`
+- `QUOTA_COUNT_KV_RECORDS`
+- `QUOTA_COUNT_LT_RECORDS`
 
 ### Payment (optional)
 - `PADDLE_API_KEY`, `PADDLE_API_URL`
