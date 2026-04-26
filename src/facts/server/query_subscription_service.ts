@@ -2,7 +2,7 @@
 import type Fact from '.';
 import IsLogger from '../../../lib/is_logger';
 import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
-import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../../attributes/attribute_query';
+import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../../records/record_query';
 import FactBox from './fact_box';
 
 export default class QuerySubscriptionService {

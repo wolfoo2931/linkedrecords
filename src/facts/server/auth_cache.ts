@@ -1,7 +1,7 @@
 /* eslint-disable import/no-cycle */
 import type Fact from '.';
 import IsLogger from '../../../lib/is_logger';
-import { ResolveToAttributesResult } from '../../attributes/attribute_query';
+import { ResolveToAttributesResult } from '../../records/record_query';
 import cache from '../../server/cache';
 import { Role } from './authorization_sql_builder';
 import FactBox from './fact_box';

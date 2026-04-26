@@ -4,7 +4,7 @@
 // The usage of this code is demonstrated and tested in tinytodo.spec.ts
 
 import { uuidv4 } from 'uuidv7';
-import { CompositionCreationRequest } from '../../src/browser_sdk/attributes_repository';
+import { CompositionCreationRequest } from '../../src/browser_sdk/records_repository';
 import { InitializedSession } from '../helpers/session';
 
 function getOrgBlueprint(orgName: string): CompositionCreationRequest {

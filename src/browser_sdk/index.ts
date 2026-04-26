@@ -3,13 +3,13 @@
 
 import { uuidv7 as uuid } from 'uuidv7';
 
-import LongTextAttribute from '../attributes/long_text/client';
-import KeyValueAttribute from '../attributes/key_value/client';
-import KeyValueChange from '../attributes/key_value/key_value_change';
-import LongTextChange from '../attributes/long_text/long_text_change';
+import LongTextRecord from '../records/long_text/client';
+import KeyValueRecord from '../records/key_value/client';
+import KeyValueChange from '../records/key_value/key_value_change';
+import LongTextChange from '../records/long_text/long_text_change';
 import ClientServerBus from '../../lib/client-server-bus/client';
 import FactsRepository from './facts_repository';
-import AttributesRepository from './attributes_repository';
+import RecordsRepository from './records_repository';
 import { QuotaAsJSON } from '../server/quota';
 import { OIDCManager, OIDCConfig } from './oidc';
 
@@ -23,8 +23,10 @@ type FetchOptions = {
 };
 
 export {
-  LongTextAttribute,
-  KeyValueAttribute,
+  LongTextRecord,
+  KeyValueRecord,
+  LongTextRecord as LongTextAttribute,
+  KeyValueRecord as KeyValueAttribute,
   KeyValueChange,
   LongTextChange,
 };
@@ -56,7 +58,10 @@ export default class LinkedRecords {
 
   actorId: string | undefined;
 
-  Attribute: AttributesRepository;
+  Record: RecordsRepository;
+
+  // backwards-compat getter
+  get Attribute(): RecordsRepository { return this.Record; }
 
   Fact: FactsRepository;
 
@@ -121,7 +126,7 @@ export default class LinkedRecords {
       }
     });
 
-    this.Attribute = new AttributesRepository(this, () => this.getClientServerBus());
+    this.Record = new RecordsRepository(this, () => this.getClientServerBus());
     this.clientId = uuid();
     this.Fact = new FactsRepository(this);
 
@@ -171,12 +176,12 @@ export default class LinkedRecords {
   }
 
   public async isAuthorizedToSeeMemberOf(nodeId: string):Promise<boolean> {
-    const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`, { doNotHandleExpiredSessions: true });
+    const response = await this.fetch(`/records/${nodeId}/members?clientId=${this.clientId}`, { doNotHandleExpiredSessions: true });
     return !!response;
   }
 
   public async getMembersOf(nodeId: string): Promise<{ id: string, username: string }[]> {
-    const response = await this.fetch(`/attributes/${nodeId}/members?clientId=${this.clientId}`);
+    const response = await this.fetch(`/records/${nodeId}/members?clientId=${this.clientId}`);
 
     if (!response) {
       // TODO: remove this check once the this.fetch throws an exception

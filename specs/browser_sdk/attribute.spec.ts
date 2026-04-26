@@ -1,12 +1,15 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import LongTextAttribute from '../../src/attributes/long_text/client/index';
-import KeyValueAttribute from '../../src/attributes/key_value/client/index';
+import LongTextRecord from '../../src/records/long_text/client/index';
+import KeyValueRecord from '../../src/records/key_value/client/index';
 import {
   createClient, cleanupClients, truncateDB, waitFor, sleep,
 } from '../helpers';
-import AbstractAttributeClient from '../../src/attributes/abstract/abstract_attribute_client';
+import AbstractAttributeClient from '../../src/records/abstract/abstract_record_client';
+
+type LongTextAttribute = LongTextRecord;
+type KeyValueAttribute = KeyValueRecord;
 
 describe('Attribute', () => {
   beforeEach(truncateDB);
@@ -275,7 +278,7 @@ describe('Attribute', () => {
 
       await client.Attribute.subscribeToQuery({
         items: [
-          ['$it', '$hasDataType', KeyValueAttribute],
+          ['$it', '$hasDataType', KeyValueRecord],
           ['$it', 'isA', 'Document'],
         ],
       }, ({ items }) => {
@@ -284,7 +287,7 @@ describe('Attribute', () => {
 
       await client.Attribute.subscribeToQuery({
         items: [
-          ['$it', '$hasDataType', LongTextAttribute],
+          ['$it', '$hasDataType', LongTextRecord],
           ['$it', 'isA', 'Document'],
         ],
       }, ({ items }) => {
@@ -660,11 +663,11 @@ describe('Attribute', () => {
 
       const { keyValueMembers, longTextMembers } = await otherClient.Attribute.findAll({
         keyValueMembers: [
-          ['$it', '$hasDataType', KeyValueAttribute],
+          ['$it', '$hasDataType', KeyValueRecord],
           ['$it', 'isMemberOf', teamA.id],
         ],
         longTextMembers: [
-          ['$hasDataType', LongTextAttribute],
+          ['$hasDataType', LongTextRecord],
           ['isMemberOf', teamA.id!],
         ],
       });

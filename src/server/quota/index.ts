@@ -1,15 +1,15 @@
 /* eslint-disable import/no-cycle */
-import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
+import AbstractAttributeServer from '../../records/abstract/abstract_record_server';
 import Fact from '../../facts/server';
 import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
 import EnsureIsValid from '../../../lib/utils/sql_values';
-import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
+import SerializedChangeWithMetadata from '../../records/abstract/serialized_change_with_metadata';
 import PaymentProvider from '../payment_provider';
-import AttributeStoragePsqlWithHistory from '../../attributes/attribute_storage/psql_with_history';
-import AttributeStoragePsql from '../../attributes/attribute_storage/psql';
-import AttributeStorageS3 from '../../attributes/attribute_storage/s3';
-import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
+import AttributeStoragePsqlWithHistory from '../../records/record_storage/psql_with_history';
+import AttributeStoragePsql from '../../records/record_storage/psql';
+import AttributeStorageS3 from '../../records/record_storage/s3';
+import IsAttributeStorage from '../../records/abstract/is_record_storage';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};

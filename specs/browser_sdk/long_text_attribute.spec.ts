@@ -6,8 +6,10 @@ import { uuidv7 as uuid } from 'uuidv7';
 import {
   createClient, cleanupClients, truncateDB, waitFor,
 } from '../helpers';
-import LongTextChange from '../../src/attributes/long_text/long_text_change';
-import LongTextAttribute from '../../src/attributes/long_text/client';
+import LongTextChange from '../../src/records/long_text/long_text_change';
+import LongTextRecord from '../../src/records/long_text/client';
+
+type LongTextAttribute = LongTextRecord;
 
 async function applyChangesOnAttribute(attribute: LongTextAttribute, changes: LongTextChange[]) {
   changes.forEach(async (change: LongTextChange) => {

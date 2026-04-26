@@ -5,12 +5,12 @@ import * as jose from 'jose';
 import http from 'http';
 import clientServerBus, { getAllChannels } from '../../lib/client-server-bus/server';
 import IsLogger from '../../lib/is_logger';
-import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
-import { getAttributeByMessage } from './middleware/attribute';
+import SerializedChangeWithMetadata from '../records/abstract/serialized_change_with_metadata';
+import { getAttributeByMessage } from './middleware/record';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
-import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../attributes/attribute_query';
+import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../records/record_query';
 
 export type CompoundAttributeQuerySubscribers = {
   query: CompoundAttributeQuery,
