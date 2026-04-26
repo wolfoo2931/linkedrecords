@@ -3,10 +3,10 @@
 import { multiremote } from 'webdriverio';
 import WdioRemote from './wdio_remote';
 import RecordsRepository from '../../src/browser_sdk/records_repository';
-
-type AttributesRepository = RecordsRepository;
 import FactsRepository from '../../src/browser_sdk/facts_repository';
 import * as testappClient from './testapp_client';
+
+type AttributesRepository = RecordsRepository;
 
 const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
