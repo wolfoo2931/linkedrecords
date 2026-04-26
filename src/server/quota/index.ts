@@ -9,7 +9,7 @@ import PaymentProvider from '../payment_provider';
 import AttributeStoragePsqlWithHistory from '../../records/record_storage/psql_with_history';
 import AttributeStoragePsql from '../../records/record_storage/psql';
 import AttributeStorageS3 from '../../records/record_storage/s3';
-import IsAttributeStorage from '../../records/abstract/is_record_storage';
+import IsRecordStorage from '../../records/abstract/is_record_storage';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
@@ -312,7 +312,7 @@ export default class Quota {
       this.logger.warn(`accountable nodes for accounteeId ${this.nodeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
-    const storageDrivers: IsAttributeStorage[] = [];
+    const storageDrivers: IsRecordStorage[] = [];
 
     if (process.env['QUOTA_COUNT_KV_RECORDS'] === 'true' || process.env['QUOTA_COUNT_KV_ATTRIBUTES'] === 'true') {
       storageDrivers.push(new AttributeStoragePsql(logger, 'kv'));
@@ -329,7 +329,7 @@ export default class Quota {
     }
 
     const sizes = await Promise.all(storageDrivers.map(
-      (s) => s.getSizeInBytesForAllAttributes(accountableNodes),
+      (s) => s.getSizeInBytesForAllRecords(accountableNodes),
     ));
 
     return sizes.reduce((acc, curr) => acc + curr, 0);

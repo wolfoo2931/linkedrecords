@@ -27,13 +27,13 @@ describe('Long Text Attributes', () => {
       const [clientB] = await createClient();
 
       const content = `<p>${uuid()}</p>`;
-      const attribute = await clientA.Attribute.create('longText', content);
+      const attribute = await clientA.Record.create('longText', content);
 
       expect(attribute.id).to.match(/^l-.{8}-.{4}-.{4}-.{4}-.{12}$/);
 
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeFromDB = await clientB.Attribute.find(attribute.id);
+      const attributeFromDB = await clientB.Record.find(attribute.id);
       expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
       const data = await attributeFromDB!.get();
@@ -46,11 +46,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>');
+      const attributeClientA = await clientA.Record.create('longText', '<p>text</p>');
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Record.find(attributeClientA.id);
 
       await attributeClientA.set('<p>texta</p>');
       await attributeClientA.set('<p>textab</p>');
@@ -77,11 +77,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>text</p>') as LongTextAttribute;
+      const attributeClientA = await clientA.Record.create('longText', '<p>text</p>') as LongTextAttribute;
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id) as LongTextAttribute;
+      const attributeClientB = await clientB.Record.find(attributeClientA.id) as LongTextAttribute;
 
       applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromDiff('<p>text</p>', '<p>texta</p>'),
@@ -110,11 +110,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>') as LongTextAttribute;
+      const attributeClientA = await clientA.Record.create('longText', '<p>initial</p>') as LongTextAttribute;
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id) as LongTextAttribute;
+      const attributeClientB = await clientB.Record.find(attributeClientA.id) as LongTextAttribute;
 
       applyChangesOnAttribute(attributeClientA, [
         LongTextChange.fromString('-e+f|<p>initialo</p>|<p>initial</p>'),
@@ -138,11 +138,11 @@ describe('Long Text Attributes', () => {
       const [clientA] = await createClient();
       const [clientB, clientBEventStream] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('longText', '<p>initial</p>') as LongTextAttribute;
+      const attributeClientA = await clientA.Record.create('longText', '<p>initial</p>') as LongTextAttribute;
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id) as LongTextAttribute;
+      const attributeClientB = await clientB.Record.find(attributeClientA.id) as LongTextAttribute;
 
       clientBEventStream.pauseNotification();
 
@@ -173,10 +173,10 @@ describe('Long Text Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.createLongText('');
+      const attributeClientA = await clientA.Record.createLongText('');
 
       assert(attributeClientA.id);
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Record.find(attributeClientA.id);
 
       assert(attributeClientB);
 

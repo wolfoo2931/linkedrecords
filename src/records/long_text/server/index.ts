@@ -45,7 +45,7 @@ LongTextChange
   async create(value: string) : Promise<{ id: string }> {
     await this.createAccountableFact();
 
-    return this.storage.createAttribute(this.id, this.actorId, value);
+    return this.storage.createRecord(this.id, this.actorId, value);
   }
 
   async get(args?: { inAuthorizedContext?: boolean }) : Promise<LoadResult<string>> {
@@ -54,7 +54,7 @@ LongTextChange
 
   async set(value: string) : Promise<{ id: string }> {
     return queue
-      .do(this.id, () => this.storage.insertAttributeSnapshot(this.id, this.actorId, value));
+      .do(this.id, () => this.storage.insertRecordSnapshot(this.id, this.actorId, value));
   }
 
   async change(
@@ -95,7 +95,7 @@ LongTextChange
     args?: { inAuthorizedContext?: boolean },
   ) : Promise<LoadResult<string>> {
     const queryOptions = { maxChangeId: changeId, inAuthorizedContext: args?.inAuthorizedContext };
-    const result = await this.storage.getAttributeLatestSnapshot(
+    const result = await this.storage.getRecordLatestSnapshot(
       this.id,
       this.actorId,
       queryOptions,
@@ -107,7 +107,7 @@ LongTextChange
 
     // TODO: query options should be something
     // like { minChangeId: result.changeId, maxChangeId: changeId }
-    const changes = await this.storage.getAttributeChanges(
+    const changes = await this.storage.getRecordChanges(
       this.id,
       this.actorId,
       {
@@ -128,7 +128,7 @@ LongTextChange
     });
 
     if (changes.length >= 100) {
-      await this.storage.insertAttributeSnapshot(
+      await this.storage.insertRecordSnapshot(
         this.id,
         this.actorId,
         result.value,
@@ -140,7 +140,7 @@ LongTextChange
   }
 
   private async getChangeSince(changeId: string) : Promise<LongTextChange | null> {
-    const changes = await this.storage.getAttributeChanges(
+    const changes = await this.storage.getRecordChanges(
       this.id,
       this.actorId,
       { minChangeId: changeId },
@@ -202,7 +202,7 @@ LongTextChange
 
     // TODO: we do not know yet for sure if this changeset will be applicable
     // to the already inserted changesets.
-    const insertResult = await this.storage.insertAttributeChange(
+    const insertResult = await this.storage.insertRecordChange(
       this.id,
       this.actorId,
       transformedClientChange,

@@ -1,25 +1,25 @@
 import { Readable } from 'stream';
-import { AttributeValue } from '../record_storage/types';
+import { RecordValue } from '../record_storage/types';
 
-export default interface IsAttributeStorage {
-  createAttributeWithoutFactsCheck(
-    attributeId: string,
+export default interface IsRecordStorage {
+  createRecordWithoutFactsCheck(
+    recordId: string,
     actorId: string,
-    value: AttributeValue,
+    value: RecordValue,
   ) : Promise<{ id: string }>;
 
-  createAttribute(
-    attributeId: string,
+  createRecord(
+    recordId: string,
     actorId: string,
-    value: AttributeValue,
+    value: RecordValue,
   ) : Promise<{ id: string }>;
 
-  createAllAttributes(
-    attr: { attributeId: string, actorId: string, value: AttributeValue }[]
+  createAllRecords(
+    attr: { recordId: string, actorId: string, value: RecordValue }[]
   ) : Promise<{ id: string }[]>;
 
-  getAttributeLatestSnapshot(
-    attributeId: string,
+  getRecordLatestSnapshot(
+    recordId: string,
     actorId: string,
     criteria: { maxChangeId?: string, inAuthorizedContext?: boolean }
   ) : Promise<{
@@ -30,8 +30,8 @@ export default interface IsAttributeStorage {
     updatedAt: number
   }>;
 
-  getAttributeLatestSnapshotAsReadable?(
-    attributeId: string,
+  getRecordLatestSnapshotAsReadable?(
+    recordId: string,
     actorId: string,
     criteria: { maxChangeId?: string, inAuthorizedContext?: boolean }
   ) : Promise<{
@@ -42,26 +42,29 @@ export default interface IsAttributeStorage {
     updatedAt: number
   }>;
 
-  getAttributeChanges(
-    attributeId: string,
+  getRecordChanges(
+    recordId: string,
     actorId: string,
     criteria: { inAuthorizedContext?: boolean, minChangeId?: string, maxChangeId?: string }
   ) : Promise<Array<any>>;
 
-  insertAttributeChange(
-    attributeId: string,
+  insertRecordChange(
+    recordId: string,
     actorId: string,
     change: string
   ) : Promise<{ id: string, updatedAt: Date }>;
 
-  insertAttributeSnapshot(
-    attributeId: string,
+  insertRecordSnapshot(
+    recordId: string,
     actorId: string,
-    value: AttributeValue,
+    value: RecordValue,
     changeId?: string,
   ) : Promise<{ id: string, updatedAt: Date }>;
 
-  getSizeInBytesForAllAttributes(
+  getSizeInBytesForAllRecords(
     nodes: string[],
   ): Promise<number>;
 }
+
+// backwards-compat alias
+export type IsAttributeStorage = IsRecordStorage;

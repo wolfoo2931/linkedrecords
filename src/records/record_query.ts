@@ -12,21 +12,25 @@ export type FactQueryWithOptionalSubjectPlaceholder =
   [string, string, typeof AbstractRecordClient<any, any>] |
   [string, typeof AbstractRecordClient<any, any>];
 
-export type AttributeQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
+export type RecordQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
 
-export type CompoundAttributeQuery = {
-  [key: string]: AttributeQuery
+export type CompoundRecordQuery = {
+  [key: string]: RecordQuery
 };
+
+// backwards-compat aliases
+export type AttributeQuery = RecordQuery;
+export type CompoundAttributeQuery = CompoundRecordQuery;
 
 /**
  * Checks if a value is an AbstractRecordClient subclass.
  */
-function isAttributeClientClass(value: unknown): boolean {
+function isRecordClientClass(value: unknown): boolean {
   if (typeof value !== 'function') {
     return false;
   }
 
-  // Check if it's one of the known attribute client classes or extends AbstractRecordClient
+  // Check if it's one of the known record client classes or extends AbstractRecordClient
   let proto = value;
   while (proto && proto !== Function.prototype) {
     if (proto === AbstractRecordClient || proto.name === AbstractRecordClient.name) {
@@ -61,7 +65,7 @@ function isValidFactQueryTuple(value: unknown): boolean {
 
   // Handle [string, AbstractRecordClient] case (2 elements)
   if (value.length === 2) {
-    return typeof value[1] === 'string' || isAttributeClientClass(value[1]);
+    return typeof value[1] === 'string' || isRecordClientClass(value[1]);
   }
 
   // Handle 3-element tuples
@@ -73,7 +77,7 @@ function isValidFactQueryTuple(value: unknown): boolean {
   // Third element can be string, undefined, or AbstractRecordClient subclass
   if (value[2] !== undefined
       && typeof value[2] !== 'string'
-      && !isAttributeClientClass(value[2])) {
+      && !isRecordClientClass(value[2])) {
     return false;
   }
 
@@ -81,11 +85,11 @@ function isValidFactQueryTuple(value: unknown): boolean {
 }
 
 /**
- * Validates if a value is a valid AttributeQuery.
- * An AttributeQuery is either a string or an array of
+ * Validates if a value is a valid RecordQuery.
+ * A RecordQuery is either a string or an array of
  * FactQueryWithOptionalSubjectPlaceholder tuples.
  */
-export function isValidAttributeQuery(value: unknown): value is AttributeQuery {
+export function isValidRecordQuery(value: unknown): value is RecordQuery {
   if (typeof value === 'string') {
     return true;
   }
@@ -97,11 +101,14 @@ export function isValidAttributeQuery(value: unknown): value is AttributeQuery {
   return false;
 }
 
+// backwards-compat alias
+export const isValidAttributeQuery = isValidRecordQuery;
+
 /**
- * Validates if a JSON object is a valid CompoundAttributeQuery.
- * A CompoundAttributeQuery is an object where each value is a valid AttributeQuery.
+ * Validates if a JSON object is a valid CompoundRecordQuery.
+ * A CompoundRecordQuery is an object where each value is a valid RecordQuery.
  */
-export function isValidCompoundAttributeQuery(value: unknown): value is CompoundAttributeQuery {
+export function isValidCompoundRecordQuery(value: unknown): value is CompoundRecordQuery {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return false;
   }
@@ -116,18 +123,24 @@ export function isValidCompoundAttributeQuery(value: unknown): value is Compound
     if (typeof key !== 'string') {
       return false;
     }
-    return isValidAttributeQuery(val);
+    return isValidRecordQuery(val);
   });
 }
 
+// backwards-compat alias
+export const isValidCompoundAttributeQuery = isValidCompoundRecordQuery;
+
 type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
-export type ResolveToAttributesResult =
+export type ResolveToRecordsResult =
   undefined |
   AbstractRecordClient<any, any> |
   AbstractRecordClient<any, any>[] |
   { [key: string]: AbstractRecordClient<any, any> | AbstractRecordClient<any, any>[] };
 
-type Attribute = typeof LongTextRecord | typeof KeyValueRecord | typeof BlobRecord;
+// backwards-compat alias
+export type ResolveToAttributesResult = ResolveToRecordsResult;
+
+type RecordClass = typeof LongTextRecord | typeof KeyValueRecord | typeof BlobRecord;
 
 function factQueryWithOptionalSubjectPlaceholderToFactQuery(
   x: [string, string, string?],
@@ -174,11 +187,11 @@ export default class QueryExecutor {
     this.logger = logger;
   }
 
-  async resolveToAttributes(
-    query: AttributeQuery | CompoundAttributeQuery,
+  async resolveToRecords(
+    query: RecordQuery | CompoundRecordQuery,
     clientId,
     actorId,
-  ): Promise<ResolveToAttributesResult> {
+  ): Promise<ResolveToRecordsResult> {
     // undefined | string | string[] | { [key: string]: string | string[] };
     let resultWithIds = await this.resolveToIds(query, actorId);
 
@@ -210,7 +223,7 @@ export default class QueryExecutor {
       });
     }
 
-    const attributes = await this.loadAttributes(
+    const records = await this.loadRecords(
       flatIds,
       clientId,
       actorId,
@@ -218,26 +231,26 @@ export default class QueryExecutor {
     );
 
     if (typeof resultWithIds === 'string') {
-      return attributes[resultWithIds];
+      return records[resultWithIds];
     }
 
     if (Array.isArray(resultWithIds)) {
       return resultWithIds
-        .map((id) => attributes[id])
+        .map((id) => records[id])
         .filter((x) => x);
     }
 
-    const resultWithAttr: ResolveToAttributesResult = {};
+    const resultWithAttr: ResolveToRecordsResult = {};
     Object.keys(resultWithIds).forEach((group) => {
       if (!resultWithIds) {
         return;
       }
 
       if (typeof resultWithIds[group] === 'string') {
-        resultWithAttr[group] = attributes[resultWithIds[group]];
+        resultWithAttr[group] = records[resultWithIds[group]];
       } else if (Array.isArray(resultWithIds[group])) {
         resultWithAttr[group] = resultWithIds[group]
-          .map((id) => attributes[id])
+          .map((id) => records[id])
           .filter((x) => x);
       }
     });
@@ -245,8 +258,17 @@ export default class QueryExecutor {
     return resultWithAttr;
   }
 
+  // backwards-compat alias
+  async resolveToAttributes(
+    query: RecordQuery | CompoundRecordQuery,
+    clientId,
+    actorId,
+  ): Promise<ResolveToRecordsResult> {
+    return this.resolveToRecords(query, clientId, actorId);
+  }
+
   async resolveToIds(
-    query: AttributeQuery | CompoundAttributeQuery,
+    query: RecordQuery | CompoundRecordQuery,
     userid: string,
   ): Promise<ResolveToIdsResult> {
     if (!userid) {
@@ -265,7 +287,7 @@ export default class QueryExecutor {
       return undefined;
     }
 
-    if (!isValidCompoundAttributeQuery(query) && !isValidAttributeQuery(query)) {
+    if (!isValidCompoundRecordQuery(query) && !isValidRecordQuery(query)) {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
@@ -330,17 +352,17 @@ export default class QueryExecutor {
     return matchedIds;
   }
 
-  async loadAttributes(
-    attributeIDs: string[],
+  async loadRecords(
+    recordIDs: string[],
     clientId: string,
     actorId: string,
     args?: { inAuthorizedContext: boolean },
   ): Promise<Record<string, any>> {
-    const attributesByType = QueryExecutor.groupAttributeIDsByClass(attributeIDs);
-    const attributes = {};
+    const recordsByType = QueryExecutor.groupRecordIDsByClass(recordIDs);
+    const records = {};
     const promises: Promise<any>[] = [];
 
-    attributesByType.forEach((ids, c) => {
+    recordsByType.forEach((ids, c) => {
       const promise = c.loadAll(
         ids,
         clientId,
@@ -349,7 +371,7 @@ export default class QueryExecutor {
         args,
       ).then((attrs) => {
         attrs.forEach((attr) => {
-          attributes[attr.id] = attr;
+          records[attr.id] = attr;
         });
       });
 
@@ -358,17 +380,27 @@ export default class QueryExecutor {
 
     await Promise.all(promises);
 
-    return attributes;
+    return records;
   }
 
-  async resolveCompoundQueryToIds(query: CompoundAttributeQuery, userid: string): Promise<({
+  // backwards-compat alias
+  async loadAttributes(
+    recordIDs: string[],
+    clientId: string,
+    actorId: string,
+    args?: { inAuthorizedContext: boolean },
+  ): Promise<Record<string, any>> {
+    return this.loadRecords(recordIDs, clientId, actorId, args);
+  }
+
+  async resolveCompoundQueryToIds(query: CompoundRecordQuery, userid: string): Promise<({
     [key: string]: string | string[]
   })> {
     if (!userid) {
       throw new Error('resolveCompoundQueryToIds needs to receive a valid userid!');
     }
 
-    if (!isValidCompoundAttributeQuery(query)) {
+    if (!isValidCompoundRecordQuery(query)) {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
@@ -399,35 +431,37 @@ export default class QueryExecutor {
 
   static getAttributeClassByAttributeId(
     id: string,
-  ) : Attribute | undefined {
-    const attributeTypes = [LongTextRecord, KeyValueRecord, BlobRecord];
-    const [attributeTypePrefix] = id.split('-');
-    return attributeTypes.find((c) => c.getDataTypePrefix() === attributeTypePrefix);
+  ) : RecordClass | undefined {
+    const recordTypes = [LongTextRecord, KeyValueRecord, BlobRecord];
+    const [recordTypePrefix] = id.split('-');
+    return recordTypes.find((c) => c.getDataTypePrefix() === recordTypePrefix);
   }
 
-  static groupAttributeIDsByClass(attributeIDs: string[]): Map<Attribute, string[]> {
-    const attributesByType = new Map<Attribute, string[]>();
+  static groupRecordIDsByClass(recordIDs: string[]): Map<RecordClass, string[]> {
+    const recordsByType = new Map<RecordClass, string[]>();
 
-    attributeIDs.forEach((id) => {
-      const AttributeClass = QueryExecutor.getAttributeClassByAttributeId(id);
-      if (!AttributeClass) {
+    recordIDs.forEach((id) => {
+      const RecordClassItem = QueryExecutor.getAttributeClassByAttributeId(id);
+      if (!RecordClassItem) {
         return;
       }
 
-      if (!attributesByType.get(AttributeClass)) {
-        attributesByType.set(AttributeClass, []);
+      if (!recordsByType.get(RecordClassItem)) {
+        recordsByType.set(RecordClassItem, []);
       }
 
-      const ids = attributesByType.get(AttributeClass);
+      const ids = recordsByType.get(RecordClassItem);
 
       if (ids) {
         ids.push(id);
       }
     });
 
-    return attributesByType;
+    return recordsByType;
+  }
+
+  // backwards-compat alias
+  static groupAttributeIDsByClass(attributeIDs: string[]): Map<RecordClass, string[]> {
+    return QueryExecutor.groupRecordIDsByClass(attributeIDs);
   }
 }
-
-export type RecordQuery = AttributeQuery;
-export type CompoundRecordQuery = CompoundAttributeQuery;

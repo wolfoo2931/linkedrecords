@@ -46,7 +46,7 @@ export default abstract class AbstractRecordClient <Type, TypedChange extends Is
 
     // because the same user can be logged on two browsers/laptops, we need
     // a clientId and an actorId. Every attribute needs to have its own clientId.
-    this.clientId = linkedRecords.getAttributeClientId();
+    this.clientId = linkedRecords.getRecordClientId();
 
     if (linkedRecords.actorId) {
       this.actorId = linkedRecords.actorId;

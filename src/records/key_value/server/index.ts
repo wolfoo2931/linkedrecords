@@ -39,8 +39,8 @@ KeyValueChange
 
     const storage = new AttributeStorage(attr[0][0].logger, 'kv');
 
-    const result = await storage.createAllAttributes(attr.map((a) => ({
-      attributeId: a[0].id,
+    const result = await storage.createAllRecords(attr.map((a) => ({
+      recordId: a[0].id,
       actorId: a[0].actorId,
       value: a[1],
     })));
@@ -60,7 +60,7 @@ KeyValueChange
     }
 
     const storage = new AttributeStorage(logger, 'kv');
-    const snapshots = await storage.getAttributeLatestSnapshots(attributeIDs, actorId, args);
+    const snapshots = await storage.getRecordLatestSnapshots(attributeIDs, actorId, args);
 
     return snapshots.map((snapshot) => ({
       id: snapshot.id,
@@ -95,13 +95,13 @@ KeyValueChange
 
   async create(value: object) : Promise<{ id: string }> {
     await this.createAccountableFact();
-    return this.storage.createAttribute(this.id, this.actorId, JSON.stringify(value));
+    return this.storage.createRecord(this.id, this.actorId, JSON.stringify(value));
   }
 
   async get(args?: { inAuthorizedContext?: boolean }) : Promise<LoadResult<object>> {
     const queryOptions = { maxChangeId: '2147483647', inAuthorizedContext: args?.inAuthorizedContext };
 
-    const result = await this.storage.getAttributeLatestSnapshot(
+    const result = await this.storage.getRecordLatestSnapshot(
       this.id,
       this.actorId,
       queryOptions,
@@ -118,7 +118,7 @@ KeyValueChange
   }
 
   async set(value: object) : Promise<{ id: string, updatedAt: Date }> {
-    return this.storage.insertAttributeSnapshot(this.id, this.actorId, JSON.stringify(value));
+    return this.storage.insertRecordSnapshot(this.id, this.actorId, JSON.stringify(value));
   }
 
   async change(

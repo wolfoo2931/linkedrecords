@@ -160,9 +160,14 @@ export default class LinkedRecords {
     }
   }
 
-  public getAttributeClientId(): string {
+  public getRecordClientId(): string {
     this.attributeClientIdSuffix += 1;
     return `${this.clientId}-${this.attributeClientIdSuffix}`;
+  }
+
+  // backwards-compat alias
+  public getAttributeClientId(): string {
+    return this.getRecordClientId();
   }
 
   public async getClientServerBus(): Promise<ClientServerBus> {

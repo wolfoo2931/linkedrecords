@@ -10,8 +10,8 @@ import Session from '../helpers/session';
 import {
   expectFactToExists,
   expectFactToNotExists,
-  expectNotToBeAbleToReadOrWriteAttribute,
-  expectNotToBeAbleToWriteAttribute,
+  expectNotToBeAbleToReadOrWriteRecord,
+  expectNotToBeAbleToWriteRecord,
   expectNotToBeAbleToUseAsSubject,
   expectNotToBeAbleToUseAsObject,
 } from '../helpers/lr_expects';
@@ -33,7 +33,7 @@ async function filterAutoCreatedFacts(facts) {
 }
 
 const getTridents = async (c, type = 'Trident') => {
-  const { tridents } = await c.Attribute.findAll({
+  const { tridents } = await c.Record.findAll({
     tridents: [
       ['$it', '$hasDataType', 'KeyValueAttribute'],
       ['isA', type],
@@ -44,7 +44,7 @@ const getTridents = async (c, type = 'Trident') => {
 };
 
 const getTeams = async (c) => {
-  const { teams } = await c.Attribute.findAll({
+  const { teams } = await c.Record.findAll({
     teams: [
       ['$it', '$hasDataType', 'KeyValueAttribute'],
       ['isA', 'Team'],
@@ -55,12 +55,12 @@ const getTeams = async (c) => {
 };
 
 // TODO: replace with helper functions from lr_expects
-const canReadTheAttribute = async (client, attributeId) => {
-  const { attr1 } = await client.Attribute.findAll({
+const canReadRecord = async (client, attributeId) => {
+  const { attr1 } = await client.Record.findAll({
     attr1: attributeId,
   }, true);
 
-  const attr2 = await client.Attribute.find(attributeId, true);
+  const attr2 = await client.Record.find(attributeId, true);
 
   if (attr1 && !attr2) {
     throw new Error('could read the attribute with findAll but not with find (or the other way around)');
@@ -77,10 +77,10 @@ describe('authorization', () => {
   it('does not allow to read attributes create by other users', async () => {
     const [client1, client2] = await Session.getTwoSessions();
 
-    const attribute = await client1.Attribute.create('keyValue', { foo: 'bar' });
-    const authorizedReadAttribute = await client1.Attribute.find(await attribute.getId());
+    const attribute = await client1.Record.create('keyValue', { foo: 'bar' });
+    const authorizedReadAttribute = await client1.Record.find(await attribute.getId());
 
-    const unauthorizedReadAttribute = await client2.Attribute.find(await attribute.getId());
+    const unauthorizedReadAttribute = await client2.Record.find(await attribute.getId());
 
     expect(await unauthorizedReadAttribute).to.eql(undefined);
 
@@ -93,9 +93,9 @@ describe('authorization', () => {
 
     expect(unauthorizedReadAttribute).to.eql(undefined);
 
-    const authorizedCompound = await client1.Attribute.findAll({ doc: await attribute.getId() });
+    const authorizedCompound = await client1.Record.findAll({ doc: await attribute.getId() });
 
-    const unauthorizedCompound = await client2.Attribute.findAll({
+    const unauthorizedCompound = await client2.Record.findAll({
       doc: await attribute.getId(),
     });
 
@@ -117,19 +117,19 @@ describe('authorization', () => {
       ['Book', '$isATermFor', 'a book'],
     ]);
 
-    await client1.Attribute.create('keyValue', { name: 'bookC1a' }, [
+    await client1.Record.create('keyValue', { name: 'bookC1a' }, [
       ['isA', 'Book'],
     ]);
 
-    await client1.Attribute.create('keyValue', { name: 'bookC1b' }, [
+    await client1.Record.create('keyValue', { name: 'bookC1b' }, [
       ['isA', 'Book'],
     ]);
 
-    await client2.Attribute.create('keyValue', { name: 'bookC2' }, [
+    await client2.Record.create('keyValue', { name: 'bookC2' }, [
       ['isA', 'Book'],
     ]);
 
-    const { books1 } = await client1.Attribute.findAll({
+    const { books1 } = await client1.Record.findAll({
       books1: [
         ['$it', 'isA', 'Book'],
       ],
@@ -137,7 +137,7 @@ describe('authorization', () => {
 
     expect(books1.length).to.equal(2);
 
-    const { books2 } = await client2.Attribute.findAll({
+    const { books2 } = await client2.Record.findAll({
       books2: [
         ['$it', 'isA', 'Book'],
       ],
@@ -159,25 +159,25 @@ describe('authorization', () => {
       ['Book', '$isATermFor', 'a book'],
     ]);
 
-    const atrBook1 = await client1.Attribute.create('keyValue', { name: 'bookC1a' }, [
+    const atrBook1 = await client1.Record.create('keyValue', { name: 'bookC1a' }, [
       ['isA', 'Book'],
     ]);
 
-    await client1.Attribute.create('keyValue', { name: 'bookC1b' }, [
+    await client1.Record.create('keyValue', { name: 'bookC1b' }, [
       ['isA', 'Book'],
     ]);
 
-    await client2.Attribute.create('keyValue', { name: 'bookC2' }, [
+    await client2.Record.create('keyValue', { name: 'bookC2' }, [
       ['isA', 'Book'],
     ]);
 
-    const { book1 } = await client1.Attribute.findAll({
+    const { book1 } = await client1.Record.findAll({
       book1: await atrBook1.getId(),
     });
 
     expect(await book1.getValue()).to.deep.equal({ name: 'bookC1a' });
 
-    const { book1UnAuth } = await client2.Attribute.findAll({
+    const { book1UnAuth } = await client2.Record.findAll({
       book1UnAuth: await atrBook1.getId(),
     });
 
@@ -191,16 +191,16 @@ describe('authorization', () => {
       ['Book', '$isATermFor', 'a book'],
     ]);
 
-    const bookOfC1 = await client1.Attribute.create('keyValue', { name: 'bookBelongingToClient1' }, [
+    const bookOfC1 = await client1.Record.create('keyValue', { name: 'bookBelongingToClient1' }, [
       ['isA', 'Book'],
     ]);
 
-    await client2.Attribute.create('keyValue', { name: 'bookC1a' }, [
+    await client2.Record.create('keyValue', { name: 'bookC1a' }, [
       ['isA', 'Book'],
       ['belongsTo', await bookOfC1.getId()],
     ]);
 
-    const { unauthorizedMatches } = await client1.Attribute.findAll({
+    const { unauthorizedMatches } = await client1.Record.findAll({
       unauthorizedMatches: [
         ['belongsTo', await bookOfC1.getId()],
       ],
@@ -222,23 +222,23 @@ describe('authorization', () => {
       ['Book', '$isATermFor', 'a book'],
     ]);
 
-    const atrBook1 = await client1.Attribute.create('keyValue', { name: 'bookC1a' }, [
+    const atrBook1 = await client1.Record.create('keyValue', { name: 'bookC1a' }, [
       ['isA', 'Book'],
     ]);
 
-    await client1.Attribute.create('keyValue', { name: 'bookC1b' }, [
+    await client1.Record.create('keyValue', { name: 'bookC1b' }, [
       ['isA', 'Book'],
     ]);
 
-    await client2.Attribute.create('keyValue', { name: 'bookC2' }, [
+    await client2.Record.create('keyValue', { name: 'bookC2' }, [
       ['isA', 'Book'],
     ]);
 
-    const book1 = await client1.Attribute.find(await atrBook1.getId());
+    const book1 = await client1.Record.find(await atrBook1.getId());
 
     expect(await book1!.getValue()).to.deep.equal({ name: 'bookC1a' });
 
-    const book1UnAuth = await client2.Attribute.find(await atrBook1.getId());
+    const book1UnAuth = await client2.Record.find(await atrBook1.getId());
 
     expect(book1UnAuth).to.equal(undefined);
   });
@@ -308,11 +308,11 @@ describe('authorization', () => {
   it('does not allow to subscribe for foreign attributes changes', async () => {
     const [client1, client2] = await Session.getTwoSessions();
 
-    const ofInterest = await client1.Attribute.create('keyValue', { name: 'bookC1a' });
+    const ofInterest = await client1.Record.create('keyValue', { name: 'bookC1a' });
     const ofInterestID = await ofInterest.getId();
     const ofInterestServerURL = await ofInterest.getServerURL();
     const ofInterestClientID = await ofInterest.getClientId();
-    const attr = await client2.Attribute.create('keyValue', { name: 'XXXX' });
+    const attr = await client2.Record.create('keyValue', { name: 'XXXX' });
     const url = `${ofInterestServerURL}attributes/${ofInterestID}/changes?clientId=${ofInterestClientID}`;
 
     client2.do((lr, remoteIdOfMyAttr, _ofInterestID, _url) => new Promise<void>((resolve) => {
@@ -347,17 +347,17 @@ describe('authorization', () => {
   it('is allowed to create facts which refer to the authenticated users', async () => {
     const [client, otherClient] = await Session.getTwoSessions();
 
-    await client.Attribute.create('keyValue', { name: 'some data' }, [
+    await client.Record.create('keyValue', { name: 'some data' }, [
       ['belongsTo', await client.getActorId()],
     ]);
 
-    const { myRecords } = await client.Attribute.findAll({
+    const { myRecords } = await client.Record.findAll({
       myRecords: [
         ['belongsTo', await client.getActorId()],
       ],
     });
 
-    const { somebodyElsesRecords } = await otherClient.Attribute.findAll({
+    const { somebodyElsesRecords } = await otherClient.Record.findAll({
       somebodyElsesRecords: [
         ['belongsTo', await client.getActorId()],
       ],
@@ -411,15 +411,15 @@ describe('authorization', () => {
       ['Tree', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-    const mammalTeam = await aquaman.Attribute.createKeyValue({ name: 'mammal' }, [['isA', 'Team']]);
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const mammalTeam = await aquaman.Record.createKeyValue({ name: 'mammal' }, [['isA', 'Team']]);
 
-    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
 
-    await aquaman.Attribute.createKeyValue({ name: ' Eywa' }, [
+    await aquaman.Record.createKeyValue({ name: ' Eywa' }, [
       ['isA', 'Tree'],
       [mammalTeam.id!, '$canAccess', '$it'],
     ]);
@@ -479,9 +479,9 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -511,9 +511,9 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -536,9 +536,9 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -565,10 +565,10 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-    const fishTeam2 = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const fishTeam2 = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-    const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -694,8 +694,8 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-    const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -750,8 +750,8 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -804,8 +804,8 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-    const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+    const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       [fishTeam.id!, '$canAccess', '$it'],
     ]);
@@ -819,9 +819,9 @@ describe('authorization', () => {
     expect((await getTeams(aquaman)).length).to.eq(1);
     expect((await getTridents(aquaman)).length).to.eq(1);
 
-    const aquamansResult = await aquaman.Attribute.find(trident.id!);
-    const nemosResult = await nemo.Attribute.find(trident.id!);
-    const mannisResult = await manni.Attribute.find(trident.id!);
+    const aquamansResult = await aquaman.Record.find(trident.id!);
+    const nemosResult = await nemo.Record.find(trident.id!);
+    const mannisResult = await manni.Record.find(trident.id!);
 
     expect(await aquamansResult!.getValue()).to.eql({ name: 'Trident of Atlan' });
     expect(await nemosResult!.getValue()).to.eql({ name: 'Trident of Atlan' });
@@ -835,12 +835,12 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+    await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
       ['isA', 'Trident'],
       ['$isMagicRelictIn', 'Team'],
     ]);
 
-    const { tridents } = await aquaman.Attribute.findAll({
+    const { tridents } = await aquaman.Record.findAll({
       tridents: [
         ['$isMagicRelictIn', 'Team'],
       ],
@@ -861,8 +861,8 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
         [fishTeam.id!, '$canRefine', '$it'],
@@ -894,8 +894,8 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
         [fishTeam.id!, '$canRefine', '$it'],
@@ -927,43 +927,43 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
 
-      const atlantis = await nemo.Attribute.createKeyValue({ name: 'The City' });
+      const atlantis = await nemo.Record.createKeyValue({ name: 'The City' });
 
       await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
-      const { homes } = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      const { homes } = await nemo.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(homes.length).to.eql(0);
 
       await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
 
-      const { homes2 } = await nemo.Attribute.findAll({ homes2: [['isHomeOf', trident.id!]] });
+      const { homes2 } = await nemo.Record.findAll({ homes2: [['isHomeOf', trident.id!]] });
       expect(homes2.length).to.eql(0);
 
       await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
 
-      let nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      let nemosHomeMatches = await nemo.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(nemosHomeMatches.homes.length).to.eql(1);
 
-      let amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      let amHomeMatches = await aquaman.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(amHomeMatches.homes.length).to.eql(0);
 
-      let mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      let mannisHomeMatches = await manni.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(mannisHomeMatches.homes.length).to.eql(0);
 
       await nemo.Fact.createAll([[atlantis.id, '$isMemberOf', fishTeam.id]]);
       await nemo.Fact.createAll([[fishTeam.id, '$canAccess', atlantis.id]]);
 
-      nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      nemosHomeMatches = await nemo.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(nemosHomeMatches.homes.length).to.eql(1);
-      amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      amHomeMatches = await aquaman.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(amHomeMatches.homes.length).to.eql(1);
-      mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      mannisHomeMatches = await manni.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(mannisHomeMatches.homes.length).to.eql(0);
     });
 
@@ -978,67 +978,67 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
 
-      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
-      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, manni);
+      await expectNotToBeAbleToReadOrWriteRecord(trident.id, nemo);
+      await expectNotToBeAbleToReadOrWriteRecord(trident.id, manni);
 
-      expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
-      expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
-      expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
+      expect(await canReadRecord(aquaman, trident.id)).to.eql(true);
+      expect(await canReadRecord(nemo, trident.id)).to.eql(false);
+      expect(await canReadRecord(manni, trident.id)).to.eql(false);
 
-      const atlantis = await nemo.Attribute.createKeyValue({ name: 'The City' });
+      const atlantis = await nemo.Record.createKeyValue({ name: 'The City' });
 
       await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
-      const { homes } = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      const { homes } = await nemo.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
 
       expect(homes.length).to.eql(0);
 
       await aquaman.Fact.createAll([[nemoId, '$isHostOf', fishTeam.id]]);
 
-      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, manni);
-      await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, aquaman);
-      await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, manni);
+      await expectNotToBeAbleToReadOrWriteRecord(trident.id, manni);
+      await expectNotToBeAbleToReadOrWriteRecord(atlantis.id, aquaman);
+      await expectNotToBeAbleToReadOrWriteRecord(atlantis.id, manni);
 
-      expect(await canReadTheAttribute(aquaman, trident.id)).to.eql(true);
-      expect(await canReadTheAttribute(nemo, trident.id)).to.eql(true);
-      expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
-      expect(await canReadTheAttribute(aquaman, atlantis.id)).to.eql(false);
-      expect(await canReadTheAttribute(nemo, atlantis.id)).to.eql(true);
-      expect(await canReadTheAttribute(manni, atlantis.id)).to.eql(false);
+      expect(await canReadRecord(aquaman, trident.id)).to.eql(true);
+      expect(await canReadRecord(nemo, trident.id)).to.eql(true);
+      expect(await canReadRecord(manni, trident.id)).to.eql(false);
+      expect(await canReadRecord(aquaman, atlantis.id)).to.eql(false);
+      expect(await canReadRecord(nemo, atlantis.id)).to.eql(true);
+      expect(await canReadRecord(manni, atlantis.id)).to.eql(false);
 
-      const { homes2 } = await nemo.Attribute.findAll({ homes2: [['isHomeOf', trident.id!]] });
+      const { homes2 } = await nemo.Record.findAll({ homes2: [['isHomeOf', trident.id!]] });
       expect(homes2.length).to.eql(0);
 
       await nemo.Fact.createAll([[atlantis.id, 'isHomeOf', trident.id]]);
 
-      let nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      let nemosHomeMatches = await nemo.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(nemosHomeMatches.homes.length).to.eql(1);
 
-      let amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      let amHomeMatches = await aquaman.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(amHomeMatches.homes.length).to.eql(0);
 
-      let mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      let mannisHomeMatches = await manni.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(mannisHomeMatches.homes.length).to.eql(0);
 
       await nemo.Fact.createAll([[fishTeam.id, '$canAccess', atlantis.id]]);
 
-      await expectNotToBeAbleToReadOrWriteAttribute(atlantis.id, manni);
+      await expectNotToBeAbleToReadOrWriteRecord(atlantis.id, manni);
 
-      expect(await canReadTheAttribute(aquaman, atlantis.id)).to.eql(true);
-      expect(await canReadTheAttribute(nemo, atlantis.id)).to.eql(true);
-      expect(await canReadTheAttribute(manni, atlantis.id)).to.eql(false);
+      expect(await canReadRecord(aquaman, atlantis.id)).to.eql(true);
+      expect(await canReadRecord(nemo, atlantis.id)).to.eql(true);
+      expect(await canReadRecord(manni, atlantis.id)).to.eql(false);
 
-      nemosHomeMatches = await nemo.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      nemosHomeMatches = await nemo.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(nemosHomeMatches.homes.length).to.eql(1);
-      amHomeMatches = await aquaman.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      amHomeMatches = await aquaman.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(amHomeMatches.homes.length).to.eql(1);
-      mannisHomeMatches = await manni.Attribute.findAll({ homes: [['isHomeOf', trident.id!]] });
+      mannisHomeMatches = await manni.Record.findAll({ homes: [['isHomeOf', trident.id!]] });
       expect(mannisHomeMatches.homes.length).to.eql(0);
     });
 
@@ -1054,30 +1054,30 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
 
-      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
-      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, manni);
+      await expectNotToBeAbleToReadOrWriteRecord(trident.id, nemo);
+      await expectNotToBeAbleToReadOrWriteRecord(trident.id, manni);
 
-      expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
-      expect(await canReadTheAttribute(manni, trident.id)).to.eql(false);
+      expect(await canReadRecord(nemo, trident.id)).to.eql(false);
+      expect(await canReadRecord(manni, trident.id)).to.eql(false);
 
       await aquaman.Fact.createAll([[fishTeam.id, '$canAccess', trident.id]]);
       await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
       await aquaman.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
 
-      const tridentByNemo = await nemo.Attribute.find(trident.id!);
+      const tridentByNemo = await nemo.Record.find(trident.id!);
       expect(await tridentByNemo?.getValue()).to.eql({ name: 'Trident of Atlan' });
 
       await tridentByNemo!.set({ name: 'Trident of Atlantis' });
       await browser.pause(200);
 
-      const tridentByManni = await manni.Attribute.find(trident.id!);
+      const tridentByManni = await manni.Record.find(trident.id!);
       expect(await tridentByManni?.getValue()).to.eql({ name: 'Trident of Atlantis' });
     });
 
@@ -1093,24 +1093,24 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      await expectNotToBeAbleToReadOrWriteAttribute(fishTeam.id, nemo);
-      await expectNotToBeAbleToReadOrWriteAttribute(fishTeam.id, manni);
+      await expectNotToBeAbleToReadOrWriteRecord(fishTeam.id, nemo);
+      await expectNotToBeAbleToReadOrWriteRecord(fishTeam.id, manni);
 
-      expect(await canReadTheAttribute(nemo, fishTeam.id)).to.eql(false);
-      expect(await canReadTheAttribute(manni, fishTeam.id)).to.eql(false);
+      expect(await canReadRecord(nemo, fishTeam.id)).to.eql(false);
+      expect(await canReadRecord(manni, fishTeam.id)).to.eql(false);
 
       await aquaman.Fact.createAll([[nemoId, '$isMemberOf', fishTeam.id]]);
       await aquaman.Fact.createAll([[manniId, '$isMemberOf', fishTeam.id]]);
 
-      const teamByNemo = await nemo.Attribute.find(fishTeam.id!);
+      const teamByNemo = await nemo.Record.find(fishTeam.id!);
       expect(await teamByNemo?.getValue()).to.eql({ name: 'fish' });
 
       await teamByNemo!.set({ name: 'fish & wales' });
       await browser.pause(200);
 
-      const teamByManni = await nemo.Attribute.find(fishTeam.id!);
+      const teamByManni = await nemo.Record.find(fishTeam.id!);
       expect(await teamByManni?.getValue()).to.eql({ name: 'fish & wales' });
     });
 
@@ -1124,8 +1124,8 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
@@ -1152,8 +1152,8 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
@@ -1189,13 +1189,13 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
 
-      await expectNotToBeAbleToReadOrWriteAttribute(trident.id, nemo);
+      await expectNotToBeAbleToReadOrWriteRecord(trident.id, nemo);
     });
 
     it('does NOT allow any NON member to modify the content of the attribute', async () => {
@@ -1207,13 +1207,13 @@ describe('authorization', () => {
         ['Weapon', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
 
-      await expectNotToBeAbleToWriteAttribute(trident.id, nemo);
+      await expectNotToBeAbleToWriteRecord(trident.id, nemo);
     });
 
     // AI generated
@@ -1228,7 +1228,7 @@ describe('authorization', () => {
       ]);
 
       // Create a todo attribute
-      const todo = await aquaman.Attribute.createKeyValue({ title: 'Buy groceries', completed: false }, [
+      const todo = await aquaman.Record.createKeyValue({ title: 'Buy groceries', completed: false }, [
         ['isA', 'Todo'],
       ]);
 
@@ -1270,10 +1270,10 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const fishTeam2 = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam2 = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
@@ -1297,13 +1297,13 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
       await aquaman.Fact.createAll([
         [nemoId, '$isMemberOf', fishTeam.id],
       ]);
 
-      const trident = await nemo.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await nemo.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
       ]);
 
@@ -1324,13 +1324,13 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await nemo.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await nemo.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
       await nemo.Fact.createAll([
         [aquamanId, '$isMemberOf', fishTeam.id],
       ]);
 
-      const trident = await nemo.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await nemo.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
       ]);
 
@@ -1351,9 +1351,9 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
@@ -1396,9 +1396,9 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
@@ -1443,9 +1443,9 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const mannisTeam = await manni.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const mannisTeam = await manni.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
       ]);
 
@@ -1494,10 +1494,10 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
-      const otherTeam = await manni.Attribute.createKeyValue({ name: 'other' }, [['isA', 'Team']]);
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+      const otherTeam = await manni.Record.createKeyValue({ name: 'other' }, [['isA', 'Team']]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
       ]);
@@ -1548,12 +1548,12 @@ describe('authorization', () => {
         ['Trident', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [
+      const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [
         ['isA', 'Team'],
         [nemoId, '$isMemberOf', '$it'],
       ]);
 
-      const trident = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+      const trident = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
         ['isA', 'Trident'],
         [fishTeam.id!, '$canAccess', '$it'],
         [fishTeam.id!, '$isAccountableFor', '$it'],
@@ -1574,7 +1574,7 @@ describe('authorization', () => {
         ['Team', '$isATermFor', 'a term for a concept'],
       ]);
 
-      const trident = await aquaman.Attribute.createKeyValue({});
+      const trident = await aquaman.Record.createKeyValue({});
 
       await aquaman.Fact.createAll([
         ['Team', '$isAccountableFor', trident.id!],
@@ -1586,7 +1586,7 @@ describe('authorization', () => {
     it('does not allow the user to transfer the accountability to random string', async () => {
       const aquaman = await Session.getOneSession();
 
-      const trident = await aquaman.Attribute.createKeyValue({});
+      const trident = await aquaman.Record.createKeyValue({});
 
       await aquaman.Fact.createAll([
         ['xxxx', '$isAccountableFor', trident.id!],
@@ -1598,7 +1598,7 @@ describe('authorization', () => {
     it('does not allow to create accountability facts where object = subject', async () => {
       const aquaman = await Session.getOneSession();
 
-      const trident = await aquaman.Attribute.createKeyValue({});
+      const trident = await aquaman.Record.createKeyValue({});
 
       await aquaman.Fact.createAll([
         [trident.id!, '$isAccountableFor', trident.id!],
@@ -1617,13 +1617,13 @@ describe('authorization', () => {
           ['Trident', '$isATermFor', 'a term for a concept'],
         ]);
 
-        const fishTeam = await aquaman.Attribute.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
+        const fishTeam = await aquaman.Record.createKeyValue({ name: 'fish' }, [['isA', 'Team']]);
 
         await aquaman.Fact.createAll([
           [nemoId, '$isMemberOf', fishTeam.id],
         ]);
 
-        const trident = await nemo.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        const trident = await nemo.Record.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
           [fishTeam.id!, '$canAccess', '$it'],
         ]);
@@ -1632,13 +1632,13 @@ describe('authorization', () => {
           [fishTeam.id, '$isAccountableFor', trident.id!],
         ]);
 
-        expect(await canReadTheAttribute(nemo, trident.id)).to.eql(true);
+        expect(await canReadRecord(nemo, trident.id)).to.eql(true);
 
         await aquaman.Fact.deleteAll([
           [nemoId, '$isMemberOf', fishTeam.id!],
         ]);
 
-        expect(await canReadTheAttribute(nemo, trident.id)).to.eql(false);
+        expect(await canReadRecord(nemo, trident.id)).to.eql(false);
       });
     });
   });
@@ -1650,7 +1650,7 @@ describe('authorization', () => {
       const nemoId = await aquaman.getUserIdByEmail(nemo.email);
       const manniId = await aquaman.getUserIdByEmail(manni.email);
 
-      const attr = await aquaman.Attribute.createKeyValue({});
+      const attr = await aquaman.Record.createKeyValue({});
 
       if (!nemo) {
         return;
@@ -1696,22 +1696,22 @@ describe('authorization', () => {
           ['Trident', '$isATermFor', 'a term for a concept'],
         ]);
 
-        const teamA = await aquaman.Attribute.createKeyValue({ name: 'teamA' }, [
+        const teamA = await aquaman.Record.createKeyValue({ name: 'teamA' }, [
           ['isA', 'Team'],
           [nemoId, '$isMemberOf', '$it'],
         ]);
 
-        const teamB = await aquaman.Attribute.createKeyValue({ name: 'teamB' }, [
+        const teamB = await aquaman.Record.createKeyValue({ name: 'teamB' }, [
           ['isA', 'Team'],
           [teamA.id!, '$isAccountableFor', '$it'],
         ]);
 
-        const tridentOfA = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        const tridentOfA = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
           [teamA.id!, '$isAccountableFor', '$it'],
         ]);
 
-        const tridentOfB = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        const tridentOfB = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
         ]);
 
@@ -1719,15 +1719,15 @@ describe('authorization', () => {
           [teamB.id, '$isAccountableFor', tridentOfB.id],
         ]);
 
-        await expectNotToBeAbleToReadOrWriteAttribute(tridentOfB.id, nemo);
-        expect(await canReadTheAttribute(nemo, tridentOfA.id)).to.eql(true);
-        expect(await canReadTheAttribute(nemo, tridentOfB.id)).to.eql(false);
+        await expectNotToBeAbleToReadOrWriteRecord(tridentOfB.id, nemo);
+        expect(await canReadRecord(nemo, tridentOfA.id)).to.eql(true);
+        expect(await canReadRecord(nemo, tridentOfB.id)).to.eql(false);
 
-        await expectNotToBeAbleToReadOrWriteAttribute(tridentOfB.id, aquaman);
+        await expectNotToBeAbleToReadOrWriteRecord(tridentOfB.id, aquaman);
         await aquaman.Fact.createAll([
           [aquamanId, '$isMemberOf', teamB.id],
         ]);
-        expect(await canReadTheAttribute(aquaman, tridentOfB.id)).to.eql(true);
+        expect(await canReadRecord(aquaman, tridentOfB.id)).to.eql(true);
       });
 
       it('does not inherit the memberships (member of team A cannot access the attributes) (accountable fact created WITH attribute creation)', async () => {
@@ -1741,30 +1741,30 @@ describe('authorization', () => {
           ['Trident', '$isATermFor', 'a term for a concept'],
         ]);
 
-        const teamA = await aquaman.Attribute.createKeyValue({ name: 'teamA' }, [
+        const teamA = await aquaman.Record.createKeyValue({ name: 'teamA' }, [
           ['isA', 'Team'],
           [nemoId, '$isMemberOf', '$it'],
         ]);
 
-        const teamB = await aquaman.Attribute.createKeyValue({ name: 'teamB' }, [
+        const teamB = await aquaman.Record.createKeyValue({ name: 'teamB' }, [
           ['isA', 'Team'],
           [teamA.id!, '$isAccountableFor', '$it'],
         ]);
 
-        const tridentOfA = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        const tridentOfA = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
           [teamA.id!, '$isAccountableFor', '$it'],
         ]);
 
-        const tridentOfB = await aquaman.Attribute.createKeyValue({ name: 'Trident of Atlan' }, [
+        const tridentOfB = await aquaman.Record.createKeyValue({ name: 'Trident of Atlan' }, [
           ['isA', 'Trident'],
           [aquamanId, '$isMemberOf', '$it'], // to not loose access when giving up accountability
           [teamB.id!, '$isAccountableFor', '$it'],
         ]);
 
-        await expectNotToBeAbleToReadOrWriteAttribute(tridentOfB.id, nemo);
-        expect(await canReadTheAttribute(nemo, tridentOfA.id)).to.eql(true);
-        expect(await canReadTheAttribute(nemo, tridentOfB.id)).to.eql(false);
+        await expectNotToBeAbleToReadOrWriteRecord(tridentOfB.id, nemo);
+        expect(await canReadRecord(nemo, tridentOfA.id)).to.eql(true);
+        expect(await canReadRecord(nemo, tridentOfB.id)).to.eql(false);
       });
 
       it('does not allow $isMemberOf chain to inherit access', async () => {
@@ -1772,9 +1772,9 @@ describe('authorization', () => {
         const randomUser = [aquaman, nemo][Math.floor(Math.random() * 2)];
         const nemoId = await randomUser!.getUserIdByEmail(nemo.email);
 
-        const attr1 = await aquaman.Attribute.createKeyValue({});
-        const attr2 = await aquaman.Attribute.createKeyValue({});
-        const attr3 = await aquaman.Attribute.createKeyValue({});
+        const attr1 = await aquaman.Record.createKeyValue({});
+        const attr2 = await aquaman.Record.createKeyValue({});
+        const attr3 = await aquaman.Record.createKeyValue({});
 
         await aquaman.Fact.createAll([
           [nemoId, '$isMemberOf', attr1.id],
@@ -1782,7 +1782,7 @@ describe('authorization', () => {
           [attr3.id, '$canAccess', attr1.id],
         ]);
 
-        await expectNotToBeAbleToReadOrWriteAttribute(attr3.id, nemo);
+        await expectNotToBeAbleToReadOrWriteRecord(attr3.id, nemo);
         await expectNotToBeAbleToUseAsSubject(attr3.id, nemo);
         await expectNotToBeAbleToUseAsObject(attr3.id, nemo);
       });
@@ -1807,17 +1807,17 @@ describe('authorization', () => {
       const createTeam = async (lrClient, name) => {
         const uId = await lrClient.getUserIdByEmail(lrClient.email);
 
-        const team = await lrClient.Attribute.createKeyValue({ name }, [
+        const team = await lrClient.Record.createKeyValue({ name }, [
           ['isA', 'Team'],
         ]);
 
-        const writerGroup = await lrClient.Attribute.createKeyValue({}, [
+        const writerGroup = await lrClient.Record.createKeyValue({}, [
           ['isWriterGroupOf', team.id],
           [uId, '$isMemberOf', '$it'],
           [team.id, '$isAccountableFor', '$it'],
         ]);
 
-        const ontologistGroup = await lrClient.Attribute.createKeyValue({}, [
+        const ontologistGroup = await lrClient.Record.createKeyValue({}, [
           ['isOntologistGroupOf', team.id],
           [uId, '$isMemberOf', '$it'],
           [team.id, '$isAccountableFor', '$it'],
@@ -1832,7 +1832,7 @@ describe('authorization', () => {
             [userId, '$isMemberOf', writerGroup.id],
           ]),
           getCategories: async (c) => {
-            const { categories } = await c.Attribute.findAll({
+            const { categories } = await c.Record.findAll({
               categories: [
                 ['isA', 'documentCategory'],
               ],
@@ -1844,7 +1844,7 @@ describe('authorization', () => {
             [userId, '$canRead', ontologistGroup.id],
             [userId, '$isMemberOf', writerGroup.id],
           ]),
-          createCategory: (c, cname, superCat) => c.Attribute.createKeyValue({ name: cname }, [
+          createCategory: (c, cname, superCat) => c.Record.createKeyValue({ name: cname }, [
             ['isA', 'documentCategory'],
             [ontologistGroup.id, '$isAccountableFor', '$it'],
             [writerGroup.id, '$canReferTo', '$it'],
@@ -1873,7 +1873,7 @@ describe('authorization', () => {
       expect(categories).to.be.an('array').of.length(3);
 
       // As a writer, I can query categories by id
-      const idLookup = await writer.Attribute.find(c2.id);
+      const idLookup = await writer.Record.find(c2.id);
       expect(idLookup!.id).to.be.eql(c2.id);
 
       // As a writer, I can read the category name
@@ -1896,7 +1896,7 @@ describe('authorization', () => {
       await expectFactToNotExists([c3.id, 'isCategorizedAs*', c2.id]);
 
       // As a Writer, I can create documents and categorize them
-      const document = await writer.Attribute.createLongText('the doc', [
+      const document = await writer.Record.createLongText('the doc', [
         ['isA', 'document'],
         ['isCategorizedAs*', c3.id],
       ]);
@@ -1905,7 +1905,7 @@ describe('authorization', () => {
 
       // As a Writer, I can see all documents of the group
       // a user can query all categories and their hierarchy
-      const { docs, cats } = await writer.Attribute.findAll({
+      const { docs, cats } = await writer.Record.findAll({
         docs: [
           ['isCategorizedAs*', c3.id],
         ],
@@ -1945,11 +1945,11 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const group = await aquaman.Attribute.createKeyValue({}, [
+    const group = await aquaman.Record.createKeyValue({}, [
       [nemoId, '$isMemberOf', '$it'],
     ]);
 
-    await aquaman.Attribute.createKeyValue({}, [
+    await aquaman.Record.createKeyValue({}, [
       ['isA', 'Trident'],
       [group.id!, '$canAccess', '$it'],
     ]);
@@ -1969,11 +1969,11 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const group = await aquaman.Attribute.createKeyValue({}, [
+    const group = await aquaman.Record.createKeyValue({}, [
       [nemoId, '$isMemberOf', '$it'],
     ]);
 
-    await aquaman.Attribute.createKeyValue({}, [
+    await aquaman.Record.createKeyValue({}, [
       ['isA', 'Trident'],
       [group.id!, '$canAccess', '$it'],
     ]);
@@ -2001,12 +2001,12 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const group = await aquaman.Attribute.createKeyValue({}, [
+    const group = await aquaman.Record.createKeyValue({}, [
       [nemoId, '$isMemberOf', '$it'],
       [manniId, '$isMemberOf', '$it'],
     ]);
 
-    const trident = await aquaman.Attribute.createKeyValue({}, [
+    const trident = await aquaman.Record.createKeyValue({}, [
       ['isA', 'Trident'],
     ]);
 
@@ -2033,7 +2033,7 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const group = await aquaman.Attribute.createKeyValue({});
+    const group = await aquaman.Record.createKeyValue({});
 
     await nemo.Fact.createAll([
       ['randomstring', '$isMemberOf', group.id],
@@ -2049,7 +2049,7 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const group = await aquaman.Attribute.createKeyValue({});
+    const group = await aquaman.Record.createKeyValue({});
 
     await aquaman.Fact.createAll([
       ['Trident', '$isMemberOf', group.id],
@@ -2065,7 +2065,7 @@ describe('authorization', () => {
       ['Trident', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const group = await aquaman.Attribute.createKeyValue({});
+    const group = await aquaman.Record.createKeyValue({});
 
     await aquaman.Fact.createAll([
       ['Trident', '$isMemberOf', group.id],
@@ -2077,7 +2077,7 @@ describe('authorization', () => {
   it('is not possible to use an existing attribute as subject in a term definition statement', async () => {
     const aquaman = await Session.getOneSession();
 
-    const attr1 = await aquaman.Attribute.createKeyValue({});
+    const attr1 = await aquaman.Record.createKeyValue({});
 
     await aquaman.Fact.createAll([
       [attr1.id, '$isATermFor', 'a term for a concept'],
@@ -2089,9 +2089,9 @@ describe('authorization', () => {
   describe('when a user guessed an attribute id and tries to access it', () => {
     it('is not possible for the user to access it', async () => {
       const [aquaman, nemo] = await Session.getTwoSessions();
-      const attr = await aquaman.Attribute.createKeyValue({});
+      const attr = await aquaman.Record.createKeyValue({});
 
-      await expectNotToBeAbleToReadOrWriteAttribute(attr.id, nemo);
+      await expectNotToBeAbleToReadOrWriteRecord(attr.id, nemo);
     });
   });
 
@@ -2119,7 +2119,7 @@ describe('authorization', () => {
       await expectFactToNotExists(fact);
     }
 
-    const attr = await aquaman.Attribute.createKeyValue({});
+    const attr = await aquaman.Record.createKeyValue({});
     fact = [nemoId, 'foo', attr.id!];
     await aquaman.Fact.createAll([fact]);
     await expectFactToNotExists(fact);
@@ -2143,7 +2143,7 @@ describe('authorization', () => {
       ['Document', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const team = await admin.Attribute.createAll({
+    const team = await admin.Record.createAll({
       info: {
         value: { name: 'The team with groups' },
         facts: [
@@ -2171,7 +2171,7 @@ describe('authorization', () => {
       },
     });
 
-    await contributingUser.Attribute.createAll({
+    await contributingUser.Record.createAll({
       document: {
         type: 'LongTextAttribute',
         value: 'the content of the document',
@@ -2196,7 +2196,7 @@ describe('authorization', () => {
 
     const teamId: string = team.info.id!;
 
-    const { teamReadByReaders, readByReaders, contributorsByReaders } = await readingUser.Attribute.findAll({
+    const { teamReadByReaders, readByReaders, contributorsByReaders } = await readingUser.Record.findAll({
       teamReadByReaders: teamId,
       readByReaders: [
         ['$it', 'isTheReadersGroupOf', teamId],
@@ -2210,7 +2210,7 @@ describe('authorization', () => {
     expect(await readByReaders[0]!.getValue()).to.deep.equal({ name: 'the readers group' });
     expect(contributorsByReaders).to.be.an('array').of.length(0); // the reader is not part of the contributor group hence can not query it.
 
-    const { documents } = await readingUser.Attribute.findAll({
+    const { documents } = await readingUser.Record.findAll({
       documents: [
         ['$it', '$hasDataType', 'LongTextAttribute'],
         ['$it', 'isA', 'Document'],
@@ -2221,7 +2221,7 @@ describe('authorization', () => {
 
     await documents[0]?.set('unauthorized update'); // this is executed in context of the reader user -> not allowed to change the value
 
-    const { cDocuments } = await contributingUser.Attribute.findAll({
+    const { cDocuments } = await contributingUser.Record.findAll({
       cDocuments: [
         ['$it', '$hasDataType', 'LongTextAttribute'],
         ['$it', 'isA', 'Document'],
@@ -2245,7 +2245,7 @@ describe('authorization', () => {
       ['Document', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const { team } = await admin.Attribute.createAll({
+    const { team } = await admin.Record.createAll({
       team: {
         value: { name: 'The team with groups' },
         facts: [
@@ -2262,7 +2262,7 @@ describe('authorization', () => {
       },
     });
 
-    const { documents } = await readingUser.Attribute.findAll({
+    const { documents } = await readingUser.Record.findAll({
       documents: [
         ['$it', 'isA', 'Document'],
       ],
@@ -2276,7 +2276,7 @@ describe('authorization', () => {
       [team.id, '$canAccess', documents[0].id],
     ]);
 
-    await expectNotToBeAbleToReadOrWriteAttribute(documents[0].id, readingUser);
+    await expectNotToBeAbleToReadOrWriteRecord(documents[0].id, readingUser);
   });
 
   it('returns facts when subject is a query itself', async () => {
@@ -2287,14 +2287,14 @@ describe('authorization', () => {
       ['documentConfig', '$isATermFor', 'a term for a concept'],
     ]);
 
-    const k1 = await user1.Attribute.createKeyValue({}, [['isA', 'documentCategory']]);
-    const k2 = await user1.Attribute.createKeyValue({}, [['isA', 'documentCategory'], ['isCategorizedAs*', k1.id!]]);
-    const k3 = await user1.Attribute.createKeyValue({}, [['isA', 'documentCategory'], ['isCategorizedAs*', k2.id!]]);
+    const k1 = await user1.Record.createKeyValue({}, [['isA', 'documentCategory']]);
+    const k2 = await user1.Record.createKeyValue({}, [['isA', 'documentCategory'], ['isCategorizedAs*', k1.id!]]);
+    const k3 = await user1.Record.createKeyValue({}, [['isA', 'documentCategory'], ['isCategorizedAs*', k2.id!]]);
 
-    const d1 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig']]);
-    const d2 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k1.id!]]);
-    const d3 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k2.id!]]);
-    const d4 = await user1.Attribute.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k3.id!]]);
+    const d1 = await user1.Record.createKeyValue({}, [['isA', 'documentConfig']]);
+    const d2 = await user1.Record.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k1.id!]]);
+    const d3 = await user1.Record.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k2.id!]]);
+    const d4 = await user1.Record.createKeyValue({}, [['isA', 'documentConfig'], ['isCategorizedAs*', k3.id!]]);
 
     {
       const factsBySubject = await user1.Fact.findAll({

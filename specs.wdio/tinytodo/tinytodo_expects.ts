@@ -9,7 +9,7 @@ import { InitializedSession } from '../helpers/session';
 function clearCache(client: InitializedSession) {
   return client.do((lr: any) => {
     // eslint-disable-next-line no-param-reassign
-    lr.Attribute.attributeCache = {};
+    lr.Record.attributeCache = {};
   });
 }
 

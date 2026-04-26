@@ -1,8 +1,8 @@
 import { Readable } from 'stream';
 
-export type AttributeValue = string | Buffer;
+export type RecordValue = string | Buffer;
 
-export type AttributeSnapshotReadable = {
+export type RecordSnapshotReadable = {
   value: Readable,
   changeId: string,
   actorId: string,
@@ -10,7 +10,7 @@ export type AttributeSnapshotReadable = {
   updatedAt: number
 };
 
-export type AttributeSnapshot = {
+export type RecordSnapshot = {
   id: string,
   value: string,
   changeId: string,
@@ -19,19 +19,20 @@ export type AttributeSnapshot = {
   updatedAt: number
 };
 
-export type AttributeChange = {
+export type RecordChange = {
   id: string,
   updatedAt: Date,
 };
 
-export type AttributeChangeCriteria = {
+export type RecordChangeCriteria = {
   inAuthorizedContext?: boolean,
   minChangeId?: string,
   maxChangeId?: string,
 };
 
-export type RecordValue = AttributeValue;
-export type RecordSnapshot = AttributeSnapshot;
-export type RecordSnapshotReadable = AttributeSnapshotReadable;
-export type RecordChange = AttributeChange;
-export type RecordChangeCriteria = AttributeChangeCriteria;
+// backwards-compat aliases
+export type AttributeValue = RecordValue;
+export type AttributeSnapshot = RecordSnapshot;
+export type AttributeSnapshotReadable = RecordSnapshotReadable;
+export type AttributeChange = RecordChange;
+export type AttributeChangeCriteria = RecordChangeCriteria;

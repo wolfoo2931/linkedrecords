@@ -3,7 +3,7 @@
 // eslint-disable-next-line max-classes-per-file
 import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../records/abstract/serialized_change_with_metadata';
-import QueryExecutor, { AttributeQuery, ResolveToAttributesResult } from '../../records/record_query';
+import QueryExecutor, { RecordQuery, ResolveToRecordsResult } from '../../records/record_query';
 import Fact from '../../facts/server';
 import PgPoolWithLog from '../../../lib/pg-log';
 import Quota from '../quota';
@@ -29,9 +29,9 @@ class UnauthorizedFactsError extends Error {
 export default class Controller {
   static async index(req, res) {
     const { clientId, actorId } = req;
-    const query: AttributeQuery = JSON.parse(req.query.query);
+    const query: RecordQuery = JSON.parse(req.query.query);
     const queryExecutor = new QueryExecutor(req.log);
-    const result: ResolveToAttributesResult = await queryExecutor.resolveToAttributes(
+    const result: ResolveToRecordsResult = await queryExecutor.resolveToRecords(
       query,
       clientId,
       actorId,
@@ -224,7 +224,7 @@ export default class Controller {
   }
 
   private static resolveToAttributesResultToFlatArray(
-    result: ResolveToAttributesResult | Record<string, { id: string; }>,
+    result: ResolveToRecordsResult | Record<string, { id: string; }>,
   ): any[] {
     if (!result) {
       return [];

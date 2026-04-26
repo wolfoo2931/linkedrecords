@@ -6,7 +6,7 @@ import IsSerializable from '../records/abstract/is_serializable';
 import LongTextRecord from '../records/long_text/client';
 import KeyValueRecord from '../records/key_value/client';
 import BlobRecord from '../records/blob/client';
-import { CompoundAttributeQuery, FactQueryWithOptionalSubjectPlaceholder } from '../records/record_query';
+import { CompoundRecordQuery, FactQueryWithOptionalSubjectPlaceholder } from '../records/record_query';
 import ClientServerBus from '../../lib/client-server-bus/client';
 
 type ArrayContains<T, U> = T extends Array<infer E>
@@ -68,7 +68,7 @@ export default class RecordsRepository {
 
   private getClientServerBus: () => Promise<ClientServerBus>;
 
-  private attributeCache: { [key: string]: AbstractRecordClient<any, any> };
+  private recordCache: { [key: string]: AbstractRecordClient<any, any> };
 
   static attributeTypes = [
     LongTextRecord,
@@ -79,11 +79,11 @@ export default class RecordsRepository {
   constructor(linkedRecords: LinkedRecords, getClientServerBus: () => Promise<ClientServerBus>) {
     this.linkedRecords = linkedRecords;
     this.getClientServerBus = getClientServerBus;
-    this.attributeCache = {};
+    this.recordCache = {};
   }
 
   // TODO: we should cache this
-  private async idToAttribute(id, ignoreCache: boolean = false, serverState?): Promise<AbstractRecordClient<any, any> | undefined> {
+  private async idToRecord(id, ignoreCache: boolean = false, serverState?): Promise<AbstractRecordClient<any, any> | undefined> {
     const [attributeTypePrefix] = id.split('-');
     const AttributeClass = RecordsRepository
       .attributeTypes
@@ -93,27 +93,27 @@ export default class RecordsRepository {
       return undefined;
     }
 
-    if (this.attributeCache[id] && !ignoreCache) {
-      return this.attributeCache[id];
+    if (this.recordCache[id] && !ignoreCache) {
+      return this.recordCache[id];
     }
 
-    const attr = new AttributeClass(this.linkedRecords, await this.getClientServerBus(), id);
+    const record = new AttributeClass(this.linkedRecords, await this.getClientServerBus(), id);
 
     if (serverState) {
-      await attr.load(serverState);
+      await record.load(serverState);
     }
 
-    this.attributeCache[id] = attr;
+    this.recordCache[id] = record;
 
-    return attr;
+    return record;
   }
 
   async createKeyValue(
     value?: object,
     facts?: [ string, string, string?][],
   ): Promise<KeyValueRecord> {
-    const attr = await this.create('keyValue', value || {}, facts);
-    return attr as KeyValueRecord;
+    const record = await this.create('keyValue', value || {}, facts);
+    return record as KeyValueRecord;
   }
 
   async createLongText(
@@ -173,7 +173,7 @@ export default class RecordsRepository {
 
     await Promise.all(Object.entries(resultBody).map(async ([attrName, config]: [string, any]) => {
       if (config.id) {
-        const tmpResult = await this.idToAttribute(config.id!, false, config);
+        const tmpResult = await this.idToRecord(config.id!, false, config);
 
         if (!tmpResult) {
           throw new Error(`Error transforming id to attribute: ${config.id}`);
@@ -189,7 +189,7 @@ export default class RecordsRepository {
 
   async find(attributeId: string, ignoreCache: boolean = false)
     :Promise<AbstractRecordClient<any, IsSerializable> | undefined> {
-    const attribute = await this.idToAttribute(attributeId, ignoreCache);
+    const attribute = await this.idToRecord(attributeId, ignoreCache);
 
     if (!attribute) {
       throw new Error(`Attribute ID ${attributeId} is unknown`);
@@ -205,7 +205,7 @@ export default class RecordsRepository {
   }
 
   // TODO: check for null values in the query
-  async findAll<T extends CompoundAttributeQuery>(
+  async findAll<T extends CompoundRecordQuery>(
     query: T,
     ignoreCache: boolean = false,
   ): Promise<QueryResult<T>> {
@@ -220,9 +220,9 @@ export default class RecordsRepository {
 
     await Promise.all(Object.keys(records).map(async (key) => {
       if (Array.isArray(records[key])) {
-        attributeResult[key] = (await Promise.all(records[key].map((attr) => this.idToAttribute(attr.id, ignoreCache, attr)))).sort(byId);
+        attributeResult[key] = (await Promise.all(records[key].map((attr) => this.idToRecord(attr.id, ignoreCache, attr)))).sort(byId);
       } else if (records[key]) {
-        attributeResult[key] = await this.idToAttribute(records[key].id, ignoreCache, records[key]);
+        attributeResult[key] = await this.idToRecord(records[key].id, ignoreCache, records[key]);
       } else {
         attributeResult[key] = null;
       }
@@ -231,7 +231,7 @@ export default class RecordsRepository {
     return attributeResult;
   }
 
-  async findAndLoadAll<T extends CompoundAttributeQuery>(query: T): Promise<QueryResult<T>> {
+  async findAndLoadAll<T extends CompoundRecordQuery>(query: T): Promise<QueryResult<T>> {
     const result = await this.findAll(query);
     const promises: Promise<boolean>[] = [];
 
@@ -252,7 +252,7 @@ export default class RecordsRepository {
     return result;
   }
 
-  async subscribeToQuery<T extends CompoundAttributeQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
+  async subscribeToQuery<T extends CompoundRecordQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
     if (!this.linkedRecords.actorId) {
       throw new Error('Not ready to subscribe to queries yet: this.linkedRecords.actorId is not initialized');
     }
@@ -275,7 +275,7 @@ export default class RecordsRepository {
   }
 
   clearCache() {
-    this.attributeCache = {};
+    this.recordCache = {};
   }
 }
 

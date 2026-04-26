@@ -11,13 +11,13 @@ import IsLogger from '../../../../lib/is_logger';
 import PsqlStorage from '../../record_storage/psql';
 import S3Storage from '../../record_storage/s3';
 import PgPoolWithLog from '../../../../lib/pg-log';
-import IsAttributeStorage from '../../abstract/is_record_storage';
+import IsRecordStorage from '../../abstract/is_record_storage';
 
 export default class BlobRecord extends AbstractRecordServer<
 Blob,
 BlobChange
 > {
-  storage: IsAttributeStorage;
+  storage: IsRecordStorage;
 
   isS3Configured: boolean = S3Storage.isConfigurationAvailable();
 
@@ -42,7 +42,7 @@ BlobChange
       data.rows.map(async ({ id, value, actor_id }) => {
         const interVal = await BlobRecord.unmarshal(value, id, logger);
         const buffer = await BlobRecord.marshal(interVal, S3Storage.isConfigurationAvailable());
-        await s3storage.createAttributeWithoutFactsCheck(`${prefix}-${id}`, actor_id, buffer);
+        await s3storage.createRecordWithoutFactsCheck(`${prefix}-${id}`, actor_id, buffer);
       }),
     );
 
@@ -65,7 +65,7 @@ BlobChange
   async create(value: Blob) : Promise<{ id: string }> {
     await this.createAccountableFact();
 
-    return this.storage.createAttribute(this.id, this.actorId, await this.marshal(value));
+    return this.storage.createRecord(this.id, this.actorId, await this.marshal(value));
   }
 
   async getStorageRequiredForValue(value: Blob): Promise<number> {
@@ -79,9 +79,9 @@ BlobChange
   }
 
   async get() : Promise<LoadResult<Blob>> {
-    const content = this.storage.getAttributeLatestSnapshotAsReadable
-      ? await this.storage.getAttributeLatestSnapshotAsReadable(this.id, this.actorId, { maxChangeId: '2147483647' })
-      : await this.storage.getAttributeLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
+    const content = this.storage.getRecordLatestSnapshotAsReadable
+      ? await this.storage.getRecordLatestSnapshotAsReadable(this.id, this.actorId, { maxChangeId: '2147483647' })
+      : await this.storage.getRecordLatestSnapshot(this.id, this.actorId, { maxChangeId: '2147483647' });
 
     return {
       ...content,
@@ -92,14 +92,14 @@ BlobChange
 
   async set(value: Blob) : Promise<{ id: string }> {
     const content = await this.marshal(value);
-    return this.storage.insertAttributeSnapshot(this.id, this.actorId, content);
+    return this.storage.insertRecordSnapshot(this.id, this.actorId, content);
   }
 
   async change(
     changeWithMetadata: SerializedChangeWithMetadata<BlobChange>,
   ) : Promise<SerializedChangeWithMetadata<BlobChange>> {
     const newValue = changeWithMetadata.change.value;
-    const insertResult = await this.storage.insertAttributeSnapshot(
+    const insertResult = await this.storage.insertRecordSnapshot(
       this.id,
       this.actorId,
       await this.marshal(newValue),

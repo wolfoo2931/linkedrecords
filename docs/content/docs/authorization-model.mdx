@@ -36,7 +36,7 @@ Indicates ownership and accountability for a record. The accountable party
 is responsible for the storage quota used by the record.
 
 ```typescript
-[userId, '$isAccountableFor', attributeId]
+[userId, '$isAccountableFor', recordId]
 ```
 
 <Callout type="info">
@@ -119,9 +119,9 @@ To create a `$isHostOf` fact, you must either be accountable for the group or be
 Grants read-only access to a record.
 
 ```typescript
-[userId, '$canRead', attributeId]
+[userId, '$canRead', recordId]
 // or for a group:
-[teamId, '$canRead', attributeId]
+[teamId, '$canRead', recordId]
 ```
 
 ### $canAccess
@@ -129,9 +129,9 @@ Grants read-only access to a record.
 Grants read and write access to a record.
 
 ```typescript
-[userId, '$canAccess', attributeId]
+[userId, '$canAccess', recordId]
 // or for a group:
-[teamId, '$canAccess', attributeId]
+[teamId, '$canAccess', recordId]
 ```
 
 ### $canRefine
@@ -139,20 +139,20 @@ Grants read and write access to a record.
 Grants permission to use a record as the **subject** in facts (conceptor permission).
 
 ```typescript
-[teamId, '$canRefine', attributeId]
+[teamId, '$canRefine', recordId]
 ```
 
-This allows team members to create facts like `[attributeId, 'somePredicate', someOtherAttributeId]`.
+This allows team members to create facts like `[recordId, 'somePredicate', someOtherRecordId]`.
 
 ### $canReferTo
 
 Grants permission to use a record as the **object** in facts (referrer permission).
 
 ```typescript
-[teamId, '$canReferTo', attributeId]
+[teamId, '$canReferTo', recordId]
 ```
 
-This allows team members to create facts like `[otherId, 'somePredicate', attributeId]`.
+This allows team members to create facts like `[otherId, 'somePredicate', recordId]`.
 
 ## Permission Hierarchy
 

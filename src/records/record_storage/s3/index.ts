@@ -3,13 +3,13 @@
 import { Client } from 'minio';
 import { text } from 'stream/consumers';
 import assert from 'assert';
-import IsAttributeStorage from '../../abstract/is_record_storage';
+import IsRecordStorage from '../../abstract/is_record_storage';
 import IsLogger from '../../../../lib/is_logger';
 import Fact from '../../../facts/server';
 import AuthorizationError from '../../errors/authorization_error';
-import { AttributeSnapshot, AttributeChangeCriteria, AttributeSnapshotReadable } from '../types';
+import { RecordSnapshot, RecordChangeCriteria, RecordSnapshotReadable } from '../types';
 
-export default class AttributeStorage implements IsAttributeStorage {
+export default class AttributeStorage implements IsRecordStorage {
   logger: IsLogger;
 
   minioClient: Client;
@@ -40,41 +40,41 @@ export default class AttributeStorage implements IsAttributeStorage {
     });
   }
 
-  async getSizeInBytesForAllAttributes(nodes: string[]): Promise<number> {
+  async getSizeInBytesForAllRecords(nodes: string[]): Promise<number> {
     const sizes = await Promise.all(nodes.map((node) => this.getObjectSize(node)));
     return sizes.reduce((acc, x) => acc + x, 0);
   }
 
-  async createAllAttributes(
-    attrs: { attributeId: string, actorId: string, value: string | Buffer }[],
+  async createAllRecords(
+    attrs: { recordId: string, actorId: string, value: string | Buffer }[],
   ) : Promise<{ id: string }[]> {
     if (!attrs.length) {
       return [];
     }
 
     return Promise.all(
-      attrs.map((attr) => this.createAttribute(attr.attributeId, attr.actorId, attr.value)),
+      attrs.map((attr) => this.createRecord(attr.recordId, attr.actorId, attr.value)),
     );
   }
 
-  async createAttribute(
-    attributeId: string,
+  async createRecord(
+    recordId: string,
     actorId: string,
     value: string | Buffer,
   ) : Promise<{ id: string }> {
-    if (await Fact.areKnownSubjects([attributeId], this.logger)) {
-      throw new Error('attributeId is invalid');
+    if (await Fact.areKnownSubjects([recordId], this.logger)) {
+      throw new Error('recordId is invalid');
     }
 
-    return this.createAttributeWithoutFactsCheck(
-      attributeId,
+    return this.createRecordWithoutFactsCheck(
+      recordId,
       actorId,
       value,
     );
   }
 
-  async createAttributeWithoutFactsCheck(
-    attributeId: string,
+  async createRecordWithoutFactsCheck(
+    recordId: string,
     actorId: string,
     value: string | Buffer,
   ) : Promise<{ id: string }> {
@@ -82,7 +82,7 @@ export default class AttributeStorage implements IsAttributeStorage {
 
     await this.minioClient.putObject(
       this.bucketName,
-      attributeId,
+      recordId,
       value,
       undefined,
       {
@@ -90,29 +90,29 @@ export default class AttributeStorage implements IsAttributeStorage {
       },
     );
 
-    return { id: attributeId };
+    return { id: recordId };
   }
 
-  async getAttributeLatestSnapshot(
-    attributeId: string,
+  async getRecordLatestSnapshot(
+    recordId: string,
     actorId: string,
-    { inAuthorizedContext = false }: AttributeChangeCriteria = {},
-  ) : Promise<AttributeSnapshot> {
+    { inAuthorizedContext = false }: RecordChangeCriteria = {},
+  ) : Promise<RecordSnapshot> {
     if (!inAuthorizedContext) {
-      if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
+      if (!(await Fact.isAuthorizedToReadPayload(recordId, actorId, this.logger))) {
         // TODO: when this is thrown, it is not visible in the logs probably??
         // And the status code is 500
-        throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+        throw new AuthorizationError(actorId, 'record', recordId, this.logger);
       }
     }
 
     const [dataStream, stats] = await Promise.all([
-      this.minioClient.getObject(this.bucketName, attributeId),
-      this.minioClient.statObject(this.bucketName, attributeId),
+      this.minioClient.getObject(this.bucketName, recordId),
+      this.minioClient.statObject(this.bucketName, recordId),
     ]);
 
     return {
-      id: attributeId,
+      id: recordId,
       value: await text(dataStream),
       changeId: '2147483647',
       actorId: stats.metaData['actorId'] || stats.metaData['actorid'],
@@ -121,22 +121,22 @@ export default class AttributeStorage implements IsAttributeStorage {
     };
   }
 
-  async getAttributeLatestSnapshotAsReadable(
-    attributeId: string,
+  async getRecordLatestSnapshotAsReadable(
+    recordId: string,
     actorId: string,
-    { inAuthorizedContext = false }: AttributeChangeCriteria = {},
-  ) : Promise<AttributeSnapshotReadable> {
+    { inAuthorizedContext = false }: RecordChangeCriteria = {},
+  ) : Promise<RecordSnapshotReadable> {
     if (!inAuthorizedContext) {
-      if (!(await Fact.isAuthorizedToReadPayload(attributeId, actorId, this.logger))) {
+      if (!(await Fact.isAuthorizedToReadPayload(recordId, actorId, this.logger))) {
         // TODO: when this is thrown, it is not visible in the logs probably??
         // And the status code is 500
-        throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+        throw new AuthorizationError(actorId, 'record', recordId, this.logger);
       }
     }
 
     const [dataStream, stats] = await Promise.all([
-      this.minioClient.getObject(this.bucketName, attributeId),
-      this.minioClient.statObject(this.bucketName, attributeId),
+      this.minioClient.getObject(this.bucketName, recordId),
+      this.minioClient.statObject(this.bucketName, recordId),
     ]);
 
     return {
@@ -148,21 +148,21 @@ export default class AttributeStorage implements IsAttributeStorage {
     };
   }
 
-  async getAttributeChanges() : Promise<Array<any>> {
+  async getRecordChanges() : Promise<Array<any>> {
     return [];
   }
 
-  async insertAttributeChange() : Promise<{ id: string, updatedAt: Date }> {
-    throw new Error('insertAttributeChange is not implemented for psql storage, use psql_with_history instead');
+  async insertRecordChange() : Promise<{ id: string, updatedAt: Date }> {
+    throw new Error('insertRecordChange is not implemented for psql storage, use psql_with_history instead');
   }
 
-  async insertAttributeSnapshot(
-    attributeId: string,
+  async insertRecordSnapshot(
+    recordId: string,
     actorId: string,
     value: string | Buffer,
   ) : Promise<{ id: string, updatedAt: Date }> {
-    if (!(await Fact.isAuthorizedToModifyPayload(attributeId, actorId, this.logger))) {
-      throw new AuthorizationError(actorId, 'attribute', attributeId, this.logger);
+    if (!(await Fact.isAuthorizedToModifyPayload(recordId, actorId, this.logger))) {
+      throw new AuthorizationError(actorId, 'record', recordId, this.logger);
     }
 
     const updatedAt = new Date();
@@ -172,7 +172,7 @@ export default class AttributeStorage implements IsAttributeStorage {
 
     await this.minioClient.putObject(
       this.bucketName,
-      attributeId,
+      recordId,
       value,
       undefined,
       {
@@ -181,24 +181,15 @@ export default class AttributeStorage implements IsAttributeStorage {
     );
 
     return {
-      id: attributeId,
+      id: recordId,
       updatedAt,
     };
   }
 
   private async getObjectSize(nodeId: string): Promise<number> {
-    // const cacheKey = `node-size-${nodeId}`;
-    // const cached = cache.get(cacheKey);
-
-    // if (cached) {
-    //   return cached;
-    // }
-
     try {
       const stats = await this.minioClient.statObject(this.bucketName, nodeId);
       const { size } = stats;
-
-      // cache.set(cacheKey, size);
       return size || 0;
     } catch (ex: any) {
       if (ex.code === 'NotFound') {

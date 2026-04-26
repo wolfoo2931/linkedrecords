@@ -99,7 +99,7 @@ describe('paddle notification events', () => {
 
   it('is possible to send a payment event in order to upgrade a quota for an attribute id', async () => {
     const client = await Session.getOneSession();
-    const org = await client.Attribute.createKeyValue({ x: 'x' });
+    const org = await client.Record.createKeyValue({ x: 'x' });
     const nodeId = org.id;
     const storageBeforeUpgrade = 0;
     const storageAfterUpgrade = 5242880000;
@@ -151,7 +151,7 @@ describe('paddle notification events', () => {
 
   it('handles subscription cancel events for attribute nodes', async () => {
     const client = await Session.getOneSession();
-    const org = await client.Attribute.createKeyValue({ x: 'x' });
+    const org = await client.Record.createKeyValue({ x: 'x' });
     const nodeId = org.id;
     const storageBeforeUpgrade = 0;
     const storageAfterUpgrade = 5242880000;
@@ -188,7 +188,7 @@ describe('paddle notification events', () => {
   describe('details for accountee', () => {
     it('allows the accountee of a node to see the paddle management links', async () => {
       const client = await Session.getOneSession();
-      const org = await client.Attribute.createKeyValue({ x: 'x' });
+      const org = await client.Record.createKeyValue({ x: 'x' });
 
       await expectNotToSeeManagementUrls(client, org);
 
@@ -202,7 +202,7 @@ describe('paddle notification events', () => {
 
       const otherId = await accountee.getUserIdByEmail(other.email);
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [otherId, '$isMemberOf', '$is'],
       ]);
 
@@ -217,7 +217,7 @@ describe('paddle notification events', () => {
 
       const otherId = await accountee.getUserIdByEmail(other.email);
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [otherId, '$isHostOf', '$is'],
       ]);
 
@@ -232,7 +232,7 @@ describe('paddle notification events', () => {
 
       const otherId = await accountee.getUserIdByEmail(other.email);
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [otherId, '$canAccess', '$is'],
       ]);
 
@@ -247,7 +247,7 @@ describe('paddle notification events', () => {
 
       const otherId = await accountee.getUserIdByEmail(other.email);
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [otherId, '$canRead', '$is'],
       ]);
 
@@ -262,7 +262,7 @@ describe('paddle notification events', () => {
 
       const otherId = await accountee.getUserIdByEmail(other.email);
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [otherId, '$canRefine', '$is'],
       ]);
 
@@ -277,7 +277,7 @@ describe('paddle notification events', () => {
 
       const otherId = await accountee.getUserIdByEmail(other.email);
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [otherId, '$canReferTo', '$is'],
       ]);
 
@@ -290,9 +290,9 @@ describe('paddle notification events', () => {
     it('allows accountable user to see the paddle management links when the user is indirectly accountable for the node', async () => {
       const accountee = await Session.getOneSession();
 
-      const intermediateNode = await accountee.Attribute.createKeyValue({ x: 'x' });
+      const intermediateNode = await accountee.Record.createKeyValue({ x: 'x' });
 
-      const org = await accountee.Attribute.createKeyValue({ x: 'x' }, [
+      const org = await accountee.Record.createKeyValue({ x: 'x' }, [
         [intermediateNode.id!, '$isAccountableFor', '$is'],
       ]);
 

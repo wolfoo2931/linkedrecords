@@ -15,13 +15,13 @@ describe('Key Value Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attribute = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+      const attribute = await clientA.Record.create('keyValue', { foo: 'bar' });
 
       expect(attribute.id).to.match(/^kv-.{8}-.{4}-.{4}-.{4}-.{12}$/);
 
       if (!attribute.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeFromDB = await clientB.Attribute.find(attribute.id);
+      const attributeFromDB = await clientB.Record.find(attribute.id);
       expect(attributeFromDB!.id).to.be.equal(attribute.id);
 
       const data = await attributeFromDB!.get();
@@ -35,11 +35,11 @@ describe('Key Value Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
+      const attributeClientA = await clientA.Record.create('keyValue', { foo: 'bar' });
 
       if (!attributeClientA.id) throw Error('Attribute should have an id. Something went wrong when creating it!');
 
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id);
+      const attributeClientB = await clientB.Record.find(attributeClientA.id);
 
       attributeClientA.set({ clientA: 'adda', foo: 'bar' });
       attributeClientB!.set({ clientB: 'addb', foo: 'bar', new: 'value' });
@@ -81,8 +81,8 @@ describe('Key Value Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id!);
+      const attributeClientA = await clientA.Record.create('keyValue', { foo: 'bar' });
+      const attributeClientB = await clientB.Record.find(attributeClientA.id!);
 
       await attributeClientA.set({
         foo: 'bar',
@@ -112,7 +112,7 @@ describe('Key Value Attributes', () => {
     it('does not reset value if nested object did not change', async () => {
       const [clientA] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', {
+      const attributeClientA = await clientA.Record.create('keyValue', {
         foo: 'bar',
         todos: {
           id1: { title: 'todo1', checked: false },
@@ -142,7 +142,7 @@ describe('Key Value Attributes', () => {
     it('does work when setting a nested value to null', async () => {
       const [clientA] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', {
+      const attributeClientA = await clientA.Record.create('keyValue', {
         foo: 'bar',
         todos: {
           id1: { title: 'todo1', checked: false },
@@ -172,7 +172,7 @@ describe('Key Value Attributes', () => {
     it('does work when setting a nested value to empty object', async () => {
       const [clientA] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', {
+      const attributeClientA = await clientA.Record.create('keyValue', {
         foo: 'bar',
         todos: {
           id1: { title: 'todo1', checked: false },
@@ -200,7 +200,7 @@ describe('Key Value Attributes', () => {
     it('does not reset value if entry has been removed from nested object', async () => {
       const [clientA] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', {
+      const attributeClientA = await clientA.Record.create('keyValue', {
         foo: 'bar',
         todos: {
           id1: { title: 'todo1', checked: false },
@@ -231,8 +231,8 @@ describe('Key Value Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
-      const reloadedAttribute = await clientB.Attribute.find(attributeClientA.id!);
+      const attributeClientA = await clientA.Record.create('keyValue', { foo: 'bar' });
+      const reloadedAttribute = await clientB.Record.find(attributeClientA.id!);
 
       await attributeClientA.change(new KeyValueChange([
         { key: 'foo2', value: { nested: 'values', more: undefined } },
@@ -255,8 +255,8 @@ describe('Key Value Attributes', () => {
       const [clientA] = await createClient();
       const [clientB] = await createClient();
 
-      const attributeClientA = await clientA.Attribute.create('keyValue', { foo: 'bar' });
-      const attributeClientB = await clientB.Attribute.find(attributeClientA.id!);
+      const attributeClientA = await clientA.Record.create('keyValue', { foo: 'bar' });
+      const attributeClientB = await clientB.Record.find(attributeClientA.id!);
 
       await attributeClientA.change(new KeyValueChange([
         { key: 'foo2', value: { deep: { nested: { value: 'dn' } }, more: undefined } },

@@ -148,7 +148,7 @@ function CollaborativeEditor({ recordId }) {
   useEffect(() => {
     let attr;
 
-    async function setupAttribute() {
+    async function setupRecord() {
       attr = await lr.Record.find(recordId);
       if (attr) {
         // Subscribe to receive real-time changes from other users
@@ -160,7 +160,7 @@ function CollaborativeEditor({ recordId }) {
       }
     }
 
-    setupAttribute();
+    setupRecord();
 
     return () => {
       attr?.unload();
