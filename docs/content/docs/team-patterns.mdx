@@ -13,7 +13,7 @@ and implement role-based hierarchies.
 
 ## Creating a Team
 
-A team is simply an attribute with the appropriate permission facts:
+A team is simply a record with the appropriate permission facts:
 
 ```typescript
 // Declare the term first
@@ -22,7 +22,7 @@ await lr.Fact.createAll([
 ]);
 
 // Create the team
-const team = await lr.Attribute.createKeyValue(
+const team = await lr.Record.createKeyValue(
   { name: 'Engineering', description: 'Engineering team' },
   [['$it', 'isA', 'Team']]
 );
@@ -138,7 +138,7 @@ For more sophisticated access control, create multiple teams representing
 different roles:
 
 ```typescript
-const { org, adminTeam, editorTeam, viewerTeam } = await lr.Attribute.createAll({
+const { org, adminTeam, editorTeam, viewerTeam } = await lr.Record.createAll({
   org: {
     type: 'KeyValueAttribute',
     value: { name: 'Acme Inc' },
@@ -185,7 +185,7 @@ const { org, adminTeam, editorTeam, viewerTeam } = await lr.Attribute.createAll(
 
 ```typescript
 // Create a document with different access levels
-const document = await lr.Attribute.createKeyValue(
+const document = await lr.Record.createKeyValue(
   { title: 'Project Plan', content: '...' },
   [
     ['$it', 'isA', 'Document'],
@@ -209,7 +209,7 @@ async function createOrganization(lr, name: string) {
     ['GuestTeam', '$isATermFor', 'External collaborators'],
   ]);
 
-  return lr.Attribute.createAll({
+  return lr.Record.createAll({
     org: {
       type: 'KeyValueAttribute',
       value: { name },

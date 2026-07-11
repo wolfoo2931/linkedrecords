@@ -16,10 +16,10 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
-      const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
-      const mobyDickSummary = await client.Attribute.create('longText', 'it is about a whale');
-      const mobyDickContent = await client.Attribute.create('longText', 'the moby dick story');
+      const hermanMelville = await client.Record.create('keyValue', { name: 'Herman Melville' });
+      const mobyDick = await client.Record.create('keyValue', { title: 'Moby Dick' });
+      const mobyDickSummary = await client.Record.create('longText', 'it is about a whale');
+      const mobyDickContent = await client.Record.create('longText', 'the moby dick story');
 
       await client.Fact.createAll([
         ['Author', '$isATermFor', 'somebody who writes a book'],
@@ -65,8 +65,8 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
-      const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
+      const hermanMelville = await client.Record.create('keyValue', { name: 'Herman Melville' });
+      const mobyDick = await client.Record.create('keyValue', { title: 'Moby Dick' });
 
       await client.Fact.createAll([
         ['Author', '$isATermFor', 'somebody who writes a book'],
@@ -78,7 +78,7 @@ describe('Fact', () => {
         [mobyDick.id, 'isA', 'Book'],
       ]);
 
-      const { books } = await otherClient.Attribute.findAll({
+      const { books } = await otherClient.Record.findAll({
         books: [
           ['isA', 'Book'],
         ],
@@ -90,7 +90,7 @@ describe('Fact', () => {
         [mobyDick.id!, 'isA', 'Book'],
       ]);
 
-      const { books2 } = await otherClient.Attribute.findAll({
+      const { books2 } = await otherClient.Record.findAll({
         books2: [
           ['isA', 'Book'],
         ],
@@ -110,9 +110,9 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const todo = await client.Attribute.create('keyValue', { name: 'To-do', color: '#fff' });
-      const openTodo = await client.Attribute.create('keyValue', { name: 'open To-do', color: '#ffa' });
-      const importantOpenTodo = await client.Attribute.create('keyValue', { name: 'important open To-do', color: '#ff0' });
+      const todo = await client.Record.create('keyValue', { name: 'To-do', color: '#fff' });
+      const openTodo = await client.Record.create('keyValue', { name: 'open To-do', color: '#ffa' });
+      const importantOpenTodo = await client.Record.create('keyValue', { name: 'important open To-do', color: '#ff0' });
 
       await client.Fact.createAll([
         ['ContentType', '$isATermFor', 'some concept'],
@@ -135,10 +135,10 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
-      const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
-      const mobyDickSummary = await client.Attribute.create('longText', 'it is about a whale');
-      const mobyDickContent = await client.Attribute.create('longText', 'the moby dick story');
+      const hermanMelville = await client.Record.create('keyValue', { name: 'Herman Melville' });
+      const mobyDick = await client.Record.create('keyValue', { title: 'Moby Dick' });
+      const mobyDickSummary = await client.Record.create('longText', 'it is about a whale');
+      const mobyDickContent = await client.Record.create('longText', 'the moby dick story');
 
       await client.Fact.createAll([
         ['Author', '$isATermFor', 'some concept'],
@@ -190,10 +190,10 @@ describe('Fact', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const hermanMelville = await client.Attribute.create('keyValue', { name: 'Herman Melville' });
-      const mobyDick = await client.Attribute.create('keyValue', { title: 'Moby Dick' });
-      const mobyDickSummary = await client.Attribute.create('longText', 'it is about a whale');
-      const mobyDickContent = await client.Attribute.create('longText', 'the moby dick story');
+      const hermanMelville = await client.Record.create('keyValue', { name: 'Herman Melville' });
+      const mobyDick = await client.Record.create('keyValue', { title: 'Moby Dick' });
+      const mobyDickSummary = await client.Record.create('longText', 'it is about a whale');
+      const mobyDickContent = await client.Record.create('longText', 'the moby dick story');
 
       await client.Fact.createAll([
         ['AuthorizedUser', '$isATermFor', 'some concept'],

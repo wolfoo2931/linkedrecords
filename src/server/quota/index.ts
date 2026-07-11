@@ -1,15 +1,15 @@
 /* eslint-disable import/no-cycle */
-import AbstractAttributeServer from '../../attributes/abstract/abstract_attribute_server';
+import AbstractRecordServer from '../../records/abstract/abstract_record_server';
 import Fact from '../../facts/server';
 import IsLogger from '../../../lib/is_logger';
 import PgPoolWithLog from '../../../lib/pg-log';
 import EnsureIsValid from '../../../lib/utils/sql_values';
-import SerializedChangeWithMetadata from '../../attributes/abstract/serialized_change_with_metadata';
+import SerializedChangeWithMetadata from '../../records/abstract/serialized_change_with_metadata';
 import PaymentProvider from '../payment_provider';
-import AttributeStoragePsqlWithHistory from '../../attributes/attribute_storage/psql_with_history';
-import AttributeStoragePsql from '../../attributes/attribute_storage/psql';
-import AttributeStorageS3 from '../../attributes/attribute_storage/s3';
-import IsAttributeStorage from '../../attributes/abstract/is_attribute_storage';
+import AttributeStoragePsqlWithHistory from '../../records/record_storage/psql_with_history';
+import AttributeStoragePsql from '../../records/record_storage/psql';
+import AttributeStorageS3 from '../../records/record_storage/s3';
+import IsRecordStorage from '../../records/abstract/is_record_storage';
 
 const uncheckedStorageConsumption: Record<string, number> = {};
 const lastKnownStorageAvailable: Record<string, number> = {};
@@ -237,7 +237,7 @@ export default class Quota {
 
   static async ensureStorageSpaceToSave<T>(
     actorId: string,
-    attributesAndValuesToSave: [AbstractAttributeServer<T, any>, T][],
+    attributesAndValuesToSave: [AbstractRecordServer<T, any>, T][],
     logger: IsLogger,
     factsToSave: Fact[] = [],
   ): Promise<void> {
@@ -312,13 +312,13 @@ export default class Quota {
       this.logger.warn(`accountable nodes for accounteeId ${this.nodeId} is very big (${accountableNodes.length} nodes)! Implement a map reduce based calculation in linkedrecords to prevent to big sql queries`);
     }
 
-    const storageDrivers: IsAttributeStorage[] = [];
+    const storageDrivers: IsRecordStorage[] = [];
 
-    if (process.env['QUOTA_COUNT_KV_ATTRIBUTES'] === 'true') {
+    if (process.env['QUOTA_COUNT_KV_RECORDS'] === 'true' || process.env['QUOTA_COUNT_KV_ATTRIBUTES'] === 'true') {
       storageDrivers.push(new AttributeStoragePsql(logger, 'kv'));
     }
 
-    if (process.env['QUOTA_COUNT_LT_ATTRIBUTES'] === 'true') {
+    if (process.env['QUOTA_COUNT_LT_RECORDS'] === 'true' || process.env['QUOTA_COUNT_LT_ATTRIBUTES'] === 'true') {
       storageDrivers.push(new AttributeStoragePsqlWithHistory(logger));
     }
 
@@ -329,7 +329,7 @@ export default class Quota {
     }
 
     const sizes = await Promise.all(storageDrivers.map(
-      (s) => s.getSizeInBytesForAllAttributes(accountableNodes),
+      (s) => s.getSizeInBytesForAllRecords(accountableNodes),
     ));
 
     return sizes.reduce((acc, curr) => acc + curr, 0);
@@ -367,13 +367,13 @@ export default class Quota {
 
   private static async getStorageRequiredByAccountee<T>(
     actorId: string,
-    attributesAndValuesToSave: [AbstractAttributeServer<T, any>, T][],
+    attributesAndValuesToSave: [AbstractRecordServer<T, any>, T][],
     accountableMap: Record<string, string>,
   ) {
     const storageRequiredByAccountee: Record<string, number> = {};
 
     await Promise.all(attributesAndValuesToSave.map(async ([attribute, value]) => {
-      const change = AbstractAttributeServer.isValidChange(value) ? value : false;
+      const change = AbstractRecordServer.isValidChange(value) ? value : false;
 
       const bytesRequired = change
         ? await attribute.getStorageRequiredForChange(

@@ -34,18 +34,18 @@ https://your-linkedrecords-server.com
 
 ---
 
-## Attributes
+## Records
 
-### Get Attribute
+### Get Record
 
-Retrieve a single attribute by ID.
+Retrieve a single record by ID.
 
 ```
-GET /attributes/:id
+GET /records/:id
 ```
 
 **Parameters:**
-- `id` - Attribute ID (e.g., `kv-abc123`)
+- `id` - Record ID (e.g., `kv-abc123`)
 - `clientId` - Client identifier (query parameter)
 
 **Response:**
@@ -57,12 +57,12 @@ GET /attributes/:id
 }
 ```
 
-### Query Attributes
+### Query Records
 
-Find attributes matching a query.
+Find records matching a query.
 
 ```
-GET /attributes
+GET /records
 ```
 
 **Parameters:**
@@ -70,7 +70,7 @@ GET /attributes
 
 **Example:**
 ```bash
-curl "https://api.example.com/attributes?query=%7B%22docs%22%3A%5B%5B%22%24it%22%2C%22isA%22%2C%22Document%22%5D%5D%7D"
+curl "https://api.example.com/records?query=%7B%22docs%22%3A%5B%5B%22%24it%22%2C%22isA%22%2C%22Document%22%5D%5D%7D"
 ```
 
 **Query format:**
@@ -93,12 +93,12 @@ curl "https://api.example.com/attributes?query=%7B%22docs%22%3A%5B%5B%22%24it%22
 }
 ```
 
-### Create Attribute
+### Create Record
 
-Create a new attribute.
+Create a new record.
 
 ```
-POST /attributes
+POST /records
 ```
 
 **Headers:**
@@ -124,12 +124,12 @@ POST /attributes
 }
 ```
 
-### Update Attribute
+### Update Record
 
-Update an attribute's value.
+Update a record's value.
 
 ```
-PATCH /attributes/:id
+PATCH /records/:id
 ```
 
 **Headers:**
@@ -142,12 +142,12 @@ PATCH /attributes/:id
 }
 ```
 
-### Create Multiple Attributes (Blueprint)
+### Create Multiple Records (Blueprint)
 
-Create multiple related attributes atomically.
+Create multiple related records atomically.
 
 ```
-POST /attribute-compositions
+POST /record-compositions
 ```
 
 **Parameters:**
@@ -324,7 +324,7 @@ GET /quota/:nodeId
 {
   "storageUsed": 1048576,
   "storageLimit": 104857600,
-  "attributeCounts": {
+  "recordCounts": {
     "keyValue": 150,
     "longText": 25,
     "blob": 10
@@ -341,11 +341,11 @@ GET /quota/:nodeId
 Get the list of members in a team.
 
 ```
-GET /attributes/:nodeId/members
+GET /records/:nodeId/members
 ```
 
 **Parameters:**
-- `nodeId` - Team/group attribute ID
+- `nodeId` - Team/group record ID
 - `clientId` - Client identifier (query parameter)
 
 **Response:**
@@ -392,10 +392,10 @@ GET /oidc/discovery
 Real-time updates are handled via WebSocket/Socket.IO connections. The SDK
 manages these connections automatically, but for custom implementations:
 
-### Subscribe to Attribute Changes
+### Subscribe to Record Changes
 
 ```
-WebSocket: /attributes/:id/changes?clientId=xxx
+WebSocket: /records/:id/changes?clientId=xxx
 ```
 
 ### Subscribe to Query Changes
@@ -438,7 +438,7 @@ Resource not found or not accessible.
 ```json
 {
   "error": "Not Found",
-  "message": "Attribute not found"
+  "message": "Record not found"
 }
 ```
 

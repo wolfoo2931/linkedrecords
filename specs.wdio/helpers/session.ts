@@ -2,9 +2,11 @@
 /* eslint-disable no-eval */
 import { multiremote } from 'webdriverio';
 import WdioRemote from './wdio_remote';
-import AttributesRepository from '../../src/browser_sdk/attributes_repository';
+import RecordsRepository from '../../src/browser_sdk/records_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
 import * as testappClient from './testapp_client';
+
+type RecordsRepositoryType = RecordsRepository;
 
 const reuseBrowsers = process.env['REUSE_TEST_BROWSERS'] === 'true';
 
@@ -26,7 +28,7 @@ export default class Session {
 
   email: string;
 
-  Attribute?: AttributesRepository;
+  Record?: RecordsRepositoryType;
 
   Fact?: FactsRepository;
 
@@ -193,9 +195,9 @@ export default class Session {
       },
     );
 
-    this.Attribute = (await remote.execute(
-      () => (window as any).lr.Attribute,
-    )) as AttributesRepository;
+    this.Record = (await remote.execute(
+      () => (window as any).lr.Record,
+    )) as RecordsRepositoryType;
 
     this.Fact = (await remote.execute(
       () => (window as any).lr.Fact,
@@ -241,7 +243,7 @@ export default class Session {
 }
 
 export class InitializedSession extends Session {
-  Attribute: AttributesRepository;
+  Record: RecordsRepositoryType;
 
   Fact: FactsRepository;
 
@@ -264,7 +266,7 @@ export class InitializedSession extends Session {
     email,
   ) {
     super(browser, email);
-    this.Attribute = attr;
+    this.Record = attr;
     this.Fact = fact;
     this.getUserIdByEmail = getUserIdByEmail;
     this.getMembersOf = getMembersOf;

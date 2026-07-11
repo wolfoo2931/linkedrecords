@@ -7,22 +7,22 @@ import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-Accountability in LinkedRecords determines who "owns" an attribute in terms of
+Accountability in LinkedRecords determines who "owns" a record in terms of
 storage quota usage. The accountable party's quota is charged for the storage
-used by the attribute.
+used by the record.
 
 ## Automatic Accountability
 
-When you create an attribute, you automatically become accountable for it:
+When you create a record, you automatically become accountable for it:
 
 ```typescript
-const doc = await lr.Attribute.createKeyValue({ title: 'My Doc' });
+const doc = await lr.Record.createKeyValue({ title: 'My Doc' });
 // A fact [yourUserId, '$isAccountableFor', doc.id] is automatically created
 ```
 
 This means:
 - The storage counts against your quota
-- You have full control over the attribute
+- You have full control over the record
 - You can grant permissions to others
 
 ## Quota Management
@@ -41,7 +41,7 @@ const orgQuota = await lr.getQuota(organizationId);
 ```
 
 Quota includes:
-- Storage size for attribute values
+- Storage size for record values
 
 ## Transferring Accountability
 
@@ -49,7 +49,7 @@ Transfer accountability to an organization so storage counts against the
 organization's quota instead of the individual:
 
 ```typescript
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Company Document' },
   [
     ['$it', 'isA', 'Document'],
@@ -110,7 +110,7 @@ accountable for all shared resources:
 
 ```typescript
 async function createOrganization(lr, name: string) {
-  const { org, team, resourceCollection } = await lr.Attribute.createAll({
+  const { org, team, resourceCollection } = await lr.Record.createAll({
     org: {
       type: 'KeyValueAttribute',
       value: { name },
@@ -145,7 +145,7 @@ When team members create resources, transfer accountability to the org:
 
 ```typescript
 async function createOrgDocument(lr, org: { id: string, team: { id: string } }, title: string) {
-  return lr.Attribute.createKeyValue(
+  return lr.Record.createKeyValue(
     { title, createdAt: Date.now() },
     [
       ['$it', 'isA', 'Document'],
@@ -169,7 +169,7 @@ Accountability is separate from access permissions:
 
 ```typescript
 // Org is accountable, but team has access
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Shared Doc' },
   [
     ['$it', 'isA', 'Document'],
@@ -185,14 +185,14 @@ Query for resources you're accountable for:
 
 ```typescript
 // Find all resources I'm accountable for
-const { myResources } = await lr.Attribute.findAll({
+const { myResources } = await lr.Record.findAll({
   myResources: [
     [myUserId, '$isAccountableFor', '$it'],
   ],
 });
 
 // Find all resources an org is accountable for
-const { orgResources } = await lr.Attribute.findAll({
+const { orgResources } = await lr.Record.findAll({
   orgResources: [
     [orgId, '$isAccountableFor', '$it'],
   ],
@@ -223,20 +223,20 @@ lr.setQuotaViolationErrorHandler((response) => {
   // Show user a message or upgrade prompt
 });
 
-await lr.Attribute.createKeyValue({ /* large data */ });
+await lr.Record.createKeyValue({ /* large data */ });
 ```
 
 ## Practical Example: Personal vs Organization Storage
 
 ```typescript
 // Personal document (counts against user's quota)
-const personalDoc = await lr.Attribute.createKeyValue(
+const personalDoc = await lr.Record.createKeyValue(
   { title: 'My Personal Notes' },
   [['$it', 'isA', 'Document']]
 );
 
 // Work document (counts against org's quota)
-const workDoc = await lr.Attribute.createKeyValue(
+const workDoc = await lr.Record.createKeyValue(
   { title: 'Project Specification' },
   [
     ['$it', 'isA', 'Document'],
@@ -297,7 +297,7 @@ await lr.Fact.createAll([
 
 ```typescript
 // Being accountable doesn't automatically mean team members can access
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Doc' },
   [
     [orgId, '$isAccountableFor', '$it'],

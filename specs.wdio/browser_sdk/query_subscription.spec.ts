@@ -19,8 +19,8 @@ describe('query subscriptions', () => {
       (window as any)[`sub_${id}_count`] = 0;
       (window as any)[`sub_${id}_results`] = [];
 
-      (window as any)[`unsub_${id}`] = await lr.Attribute.subscribeToQuery(q, () => {
-        lr.Attribute.findAll(q).then((qr) => {
+      (window as any)[`unsub_${id}`] = await lr.Record.subscribeToQuery(q, () => {
+        lr.Record.findAll(q).then((qr) => {
           (window as any)[`sub_${id}_count`] += 1;
           (window as any)[`sub_${id}_results`] = qr;
         });
@@ -70,7 +70,7 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client, 'basic')).to.be.deep.equal({ docs: [] });
 
     // Create a document
-    await client.Attribute.createKeyValue({ name: 'doc1' }, [['$it', 'isA', 'Document']]);
+    await client.Record.createKeyValue({ name: 'doc1' }, [['$it', 'isA', 'Document']]);
 
     await waitFor(async () => (await getCallCount(client, 'basic')) >= 2);
     expect(await getJSONResult(client, 'basic')).to.be.deep.equal({ docs: [{ name: 'doc1' }] });
@@ -93,7 +93,7 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client2, 'user2')).to.deep.equal({ docs: [] });
 
     // Client1 creates a private document
-    await client1.Attribute.createKeyValue({ name: 'private-doc' }, [['$it', 'isA', 'Document']]);
+    await client1.Record.createKeyValue({ name: 'private-doc' }, [['$it', 'isA', 'Document']]);
 
     // Client1 should be notified
     await waitFor(async () => (await getCallCount(client1, 'user1')) >= 2);
@@ -116,7 +116,7 @@ describe('query subscriptions', () => {
     ]);
 
     // Client1 creates a team
-    const team = await client1.Attribute.createKeyValue(
+    const team = await client1.Record.createKeyValue(
       { name: 'shared-team' },
       [['$it', 'isA', 'Team']],
     );
@@ -133,7 +133,7 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client2, 'shared')).to.deep.equal({ docs: [] });
 
     // Client1 creates a document shared with the team
-    await client1.Attribute.createKeyValue(
+    await client1.Record.createKeyValue(
       { name: 'shared-doc' },
       [
         ['$it', 'isA', 'Document'],
@@ -163,7 +163,7 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client, 'predicate')).to.deep.equal({ docs: [] });
 
     // Create a document (should trigger notification)
-    const doc = await client.Attribute.createKeyValue(
+    const doc = await client.Record.createKeyValue(
       { name: 'doc' },
       [['$it', 'isA', 'Document']],
     );
@@ -172,7 +172,7 @@ describe('query subscriptions', () => {
 
     expect(await getJSONResult(client, 'predicate')).to.deep.equal({ docs: [{ name: 'doc' }] });
 
-    const archivedState = await client.Attribute.createKeyValue(
+    const archivedState = await client.Record.createKeyValue(
       {},
       [['$it', 'isA', 'ArchivedState']],
     );
@@ -203,7 +203,7 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client, 'unsub')).to.deep.equal({ docs: [] });
 
     // Create first document (should notify)
-    await client.Attribute.createKeyValue({ name: 'doc1' }, [['$it', 'isA', 'Document']]);
+    await client.Record.createKeyValue({ name: 'doc1' }, [['$it', 'isA', 'Document']]);
     await waitFor(async () => (await getCallCount(client, 'unsub')) >= 2);
     expect(await getJSONResult(client, 'unsub')).to.deep.equal({ docs: [{ name: 'doc1' }] });
 
@@ -214,7 +214,7 @@ describe('query subscriptions', () => {
     await unsubscribe(client, 'unsub');
 
     // Create second document (should NOT notify)
-    await client.Attribute.createKeyValue({ name: 'doc2' }, [['$it', 'isA', 'Document']]);
+    await client.Record.createKeyValue({ name: 'doc2' }, [['$it', 'isA', 'Document']]);
 
     // Wait a bit to ensure no notification comes
     await browser.pause(300);
@@ -233,11 +233,11 @@ describe('query subscriptions', () => {
     ]);
 
     // Create document and state
-    const doc = await client.Attribute.createKeyValue(
+    const doc = await client.Record.createKeyValue(
       { name: 'doc' },
       [['$it', 'isA', 'Document']],
     );
-    const activeState = await client.Attribute.createKeyValue(
+    const activeState = await client.Record.createKeyValue(
       {},
       [['$it', 'isA', 'ActiveState']],
     );
@@ -275,7 +275,7 @@ describe('query subscriptions', () => {
     ]);
 
     // Client1 creates a team
-    const team = await client1.Attribute.createKeyValue(
+    const team = await client1.Record.createKeyValue(
       { name: 'team' },
       [['$it', 'isA', 'Team']],
     );
@@ -295,7 +295,7 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(unrelatedClient, 'removal')).to.deep.equal({ docs: [] });
 
     // Client1 creates a shared document (should notify client2)
-    await client1.Attribute.createKeyValue(
+    await client1.Record.createKeyValue(
       { name: 'doc1' },
       [['$it', 'isA', 'Document'], [team.id!, '$canAccess', '$it']],
     );
@@ -314,7 +314,7 @@ describe('query subscriptions', () => {
     await browser.pause(300);
 
     // Client1 creates another shared document (should NOT notify client2)
-    await client1.Attribute.createKeyValue(
+    await client1.Record.createKeyValue(
       { name: 'doc2' },
       [['$it', 'isA', 'Document'], [team.id!, '$canAccess', '$it']],
     );
@@ -350,8 +350,8 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client, 'tasks')).to.deep.equal({ items: [] });
 
     // Create a document
-    await client.Attribute.createKeyValue({ name: 'doc1' }, [['$it', 'isA', 'Document']]);
-    await client.Attribute.createKeyValue({ name: 'task1' }, [['$it', 'isA', 'Task']]);
+    await client.Record.createKeyValue({ name: 'doc1' }, [['$it', 'isA', 'Document']]);
+    await client.Record.createKeyValue({ name: 'task1' }, [['$it', 'isA', 'Task']]);
 
     await waitFor(async () => (await getJSONResult(client, 'docs'))?.['items']?.length === 1);
     await waitFor(async () => (await getJSONResult(client, 'tasks'))?.['items']?.length === 1);
@@ -373,7 +373,7 @@ describe('query subscriptions', () => {
     ]);
 
     // Client1 creates a team and invites client2
-    const team = await client1.Attribute.createKeyValue(
+    const team = await client1.Record.createKeyValue(
       { name: 'team' },
       [['$it', 'isA', 'Team']],
     );
@@ -388,11 +388,11 @@ describe('query subscriptions', () => {
     expect(await getJSONResult(client2, 'merge')).to.deep.equal({ docs: [] });
 
     // Client1 creates two separate private attributes (in different graphs)
-    const folder = await client1.Attribute.createKeyValue(
+    const folder = await client1.Record.createKeyValue(
       { name: 'folder' },
       [['$it', 'isA', 'Folder']],
     );
-    const doc = await client1.Attribute.createKeyValue(
+    const doc = await client1.Record.createKeyValue(
       { name: 'doc-in-folder' },
       [['$it', 'isA', 'Document']],
     );
@@ -414,7 +414,7 @@ describe('query subscriptions', () => {
     await waitFor(async () => (await getCallCount(client2, 'merge')) >= 2);
 
     // // The document should now be visible to client2 through the team membership
-    const result = await client2.Attribute.findAll({
+    const result = await client2.Record.findAll({
       docs: [['$it', 'isA', 'Document']],
     });
 

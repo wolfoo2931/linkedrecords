@@ -1,12 +1,15 @@
 /* eslint-disable max-len */
 
 import { expect } from 'chai';
-import LongTextAttribute from '../../src/attributes/long_text/client/index';
-import KeyValueAttribute from '../../src/attributes/key_value/client/index';
+import LongTextRecord from '../../src/records/long_text/client/index';
+import KeyValueRecord from '../../src/records/key_value/client/index';
 import {
   createClient, cleanupClients, truncateDB, waitFor, sleep,
 } from '../helpers';
-import AbstractAttributeClient from '../../src/attributes/abstract/abstract_attribute_client';
+import AbstractRecordClient from '../../src/records/abstract/abstract_record_client';
+
+type LongTextAttribute = LongTextRecord;
+type KeyValueAttribute = KeyValueRecord;
 
 describe('Attribute', () => {
   beforeEach(truncateDB);
@@ -17,15 +20,15 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      let liveBooks: AbstractAttributeClient<any, any>[] = [];
-      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+      let liveBooks: AbstractRecordClient<any, any>[] = [];
+      let liveMagazines: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['Magazine', '$isATermFor', 'A source of external reference sources'],
       ]);
 
-      await otherClient.Attribute.subscribeToQuery({
+      await otherClient.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
         magazines: [['$it', 'isA', 'Magazine']],
       }, ({ books, magazines }) => {
@@ -33,8 +36,8 @@ describe('Attribute', () => {
         liveMagazines = magazines;
       });
 
-      await client.Attribute.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
-      await client.Attribute.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
+      await client.Record.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
+      await client.Record.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
 
       await waitFor(() => liveBooks.length === 1);
       await waitFor(() => liveMagazines.length === 1);
@@ -42,7 +45,7 @@ describe('Attribute', () => {
       expect(await liveBooks[0]?.getValue()).to.haveOwnProperty('title', 'the first book');
       expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
 
-      await client.Attribute.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
+      await client.Record.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
 
       await waitFor(() => liveBooks.length === 2);
 
@@ -52,7 +55,7 @@ describe('Attribute', () => {
       expect(await liveMagazines[0]?.getValue()).to.haveOwnProperty('title', 'the first magazine');
 
       // use the other client now
-      await otherClient.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+      await otherClient.Record.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
 
       await waitFor(() => liveMagazines.length === 2);
 
@@ -67,36 +70,36 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      let liveBooks: AbstractAttributeClient<any, any>[] = [];
-      let liveMagazines: AbstractAttributeClient<any, any>[] = [];
+      let liveBooks: AbstractRecordClient<any, any>[] = [];
+      let liveMagazines: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A storage which stores information about references cited in papers'],
         ['Magazine', '$isATermFor', 'A source of external reference sources'],
       ]);
 
-      const unsubscribeBooks = await otherClient.Attribute.subscribeToQuery({
+      const unsubscribeBooks = await otherClient.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
       }, ({ books }) => {
         liveBooks = books;
       });
 
-      await otherClient.Attribute.subscribeToQuery({
+      await otherClient.Record.subscribeToQuery({
         magazines: [['$it', 'isA', 'Magazine']],
       }, ({ magazines }) => {
         liveMagazines = magazines;
       });
 
-      await client.Attribute.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
-      await client.Attribute.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
+      await client.Record.createKeyValue({ title: 'the first book' }, [['isA', 'Book']]);
+      await client.Record.createKeyValue({ title: 'the first magazine' }, [['isA', 'Magazine']]);
 
       await waitFor(() => liveBooks.length === 1);
       await waitFor(() => liveMagazines.length === 1);
 
       unsubscribeBooks();
 
-      await client.Attribute.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
-      await client.Attribute.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
+      await client.Record.createKeyValue({ title: 'the second book' }, [['isA', 'Book']]);
+      await client.Record.createKeyValue({ title: 'the second magazine' }, [['isA', 'Magazine']]);
 
       await waitFor(() => liveMagazines.length === 2);
 
@@ -113,11 +116,11 @@ describe('Attribute', () => {
       ]);
 
       // Create attributes BEFORE subscribing
-      await client.Attribute.createKeyValue({ title: 'existing book' }, [['isA', 'Book']]);
+      await client.Record.createKeyValue({ title: 'existing book' }, [['isA', 'Book']]);
 
-      let books: AbstractAttributeClient<any, any>[] = [];
+      let books: AbstractRecordClient<any, any>[] = [];
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
       }, ({ books: b }) => {
         books = b;
@@ -132,16 +135,16 @@ describe('Attribute', () => {
     it('updates when an attribute no longer matches the query due to fact deletion', async () => {
       const [client] = await createClient();
 
-      let liveBooks: AbstractAttributeClient<any, any>[] = [];
+      let liveBooks: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A book'],
       ]);
 
-      const book1 = await client.Attribute.createKeyValue({ title: 'book 1' }, [['isA', 'Book']]);
-      const book2 = await client.Attribute.createKeyValue({ title: 'book 2' }, [['isA', 'Book']]);
+      const book1 = await client.Record.createKeyValue({ title: 'book 1' }, [['isA', 'Book']]);
+      const book2 = await client.Record.createKeyValue({ title: 'book 2' }, [['isA', 'Book']]);
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
       }, ({ books }) => {
         liveBooks = books;
@@ -170,15 +173,15 @@ describe('Attribute', () => {
         ['Book', '$isATermFor', 'A book'],
       ]);
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
       }, () => { callback1Count += 1; });
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
       }, () => { callback2Count += 1; });
 
-      await client.Attribute.createKeyValue({ title: 'new book' }, [['isA', 'Book']]);
+      await client.Record.createKeyValue({ title: 'new book' }, [['isA', 'Book']]);
 
       // initial + update = at least 2
       await waitFor(() => callback1Count >= 2);
@@ -189,17 +192,17 @@ describe('Attribute', () => {
     it('updates correctly with queries using $latest and $not modifiers', async () => {
       const [client] = await createClient();
 
-      let activeBooks: AbstractAttributeClient<any, any>[] = [];
+      let activeBooks: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Book', '$isATermFor', 'A book'],
         ['archived', '$isATermFor', 'An archived state'],
       ]);
 
-      const book1 = await client.Attribute.createKeyValue({ title: 'book 1' }, [['isA', 'Book']]);
-      const book2 = await client.Attribute.createKeyValue({ title: 'book 2' }, [['isA', 'Book']]);
+      const book1 = await client.Record.createKeyValue({ title: 'book 1' }, [['isA', 'Book']]);
+      const book2 = await client.Record.createKeyValue({ title: 'book 2' }, [['isA', 'Book']]);
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         activeBooks: [
           ['$it', 'isA', 'Book'],
           ['$it', '$latest(stateIs)', '$not(archived)'],
@@ -225,13 +228,13 @@ describe('Attribute', () => {
       const [client] = await createClient();
 
       let callbackCount = 0;
-      let lastResult: AbstractAttributeClient<any, any>[] = [];
+      let lastResult: AbstractRecordClient<any, any>[] = [];
 
       await client.Fact.createAll([
         ['Unicorn', '$isATermFor', 'A mythical creature'],
       ]);
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         unicorns: [['$it', 'isA', 'Unicorn']],
       }, ({ unicorns }) => {
         callbackCount += 1;
@@ -251,7 +254,7 @@ describe('Attribute', () => {
         ['Book', '$isATermFor', 'A book'],
       ]);
 
-      const unsubscribe = await client.Attribute.subscribeToQuery({
+      const unsubscribe = await client.Record.subscribeToQuery({
         books: [['$it', 'isA', 'Book']],
       }, () => {});
 
@@ -273,18 +276,18 @@ describe('Attribute', () => {
         ['Document', '$isATermFor', 'A document'],
       ]);
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         items: [
-          ['$it', '$hasDataType', KeyValueAttribute],
+          ['$it', '$hasDataType', KeyValueRecord],
           ['$it', 'isA', 'Document'],
         ],
       }, ({ items }) => {
         keyValueItems = items as any;
       });
 
-      await client.Attribute.subscribeToQuery({
+      await client.Record.subscribeToQuery({
         items: [
-          ['$it', '$hasDataType', LongTextAttribute],
+          ['$it', '$hasDataType', LongTextRecord],
           ['$it', 'isA', 'Document'],
         ],
       }, ({ items }) => {
@@ -296,12 +299,12 @@ describe('Attribute', () => {
       expect(keyValueItems).to.have.lengthOf(0);
 
       // Create a KeyValue document
-      await client.Attribute.createKeyValue({ content: 'kv doc' }, [['isA', 'Document']]);
+      await client.Record.createKeyValue({ content: 'kv doc' }, [['isA', 'Document']]);
 
       await waitFor(() => keyValueItems.length === 1);
 
       // Create a LongText document - should NOT appear in keyValueItems
-      await client.Attribute.create('longText', 'long text doc', [['isA', 'Document']]);
+      await client.Record.create('longText', 'long text doc', [['isA', 'Document']]);
 
       await waitFor(() => longTextItems.length === 1);
 
@@ -314,16 +317,16 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const content = await client.Attribute.create('longText', 'the init value');
-      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+      const content = await client.Record.create('longText', 'the init value');
+      const references = await client.Record.create('keyValue', { foo: 'bar' });
 
-      const userAB = await client.Attribute.create('keyValue', {});
-      const userXX = await client.Attribute.create('keyValue', {});
-      const userCB = await client.Attribute.create('keyValue', {});
+      const userAB = await client.Record.create('keyValue', {});
+      const userXX = await client.Record.create('keyValue', {});
+      const userCB = await client.Record.create('keyValue', {});
 
-      const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
-      const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
-      const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
+      const referenceSources1 = await client.Record.create('keyValue', { user: 'usr-ab' });
+      const referenceSources2 = await client.Record.create('keyValue', { user: 'usr-xx' });
+      const referenceSources3 = await client.Record.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
@@ -348,7 +351,7 @@ describe('Attribute', () => {
         content: contentAttribute,
         references: [referencesAttribute],
         referenceSources: [referenceSourcesAttribute],
-      } = await otherClient.Attribute.findAndLoadAll({
+      } = await otherClient.Record.findAndLoadAll({
         content: content.id!,
         references: [
           ['belongsTo', content.id!],
@@ -380,16 +383,16 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const content = await client.Attribute.create('longText', 'the init value');
-      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+      const content = await client.Record.create('longText', 'the init value');
+      const references = await client.Record.create('keyValue', { foo: 'bar' });
 
-      const userAB = await client.Attribute.create('keyValue', {});
-      const userXX = await client.Attribute.create('keyValue', {});
-      const userCB = await client.Attribute.create('keyValue', {});
+      const userAB = await client.Record.create('keyValue', {});
+      const userXX = await client.Record.create('keyValue', {});
+      const userCB = await client.Record.create('keyValue', {});
 
-      const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
-      const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
-      const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
+      const referenceSources1 = await client.Record.create('keyValue', { user: 'usr-ab' });
+      const referenceSources2 = await client.Record.create('keyValue', { user: 'usr-xx' });
+      const referenceSources3 = await client.Record.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
@@ -414,7 +417,7 @@ describe('Attribute', () => {
         content: LongTextAttribute,
         references: KeyValueAttribute[],
         referenceSources: KeyValueAttribute[]
-      }> <unknown> await otherClient.Attribute.findAll({
+      }> <unknown> await otherClient.Record.findAll({
         content: content.id!,
         references: [
           ['belongsTo', content.id!],
@@ -448,8 +451,8 @@ describe('Attribute', () => {
 
       await sleep(1000);
 
-      const content = await client.Attribute.create('longText', 'the init value');
-      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
+      const content = await client.Record.create('longText', 'the init value');
+      const references = await client.Record.create('keyValue', { foo: 'bar' });
       const afterCreationTime = new Date();
 
       if (!content.createdAt || !references.createdAt || !references.updatedAt || !content.updatedAt) {
@@ -468,8 +471,8 @@ describe('Attribute', () => {
         throw new Error('id of attribute is not initialized');
       }
 
-      const sameContent = await otherClient.Attribute.find(content.id);
-      const sameReferences = await otherClient.Attribute.find(references.id);
+      const sameContent = await otherClient.Record.find(content.id);
+      const sameReferences = await otherClient.Record.find(references.id);
 
       expect(sameContent!.createdAt?.toString()).to.equals(content.createdAt.toString());
       expect(sameReferences!.createdAt?.toString()).to.equals(references.createdAt.toString());
@@ -503,12 +506,12 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const userA = await client.Attribute.create('keyValue', {});
-      const userB = await client.Attribute.create('keyValue', {});
-      const userAB = await client.Attribute.create('keyValue', {});
-      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
-      const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
-      const clubA = await client.Attribute.create('keyValue', { name: 'Club' });
+      const userA = await client.Record.create('keyValue', {});
+      const userB = await client.Record.create('keyValue', {});
+      const userAB = await client.Record.create('keyValue', {});
+      const teamA = await client.Record.create('keyValue', { name: 'A Team' });
+      const teamB = await client.Record.create('keyValue', { name: 'B Team' });
+      const clubA = await client.Record.create('keyValue', { name: 'Club' });
 
       await client.Fact.createAll([
         ['team', '$isATermFor', 'a group of people'],
@@ -526,7 +529,7 @@ describe('Attribute', () => {
         [userAB.id, 'isMemberOf', teamB.id],
       ]);
 
-      const { allTeamsOfUserA, allTeamsOfUserB, allTeamsOfUserAB } = await otherClient.Attribute.findAll({
+      const { allTeamsOfUserA, allTeamsOfUserB, allTeamsOfUserAB } = await otherClient.Record.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
           [userA.id!, 'isMemberOf', '$it'],
@@ -554,11 +557,11 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const userA = await client.Attribute.create('keyValue', {});
-      const userB = await client.Attribute.create('keyValue', {});
-      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
-      const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
-      const teamC = await client.Attribute.create('keyValue', { name: 'C Team' });
+      const userA = await client.Record.create('keyValue', {});
+      const userB = await client.Record.create('keyValue', {});
+      const teamA = await client.Record.create('keyValue', { name: 'A Team' });
+      const teamB = await client.Record.create('keyValue', { name: 'B Team' });
+      const teamC = await client.Record.create('keyValue', { name: 'C Team' });
 
       await client.Fact.createAll([
         ['team', '$isATermFor', 'a group of people'],
@@ -574,7 +577,7 @@ describe('Attribute', () => {
         [userB.id, 'isMemberOf', teamC.id],
       ]);
 
-      const { allTeamsOfUserA, allTeamsOfUserB, commonTeams } = await otherClient.Attribute.findAll({
+      const { allTeamsOfUserA, allTeamsOfUserB, commonTeams } = await otherClient.Record.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
           [userA.id!, 'isMemberOf', '$it'],
@@ -606,12 +609,12 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const memberA = await client.Attribute.create('keyValue', { name: 'Paul' });
-      const memberB = await client.Attribute.create('keyValue', { name: 'Peter' });
-      const memberC = await client.Attribute.create('keyValue', { name: 'Petera' });
+      const memberA = await client.Record.create('keyValue', { name: 'Paul' });
+      const memberB = await client.Record.create('keyValue', { name: 'Peter' });
+      const memberC = await client.Record.create('keyValue', { name: 'Petera' });
 
-      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
-      const teamB = await client.Attribute.create('keyValue', { name: 'B Team' });
+      const teamA = await client.Record.create('keyValue', { name: 'A Team' });
+      const teamB = await client.Record.create('keyValue', { name: 'B Team' });
 
       await client.Fact.createAll([
         [memberA.id, 'isMemberOf', teamA.id],
@@ -621,7 +624,7 @@ describe('Attribute', () => {
         [memberC.id, 'isMemberOf', teamB.id],
       ]);
 
-      const { allMembersOfTeamA, allMembersOfTeamB, commonMembers } = await otherClient.Attribute.findAll({
+      const { allMembersOfTeamA, allMembersOfTeamB, commonMembers } = await otherClient.Record.findAll({
         allMembersOfTeamA: [
           ['$it', 'isMemberOf', teamA.id!],
         ],
@@ -649,22 +652,22 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const memberA = await client.Attribute.create('keyValue', { name: 'Paul' });
-      const memberB = await client.Attribute.create('longText', 'test');
-      const teamA = await client.Attribute.create('keyValue', { name: 'A Team' });
+      const memberA = await client.Record.create('keyValue', { name: 'Paul' });
+      const memberB = await client.Record.create('longText', 'test');
+      const teamA = await client.Record.create('keyValue', { name: 'A Team' });
 
       await client.Fact.createAll([
         [memberA.id, 'isMemberOf', teamA.id],
         [memberB.id, 'isMemberOf', teamA.id],
       ]);
 
-      const { keyValueMembers, longTextMembers } = await otherClient.Attribute.findAll({
+      const { keyValueMembers, longTextMembers } = await otherClient.Record.findAll({
         keyValueMembers: [
-          ['$it', '$hasDataType', KeyValueAttribute],
+          ['$it', '$hasDataType', KeyValueRecord],
           ['$it', 'isMemberOf', teamA.id],
         ],
         longTextMembers: [
-          ['$hasDataType', LongTextAttribute],
+          ['$hasDataType', LongTextRecord],
           ['isMemberOf', teamA.id!],
         ],
       });
@@ -683,7 +686,7 @@ describe('Attribute', () => {
         ['team', '$isATermFor', 'a group of people'],
       ]);
 
-      const { allTeamsOfUserA, allTeamsOfUserB } = await client.Attribute.findAll({
+      const { allTeamsOfUserA, allTeamsOfUserB } = await client.Record.findAll({
         allTeamsOfUserA: [
           ['$it', 'isA', 'team'],
         ],
@@ -700,9 +703,9 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const mobyDickVol1 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 1' });
-      const mobyDickVol2 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 2' });
-      const mobyDickVol3 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 3' });
+      const mobyDickVol1 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 1' });
+      const mobyDickVol2 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 2' });
+      const mobyDickVol3 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 3' });
 
       await client.Fact.createAll([
         ['deleted', '$isATermFor', 'something that is not existing anymore'],
@@ -722,7 +725,7 @@ describe('Attribute', () => {
         [mobyDickVol2.id, 'is', 'deleted'],
       ]);
 
-      const { books } = await otherClient.Attribute.findAll({
+      const { books } = await otherClient.Record.findAll({
         books: [
           ['$it', 'isA*', 'Book'],
           ['$it', 'is', '$not(deleted)'],
@@ -738,15 +741,15 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const mobyDickVol1 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 1' });
-      const mobyDickVol2 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 2' });
-      const mobyDickVol3 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 3' });
-      const marksAutoBio = await client.Attribute.create('keyValue', { title: 'Autobiography of Mark Twain' });
-      const chrisAutoBio = await client.Attribute.create('keyValue', { title: 'Finding Hildasay' });
-      const YusraAutoBio = await client.Attribute.create('keyValue', { title: 'Butterfly' });
-      const FullersBio = await client.Attribute.create('keyValue', { title: 'Inventor of the Future' });
-      const MonksBio = await client.Attribute.create('keyValue', { title: 'Free Press Thelonious Monk' });
-      const RalphsBio = await client.Attribute.create('keyValue', { title: 'Ralph Ellison' });
+      const mobyDickVol1 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 1' });
+      const mobyDickVol2 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 2' });
+      const mobyDickVol3 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 3' });
+      const marksAutoBio = await client.Record.create('keyValue', { title: 'Autobiography of Mark Twain' });
+      const chrisAutoBio = await client.Record.create('keyValue', { title: 'Finding Hildasay' });
+      const YusraAutoBio = await client.Record.create('keyValue', { title: 'Butterfly' });
+      const FullersBio = await client.Record.create('keyValue', { title: 'Inventor of the Future' });
+      const MonksBio = await client.Record.create('keyValue', { title: 'Free Press Thelonious Monk' });
+      const RalphsBio = await client.Record.create('keyValue', { title: 'Ralph Ellison' });
 
       await client.Fact.createAll([
         ['deleted', '$isATermFor', 'something that is not existing anymore'],
@@ -778,7 +781,7 @@ describe('Attribute', () => {
 
       const {
         books, bios, autobios, allBooks, allBios, allAutobios,
-      } = await otherClient.Attribute.findAll({
+      } = await otherClient.Record.findAll({
         books: [
           ['$it', 'isA*', 'Book'],
           ['$it', 'is', '$not(deleted)'],
@@ -818,17 +821,17 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const mobyDickVol1 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 1' });
-      const mobyDickVol2 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 2' });
-      const mobyDickVol3 = await client.Attribute.create('keyValue', { title: 'Moby Dick Volume 3' });
-      const marksAutoBio = await client.Attribute.create('keyValue', { title: 'Autobiography of Mark Twain' });
-      const chrisAutoBio = await client.Attribute.create('keyValue', { title: 'Finding Hildasay' });
-      const YusraAutoBio = await client.Attribute.create('keyValue', { title: 'Butterfly' });
-      const FullersBio = await client.Attribute.create('keyValue', { title: 'Inventor of the Future' });
-      const MonksBio = await client.Attribute.create('keyValue', { title: 'Free Press Thelonious Monk' });
-      const RalphsBio = await client.Attribute.create('keyValue', { title: 'Ralph Ellison' });
+      const mobyDickVol1 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 1' });
+      const mobyDickVol2 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 2' });
+      const mobyDickVol3 = await client.Record.create('keyValue', { title: 'Moby Dick Volume 3' });
+      const marksAutoBio = await client.Record.create('keyValue', { title: 'Autobiography of Mark Twain' });
+      const chrisAutoBio = await client.Record.create('keyValue', { title: 'Finding Hildasay' });
+      const YusraAutoBio = await client.Record.create('keyValue', { title: 'Butterfly' });
+      const FullersBio = await client.Record.create('keyValue', { title: 'Inventor of the Future' });
+      const MonksBio = await client.Record.create('keyValue', { title: 'Free Press Thelonious Monk' });
+      const RalphsBio = await client.Record.create('keyValue', { title: 'Ralph Ellison' });
 
-      const shelf1 = await client.Attribute.create('keyValue', { title: 'a shelf' });
+      const shelf1 = await client.Record.create('keyValue', { title: 'a shelf' });
 
       await client.Fact.createAll([
         ['inTrasbin', '$isATermFor', 'a state meaning it is marked to be deleted'],
@@ -882,7 +885,7 @@ describe('Attribute', () => {
       const {
         booksInTrasbin,
         booksNotInTrasbin,
-      } = await otherClient.Attribute.findAll({
+      } = await otherClient.Record.findAll({
         booksInTrasbin: [
           ['$it', 'isA*', 'Book'],
           ['$it', '$latest(delitionStateIs)', 'inTrasbin'],
@@ -913,15 +916,15 @@ describe('Attribute', () => {
       const [client] = await createClient();
       const [otherClient] = await createClient();
 
-      const userAB = await client.Attribute.create('keyValue', {});
-      const userXX = await client.Attribute.create('keyValue', {});
-      const userCB = await client.Attribute.create('keyValue', {});
+      const userAB = await client.Record.create('keyValue', {});
+      const userXX = await client.Record.create('keyValue', {});
+      const userCB = await client.Record.create('keyValue', {});
 
-      const content = await client.Attribute.create('longText', 'the init value');
-      const references = await client.Attribute.create('keyValue', { foo: 'bar' });
-      const referenceSources1 = await client.Attribute.create('keyValue', { user: 'usr-ab' });
-      const referenceSources2 = await client.Attribute.create('keyValue', { user: 'usr-xx' });
-      const referenceSources3 = await client.Attribute.create('keyValue', { user: 'usr-cd' });
+      const content = await client.Record.create('longText', 'the init value');
+      const references = await client.Record.create('keyValue', { foo: 'bar' });
+      const referenceSources1 = await client.Record.create('keyValue', { user: 'usr-ab' });
+      const referenceSources2 = await client.Record.create('keyValue', { user: 'usr-xx' });
+      const referenceSources3 = await client.Record.create('keyValue', { user: 'usr-cd' });
 
       await client.Fact.createAll([
         ['referenceStore', '$isATermFor', 'A storage which stores information about references cited in papers'],
@@ -946,7 +949,7 @@ describe('Attribute', () => {
         throw Error('id is null');
       }
 
-      const exec1 = otherClient.Attribute.findAll({
+      const exec1 = otherClient.Record.findAll({
         content: content.id,
         references: [
           ['belongsTo', content.id],
@@ -959,7 +962,7 @@ describe('Attribute', () => {
         ],
       });
 
-      const exec2 = otherClient.Attribute.findAll({
+      const exec2 = otherClient.Record.findAll({
         content: content.id,
         references: [
           ['belongsTo', content.id],
@@ -994,7 +997,7 @@ describe('Attribute', () => {
       const { content: contentAttribute, references } = <{
         content: LongTextAttribute,
         references: KeyValueAttribute[],
-      }> await client.Attribute.findAll({
+      }> await client.Record.findAll({
         content: 'not-existing',
         references: [
           ['isA', 'notExisting'],
@@ -1014,11 +1017,11 @@ describe('Attribute', () => {
         ['Thing', '$isATermFor', 'some category'],
       ]);
 
-      const attr = await client.Attribute.create('keyValue', {}, [
+      const attr = await client.Record.create('keyValue', {}, [
         ['$it', 'isA', 'Thing'],
       ]);
 
-      const { retrieved } = await client.Attribute.findAll({
+      const { retrieved } = await client.Record.findAll({
         retrieved: [
           ['$it', 'isA', 'Thing'],
         ],

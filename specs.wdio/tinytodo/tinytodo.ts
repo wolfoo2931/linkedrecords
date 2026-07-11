@@ -4,7 +4,7 @@
 // The usage of this code is demonstrated and tested in tinytodo.spec.ts
 
 import { uuidv4 } from 'uuidv7';
-import { CompositionCreationRequest } from '../../src/browser_sdk/attributes_repository';
+import { CompositionCreationRequest } from '../../src/browser_sdk/records_repository';
 import { InitializedSession } from '../helpers/session';
 
 function getOrgBlueprint(orgName: string): CompositionCreationRequest {
@@ -91,7 +91,7 @@ export default class TinyTodo {
   }
 
   public static async createOrg(client: InitializedSession, orgName: string) {
-    return client.Attribute.createAll(getOrgBlueprint(orgName));
+    return client.Record.createAll(getOrgBlueprint(orgName));
   }
 
   public static async addUserToOrg(client: InitializedSession, otherUserID, orgId, teamId) {
@@ -105,7 +105,7 @@ export default class TinyTodo {
   }
 
   public static async loadOrgAttributes(client: InitializedSession, orgID: string) {
-    const { todoLists, archivedState } = await client.Attribute.findAll({
+    const { todoLists, archivedState } = await client.Record.findAll({
       todoLists: [
         ['$it', 'isA', 'ListOfTodoLists'],
         [orgID, '$isAccountableFor', '$it'],
@@ -145,7 +145,7 @@ export default class TinyTodo {
       ];
     }
 
-    const { list } = await client.Attribute.createAll({
+    const { list } = await client.Record.createAll({
       list: {
         type: 'KeyValueAttribute',
         value: {
@@ -178,7 +178,7 @@ export default class TinyTodo {
       ];
     }
 
-    return client.Attribute.findAll({
+    return client.Record.findAll({
       lists: [
         ['$it', 'isA', 'TodoList'],
         ...orgFilters,
@@ -187,7 +187,7 @@ export default class TinyTodo {
   }
 
   public static async getList(client: InitializedSession, listId: string) {
-    const list = await client.Attribute.find(listId);
+    const list = await client.Record.find(listId);
 
     if (!list) {
       throw new Error('list not found');
@@ -274,7 +274,7 @@ export default class TinyTodo {
     // the WDIO remote method invocation hack does not work here.
     // we have to execute the JS directly in the browser manually
     const result = await client.do(async (c, lID, tID, f, v) => {
-      const list = await c.Attribute.find(lID);
+      const list = await c.Record.find(lID);
 
       if (!list) {
         throw new Error('list not found');

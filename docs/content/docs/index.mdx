@@ -16,7 +16,7 @@ LinkedRecords is a Backend-as-a-Service that you can connect to directly from yo
 
 ```tsx
 // Query data with facts - updates automatically when anything changes
-const todos = useKeyValueAttributes([['$it', 'isA', 'Todo']]);
+const todos = useKeyValueRecords([['$it', 'isA', 'Todo']]);
 ```
 
 You can use any OpenID Connect provider (Auth0, Keycloak, etc.) for authentication, so you don't need to implement login flows. Authorization is built into the data model itself - when you create data, you specify who can access it. And real-time collaboration uses CRDT and Operational Transform, so concurrent edits merge instead of overwriting each other.
@@ -73,7 +73,7 @@ LinkedRecords enables a different model: **Bring Your Own Backend (BYOB)**.
 - The frontend is distributed via CDN - just static files
 - When users open the application, the app can ask the user which LinkedRecords backend to use
 - All data is stored on the endpoint the user chose - data never leaves the customer's infrastructure
-- The SaaS vendor and the LinkedRecords provider never need to communicate - the API is intentionally minimalistic, providing just a few primitives (facts and attributes) that applications build upon. This minimal surface area is also the foundation for backwards compatibility: different versions of a SaaS application can work with different versions of LinkedRecords without coordination
+- The SaaS vendor and the LinkedRecords provider never need to communicate - the API is intentionally minimalistic, providing just a few primitives (facts and records) that applications build upon. This minimal surface area is also the foundation for backwards compatibility: different versions of a SaaS application can work with different versions of LinkedRecords without coordination
 
 **Why this matters:**
 - **Data residency compliance** - Keep data in your jurisdiction (GDPR, industry regulations)
@@ -104,7 +104,7 @@ LinkedRecords embeds authorization directly in data operations:
 
 ```typescript
 // LinkedRecords: Authorization is part of the same operation
-const doc = await client.Attribute.createKeyValue(
+const doc = await client.Record.createKeyValue(
   { content: 'Secret report' },
   [
     ['$it', 'isA', 'Document'],
@@ -144,7 +144,7 @@ When an AI assistant works with LinkedRecords, it can understand and verify perm
 
 ### Simpler Codebase, Fewer Tokens
 
-With LinkedRecords, your entire application is frontend code. No backend routes, no database queries, no sync logic, no state management boilerplate. You create facts, create attributes, query attributes - everything is reactive and declarative.
+With LinkedRecords, your entire application is frontend code. No backend routes, no database queries, no sync logic, no state management boilerplate. You create facts, create records, query records - everything is reactive and declarative.
 
 This matters for AI agents:
 
@@ -172,7 +172,7 @@ LinkedRecords provides **true collaborative editing**:
 // Multiple users editing simultaneously
 // All changes are preserved and merged
 attr.subscribe((change) => {
-  // Called when the attribute changes
+  // Called when the record changes
   // Reflects merged state from all collaborators
 });
 ```
@@ -204,10 +204,10 @@ Building a collaborative React application traditionally requires significant in
 // LinkedRecords: query data with facts, get real-time updates automatically
 function TodoList() {
   const { lr } = useLinkedRecords();
-  const todos = useKeyValueAttributes([['$it', 'isA', 'Todo']]);
+  const todos = useKeyValueRecords([['$it', 'isA', 'Todo']]);
 
   const addTodo = () => {
-    lr.Attribute.createKeyValue(
+    lr.Record.createKeyValue(
       { title: 'New task', completed: false },
       [['$it', 'isA', 'Todo']]
     );
@@ -222,7 +222,7 @@ function TodoList() {
 }
 ```
 
-The `useKeyValueAttributes` hook handles everything:
+The `useKeyValueRecords` hook handles everything:
 - **Queries by facts** - Declaratively specify what data you need
 - **Persistence** - Data is stored on the LinkedRecords backend
 - **Real-time sync** - Changes from any user appear instantly
@@ -234,14 +234,14 @@ To create or modify data:
 ```tsx
 const { lr } = useLinkedRecords();
 
-// Create a new todo - automatically appears in all useKeyValueAttributes queries
-await lr.Attribute.createKeyValue(
+// Create a new todo - automatically appears in all useKeyValueRecords queries
+await lr.Record.createKeyValue(
   { title: 'Buy groceries', completed: false },
   [['$it', 'isA', 'Todo']]
 );
 
 // Update an existing todo
-const todoAttr = await lr.Attribute.find(todoId);
+const todoAttr = await lr.Record.find(todoId);
 const todo = await todoAttr.getValue();
 todoAttr.set({ ...todo, completed: true });
 
@@ -259,7 +259,7 @@ In most systems, a developer defines universal rules that apply to all users. In
 
 ```typescript
 // The user creating this document decides who can see it
-const myDoc = await client.Attribute.createKeyValue(
+const myDoc = await client.Record.createKeyValue(
   { content: 'My private notes' },
   [
     ['$it', 'isA', 'Document'],
@@ -330,13 +330,13 @@ Multiple applications can connect to the same LinkedRecords instance and work wi
 
 ```typescript
 // A project management app creates a project
-await lr.Attribute.createKeyValue(
+await lr.Record.createKeyValue(
   { name: 'Website Redesign', status: 'active' },
   [['$it', 'isA', 'Project']]
 );
 
 // A time tracking app queries the same projects
-const projects = useKeyValueAttributes([['$it', 'isA', 'Project']]);
+const projects = useKeyValueRecords([['$it', 'isA', 'Project']]);
 
 // A reporting dashboard shows project metrics
 // A mobile app lets you update status on the go
@@ -345,12 +345,12 @@ const projects = useKeyValueAttributes([['$it', 'isA', 'Project']]);
 
 **Reusable components across applications:**
 
-Since data follows a consistent pattern (facts and attributes), you can build components that work in any application:
+Since data follows a consistent pattern (facts and records), you can build components that work in any application:
 
 ```tsx
 // A profile component that works in ANY app connected to your LinkedRecords
 function UserProfile({ userId }) {
-  const [profile] = useKeyValueAttributes([
+  const [profile] = useKeyValueRecords([
     ['$it', 'isA', 'UserProfile'],
     [userId, '$isAccountableFor', '$it'],
   ]);

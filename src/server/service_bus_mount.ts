@@ -5,15 +5,15 @@ import * as jose from 'jose';
 import http from 'http';
 import clientServerBus, { getAllChannels } from '../../lib/client-server-bus/server';
 import IsLogger from '../../lib/is_logger';
-import SerializedChangeWithMetadata from '../attributes/abstract/serialized_change_with_metadata';
-import { getAttributeByMessage } from './middleware/attribute';
+import SerializedChangeWithMetadata from '../records/abstract/serialized_change_with_metadata';
+import { getAttributeByMessage } from './middleware/record';
 import Fact from '../facts/server';
 import { uid } from './controllers/userinfo_controller';
 import Quota from './quota';
-import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../attributes/attribute_query';
+import { CompoundRecordQuery, isValidCompoundRecordQuery } from '../records/record_query';
 
-export type CompoundAttributeQuerySubscribers = {
-  query: CompoundAttributeQuery,
+export type CompoundRecordQuerySubscribers = {
+  query: CompoundRecordQuery,
   userIds: string[],
 };
 
@@ -58,10 +58,10 @@ class WSAccessControl {
 
       try {
         const parsedQuery = JSON.parse(query);
-        const isValid = isValidCompoundAttributeQuery(parsedQuery);
+        const isValid = isValidCompoundRecordQuery(parsedQuery);
 
         if (!isValid) {
-          request.log.warn('Invalid compound attribute query');
+          request.log.warn('Invalid compound record query');
         }
 
         // as long as the query is valid every authenticated user is authorized
@@ -104,7 +104,7 @@ class WSAccessControl {
   }
 }
 
-export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAttributeQuerySubscribers[]> {
+export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundRecordQuerySubscribers[]> {
   const queryUserMap: Record<string, string[]> = {};
   [...(await getAllChannels())]
     .filter((channel) => channel.startsWith('query-sub:'))
@@ -137,12 +137,12 @@ export async function getSubscribedQueries(logger: IsLogger): Promise<CompoundAt
   });
 }
 
-export function notifyQueryResultMightHaveChanged(query: CompoundAttributeQuery, userId) {
+export function notifyQueryResultMightHaveChanged(query: CompoundRecordQuery, userId) {
   if (!sendMessage) {
     throw new Error('sending messages does not work yet, sendMessage is not initialized');
   }
 
-  if (!isValidCompoundAttributeQuery(query)) {
+  if (!isValidCompoundRecordQuery(query)) {
     throw new Error(`invalid query: ${JSON.stringify(query)}`);
   }
 

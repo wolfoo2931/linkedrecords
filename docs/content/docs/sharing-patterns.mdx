@@ -17,8 +17,8 @@ There are two main permission levels:
 
 | Permission | Predicate | Capabilities |
 |------------|-----------|--------------|
-| Read-Only | `$canRead` | View attribute values |
-| Read-Write | `$canAccess` | View and modify attribute values |
+| Read-Only | `$canRead` | View record values |
+| Read-Write | `$canAccess` | View and modify record values |
 
 ## Direct User Sharing
 
@@ -69,7 +69,7 @@ Grant access to a team, and all members inherit that access:
 
 ```typescript
 // Create a document shared with a team
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Team Document' },
   [
     ['$it', 'isA', 'Document'],
@@ -78,7 +78,7 @@ const doc = await lr.Attribute.createKeyValue(
 );
 ```
 
-### Share an Existing Attribute with a Team
+### Share an Existing Record with a Team
 
 ```typescript
 await lr.Fact.createAll([
@@ -89,7 +89,7 @@ await lr.Fact.createAll([
 ### Different Access Levels for Different Teams
 
 ```typescript
-const doc = await lr.Attribute.createKeyValue(
+const doc = await lr.Record.createKeyValue(
   { title: 'Quarterly Report' },
   [
     ['$it', 'isA', 'Document'],
@@ -101,13 +101,13 @@ const doc = await lr.Attribute.createKeyValue(
 
 ## Sharing with Fact Permissions
 
-Beyond reading and writing attribute values, you can share the ability to
-create facts about an attribute:
+Beyond reading and writing record values, you can share the ability to
+create facts about a record:
 
-### Allow Creating Facts with Attribute as Subject
+### Allow Creating Facts with Record as Subject
 
 ```typescript
-// Allow team members to add classifications to this attribute
+// Allow team members to add classifications to this record
 await lr.Fact.createAll([
   [teamId, '$canRefine', documentId],
 ]);
@@ -119,10 +119,10 @@ await member.Fact.createAll([
 ]);
 ```
 
-### Allow Creating Facts with Attribute as Object
+### Allow Creating Facts with Record as Object
 
 ```typescript
-// Allow team members to reference this attribute in facts
+// Allow team members to reference this record in facts
 await lr.Fact.createAll([
   [teamId, '$canReferTo', projectId],
 ]);
@@ -139,7 +139,7 @@ A complete sharing setup for an organization:
 
 ```typescript
 async function createSharedDocument(lr, title: string, org: OrgStructure) {
-  return lr.Attribute.createAll({
+  return lr.Record.createAll({
     doc: {
       type: 'KeyValueAttribute',
       value: {
@@ -225,7 +225,7 @@ Query for items shared with you:
 
 ```typescript
 // Find all documents I can access
-const { myDocs } = await lr.Attribute.findAll({
+const { myDocs } = await lr.Record.findAll({
   myDocs: [
     ['$it', 'isA', 'Document'],
   ],

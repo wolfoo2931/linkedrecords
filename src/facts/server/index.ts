@@ -6,7 +6,7 @@ import assert from 'assert';
 import { FactQuery, SubjectQueries, SubjectQuery } from '../fact_query';
 import PgPoolWithLog from '../../../lib/pg-log';
 import IsLogger from '../../../lib/is_logger';
-import AuthorizationError from '../../attributes/errors/authorization_error';
+import AuthorizationError from '../../records/errors/authorization_error';
 import SQL, { Role, rolePredicateMap } from './authorization_sql_builder';
 import cache from '../../server/cache';
 import EnsureIsValid from '../../../lib/utils/sql_values';

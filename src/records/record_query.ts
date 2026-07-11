@@ -1,0 +1,467 @@
+/* eslint-disable import/no-cycle */
+import Fact from '../facts/server';
+import { SubjectQuery } from '../facts/fact_query';
+import LongTextRecord from './long_text/server';
+import KeyValueRecord from './key_value/server';
+import BlobRecord from './blob/server';
+import IsLogger from '../../lib/is_logger';
+import AbstractRecordClient from './abstract/abstract_record_client';
+
+export type FactQueryWithOptionalSubjectPlaceholder =
+  [string, string, string?] |
+  [string, string, typeof AbstractRecordClient<any, any>] |
+  [string, typeof AbstractRecordClient<any, any>];
+
+export type RecordQuery = string | FactQueryWithOptionalSubjectPlaceholder[];
+
+export type CompoundRecordQuery = {
+  [key: string]: RecordQuery
+};
+
+// backwards-compat aliases
+export type AttributeQuery = RecordQuery;
+export type CompoundAttributeQuery = CompoundRecordQuery;
+
+/**
+ * Checks if a value is an AbstractRecordClient subclass.
+ */
+function isRecordClientClass(value: unknown): boolean {
+  if (typeof value !== 'function') {
+    return false;
+  }
+
+  // Check if it's one of the known record client classes or extends AbstractRecordClient
+  let proto = value;
+  while (proto && proto !== Function.prototype) {
+    if (proto === AbstractRecordClient || proto.name === AbstractRecordClient.name) {
+      return true;
+    }
+    proto = Object.getPrototypeOf(proto);
+  }
+
+  return false;
+}
+
+/**
+ * Validates if a value is a valid FactQueryWithOptionalSubjectPlaceholder tuple.
+ * Accepts:
+ * - [string, string, string?]
+ * - [string, string, AbstractRecordClient subclass]
+ * - [string, AbstractRecordClient subclass]
+ */
+function isValidFactQueryTuple(value: unknown): boolean {
+  if (!Array.isArray(value)) {
+    return false;
+  }
+
+  if (value.length < 2 || value.length > 3) {
+    return false;
+  }
+
+  // First element must be a string
+  if (typeof value[0] !== 'string') {
+    return false;
+  }
+
+  // Handle [string, AbstractRecordClient] case (2 elements)
+  if (value.length === 2) {
+    return typeof value[1] === 'string' || isRecordClientClass(value[1]);
+  }
+
+  // Handle 3-element tuples
+  // Second element must be a string
+  if (typeof value[1] !== 'string') {
+    return false;
+  }
+
+  // Third element can be string, undefined, or AbstractRecordClient subclass
+  if (value[2] !== undefined
+      && typeof value[2] !== 'string'
+      && !isRecordClientClass(value[2])) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validates if a value is a valid RecordQuery.
+ * A RecordQuery is either a string or an array of
+ * FactQueryWithOptionalSubjectPlaceholder tuples.
+ */
+export function isValidRecordQuery(value: unknown): value is RecordQuery {
+  if (typeof value === 'string') {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isValidFactQueryTuple);
+  }
+
+  return false;
+}
+
+// backwards-compat alias
+export const isValidAttributeQuery = isValidRecordQuery;
+
+/**
+ * Validates if a JSON object is a valid CompoundRecordQuery.
+ * A CompoundRecordQuery is an object where each value is a valid RecordQuery.
+ */
+export function isValidCompoundRecordQuery(value: unknown): value is CompoundRecordQuery {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+
+  if (entries.length === 0) {
+    return false;
+  }
+
+  return entries.every(([key, val]) => {
+    if (typeof key !== 'string') {
+      return false;
+    }
+    return isValidRecordQuery(val);
+  });
+}
+
+// backwards-compat alias
+export const isValidCompoundAttributeQuery = isValidCompoundRecordQuery;
+
+type ResolveToIdsResult = undefined | string | string[] | { [key: string]: string | string[] };
+export type ResolveToRecordsResult =
+  undefined |
+  AbstractRecordClient<any, any> |
+  AbstractRecordClient<any, any>[] |
+  { [key: string]: AbstractRecordClient<any, any> | AbstractRecordClient<any, any>[] };
+
+// backwards-compat alias
+export type ResolveToAttributesResult = ResolveToRecordsResult;
+
+type RecordClass = typeof LongTextRecord | typeof KeyValueRecord | typeof BlobRecord;
+
+function factQueryWithOptionalSubjectPlaceholderToFactQuery(
+  x: [string, string, string?],
+): SubjectQuery {
+  if (x.length === 3 && x[0] === '$it' && x[2]) {
+    return [x[1], x[2]];
+  }
+
+  if (x.length === 3 && x[2] === '$it') {
+    return [x[0], x[1], x[2]];
+  }
+
+  if (x.length === 2 && x[0] && x[1]) {
+    return [x[0], x[1]];
+  }
+
+  throw new Error(`factQueryWithOptionalSubjectPlaceholderToFactQuery received invalid input: ${JSON.stringify(x)}`);
+}
+
+function resolvedIdsToFlatArray(resultWithIds: ResolveToIdsResult): string[] {
+  if (!resultWithIds) {
+    throw new Error('expected ResolveToIdsResult to not be undefined');
+  }
+
+  let flatIds;
+
+  if (Array.isArray(resultWithIds)) {
+    flatIds = resultWithIds;
+  } else if (typeof resultWithIds === 'string') {
+    flatIds = [resultWithIds];
+  } else {
+    flatIds = Object.values(resultWithIds).flat();
+  }
+
+  return flatIds
+    .filter((id) => id !== undefined)
+    .filter((value, index, array) => array.indexOf(value) === index);
+}
+
+export default class QueryExecutor {
+  logger: IsLogger;
+
+  constructor(logger: IsLogger) {
+    this.logger = logger;
+  }
+
+  async resolveToRecords(
+    query: RecordQuery | CompoundRecordQuery,
+    clientId,
+    actorId,
+  ): Promise<ResolveToRecordsResult> {
+    // undefined | string | string[] | { [key: string]: string | string[] };
+    let resultWithIds = await this.resolveToIds(query, actorId);
+
+    if (!resultWithIds) {
+      return [];
+    }
+
+    const flatIds = resolvedIdsToFlatArray(resultWithIds);
+
+    if (Array.isArray(resultWithIds)) {
+      resultWithIds = resultWithIds.filter((id) => flatIds.includes(id));
+    } else if (typeof resultWithIds === 'string' && flatIds.includes(resultWithIds)) {
+      return undefined;
+    } else {
+      Object.keys(resultWithIds).forEach((group) => {
+        if (!resultWithIds) {
+          throw new Error('resultWithIds is expected to be defined');
+        }
+
+        if (typeof resultWithIds[group] === 'string') {
+          if (!flatIds.includes(resultWithIds[group])) {
+            resultWithIds[group] = undefined;
+          }
+        } else {
+          resultWithIds[group] = resultWithIds[group]
+            ? resultWithIds[group].filter((id) => flatIds.includes(id))
+            : undefined;
+        }
+      });
+    }
+
+    const records = await this.loadRecords(
+      flatIds,
+      clientId,
+      actorId,
+      { inAuthorizedContext: true },
+    );
+
+    if (typeof resultWithIds === 'string') {
+      return records[resultWithIds];
+    }
+
+    if (Array.isArray(resultWithIds)) {
+      return resultWithIds
+        .map((id) => records[id])
+        .filter((x) => x);
+    }
+
+    const resultWithAttr: ResolveToRecordsResult = {};
+    Object.keys(resultWithIds).forEach((group) => {
+      if (!resultWithIds) {
+        return;
+      }
+
+      if (typeof resultWithIds[group] === 'string') {
+        resultWithAttr[group] = records[resultWithIds[group]];
+      } else if (Array.isArray(resultWithIds[group])) {
+        resultWithAttr[group] = resultWithIds[group]
+          .map((id) => records[id])
+          .filter((x) => x);
+      }
+    });
+
+    return resultWithAttr;
+  }
+
+  // backwards-compat alias
+  async resolveToAttributes(
+    query: RecordQuery | CompoundRecordQuery,
+    clientId,
+    actorId,
+  ): Promise<ResolveToRecordsResult> {
+    return this.resolveToRecords(query, clientId, actorId);
+  }
+
+  async resolveToIds(
+    query: RecordQuery | CompoundRecordQuery,
+    userid: string,
+  ): Promise<ResolveToIdsResult> {
+    if (!userid) {
+      throw new Error('resolveToIds needs to receive a valid userid!');
+    }
+
+    if (query === undefined) {
+      throw new Error('query is undefined');
+    }
+
+    if (typeof query === 'string') {
+      if (await Fact.isAuthorizedToReadPayload(query, userid, this.logger)) {
+        return query;
+      }
+
+      return undefined;
+    }
+
+    if (!isValidCompoundRecordQuery(query) && !isValidRecordQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
+    }
+
+    if (!Array.isArray(query)) {
+      return this.resolveCompoundQueryToIds(query, userid);
+    }
+
+    if (query.find((q) => (!q[0] && !q[1] && !q[2]))) {
+      return [];
+    }
+
+    let dataTypeFilter;
+    const factQuery = query as FactQueryWithOptionalSubjectPlaceholder[];
+
+    const queryWithoutDataTypeFilter = factQuery.filter((q) => {
+      if (q[2] && typeof q[2] !== 'string') {
+        return false;
+      }
+
+      if (q[1] === '$hasDataType') {
+        [, , dataTypeFilter] = q;
+        return false;
+      }
+
+      if (q[0] === '$hasDataType') {
+        [, dataTypeFilter] = q;
+        return false;
+      }
+
+      return true;
+    }) as [string, string, string?][];
+
+    const subjectQuery = queryWithoutDataTypeFilter
+      .filter((q) => q.length < 3 || q[2] !== '$not($it)')
+      .map(factQueryWithOptionalSubjectPlaceholderToFactQuery)
+      .filter((x) => x && x.length === 2);
+
+    const objectQuery = queryWithoutDataTypeFilter
+      .filter((q) => q.length === 3 && q[2] === '$it')
+      .map(([subject, predicate]) => ([subject, predicate])) as [string, string][];
+
+    const nodeBlacklist: [string, string][] = queryWithoutDataTypeFilter
+      .filter((q) => q.length === 3 && q[2] === '$not($it)')
+      .map(([subject, predicate]) => [subject, predicate]);
+
+    let matchedIds = await Fact.findNodes(
+      subjectQuery,
+      objectQuery,
+      nodeBlacklist,
+      userid,
+      this.logger,
+    );
+
+    if (dataTypeFilter === 'KeyValueAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('kv-'));
+    } else if (dataTypeFilter === 'LongTextAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('l-'));
+    } else if (dataTypeFilter === 'BlobAttribute') {
+      matchedIds = matchedIds.filter((id) => id.startsWith('bl-'));
+    }
+
+    return matchedIds;
+  }
+
+  async loadRecords(
+    recordIDs: string[],
+    clientId: string,
+    actorId: string,
+    args?: { inAuthorizedContext: boolean },
+  ): Promise<Record<string, any>> {
+    const recordsByType = QueryExecutor.groupRecordIDsByClass(recordIDs);
+    const records = {};
+    const promises: Promise<any>[] = [];
+
+    recordsByType.forEach((ids, c) => {
+      const promise = c.loadAll(
+        ids,
+        clientId,
+        actorId,
+        this.logger,
+        args,
+      ).then((attrs) => {
+        attrs.forEach((attr) => {
+          records[attr.id] = attr;
+        });
+      });
+
+      promises.push(promise);
+    });
+
+    await Promise.all(promises);
+
+    return records;
+  }
+
+  // backwards-compat alias
+  async loadAttributes(
+    recordIDs: string[],
+    clientId: string,
+    actorId: string,
+    args?: { inAuthorizedContext: boolean },
+  ): Promise<Record<string, any>> {
+    return this.loadRecords(recordIDs, clientId, actorId, args);
+  }
+
+  async resolveCompoundQueryToIds(query: CompoundRecordQuery, userid: string): Promise<({
+    [key: string]: string | string[]
+  })> {
+    if (!userid) {
+      throw new Error('resolveCompoundQueryToIds needs to receive a valid userid!');
+    }
+
+    if (!isValidCompoundRecordQuery(query)) {
+      throw new Error(`invalid query: ${JSON.stringify(query)}`);
+    }
+
+    const result = {};
+    const promises: Promise<any>[] = [];
+    const qEntries = Object.entries(query);
+
+    for (let j = 0; j < qEntries.length; j += 1) {
+      const qEntry = qEntries[j];
+
+      if (qEntry) {
+        const n = qEntry[0];
+        const q = qEntry[1];
+
+        result[n] = this.resolveToIds(q, userid);
+        promises.push(result[n]);
+      }
+    }
+
+    await Promise.all(promises);
+
+    Object.keys(result).forEach(async (key) => {
+      result[key] = await result[key];
+    });
+
+    return result;
+  }
+
+  static getAttributeClassByAttributeId(
+    id: string,
+  ) : RecordClass | undefined {
+    const recordTypes = [LongTextRecord, KeyValueRecord, BlobRecord];
+    const [recordTypePrefix] = id.split('-');
+    return recordTypes.find((c) => c.getDataTypePrefix() === recordTypePrefix);
+  }
+
+  static groupRecordIDsByClass(recordIDs: string[]): Map<RecordClass, string[]> {
+    const recordsByType = new Map<RecordClass, string[]>();
+
+    recordIDs.forEach((id) => {
+      const RecordClassItem = QueryExecutor.getAttributeClassByAttributeId(id);
+      if (!RecordClassItem) {
+        return;
+      }
+
+      if (!recordsByType.get(RecordClassItem)) {
+        recordsByType.set(RecordClassItem, []);
+      }
+
+      const ids = recordsByType.get(RecordClassItem);
+
+      if (ids) {
+        ids.push(id);
+      }
+    });
+
+    return recordsByType;
+  }
+
+  // backwards-compat alias
+  static groupAttributeIDsByClass(attributeIDs: string[]): Map<RecordClass, string[]> {
+    return QueryExecutor.groupRecordIDsByClass(attributeIDs);
+  }
+}

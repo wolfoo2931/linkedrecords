@@ -2,7 +2,7 @@
 import type Fact from '.';
 import IsLogger from '../../../lib/is_logger';
 import { getSubscribedQueries, notifyQueryResultMightHaveChanged } from '../../server/service_bus_mount';
-import { CompoundAttributeQuery, isValidCompoundAttributeQuery } from '../../attributes/attribute_query';
+import { CompoundRecordQuery, isValidCompoundRecordQuery } from '../../records/record_query';
 import FactBox from './fact_box';
 
 export default class QuerySubscriptionService {
@@ -53,7 +53,7 @@ export default class QuerySubscriptionService {
 
   private async factsChangeMightAffectQuery(
     facts: Fact[],
-    query: CompoundAttributeQuery,
+    query: CompoundRecordQuery,
     userId: string,
   ): Promise<boolean> {
     // eslint-disable-next-line no-restricted-syntax
@@ -69,12 +69,12 @@ export default class QuerySubscriptionService {
 
   private async factChangeMightAffectQuery(
     fact: Fact,
-    query: CompoundAttributeQuery,
+    query: CompoundRecordQuery,
     userid: string, // does the query result change for this user
   ): Promise<boolean> {
     this.logger.debug(`check if fact (${fact.subject}, ${fact.predicate}, ${fact.object}) change might affect query: ${JSON.stringify(query)}`);
 
-    if (!isValidCompoundAttributeQuery(query)) {
+    if (!isValidCompoundRecordQuery(query)) {
       throw new Error(`invalid query: ${JSON.stringify(query)}`);
     }
 
@@ -108,12 +108,12 @@ export default class QuerySubscriptionService {
     return true;
   }
 
-  private static hasPredicate(query: CompoundAttributeQuery, predicate: string) {
+  private static hasPredicate(query: CompoundRecordQuery, predicate: string) {
     const predicates = QuerySubscriptionService.extractAllPredicatesFromQuery(query);
     return predicates.has(predicate);
   }
 
-  private static extractAllPredicatesFromQuery(query: CompoundAttributeQuery): Set<string> {
+  private static extractAllPredicatesFromQuery(query: CompoundRecordQuery): Set<string> {
     const predicates = new Set<string>();
 
     // Process each query in the compound query

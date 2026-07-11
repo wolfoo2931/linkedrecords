@@ -35,7 +35,7 @@ describe('quota', () => {
       ['Thing', '$isATermFor', 'something'],
     ]);
 
-    const org = await client.Attribute.createKeyValue({ x: 'x'.repeat(90 * 1024) });
+    const org = await client.Record.createKeyValue({ x: 'x'.repeat(90 * 1024) });
     let quota = await client.getQuota(org.id);
 
     expect(quota.totalStorageAvailable).to.eql(0);
@@ -48,7 +48,7 @@ describe('quota', () => {
     expect(quota.totalStorageAvailable).to.eql(1 * mb);
     expect(quota.remainingStorageAvailable).to.eql(1 * mb);
 
-    await client.Attribute.createKeyValue({ x: 'x'.repeat(90 * 1024) }, [
+    await client.Record.createKeyValue({ x: 'x'.repeat(90 * 1024) }, [
       [org.id!, '$isAccountableFor', '$it'],
       ['isA', 'Thing'],
     ]);
@@ -65,12 +65,12 @@ describe('quota', () => {
     expect(quota.totalStorageAvailable).to.eql(smallerQuota);
 
     // We should not be able anymore to create any more data
-    await client.Attribute.createKeyValue({ y: 'y'.repeat(90 * 1024) }, [
+    await client.Record.createKeyValue({ y: 'y'.repeat(90 * 1024) }, [
       [org.id!, '$isAccountableFor', '$it'],
       ['isA', 'Thing'],
     ]);
 
-    const { things } = await client.Attribute.findAll({
+    const { things } = await client.Record.findAll({
       things: [
         ['$it', 'isA', 'Thing'],
       ],
@@ -87,19 +87,19 @@ describe('quota', () => {
 
     await setQuota(await client.getActorId(), Math.ceil(0.1 * mb));
 
-    await client.Attribute.create('keyValue', { x: 'x'.repeat(90 * 1024) }, [
+    await client.Record.create('keyValue', { x: 'x'.repeat(90 * 1024) }, [
       ['isA', 'Thing'],
     ]);
 
     const beforeQuotaViolation = await client.getQuota();
 
-    await client.Attribute.create('keyValue', { x: 'x'.repeat(90 * 1024) }, [
+    await client.Record.create('keyValue', { x: 'x'.repeat(90 * 1024) }, [
       ['isA', 'Thing'],
     ]);
 
     const afterQuotaViolation = await client.getQuota();
 
-    const { things } = await client.Attribute.findAll({
+    const { things } = await client.Record.findAll({
       things: [
         ['$it', 'isA', 'Thing'],
       ],
@@ -115,13 +115,13 @@ describe('quota', () => {
     const client = await Session.getOneSession();
     await setQuota(await client.getActorId(), Math.ceil(0.1 * mb));
 
-    const attribute = await client.Attribute.createKeyValue({ x: 'x'.repeat(90 * 1024) }, []);
+    const attribute = await client.Record.createKeyValue({ x: 'x'.repeat(90 * 1024) }, []);
 
     await attribute.patch({ y: 'y' });
 
     await browser.pause(500);
 
-    let readFromDb = await client.Attribute.find(attribute.id!);
+    let readFromDb = await client.Record.find(attribute.id!);
     let value = await readFromDb?.getValue();
 
     expect(Object.keys(value)).to.be.an('array').of.length(2);
@@ -134,7 +134,7 @@ describe('quota', () => {
 
     const afterQuotaViolation = await client.getQuota();
 
-    readFromDb = await client.Attribute.find(attribute.id!);
+    readFromDb = await client.Record.find(attribute.id!);
     value = await readFromDb?.getValue();
 
     expect(Object.keys(value)).to.be.an('array').of.length(2);
@@ -154,7 +154,7 @@ describe('quota', () => {
   it('does not allow to lookup quota if the user is not member of the attribute', async () => {
     const [user1, user2] = await Session.getTwoSessions();
 
-    const team = await user1.Attribute.createKeyValue({});
+    const team = await user1.Record.createKeyValue({});
 
     const authorizedQuotaLookup = await user1.getQuota(team.id);
     const unauthorizedQuotaLookup = await user2.getQuota(team.id);
