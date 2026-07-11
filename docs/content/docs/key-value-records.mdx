@@ -53,8 +53,8 @@ const task = await lr.Record.createKeyValue(
 ### Get Current Value
 
 ```typescript
-const attr = await lr.Record.find(attributeId);
-const value = await attr.getValue();
+const record = await lr.Record.find(recordId);
+const value = await record.getValue();
 console.log(value); // { title: 'My Document', ... }
 ```
 
