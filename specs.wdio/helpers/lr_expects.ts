@@ -15,6 +15,24 @@ export async function expectFactToNotExists(fact: [string, string, string]) {
   expect(count).to.eq(0);
 }
 
+export async function expectFactToNotExistsEventually(fact: [string, string, string]) {
+  const waitForMs = 5000;
+  const pollIntervalMs = 50;
+  const startedAt = Date.now();
+
+  let count = await queryFactCount(fact[0], fact[1], fact[2]);
+
+  while (count !== 0 && Date.now() - startedAt < waitForMs) {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, pollIntervalMs);
+    });
+
+    count = await queryFactCount(fact[0], fact[1], fact[2]);
+  }
+
+  expect(count, `expectFactToNotExistsEventually but it does: ${JSON.stringify(fact)} count: ${count}`).to.eq(0);
+}
+
 export async function expectNotToBeAbleToWriteRecord(attributeId, client) {
   const attributeWithAccess = await client.Record.createKeyValue({ name: 'anAttributeWithAccess' });
   const serverURL = await attributeWithAccess.getServerURL();

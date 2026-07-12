@@ -10,6 +10,7 @@ import Session from '../helpers/session';
 import {
   expectFactToExists,
   expectFactToNotExists,
+  expectFactToNotExistsEventually,
   expectNotToBeAbleToReadOrWriteRecord,
   expectNotToBeAbleToWriteRecord,
   expectNotToBeAbleToUseAsSubject,
@@ -2276,7 +2277,7 @@ describe('authorization', () => {
       [team.id, '$canAccess', documents[0].id],
     ]);
 
-    await browser.pause(1000);
+    await expectFactToNotExistsEventually([team.id, '$canAccess', documents[0].id]);
     await expectNotToBeAbleToReadOrWriteRecord(documents[0].id, readingUser);
   });
 
