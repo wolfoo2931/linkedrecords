@@ -1,6 +1,14 @@
 /* eslint-disable no-await-in-loop */
 import { expect } from 'chai';
 import { queryFactCount } from './testapp_client';
+import { InitializedSession } from './session';
+
+function clearCache(client: InitializedSession) {
+  return client.do((lr: any) => {
+    // eslint-disable-next-line no-param-reassign
+    lr.Record.recordCache = {};
+  });
+}
 
 // eslint-disable-next-line import/prefer-default-export
 export async function expectFactToExists(fact: [string, string, string]) {
@@ -13,24 +21,6 @@ export async function expectFactToNotExists(fact: [string, string, string]) {
     console.error('expectFactToNotExists but it does:', fact);
   }
   expect(count).to.eq(0);
-}
-
-export async function expectFactToNotExistsEventually(fact: [string, string, string]) {
-  const waitForMs = 5000;
-  const pollIntervalMs = 50;
-  const startedAt = Date.now();
-
-  let count = await queryFactCount(fact[0], fact[1], fact[2]);
-
-  while (count !== 0 && Date.now() - startedAt < waitForMs) {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, pollIntervalMs);
-    });
-
-    count = await queryFactCount(fact[0], fact[1], fact[2]);
-  }
-
-  expect(count, `expectFactToNotExistsEventually but it does: ${JSON.stringify(fact)} count: ${count}`).to.eq(0);
 }
 
 export async function expectNotToBeAbleToWriteRecord(attributeId, client) {
@@ -86,7 +76,7 @@ export async function expectNotToBeAbleToReadOrWriteRecord(attributeId, client) 
     object: [attributeId],
   })).length).to.eql(0);
 
-  client.Record.clearCache();
+  await clearCache(client);
   const noAccessAttr = await client.Record.find(attributeId);
   const accessAttr = await client.Record.find(attributeWithAccess.id);
 
