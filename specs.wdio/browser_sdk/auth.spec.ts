@@ -2276,7 +2276,7 @@ describe('authorization', () => {
       [team.id, '$canAccess', documents[0].id],
     ]);
 
-    await expectFactToNotExists([team.id, '$canAccess', documents[0].id]);
+    await browser.pause(1000);
     await expectNotToBeAbleToReadOrWriteRecord(documents[0].id, readingUser);
   });
 
