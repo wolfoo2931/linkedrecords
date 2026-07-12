@@ -1,0 +1,170 @@
+---
+title: React SDK
+description: Reference for the @linkedrecords/react hooks package
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+[`@linkedrecords/react`](https://www.npmjs.com/package/@linkedrecords/react)
+is a small package of React bindings on top of the core
+[`@linkedrecords/browser`](https://www.npmjs.com/package/@linkedrecords/browser)
+SDK. It provides a context provider and hooks for querying key-value records
+with automatic real-time updates.
+
+```bash
+npm install @linkedrecords/react
+```
+
+The [Getting Started guide](/getting-started) builds a complete app with it.
+
+## LinkedRecordsProvider
+
+Wrap your application in `LinkedRecordsProvider` to make a LinkedRecords
+client available to all hooks. It creates a **public client** (bearer-token
+mode) for the given server URL; the OIDC settings are discovered
+automatically from the server's `/oidc/discovery` endpoint.
+
+```tsx
+import { LinkedRecordsProvider } from '@linkedrecords/react';
+
+export default function App() {
+  return (
+    <LinkedRecordsProvider serverUrl="http://localhost:6543">
+      <MyApp />
+    </LinkedRecordsProvider>
+  );
+}
+```
+
+**Props:**
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `serverUrl` | `string` | Base URL of the LinkedRecords server |
+| `children` | `ReactNode` | Your application |
+
+## useLinkedRecords
+
+Returns the underlying `LinkedRecords` client instance for everything the
+hooks don't cover: creating and updating records, managing facts, and the
+login flow.
+
+```tsx
+import { useLinkedRecords } from '@linkedrecords/react';
+
+function AddTodoButton() {
+  const { lr } = useLinkedRecords();
+
+  const addTodo = async () => {
+    await lr.Record.createKeyValue(
+      { title: 'New task', completed: false },
+      [['$it', 'isA', 'Todo']],
+    );
+  };
+
+  return <button onClick={addTodo}>Add Todo</button>;
+}
+```
+
+Commonly used client methods:
+
+| Method | Description |
+|--------|-------------|
+| `lr.isAuthenticated()` | Whether the user is logged in |
+| `lr.login()` / `lr.logout()` | Start the OIDC login flow / log out |
+| `lr.Record.createKeyValue(value, facts)` | Create a key-value record |
+| `lr.Record.createAll(blueprint)` | Create related records atomically ([blueprint pattern](/blueprint-pattern)) |
+| `lr.Record.find(id)` | Load a single record handle |
+| `lr.Fact.createAll(facts)` / `lr.Fact.deleteAll(facts)` | Manage [facts](/facts-and-triples) |
+| `lr.getUserIdByEmail(email)` | Look up a user ID for sharing |
+
+## useKeyValueRecords
+
+Queries key-value records by facts and keeps the result up to date in
+real time - across users and browser tabs.
+
+```tsx
+import { useKeyValueRecords } from '@linkedrecords/react';
+
+function TodoList() {
+  const todos = useKeyValueRecords([
+    ['$it', 'isA', 'Todo'],
+  ]);
+
+  return (
+    <ul>
+      {todos.map((todo) => <li key={todo._id}>{todo.title}</li>)}
+    </ul>
+  );
+}
+```
+
+**Parameters:** an array of fact criteria (see the
+[query language](/query-language)). The data type filter
+`['$it', '$hasDataType', KeyValueRecord]` is prepended automatically - you
+only specify your domain criteria.
+
+**Returns:** an array of **plain JavaScript objects** - each is the record's
+current value spread together with its ID as `_id`:
+
+```ts
+{ _id: 'kv-abc123', title: 'Buy groceries', completed: false }
+```
+
+The array starts empty and fills once the query resolves. It updates
+automatically when matching records are created or deleted, and when any
+matched record's value changes.
+
+<Callout type="info">
+Unlike `lr.Record.findAll()`, which returns record **handles** (with
+`getValue()`, `set()`, `subscribe()`), this hook returns plain value objects
+for direct rendering. To modify a record, get a handle via
+`lr.Record.find(record._id)`.
+</Callout>
+
+```tsx
+function ToggleTodo({ todo }) {
+  const { lr } = useLinkedRecords();
+
+  const toggle = async () => {
+    const handle = await lr.Record.find(todo._id);
+    const value = await handle.getValue();
+    await handle.set({ ...value, completed: !value.completed });
+  };
+
+  return <input type="checkbox" checked={todo.completed} onChange={toggle} />;
+}
+```
+
+<Callout type="warn">
+The hook only queries **key-value** records. For long-text or blob records,
+use the core SDK via `useLinkedRecords()` - see
+[Long Text Records](/long-text-records) and [Blob Records](/blob-records).
+</Callout>
+
+## useUserInfo
+
+Returns the logged-in user's info, or `null` while loading or when not
+authenticated.
+
+```tsx
+import { useUserInfo } from '@linkedrecords/react';
+
+function AccountBadge() {
+  const userInfo = useUserInfo();
+
+  if (!userInfo) return null;
+
+  return <span>{userInfo.email}</span>;
+}
+```
+
+**Returns:** `{ email: string } | null`
+
+## Deprecated
+
+| Export | Replacement |
+|--------|-------------|
+| `useKeyValueAttributes` | `useKeyValueRecords` (identical behavior; "Attribute" is the former name of the Record concept) |

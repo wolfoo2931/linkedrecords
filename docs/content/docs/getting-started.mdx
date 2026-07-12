@@ -11,10 +11,12 @@ By the end of this tutorial, you will have a working application with authentica
 
 ## Quick Start
 
-Start the LinkedRecords backend locally with a single command (requires [Docker](https://docs.docker.com/get-docker/)):
+Start the LinkedRecords backend locally by downloading the Docker Compose file
+and starting the stack (requires [Docker](https://docs.docker.com/get-docker/)):
 
 ```bash
-docker compose -p linkedrecords -f https://github.com/wolfoo2931/linkedrecords.git#main:docker-compose.yml up
+curl -fsSLO https://raw.githubusercontent.com/wolfoo2931/linkedrecords/main/docker-compose.yml
+docker compose -p linkedrecords up
 ```
 
 <Callout type="warn">
@@ -85,7 +87,8 @@ npm install @linkedrecords/react react-use tailwindcss @tailwindcss/vite --save
 
 <Callout type="info">
 You can also use LinkedRecords outside of React applications. The @linkedrecords/react
-module provides some handy hooks which make our lives easier.
+module provides some handy hooks which make our lives easier - see the
+[React SDK reference](/react) for the full API.
 </Callout>
 
 #### Add Tailwind CSS

@@ -1,0 +1,124 @@
+---
+title: Self-Hosting
+description: Architecture overview and production deployment guide
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Architecture
+
+A LinkedRecords deployment consists of the following components:
+
+```
+┌──────────────────┐         ┌──────────────────────────────┐
+│  Single-Page App │  HTTPS  │   LinkedRecords Server       │
+│  (static files,  │◀───────▶│   (Node.js: Express +        │
+│   any CDN/host)  │  + WS   │    Socket.IO)                │
+└──────────────────┘         └──────┬───────┬───────┬───────┘
+        │                           │       │       │
+        │ OIDC login                │       │       │
+        ▼                           ▼       ▼       ▼
+┌──────────────────┐         ┌──────────┐ ┌─────┐ ┌──────────┐
+│  OIDC Provider   │◀───────▶│PostgreSQL│ │Redis│ │ S3/MinIO │
+│ (Auth0, Keycloak,│  verify │(required)│ │(opt)│ │  (opt)   │
+│  Okta, ...)      │  tokens └──────────┘ └─────┘ └──────────┘
+└──────────────────┘
+```
+
+- **LinkedRecords server** - stateless Node.js process serving the HTTP API
+  and Socket.IO real-time connections.
+- **PostgreSQL** (required) - stores facts (the triplestore that drives
+  authorization) and record values.
+- **OIDC provider** (required) - any OpenID Connect compliant identity
+  provider. LinkedRecords never stores passwords.
+- **Redis** (optional) - only needed when running **multiple server
+  instances**, so real-time events reach clients connected to other
+  instances.
+- **S3-compatible object storage** (optional, recommended) - stores blob
+  record values; without it they go into PostgreSQL.
+
+## Running the Server
+
+### Docker (recommended)
+
+A multi-arch image is published to GitHub Container Registry:
+
+```bash
+docker run -p 6543:6543 \
+  -e PGHOST=... -e PGUSER=... -e PGPASSWORD=... -e PGDATABASE=... \
+  -e FRONTEND_BASE_URL=https://your-app.com \
+  -e SERVER_BASE_URL=https://api.your-app.com \
+  -e AUTH_ISSUER_BASE_URL=https://your-tenant.auth0.com/ \
+  -e AUTH_CLIENT_ID=... \
+  -e AUTH_CLIENT_SECRET=... \
+  -e AUTH_COOKIE_SIGNING_SECRET=... \
+  ghcr.io/wolfoo2931/linkedrecords:latest
+```
+
+See the [configuration reference](/configuration) for all environment
+variables and the difference between confidential and public client mode.
+
+### From Source
+
+```bash
+git clone https://github.com/wolfoo2931/linkedrecords.git
+cd linkedrecords
+npm install
+npm start   # builds and starts on port 6543 (override with PORT)
+```
+
+## Database Setup
+
+Point the server at an empty PostgreSQL database via the `PG*` variables.
+**The schema is created automatically on server start** (`CREATE TABLE IF NOT
+EXISTS ...`) - there is no separate migration step to run.
+
+For backups, standard PostgreSQL tooling (`pg_dump`, WAL archiving, managed
+provider snapshots) covers all data - unless you configured S3, in which case
+blob values live in the bucket and must be backed up separately.
+
+## TLS
+
+Most deployments should terminate TLS at a reverse proxy, load balancer, or
+ingress and run the server with plain HTTP behind it. Make sure the proxy
+supports **WebSocket upgrades** (for Socket.IO real-time connections).
+
+Alternatively, the Node.js server can terminate TLS itself: set `HTTPS=true`
+and provide `SSL_KEY` and `SSL_CRT` (PEM contents).
+
+## Scaling to Multiple Instances
+
+A single instance is sufficient for most workloads (see the performance
+chart in the [README](https://github.com/wolfoo2931/linkedrecords#performance)).
+To run multiple instances behind a load balancer:
+
+1. Set `REDIS_HOST` (and `REDIS_USERNAME`/`REDIS_PASSWORD`) on every
+   instance so real-time events are fanned out across instances via Redis
+   Streams.
+2. Consider setting `SHORT_LIVED_ACCESS_TOKEN_SIGNING` to a shared secret to
+   reduce database load from subscription authorization checks.
+3. Sticky sessions are recommended for Socket.IO long-polling fallback.
+
+## Monitoring
+
+- **Liveness probe:** `GET /oidc/discovery` responds without authentication.
+- **Logs:** structured JSON on stdout ([pino](https://getpino.io/)); request
+  and response headers are redacted.
+- **Rate limiting:** built-in limit of 1000 requests/second per IP.
+
+## Production Checklist
+
+- [ ] PostgreSQL provisioned with backups; `PG*` variables set
+- [ ] Real OIDC provider configured - `AUTH_DEV_MODE` **not** set
+- [ ] `FRONTEND_BASE_URL`, `SERVER_BASE_URL`, and `CORS_ORIGIN` match your domains exactly
+- [ ] Strong random secrets for `AUTH_COOKIE_SIGNING_SECRET` (confidential mode) and `SHORT_LIVED_ACCESS_TOKEN_SIGNING`
+- [ ] TLS termination in place; WebSocket upgrades pass through the proxy
+- [ ] S3 bucket configured if your app stores blobs
+- [ ] Quotas set: `DEFAULT_STORAGE_SIZE_QUOTA`, `QUOTA_COUNT_KV_RECORDS`, `QUOTA_COUNT_LT_RECORDS`
+- [ ] Redis configured if running more than one instance
+
+<Callout type="warn">
+Never expose a server started from the development `docker-compose.yml` to
+the internet - it runs with `AUTH_DEV_MODE=true`, which lets anyone log in as
+the built-in test accounts without a password.
+</Callout>

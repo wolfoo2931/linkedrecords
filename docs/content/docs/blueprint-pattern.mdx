@@ -63,6 +63,13 @@ const result = await lr.Record.createAll({
 });
 ```
 
+<Callout type="info">
+The `type` field uses the legacy type names (`KeyValueAttribute`,
+`LongTextAttribute`, `BlobAttribute`) - "Attribute" is the former name of the
+Record concept, and the runtime identifiers were kept for backwards
+compatibility. It defaults to `KeyValueAttribute` when omitted.
+</Callout>
+
 ## The Reference Syntax
 
 Use `{{recordName}}` syntax to reference another record being created in the same

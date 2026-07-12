@@ -6,8 +6,14 @@
 
 - **Repository:** https://github.com/wolfoo2931/linkedrecords
 - **License:** MIT
-- **Version:** 0.1.0
+- **npm packages:** `@linkedrecords/browser` (core SDK), `@linkedrecords/react` (React hooks, separate repo)
 - **Author:** Oliver Wolf
+
+> **Naming note:** The core data concept is called **Record**; it was formerly
+> called **Attribute** (renamed in 2025). The runtime type identifiers
+> (`KeyValueAttribute`, `LongTextAttribute`, `BlobAttribute`), the
+> `client.Attribute` repository alias, and the `/attributes` HTTP routes remain
+> as backwards-compatible aliases. Use the `Record` forms in new code.
 
 ## Core Concept
 
@@ -20,11 +26,10 @@ Key idea: Instead of defining universal authorization rules in the backend, the 
 ### Backend
 - **TypeScript** on Node.js v24
 - **Express.js** for HTTP API
-- **PostgreSQL** (triplestore for facts + attribute storage)
-- **Socket.IO** with Redis Streams for real-time
+- **PostgreSQL** (triplestore for facts + record storage)
+- **Socket.IO** for real-time (optional Redis Streams adapter for multi-instance)
 - **OpenID Connect** (OIDC) for authentication
 - **MinIO/S3** for blob storage (optional)
-- **Redis** for caching/pub-sub
 
 ### Frontend SDK
 - **TypeScript** browser SDK
@@ -32,35 +37,39 @@ Key idea: Instead of defining universal authorization rules in the backend, the 
 - **Socket.IO client** for real-time
 
 ### Testing
-- **Mocha + Chai** for unit tests
-- **WebdriverIO v9** for E2E tests
+- **Vitest** for component tests (`npm test` via `bin/test.sh`)
+- **WebdriverIO v9** for E2E tests (`npm run wdio`)
 
 ## Project Structure
 
 ```
 src/
-├── server/                  # Express server
-│   ├── controllers/         # API endpoints
-│   │   ├── facts.ts        # Fact management (triplestore)
-│   │   ├── attributes.ts   # Attribute CRUD
-│   │   ├── quota.ts        # Storage quotas
-│   │   └── userinfo.ts     # User info
-│   ├── middleware/         # Auth, error handling
-│   ├── payment_provider/   # Paddle integration
-│   └── quota/             # Quota management
-├── browser_sdk/            # Client SDK
-├── attributes/             # Data storage
-│   ├── key_value/         # JSON documents (CRDT)
-│   ├── long_text/         # Large text (OT)
-│   ├── blob/              # Binary files
-│   └── attribute_storage/ # PostgreSQL/S3 backends
-└── facts/                 # Authorization system
-    ├── server/            # Fact management
-    └── client/            # Fact queries
+├── server/                       # Express server
+│   ├── routes.ts                # Route definitions
+│   ├── controllers/             # API endpoints
+│   │   ├── facts_controller.ts     # Fact management (triplestore)
+│   │   ├── records_controller.ts   # Record CRUD + blueprints
+│   │   ├── quota_controller.ts     # Storage quotas
+│   │   ├── userinfo_controller.ts  # User info
+│   │   └── oidc_controller.ts      # OIDC discovery
+│   ├── middleware/              # Auth, error handling
+│   ├── payment_provider/        # Paddle integration
+│   └── quota/                   # Quota management
+├── browser_sdk/                  # Client SDK
+├── records/                      # Data storage
+│   ├── key_value/               # JSON documents (CRDT)
+│   ├── long_text/               # Large text (OT)
+│   ├── blob/                    # Binary files
+│   ├── record_query.ts          # Query engine
+│   └── record_storage/          # PostgreSQL/S3 backends
+├── facts/                        # Authorization system
+│   ├── server/                  # Fact management, auth SQL
+│   └── client/                  # Fact queries
+└── dev-oidc/                     # Mock OIDC provider (AUTH_DEV_MODE)
 
 lib/                       # Shared utilities
 ├── client-server-bus/    # WebSocket/HTTP layer
-├── pg-log/               # PostgreSQL with logging
+├── pg-log/               # PostgreSQL with logging (PGlite support)
 └── utils/                # Helpers
 
 specs.wdio/               # Integration tests
@@ -90,7 +99,7 @@ await client.Fact.createAll([
 ]);
 
 // Now you can use these terms
-const org = await client.Attribute.createKeyValue(
+const org = await client.Record.createKeyValue(
   { name: 'Acme Inc' },
   [['$it', 'isA', 'Organization']]  // 'Organization' was declared above
 );
@@ -111,7 +120,7 @@ const org = await client.Attribute.createKeyValue(
 - `$canReferTo` - Can use as object in facts (referrer permission)
 
 **System predicates**:
-- `$hasDataType` - Filter by attribute type (KeyValueAttribute, LongTextAttribute, BlobAttribute)
+- `$hasDataType` - Filter by record type (legacy names: KeyValueAttribute, LongTextAttribute, BlobAttribute)
 - `$latest(predicate)` - Get latest value for a predicate
 - `$not(value)` - Negation
 
@@ -123,36 +132,36 @@ const org = await client.Attribute.createKeyValue(
 
 ### 4. Accountability
 
-- When you create an attribute, you're **automatically accountable** for it
-- A fact `[userId, '$isAccountableFor', attributeId]` is created automatically
+- When you create a record, you're **automatically accountable** for it
+- A fact `[userId, '$isAccountableFor', recordId]` is created automatically
 - Accountability determines quota usage
 - You can transfer accountability: `[orgId, '$isAccountableFor', '$it']`
 
-### 5. Attribute Types
+### 5. Record Types
 
-#### Key-Value Attributes (CRDT)
+#### Key-Value Records (CRDT)
 ```typescript
-const attr = await client.Attribute.createKeyValue(
+const attr = await client.Record.createKeyValue(
   { name: 'value', nested: { data: 123 } },
   [['$it', 'isA', 'MyType']]
 );
 ```
 
-#### Long Text Attributes (OT)
+#### Long Text Records (OT)
 ```typescript
-const attr = await client.Attribute.create('longText', 'Initial text content');
+const attr = await client.Record.createLongText('Initial text content');
 ```
 
-#### Blob Attributes
+#### Blob Records
 ```typescript
-const attr = await client.Attribute.create('blob', binaryData);
+const attr = await client.Record.createBlob(binaryData);
 ```
 
-### 6. Creating Attributes
+### 6. Creating Records
 
 **Simple creation:**
 ```typescript
-const list = await client.Attribute.createKeyValue(
+const list = await client.Record.createKeyValue(
   { title: 'Shopping', items: [] },
   [['$it', 'isA', 'TodoList']]
 );
@@ -160,7 +169,7 @@ const list = await client.Attribute.createKeyValue(
 
 **With team access:**
 ```typescript
-const doc = await client.Attribute.createKeyValue(
+const doc = await client.Record.createKeyValue(
   { content: '...' },
   [
     ['$it', 'isA', 'Document'],
@@ -169,9 +178,9 @@ const doc = await client.Attribute.createKeyValue(
 );
 ```
 
-**Blueprint pattern (multiple related attributes):**
+**Blueprint pattern (multiple related records):**
 ```typescript
-const { org, adminTeam, internTeam } = await client.Attribute.createAll({
+const { org, adminTeam, internTeam } = await client.Record.createAll({
   org: {
     type: 'KeyValueAttribute',
     value: { name: 'Acme Inc' },
@@ -201,17 +210,17 @@ const { org, adminTeam, internTeam } = await client.Attribute.createAll({
 });
 ```
 
-### 7. Querying Attributes
+### 7. Querying Records
 
 **Find by ID:**
 ```typescript
-const attr = await client.Attribute.find(attributeId);
+const attr = await client.Record.find(recordId);
 const value = await attr.getValue();
 ```
 
 **Find all matching a pattern:**
 ```typescript
-const { lists } = await client.Attribute.findAll({
+const { lists } = await client.Record.findAll({
   lists: [
     ['$it', 'isA', 'TodoList']
   ]
@@ -221,7 +230,7 @@ const { lists } = await client.Attribute.findAll({
 
 **Complex queries:**
 ```typescript
-const { todos } = await client.Attribute.findAll({
+const { todos } = await client.Record.findAll({
   todos: [
     ['$it', '$hasDataType', 'KeyValueAttribute'],
     ['$it', 'isA', 'TodoList'],
@@ -307,12 +316,12 @@ await client.Fact.createAll([
 
 // 2. Create org with teams using blueprint
 const { org, adminTeam, tempTeam, internTeam, todoLists, archivedState } =
-  await client.Attribute.createAll(getOrgBlueprint('Acme Inc'));
+  await client.Record.createAll(getOrgBlueprint('Acme Inc'));
 ```
 
 **Create todo list:**
 ```typescript
-const { list } = await client.Attribute.createAll({
+const { list } = await client.Record.createAll({
   list: {
     type: 'KeyValueAttribute',
     value: { name: 'Shopping', tasks: {} },
@@ -327,7 +336,7 @@ const { list } = await client.Attribute.createAll({
 
 **Get all lists for an org:**
 ```typescript
-const { lists } = await client.Attribute.findAll({
+const { lists } = await client.Record.findAll({
   lists: [
     ['$it', 'isA', 'TodoList'],
     ['$it', '$isMemberOf', todoListsId],
@@ -383,24 +392,28 @@ Environment variables:
 
 ### Facts
 - `GET /facts` - Query facts
-- `POST /facts` - Create facts
+- `POST /facts` - Create facts (body: plain JSON array of triples; 403 if any fact unauthorized, nothing saved)
+- `POST /facts/delete` - Delete facts (body: plain JSON array of triples)
 
-### Attributes
-- `GET /attributes/:id` - Get attribute
-- `POST /attributes` - Create attribute
-- `PATCH /attributes/:id` - Update attribute
-- `POST /attribute-compositions` - Create multiple (blueprint)
+### Records
+- `GET /records?query=...` - Query records
+- `GET /records/:id` - Get record
+- `POST /records?dtp=<kv|l|bl>` - Create record
+- `PATCH /records/:id` - Apply CRDT/OT change to record
+- `GET /records/:id/members` - List members/hosts of a record
+- `POST /record-compositions` - Create multiple (blueprint)
+- Legacy aliases: `/attributes` and `/attribute-compositions` route to the same handlers
 
 ### Other
-- `GET /userinfo` - User information
+- `GET /userinfo` - User information (`?email=` looks up a user ID by email)
 - `GET /quota/:nodeId` - Storage quota
-- `GET /oidc/discovery` - OIDC discovery
+- `GET /oidc/discovery` - OIDC discovery (unauthenticated; usable as liveness probe)
 
 ## Browser SDK Usage
 
 ### Public Client Mode (cross-domain)
 ```typescript
-import LinkedRecords from 'linkedrecords';
+import LinkedRecords from '@linkedrecords/browser';
 
 const lr = new LinkedRecords(
   new URL('https://your-backend.com'),
@@ -445,7 +458,7 @@ await client.Fact.createAll([
 
 ### 2. Use Blueprint Pattern for Related Data
 ```typescript
-const result = await client.Attribute.createAll({
+const result = await client.Record.createAll({
   parent: { type: 'KeyValueAttribute', value: {}, facts: [...] },
   child: { type: 'KeyValueAttribute', value: {}, facts: [
     ['{{parent}}', '$isAccountableFor', '$it']
@@ -472,19 +485,21 @@ const result = await client.Attribute.createAll({
 
 ### Server
 - `src/server/index.ts` - Server entry point
-- `src/server/controllers/facts.ts` - Facts API
-- `src/server/controllers/attributes.ts` - Attributes API
-- `src/facts/server/graph.ts` - Fact graph
-- `src/facts/server/query.ts` - Query engine
-- `src/facts/server/access_check.ts` - Authorization
+- `src/server/routes.ts` - Route definitions
+- `src/server/controllers/facts_controller.ts` - Facts API
+- `src/server/controllers/records_controller.ts` - Records API + blueprints
+- `src/facts/server/index.ts` - Fact management and authorization
+- `src/facts/server/authorization_sql_builder.ts` - Authorization SQL
+- `src/records/record_query.ts` - Query engine
 
 ### SDK
-- `src/browser_sdk/index.ts` - SDK entry point
-- `src/browser_sdk/LinkedRecords.ts` - Main class
+- `src/browser_sdk/index.ts` - SDK entry point (LinkedRecords class)
+- `src/browser_sdk/records_repository.ts` - `client.Record` repository
+- `src/browser_sdk/facts_repository.ts` - `client.Fact` repository
 
 ### Storage
-- `src/attributes/attribute_storage/pg_attribute_storage.ts`
-- `src/attributes/attribute_storage/s3_blob_storage.ts`
+- `src/records/record_storage/psql/` - PostgreSQL backend
+- `src/records/record_storage/s3/` - S3 blob backend
 
 ## Testing
 
@@ -517,11 +532,11 @@ const result = await client.Attribute.createAll({
 5. **CORS must be configured** - Required for cross-domain setups
 6. **Quota tracked by accountability** - Storage deducted from accountable node
 7. **$isMemberOf vs $isHostOf** - Members can access, hosts can add new members
-8. **Array fields in KeyValue attributes** - Arrays are **completely overwritten** on concurrent updates (last write wins), no merging happens. If you need array merging, use separate facts or attributes for array items.
+8. **Array fields in KeyValue records** - Arrays are **completely overwritten** on concurrent updates (last write wins), no merging happens. If you need array merging, use separate facts or records for array items.
 
 ## Design Principles
 
-1. **Simplicity** - Facts + attributes as building blocks
+1. **Simplicity** - Facts + records as building blocks
 2. **Flexibility** - Composable patterns for different use cases
 3. **Decoupled** - Frontend apps independent of backend
 4. **Authorization-first** - Access control built into triplestore
