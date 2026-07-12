@@ -1,6 +1,14 @@
 /* eslint-disable no-await-in-loop */
 import { expect } from 'chai';
 import { queryFactCount } from './testapp_client';
+import { InitializedSession } from './session';
+
+function clearCache(client: InitializedSession) {
+  return client.do((lr: any) => {
+    // eslint-disable-next-line no-param-reassign
+    lr.Record.recordCache = {};
+  });
+}
 
 // eslint-disable-next-line import/prefer-default-export
 export async function expectFactToExists(fact: [string, string, string]) {
@@ -68,7 +76,7 @@ export async function expectNotToBeAbleToReadOrWriteRecord(attributeId, client) 
     object: [attributeId],
   })).length).to.eql(0);
 
-  client.Record.clearCache();
+  await clearCache(client);
   const noAccessAttr = await client.Record.find(attributeId);
   const accessAttr = await client.Record.find(attributeWithAccess.id);
 
