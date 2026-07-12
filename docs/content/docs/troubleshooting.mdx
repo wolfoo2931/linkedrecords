@@ -1,0 +1,122 @@
+---
+title: Troubleshooting
+description: Common problems and how to diagnose them
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Facts Are Not Being Created
+
+Fact creation is **all-or-nothing per request**: if any fact in a
+`Fact.createAll()` batch is not authorized, the server rejects the whole
+batch with `403` and the SDK resolves to an **empty array** instead of
+throwing. Always check the return value:
+
+```typescript
+const created = await lr.Fact.createAll([
+  [userId, '$isMemberOf', teamId],
+]);
+
+if (created.length === 0) {
+  // Nothing was saved - a fact in the batch was not authorized
+}
+```
+
+The most common causes:
+
+1. **The term was never declared.** Before using a term in an `isA` fact, it
+   must be declared with `$isATermFor` - see [Terms](/terms):
+
+   ```typescript
+   await lr.Fact.createAll([
+     ['TodoList', '$isATermFor', 'A list of tasks'],
+   ]);
+   ```
+
+2. **You lack permission on the subject or object.** To use a record as a
+   fact's subject you need `$canRefine` (or stronger) on it; to use it as an
+   object you need `$canReferTo` (or stronger). See the
+   [authorization model](/authorization-model).
+
+3. **Self-invitation.** Users cannot add themselves to a team with
+   `$isMemberOf` - a creator or host must add them
+   (see [Team Patterns](/team-patterns)).
+
+## Queries Return No Results
+
+- **Wrong data type name.** `$hasDataType` expects the legacy type strings
+  `KeyValueAttribute`, `LongTextAttribute`, `BlobAttribute` (or the SDK
+  classes `KeyValueRecord` etc. in TypeScript) - not `"KeyValueRecord"` as a
+  string.
+- **The records aren't shared with this user.** Queries only return records
+  the current user can access. Verify with the record owner's session, and
+  check the facts granting access (`$canRead`, `$canAccess`, `$isMemberOf`
+  chains).
+- **State filters.** When using `['$it', '$latest(stateIs)', someStateId]`,
+  remember `$latest` only matches the **most recent** `stateIs` fact - an
+  older matching fact does not count.
+
+## Login Problems
+
+- **Redirect URI mismatch.** The redirect URI registered at your OIDC
+  provider must match the SDK's `redirect_uri` exactly (scheme, host, port,
+  path).
+- **Login works, but requests are 401.** In public client mode the server
+  needs `ALLOW_HTTP_AUTHENTICATION_HEADER=true` and `AUTH_TOKEN_AUDIENCE`
+  matching the token's `aud` claim.
+- **Session never sticks across domains.** Confidential client mode uses an
+  HttpOnly cookie, which browsers treat as a third-party cookie when the
+  frontend and the LinkedRecords server are on different domains - use
+  public client mode instead. See [Configuration](/configuration).
+
+## CORS Errors
+
+If the browser console shows CORS failures:
+
+- Set `CORS_ORIGIN` to a JSON array containing your frontend origin, e.g.
+  `CORS_ORIGIN='["https://your-app.com"]'` - or leave it unset and set
+  `FRONTEND_BASE_URL` to that origin.
+- Origins must match exactly (scheme, host, port). `http://localhost:5173`
+  and `http://127.0.0.1:5173` are different origins.
+
+## Real-Time Updates Not Arriving
+
+- **Proxy blocks WebSockets.** Reverse proxies/ingresses must allow the
+  WebSocket upgrade for Socket.IO connections.
+- **Multiple server instances without Redis.** Updates only reach clients
+  connected to the same instance unless `REDIS_HOST` is configured on all
+  instances - see [Self-Hosting](/self-hosting).
+- **Subscribing too early.** `Record.subscribeToQuery()` throws if the
+  client hasn't finished authenticating (`actorId` not yet known). Await
+  `lr.ensureUserIdIsKnown()` or check `lr.isAuthenticated()` first. The
+  React hook `useKeyValueRecords` handles this for you.
+
+## Concurrent Edits Overwrite Each Other
+
+Key-value records merge concurrent updates per **field** (CRDT), but
+**array fields are replaced wholesale** - last write wins for the entire
+array, with no element-level merging. If concurrent additions to a list must
+not drop entries, model list items as separate records or facts instead of
+an array field. See [Key-Value Records](/key-value-records).
+
+## 403 With "Not Enough Storage Space Available"
+
+The accountable user or organization has exceeded its storage quota. Check
+usage with `lr.getQuota(nodeId)` and see [Quotas](/quotas) and
+[Accountability](/accountability) - by default storage is charged to the
+record's accountee, which you can change with an `$isAccountableFor` fact.
+
+## Inspecting the Server State
+
+- **Look at the facts table.** All authorization state is plain data in
+  PostgreSQL:
+
+  ```sql
+  SELECT subject, predicate, object FROM facts
+  WHERE subject = 'kv-...' OR object = 'kv-...';
+  ```
+
+- **Server logs.** The server logs structured JSON to stdout, including a
+  line whenever a request was rejected because of unauthorized facts.
+- **Liveness.** `GET /oidc/discovery` answers without authentication - if it
+  doesn't respond, the server isn't the problem layer to debug first.

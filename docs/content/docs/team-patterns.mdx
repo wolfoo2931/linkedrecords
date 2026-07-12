@@ -88,7 +88,7 @@ Users cannot add themselves to teams:
 
 ```typescript
 // This will fail - users cannot invite themselves
-const myId = await nemo.getActorId();
+const myId = await nemo.ensureUserIdIsKnown();
 await nemo.Fact.createAll([
   [myId, '$isMemberOf', team.id],
 ]);
@@ -111,7 +111,7 @@ await host.Fact.deleteAll([
 Members can remove their own membership:
 
 ```typescript
-const myId = await member.getActorId();
+const myId = await member.ensureUserIdIsKnown();
 await member.Fact.deleteAll([
   [myId, '$isMemberOf', team.id],
 ]);

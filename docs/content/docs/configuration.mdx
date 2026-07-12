@@ -8,26 +8,51 @@ import { Callout } from 'fumadocs-ui/components/callout';
 ## Overview
 
 LinkedRecords is configured primarily through environment variables. This guide
-covers all available configuration options.
+covers all available configuration options. For a step-by-step deployment
+walkthrough, see [Self-Hosting](/self-hosting).
 
 ## Quick Start
 
-For local development, use Docker Compose:
+For local development, download the Docker Compose file from the repository and
+start the stack:
 
 ```bash
-docker compose -f https://github.com/wolfoo2931/linkedrecords.git#main:docker-compose.yml up
+curl -fsSLO https://raw.githubusercontent.com/wolfoo2931/linkedrecords/main/docker-compose.yml
+docker compose up
 ```
 
-This starts LinkedRecords on port 6543 with a built-in mock OIDC provider for testing.
+This starts PostgreSQL and LinkedRecords on port 6543 with a built-in mock OIDC
+provider (`AUTH_DEV_MODE`). The test accounts `alice@example.com`,
+`bob@example.com`, and `charlie@example.com` are available with one-click login.
 
 <Callout type="warn">
 The Docker Compose setup is for local development only. It includes a mock OIDC
 provider with test accounts and should not be used in production.
 </Callout>
 
+## Server
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Port the server listens on | `6543` |
+| `SERVER_BASE_URL` | Public URL of the LinkedRecords server | - |
+| `FRONTEND_BASE_URL` | URL of the frontend application (required; also used as CORS origin fallback and for OIDC redirects) | - |
+| `HTTPS` | Set to `true` to terminate TLS in the Node.js server itself | `false` |
+| `SSL_KEY` | PEM-encoded private key (required if `HTTPS=true`) | - |
+| `SSL_CRT` | PEM-encoded certificate (required if `HTTPS=true`) | - |
+
+```bash
+SERVER_BASE_URL=https://api.your-app.com
+FRONTEND_BASE_URL=https://your-app.com
+```
+
+Most deployments terminate TLS at a reverse proxy or load balancer and leave
+`HTTPS` unset.
+
 ## Database Configuration
 
-LinkedRecords uses PostgreSQL for data storage:
+LinkedRecords uses PostgreSQL for data storage. The connection is configured
+with the [standard PostgreSQL environment variables](https://www.postgresql.org/docs/current/libpq-envars.html):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -45,21 +70,37 @@ PGPASSWORD=your-secure-password
 PGDATABASE=linkedrecords
 ```
 
+The database schema is created automatically on server start; no separate
+migration step is needed.
+
+For tests and quick experiments without a PostgreSQL server, an embedded
+[PGlite](https://pglite.dev/) database can be used instead:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `USE_PGLITE` | Set to `true` to use embedded PGlite instead of PostgreSQL | `false` |
+| `PGLITE_DATA_DIR` | Data directory for PGlite (setting this also enables PGlite) | in-memory |
+
 ## Authentication (OIDC)
 
-LinkedRecords supports OpenID Connect for authentication:
+LinkedRecords supports any OpenID Connect compliant identity provider
+(Auth0, Okta, Keycloak, ...):
 
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `AUTH_ISSUER_BASE_URL` | OIDC provider URL | Yes |
 | `AUTH_CLIENT_ID` | OAuth client ID | Yes |
-| `AUTH_CLIENT_SECRET` | OAuth client secret | Confidential clients |
-| `AUTH_COOKIE_SIGNING_SECRET` | Secret for signing cookies | Yes |
-| `AUTH_TOKEN_AUDIENCE` | Token audience (public client mode) | Public clients |
+| `AUTH_CLIENT_SECRET` | OAuth client secret | Confidential client mode |
+| `AUTH_COOKIE_SIGNING_SECRET` | Secret for signing session cookies | Confidential client mode |
+| `AUTH_TOKEN_AUDIENCE` | Expected `aud` claim of bearer tokens | Public client mode |
+| `ALLOW_HTTP_AUTHENTICATION_HEADER` | Set to `true` to accept bearer tokens via the `Authorization` header | Public client mode |
+| `AUTH_IDP_LOGOUT` | Set to `true` to also destroy the session at the identity provider on logout | No |
+| `AUTH_DEV_MODE` | Set to `true` to mount a built-in mock OIDC provider at `/dev-oidc` with one-click test accounts. **Development only.** | No |
 
 ### Confidential Client Mode
 
-For same-domain setups where the frontend and backend share a domain:
+For same-domain setups where the frontend and backend share a domain, the
+session is kept in an HttpOnly cookie:
 
 ```bash
 AUTH_ISSUER_BASE_URL=https://your-tenant.auth0.com/
@@ -70,49 +111,46 @@ AUTH_COOKIE_SIGNING_SECRET=a-long-random-secret-string
 
 ### Public Client Mode
 
-For cross-domain setups (SPA on different domain than API):
+For cross-domain setups (SPA on a different domain than the API), the SPA
+stores the access token and sends it as a bearer token:
 
 ```bash
 AUTH_ISSUER_BASE_URL=https://your-tenant.auth0.com/
 AUTH_CLIENT_ID=your-client-id
 AUTH_TOKEN_AUDIENCE=your-api-audience
-AUTH_COOKIE_SIGNING_SECRET=a-long-random-secret-string
+ALLOW_HTTP_AUTHENTICATION_HEADER=true
 ```
 
 ## CORS Configuration
 
-For cross-domain access, configure allowed origins:
+For cross-domain access, configure allowed origins. If `CORS_ORIGIN` is not
+set, `FRONTEND_BASE_URL` is used.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CORS_ORIGIN` | JSON array of allowed origins | `["http://localhost:*"]` |
+| `CORS_ORIGIN` | Allowed origin as a single URL string or JSON array of URLs | value of `FRONTEND_BASE_URL` |
 
 ```bash
 CORS_ORIGIN='["https://your-app.com", "https://staging.your-app.com"]'
 ```
 
-## URL Configuration
+## Redis Configuration (Optional)
+
+Redis is **not required** for a single-instance deployment. Configure it when
+running multiple LinkedRecords instances behind a load balancer, so real-time
+updates reach clients connected to other instances (Socket.IO Redis Streams
+adapter):
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SERVER_BASE_URL` | Public URL of the LinkedRecords server | - |
-| `FRONTEND_BASE_URL` | URL of the frontend application | - |
+| `REDIS_HOST` | Redis host; setting this enables the Redis adapter | - |
+| `REDIS_USERNAME` | Redis username | - |
+| `REDIS_PASSWORD` | Redis password | - |
 
 ```bash
-SERVER_BASE_URL=https://api.your-app.com
-FRONTEND_BASE_URL=https://your-app.com
-```
-
-## Redis Configuration
-
-Redis is used for caching and real-time pub/sub:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
-
-```bash
-REDIS_URL=redis://username:password@redis-host:6379
+REDIS_HOST=redis.your-provider.com
+REDIS_USERNAME=default
+REDIS_PASSWORD=your-redis-password
 ```
 
 ## S3/MinIO Configuration (Optional)
@@ -121,14 +159,17 @@ For blob storage, configure S3-compatible object storage:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `S3_ENDPOINT` | S3-compatible endpoint URL | - |
-| `S3_BUCKET` | Bucket name | - |
+| `S3_ENDPOINT` | S3-compatible endpoint hostname | - |
+| `S3_PORT` | Endpoint port | - |
+| `S3_BUCKET` | Bucket name (must already exist) | - |
 | `S3_ACCESS_KEY` | Access key ID | - |
 | `S3_SECRET_KEY` | Secret access key | - |
-| `S3_USE_SSL` | Use HTTPS (`true`/`false`) | `true` |
+| `S3_USE_SSL` | Use TLS when talking to the endpoint (`true`/`false`) | `true` |
+| `S3_COPY_FROM_BL_ATTRIBUTE_TABLE` | One-time migration: copy existing blobs from PostgreSQL to S3 on startup | `false` |
 
 ```bash
-S3_ENDPOINT=http://localhost:9000
+S3_ENDPOINT=localhost
+S3_PORT=9000
 S3_BUCKET=linkedrecords
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
@@ -136,36 +177,38 @@ S3_USE_SSL=false
 ```
 
 <Callout type="info">
-If S3 is not configured, blob storage will use PostgreSQL (with reduced
-performance for large files).
+If S3 is not configured, blob values are stored in PostgreSQL (with reduced
+performance for large files). Configuring S3 is recommended.
 </Callout>
 
 ## Quota Configuration
 
-Control storage limits per user:
+Control storage limits per accountable user or organization:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DEFAULT_STORAGE_SIZE_QUOTA` | Default storage quota in MB | `500` |
-| `QUOTA_COUNT_KV_RECORDS` | Max key-value records | - |
-| `QUOTA_COUNT_LT_RECORDS` | Max long-text records | - |
-| `QUOTA_COUNT_BLOB_ATTRIBUTES` | Max blob records | - |
+| `QUOTA_COUNT_KV_RECORDS` | Set to `true` to count key-value record storage against the accountee's quota | `false` |
+| `QUOTA_COUNT_LT_RECORDS` | Set to `true` to count long-text record storage against the accountee's quota | `false` |
 
 ```bash
 DEFAULT_STORAGE_SIZE_QUOTA=500
-QUOTA_COUNT_KV_RECORDS=10000
-QUOTA_COUNT_LT_RECORDS=1000
+QUOTA_COUNT_KV_RECORDS=true
+QUOTA_COUNT_LT_RECORDS=true
 ```
+
+Blob storage always counts against the quota. See [Quotas](/quotas) for how
+quota accounting works.
 
 ## Payment Integration (Optional)
 
-For paid plans with Paddle:
+For paid quota upgrades with Paddle:
 
 | Variable | Description |
 |----------|-------------|
 | `PADDLE_API_KEY` | Paddle API key |
-| `PADDLE_API_URL` | Paddle API URL |
-| `PADDLE_NOTIFICATION_SECRET` | Webhook signing secret |
+| `PADDLE_API_URL` | Paddle API URL (e.g. `https://sandbox-api.paddle.com` for testing) |
+| `PADDLE_NOTIFICATION_SECRET` | Webhook signing secret used to verify `/payment_events` notifications |
 
 ```bash
 PADDLE_API_KEY=your-paddle-api-key
@@ -177,40 +220,42 @@ PADDLE_NOTIFICATION_SECRET=webhook-signing-secret
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ENABLE_AUTH_RULE_CACHE` | Cache authorization rules | `false` |
-| `SHORT_LIVED_ACCESS_TOKEN_SIGNING` | Use short-lived tokens | `false` |
+| `ENABLE_AUTH_RULE_CACHE` | Set to `true` to cache authorization lookups in memory. Can require a lot of memory. | `false` |
+| `SHORT_LIVED_ACCESS_TOKEN_SIGNING` | A **signing secret**. When set, short-lived signed read tokens are issued with query results and used to authorize real-time subscriptions, reducing database load. | not set |
 
 ```bash
 ENABLE_AUTH_RULE_CACHE=true
-SHORT_LIVED_ACCESS_TOKEN_SIGNING=true
+SHORT_LIVED_ACCESS_TOKEN_SIGNING=a-long-random-secret-string
 ```
 
 ## Complete Example Configuration
 
 ### Development
 
+The simplest way to get these is `docker compose up` (see Quick Start above).
+Equivalent manual configuration:
+
 ```bash
 # Database
 PGHOST=localhost
 PGPORT=5432
 PGUSER=linkedrecords
-PGPASSWORD=development
-PGDATABASE=linkedrecords_dev
+PGPASSWORD=linkedrecords
+PGDATABASE=linkedrecords
 
-# Auth (mock OIDC for development)
-AUTH_ISSUER_BASE_URL=http://localhost:3000/
-AUTH_CLIENT_ID=dev-client
-AUTH_COOKIE_SIGNING_SECRET=dev-secret-at-least-32-chars-long
+# Auth (built-in mock OIDC provider)
+AUTH_DEV_MODE=true
+AUTH_ISSUER_BASE_URL=http://localhost:6543/dev-oidc
+AUTH_CLIENT_ID=linkedrecords-dev
+AUTH_TOKEN_AUDIENCE=linkedrecords-dev
+ALLOW_HTTP_AUTHENTICATION_HEADER=true
 
 # URLs
 SERVER_BASE_URL=http://localhost:6543
-FRONTEND_BASE_URL=http://localhost:5173
-
-# Redis
-REDIS_URL=redis://localhost:6379
+FRONTEND_BASE_URL=http://localhost:6543
 
 # CORS
-CORS_ORIGIN='["http://localhost:5173", "http://localhost:3000"]'
+CORS_ORIGIN='*'
 ```
 
 ### Production
@@ -223,7 +268,7 @@ PGUSER=linkedrecords
 PGPASSWORD=secure-production-password
 PGDATABASE=linkedrecords
 
-# Auth (Auth0 example)
+# Auth (Auth0 example, confidential client mode)
 AUTH_ISSUER_BASE_URL=https://your-tenant.auth0.com/
 AUTH_CLIENT_ID=production-client-id
 AUTH_CLIENT_SECRET=production-client-secret
@@ -233,11 +278,8 @@ AUTH_COOKIE_SIGNING_SECRET=production-secret-at-least-32-chars
 SERVER_BASE_URL=https://api.your-app.com
 FRONTEND_BASE_URL=https://your-app.com
 
-# Redis
-REDIS_URL=redis://user:password@redis.your-provider.com:6379
-
 # S3
-S3_ENDPOINT=https://s3.amazonaws.com
+S3_ENDPOINT=s3.amazonaws.com
 S3_BUCKET=your-linkedrecords-bucket
 S3_ACCESS_KEY=AKIA...
 S3_SECRET_KEY=...
@@ -248,10 +290,12 @@ CORS_ORIGIN='["https://your-app.com"]'
 
 # Quotas
 DEFAULT_STORAGE_SIZE_QUOTA=1000
-QUOTA_COUNT_KV_RECORDS=100000
+QUOTA_COUNT_KV_RECORDS=true
+QUOTA_COUNT_LT_RECORDS=true
 
 # Performance
 ENABLE_AUTH_RULE_CACHE=true
+SHORT_LIVED_ACCESS_TOKEN_SIGNING=another-long-random-secret
 ```
 
 ## OIDC Provider Setup
@@ -274,20 +318,15 @@ LinkedRecords works with any standard OIDC provider:
 
 ## Health Check
 
-LinkedRecords exposes a health endpoint:
+There is no dedicated health endpoint. `GET /oidc/discovery` is served without
+authentication and is suitable as a liveness probe:
 
 ```bash
-curl http://localhost:6543/health
+curl http://localhost:6543/oidc/discovery
 ```
 
 ## Logging
 
-Configure logging output through standard Node.js mechanisms:
-
-```bash
-# Debug logging
-DEBUG=linkedrecords:*
-
-# Production logging
-NODE_ENV=production
-```
+LinkedRecords logs structured JSON to stdout using
+[pino](https://getpino.io/). Request and response headers are redacted. Use
+your platform's log collector to ship and filter the output.

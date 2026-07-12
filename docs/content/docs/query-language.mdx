@@ -180,6 +180,14 @@ Filter by record type:
 
 Valid types: `KeyValueAttribute`, `LongTextAttribute`, `BlobAttribute`
 
+<Callout type="info">
+"Attribute" is the former name of the Record concept. The runtime type
+identifiers still use the legacy names for backwards compatibility. When
+using TypeScript, you can pass the SDK classes `KeyValueRecord`,
+`LongTextRecord`, or `BlobRecord` (exported by `@linkedrecords/browser`)
+instead of the strings - the SDK serializes them to the legacy names for you.
+</Callout>
+
 ### $latest(predicate)
 
 Match the most recent fact for a predicate. Essential for state tracking where

@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "getting-started",
+    "react",
     "---Core Concepts---",
     "facts-and-triples",
     "query-language",
@@ -19,7 +20,11 @@
     "team-patterns",
     "query-patterns",
     "sharing-patterns",
+    "---Operations---",
+    "self-hosting",
+    "troubleshooting",
     "---Reference---",
-    "configuration"
+    "configuration",
+    "api-reference"
   ]
 }

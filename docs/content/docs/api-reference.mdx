@@ -1,27 +1,35 @@
 ---
-title: API Reference
-description: HTTP endpoints for direct integration
+title: HTTP API Reference
+description: HTTP endpoints exposed by the LinkedRecords server
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 ## Overview
 
-While most interactions should use the Browser SDK, LinkedRecords also exposes
-HTTP endpoints for direct integration. This is useful for server-to-server
-communication or building custom clients.
+Most applications should use the [Browser SDK](/getting-started) or the
+[React hooks](/react), which handle authentication, real-time subscriptions,
+and CRDT/OT change encoding for you. This reference documents the underlying
+HTTP endpoints for building custom clients or debugging.
+
+<Callout type="warn">
+Record **updates** (`PATCH`) do not accept plain values - they expect
+CRDT/OT change payloads produced by the SDK's data type implementations.
+Reading records and managing facts works well over plain HTTP; for updating
+record values, use the SDK.
+</Callout>
 
 ## Authentication
 
 All API requests require authentication via:
 
 - **Cookie-based auth** (confidential client mode)
-- **Bearer token** (public client mode)
+- **Bearer token** (public client mode, requires `ALLOW_HTTP_AUTHENTICATION_HEADER=true`)
 
 ```bash
 # Bearer token
 curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  https://api.example.com/endpoint
+  https://your-linkedrecords-server.com/facts
 ```
 
 ## Base URL
@@ -32,6 +40,12 @@ All endpoints are relative to your LinkedRecords server URL:
 https://your-linkedrecords-server.com
 ```
 
+<Callout type="info">
+The `/records` and `/record-compositions` routes are also mounted under their
+legacy names `/attributes` and `/attribute-compositions`. Both forms hit the
+same handlers; new integrations should use the `/records` form.
+</Callout>
+
 ---
 
 ## Records
@@ -41,39 +55,28 @@ https://your-linkedrecords-server.com
 Retrieve a single record by ID.
 
 ```
-GET /records/:id
+GET /records/:id?clientId=<clientId>
 ```
 
 **Parameters:**
-- `id` - Record ID (e.g., `kv-abc123`)
-- `clientId` - Client identifier (query parameter)
+- `id` - Record ID. The prefix encodes the type: `kv-` (key-value), `l-` (long text), `bl-` (blob)
+- `clientId` - A client-generated identifier for this connection (query parameter, required)
+- `valueOnly=true` - Optional; respond with the raw value only instead of the serialized record state
 
-**Response:**
-```json
-{
-  "id": "kv-abc123",
-  "type": "KeyValueAttribute",
-  "value": { "title": "My Document" }
-}
-```
+**Response** contains the serialized record state, including the current `value`.
+Blob values are returned as `data:<mimetype>;base64,...` URIs.
 
 ### Query Records
 
-Find records matching a query.
+Find records matching a query. Each key in the query object names a result
+set; the values are arrays of fact criteria (see the
+[query language](/query-language)).
 
 ```
-GET /records
+GET /records?query=<url-encoded JSON>
 ```
 
-**Parameters:**
-- `query` - JSON-encoded query object
-
-**Example:**
-```bash
-curl "https://api.example.com/records?query=%7B%22docs%22%3A%5B%5B%22%24it%22%2C%22isA%22%2C%22Document%22%5D%5D%7D"
-```
-
-**Query format:**
+**Query format (before URL encoding):**
 ```json
 {
   "docs": [["$it", "isA", "Document"]],
@@ -81,33 +84,40 @@ curl "https://api.example.com/records?query=%7B%22docs%22%3A%5B%5B%22%24it%22%2C
 }
 ```
 
-**Response:**
+Data type filters use the legacy type names as strings:
+`["$it", "$hasDataType", "KeyValueAttribute"]` (also `LongTextAttribute`,
+`BlobAttribute`).
+
+**Response:** an object with the same keys, each holding an array of
+serialized records:
+
 ```json
 {
   "docs": [
-    { "id": "kv-abc123", "type": "KeyValueAttribute", "value": {...} }
+    { "id": "kv-abc123", "value": { "title": "..." }, "readToken": "..." }
   ],
-  "tasks": [
-    { "id": "kv-def456", "type": "KeyValueAttribute", "value": {...} }
-  ]
+  "tasks": []
 }
 ```
 
 ### Create Record
 
-Create a new record.
+Create a new record. The record type is selected with the `dtp` (data type
+prefix) query parameter.
 
 ```
-POST /records
+POST /records?dtp=<kv|l|bl>&clientId=<clientId>
 ```
 
-**Headers:**
-- `Content-Type: application/json`
+**Parameters:**
+- `dtp` - Data type prefix: `kv` (key-value), `l` (long text), `bl` (blob)
+- `clientId` - Client identifier (query parameter, required)
 
-**Body:**
+**Body (key-value and long text):**
 ```json
 {
-  "type": "keyValue",
+  "clientId": "<clientId>",
+  "actorId": "us-...",
   "value": { "title": "New Document" },
   "facts": [
     ["$it", "isA", "Document"]
@@ -115,43 +125,44 @@ POST /records
 }
 ```
 
-**Response:**
+For **blob** records, send `multipart/form-data` with the binary content in a
+field named `change`.
+
+Facts must have `$it` as subject or object (two-element facts
+`["isA", "Document"]` are shorthand for `["$it", "isA", "Document"]`); other
+facts are ignored here - create them via `POST /facts` instead.
+
+**Response:** the serialized record state including its `id`.
+
+**Error:** if any submitted fact is not authorized, the record is not created
+and the server responds `403` with:
 ```json
-{
-  "id": "kv-newid123",
-  "type": "KeyValueAttribute",
-  "value": { "title": "New Document" }
-}
+{ "unauthorizedFacts": [ ... ] }
 ```
 
 ### Update Record
 
-Update a record's value.
+Apply a change to a record.
 
 ```
-PATCH /records/:id
+PATCH /records/:id?clientId=<clientId>
 ```
 
-**Headers:**
-- `Content-Type: application/json`
+The body is a `SerializedChangeWithMetadata` - the CRDT (key-value) or
+Operational Transform (long text) change format produced by the SDK. It is
+not a plain `{ "value": ... }` replacement. Use the SDK for updates.
 
-**Body:**
-```json
-{
-  "value": { "title": "Updated Title" }
-}
-```
+**Response:** `200` with an empty body. The committed change is broadcast to
+all subscribed clients.
 
 ### Create Multiple Records (Blueprint)
 
-Create multiple related records atomically.
+Create multiple related records atomically. `{{name}}` placeholders in facts
+refer to other records in the same request.
 
 ```
-POST /record-compositions
+POST /record-compositions?clientId=<clientId>
 ```
-
-**Parameters:**
-- `clientId` - Client identifier (query parameter)
 
 **Body:**
 ```json
@@ -172,13 +183,20 @@ POST /record-compositions
 }
 ```
 
+The `type` field uses the legacy type names `KeyValueAttribute`,
+`LongTextAttribute`, or `BlobAttribute`; it defaults to `KeyValueAttribute`
+when omitted. Every entry must include a `value`.
+
 **Response:**
 ```json
 {
-  "parent": { "id": "kv-parent123", ... },
-  "child": { "id": "kv-child456", ... }
+  "parent": { "id": "kv-parent123", "value": { "name": "Parent" } },
+  "child": { "id": "kv-child456", "value": { "name": "Child" } }
 }
 ```
+
+**Error:** if any fact is not authorized, nothing is created and the server
+responds `403` with `{ "unauthorizedFacts": [ ... ] }`.
 
 ---
 
@@ -186,20 +204,17 @@ POST /record-compositions
 
 ### Query Facts
 
-Find facts matching criteria.
+Find facts matching criteria. Each of `subject`, `predicate`, and `object` is
+an optional JSON-encoded array of criteria.
 
 ```
-GET /facts
+GET /facts?subject=<JSON>&predicate=<JSON>&object=<JSON>
 ```
-
-**Parameters:**
-- `predicate` - Filter by predicate (JSON array)
-- `subject` - Filter by subject criteria (JSON array)
 
 **Example:**
 ```bash
 # Find all term definitions
-curl "https://api.example.com/facts?predicate=%5B%22%24isATermFor%22%5D"
+curl "https://your-server.com/facts?predicate=%5B%22%24isATermFor%22%5D"
 ```
 
 **Response:**
@@ -215,59 +230,48 @@ curl "https://api.example.com/facts?predicate=%5B%22%24isATermFor%22%5D"
 
 ### Create Facts
 
-Create new facts.
+Create new facts. The body is a **plain JSON array** of `[subject, predicate,
+object]` triples (not wrapped in an object).
 
 ```
 POST /facts
 ```
 
-**Headers:**
-- `Content-Type: application/json`
-
 **Body:**
 ```json
-{
-  "facts": [
-    ["Document", "$isATermFor", "A file or record"],
-    ["user123", "$isMemberOf", "team456"]
-  ]
-}
+[
+  ["Document", "$isATermFor", "A file or record"],
+  ["us-user123", "$isMemberOf", "kv-team456"]
+]
 ```
 
-**Response:**
-```json
-{
-  "created": [
-    ["Document", "$isATermFor", "A file or record"],
-    ["user123", "$isMemberOf", "team456"]
-  ]
-}
-```
+**Response:** `200` with the array of created facts.
 
-<Callout type="info">
-Facts that fail authorization are silently excluded from the `created` array.
-Check the response to verify which facts were actually created.
+<Callout type="warn">
+Authorization is all-or-nothing per request: if **any** fact in the batch is
+not authorized, **no** facts are saved and the server responds `403` with an
+empty object. The SDK's `Fact.createAll()` resolves to an empty array in that
+case - check the return value.
 </Callout>
 
 ### Delete Facts
 
-Remove existing facts.
+Remove existing facts. Note this is a `POST` to `/facts/delete`, not an HTTP
+`DELETE`. The body is a plain JSON array of triples.
 
 ```
-DELETE /facts
+POST /facts/delete
 ```
-
-**Headers:**
-- `Content-Type: application/json`
 
 **Body:**
 ```json
-{
-  "facts": [
-    ["user123", "$isMemberOf", "team456"]
-  ]
-}
+[
+  ["us-user123", "$isMemberOf", "kv-team456"]
+]
 ```
+
+**Response:** `200` with `{ "status": "ok" }`, or `403` if any fact in the
+batch is not authorized (nothing is deleted in that case).
 
 ---
 
@@ -284,8 +288,9 @@ GET /userinfo
 **Response:**
 ```json
 {
-  "userId": "user-abc123",
-  "email": "user@example.com"
+  "userId": "us-abc123",
+  "userPicture": "https://...",
+  "userEmail": "user@example.com"
 }
 ```
 
@@ -297,12 +302,8 @@ Find a user's ID by their email address.
 GET /userinfo?email=user@example.com
 ```
 
-**Response:**
-```json
-{
-  "id": "user-abc123"
-}
-```
+**Response:** `{ "id": "us-abc123" }`, or `{}` when no user with that email
+is known.
 
 ---
 
@@ -310,25 +311,26 @@ GET /userinfo?email=user@example.com
 
 ### Get Quota
 
-Get storage quota for a user or organization.
+Get storage quota for a user or organization. Only the accountable user (or
+members of the accountee) can read it.
 
 ```
 GET /quota/:nodeId
 ```
 
 **Parameters:**
-- `nodeId` - User ID or organization ID
+- `nodeId` - User ID or organization record ID
 
-**Response:**
+**Response** (sizes in bytes; `{}` if you are not authorized to read it):
 ```json
 {
-  "storageUsed": 1048576,
-  "storageLimit": 104857600,
-  "recordCounts": {
-    "keyValue": 150,
-    "longText": 25,
-    "blob": 10
-  }
+  "nodeId": "us-abc123",
+  "userIsAccountable": true,
+  "isUpgraded": false,
+  "totalStorageAvailable": 524288000,
+  "usedStorage": 1048576,
+  "remainingStorageAvailable": 523239424,
+  "accounteeInformation": null
 }
 ```
 
@@ -338,29 +340,24 @@ GET /quota/:nodeId
 
 ### Get Team Members
 
-Get the list of members in a team.
+Get the users that are members, hosts, or accountable for a record. Only the
+record's creator or a host can read this.
 
 ```
-GET /records/:nodeId/members
+GET /records/:id/members?clientId=<clientId>
 ```
-
-**Parameters:**
-- `nodeId` - Team/group record ID
-- `clientId` - Client identifier (query parameter)
 
 **Response:**
 ```json
 [
-  { "id": "user-123", "username": "alice@example.com" },
-  { "id": "user-456", "username": "bob@example.com" }
+  { "id": "us-123", "username": "alice@example.com" },
+  { "id": "us-456", "username": "bob@example.com" }
 ]
 ```
 
-**Error Response (unauthorized):**
+**Response when not authorized:**
 ```json
-{
-  "notVisibleToUser": true
-}
+{ "notVisibleToUser": true }
 ```
 
 ---
@@ -369,7 +366,9 @@ GET /records/:nodeId/members
 
 ### Get OIDC Configuration
 
-Get OIDC provider configuration for public client setup.
+Get the OIDC provider configuration the server is using, so public clients
+can configure their login flow. This endpoint does not require
+authentication.
 
 ```
 GET /oidc/discovery
@@ -389,94 +388,30 @@ GET /oidc/discovery
 
 ## Real-Time Updates
 
-Real-time updates are handled via WebSocket/Socket.IO connections. The SDK
-manages these connections automatically, but for custom implementations:
-
-### Subscribe to Record Changes
-
-```
-WebSocket: /records/:id/changes?clientId=xxx
-```
-
-### Subscribe to Query Changes
-
-```
-WebSocket: /query-sub
-Channel: query-sub:{userId}:{queryJson}
-```
+Real-time updates are delivered over Socket.IO. The SDK manages these
+connections automatically (per-record change channels and query
+subscriptions); the wire protocol is internal and may change between
+versions. If you build a custom client, use the SDK source
+(`lib/client-server-bus/`) as the reference.
 
 ---
 
 ## Error Responses
 
-### 401 Unauthorized
-
-Authentication required or session expired.
-
-```json
-{
-  "error": "Unauthorized",
-  "message": "Authentication required"
-}
-```
-
-### 403 Forbidden
-
-Quota exceeded or permission denied.
-
-```json
-{
-  "error": "Forbidden",
-  "message": "Storage quota exceeded"
-}
-```
-
-### 404 Not Found
-
-Resource not found or not accessible.
-
-```json
-{
-  "error": "Not Found",
-  "message": "Record not found"
-}
-```
-
-### 500 Internal Server Error
-
-Server-side error.
-
-```json
-{
-  "error": "Internal Server Error",
-  "message": "An unexpected error occurred"
-}
-```
-
----
-
-## Content Types
-
-All JSON requests should include:
-```
-Content-Type: application/json
-Accept: application/json
-```
-
-For blob uploads:
-```
-Content-Type: application/octet-stream
-```
-or use multipart form data.
+| Status | Meaning |
+|--------|---------|
+| `401` | Not authenticated or session expired. |
+| `403` | Unauthorized facts in the request (response contains `{ "unauthorizedFacts": [...] }` for record creation, `{}` for fact endpoints), or not enough storage quota (`Not enough storage space available`). |
+| `404` | Record not found, not accessible, or unknown record ID prefix. |
+| `500` | Unexpected server-side error. |
 
 ---
 
 ## Rate Limiting
 
-<Callout type="warn">
-Rate limits may apply depending on your deployment configuration. Check with
-your LinkedRecords administrator for specific limits.
-</Callout>
+The server limits each IP to 1000 requests per second
+(see `src/server/routes.ts`). Deployments behind proxies or gateways may
+impose additional limits.
 
 ---
 
