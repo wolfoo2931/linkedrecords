@@ -45,6 +45,10 @@ LongTextChange
   async create(value: string) : Promise<{ id: string }> {
     await this.createAccountableFact();
 
+    return this.createWithoutAccountableFact(value);
+  }
+
+  async createWithoutAccountableFact(value: string) : Promise<{ id: string }> {
     return this.storage.createRecord(this.id, this.actorId, value);
   }
 

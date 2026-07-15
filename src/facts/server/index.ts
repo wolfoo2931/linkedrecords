@@ -437,21 +437,13 @@ export default class Fact {
   static async saveAllWithoutAuthCheck(
     facts: Fact[],
     userid: string,
-    isNewUserScopedGraph: boolean | undefined,
+    newUserScopedGraphBox: FactBox | undefined,
     logger: IsLogger,
   ): Promise<FactBox | undefined> {
     if (facts.length === 0) return undefined;
 
     const specialFacts = facts.filter((fact) => fact.hasSpecialCreationLogic());
     const nonSpecialFacts = facts.filter((fact) => !fact.hasSpecialCreationLogic());
-    let factPlacement: FactBox | undefined;
-
-    if (isNewUserScopedGraph) {
-      factPlacement = {
-        id: await FactBox.getInternalUserId(userid, logger),
-        graphId: await FactBox.getNewGraphId(logger),
-      };
-    }
 
     for (let i = 0; i < specialFacts.length; i += 1) {
       // we need to create this one by one to make sure no
@@ -463,15 +455,11 @@ export default class Fact {
     await this.saveAllWithoutAuthCheckAndSpecialTreatment(
       nonSpecialFacts,
       userid,
-      factPlacement,
+      newUserScopedGraphBox,
       logger,
     );
 
-    if (isNewUserScopedGraph) {
-      return factPlacement;
-    }
-
-    return undefined;
+    return newUserScopedGraphBox;
   }
 
   static async saveAllWithoutAuthCheckAndSpecialTreatment(
@@ -985,20 +973,6 @@ export default class Fact {
     });
 
     return !connectingFact;
-  }
-
-  static async moveAllAccountabilityFactsToFactBox(
-    attributeIds: string[],
-    factBox: FactBox,
-    logger: IsLogger,
-  ) {
-    const pool = new PgPoolWithLog(logger);
-    const attributeString = attributeIds.map((id) => `'${EnsureIsValid.nodeId(id)}'`).join(',');
-
-    await pool.query(`UPDATE facts SET fact_box_id=$1, graph_id=$2 WHERE predicate='$isAccountableFor' AND object IN (${attributeString})`, [
-      factBox.id,
-      factBox.graphId,
-    ]);
   }
 
   static areKnownSubjects(nodeIds: string[], logger: IsLogger): Promise<boolean> {

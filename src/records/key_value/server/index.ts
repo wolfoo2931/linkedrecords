@@ -7,6 +7,7 @@ import SerializedChangeWithMetadata from '../../abstract/serialized_change_with_
 import KeyValueChange from '../key_value_change';
 import QueuedTasks, { IsQueue } from '../../../../lib/queued-tasks';
 import Fact from '../../../facts/server';
+import FactBox from '../../../facts/server/fact_box';
 import IsLogger from '../../../../lib/is_logger';
 import AttributeStorage from '../../record_storage/psql';
 
@@ -25,6 +26,7 @@ KeyValueChange
   public static async createAll(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     attr: [AbstractRecordServer<any, any>, any][],
+    factBox?: FactBox,
   ): Promise<string[]> {
     if (!attr[0]) {
       throw new Error('invalid attribute data found when creating all attributes');
@@ -33,7 +35,7 @@ KeyValueChange
     await Fact.saveAllWithoutAuthCheckAndSpecialTreatment(
       attr.map(([a]) => new Fact(a.actorId, '$isAccountableFor', a.id, a.logger)),
       attr[0][0].actorId,
-      undefined,
+      factBox,
       attr[0][0].logger,
     );
 
@@ -95,6 +97,10 @@ KeyValueChange
 
   async create(value: object) : Promise<{ id: string }> {
     await this.createAccountableFact();
+    return this.createWithoutAccountableFact(value);
+  }
+
+  async createWithoutAccountableFact(value: object) : Promise<{ id: string }> {
     return this.storage.createRecord(this.id, this.actorId, JSON.stringify(value));
   }
 

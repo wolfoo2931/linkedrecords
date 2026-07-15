@@ -28,6 +28,19 @@ export default class FactBox {
     return newFactBoxIdResult.rows[0].id;
   }
 
+  // A fresh graph in the user's own fact box. Facts of a composition which
+  // does not connect to any existing graph can be placed here directly,
+  // without going through per-fact placement resolution.
+  public static async createNewUserScopedFactBox(
+    userId: string,
+    logger: IsLogger,
+  ): Promise<FactBox> {
+    return new FactBox(
+      await FactBox.getInternalUserId(userId, logger),
+      await FactBox.getNewGraphId(logger),
+    );
+  }
+
   static async getFactBoxPlacement(userId: string, fact: Fact, logger: IsLogger): Promise<FactBox> {
     const internalUserId = await FactBox.getInternalUserId(userId, logger);
 

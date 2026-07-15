@@ -4,6 +4,7 @@ import SerializedChangeWithMetadata from './serialized_change_with_metadata';
 import IsSerializable from './is_serializable';
 import IsLogger from '../../../lib/is_logger';
 import Fact from '../../facts/server';
+import FactBox from '../../facts/server/fact_box';
 import QueryExecutor from '../record_query';
 
 export type LoadResult<T> = {
@@ -98,11 +99,31 @@ export default abstract class AbstractRecordServer <
     throw new Error('getDataTypePrefix needs to be implemented in child class');
   }
 
+  // When factBox is given, the caller guarantees that all records are part of
+  // a new graph which lives in this box (see Fact.isNewUserScopedGraph). The
+  // accountability facts can then be placed there directly in one batch
+  // instead of resolving a fact box placement for each of them.
   public static async createAll(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     attr: [AbstractRecordServer<any, any>, any][],
+    factBox?: FactBox,
   ): Promise<string[]> {
-    const result = await Promise.all(attr.map(([a, v]) => a.create(v)));
+    const first = attr[0];
+
+    if (!first || !factBox) {
+      const result = await Promise.all(attr.map(([a, v]) => a.create(v)));
+
+      return result.map((r) => r.id);
+    }
+
+    await Fact.saveAllWithoutAuthCheckAndSpecialTreatment(
+      attr.map(([a]) => new Fact(a.actorId, '$isAccountableFor', a.id, a.logger)),
+      first[0].actorId,
+      factBox,
+      first[0].logger,
+    );
+
+    const result = await Promise.all(attr.map(([a, v]) => a.createWithoutAccountableFact(v)));
 
     return result.map((r) => r.id);
   }
@@ -113,6 +134,10 @@ export default abstract class AbstractRecordServer <
   }
 
   abstract create(
+    value: Type
+  ) : Promise<{ id: string }>;
+
+  abstract createWithoutAccountableFact(
     value: Type
   ) : Promise<{ id: string }>;
 

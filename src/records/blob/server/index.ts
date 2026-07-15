@@ -65,6 +65,10 @@ BlobChange
   async create(value: Blob) : Promise<{ id: string }> {
     await this.createAccountableFact();
 
+    return this.createWithoutAccountableFact(value);
+  }
+
+  async createWithoutAccountableFact(value: Blob) : Promise<{ id: string }> {
     return this.storage.createRecord(this.id, this.actorId, await this.marshal(value));
   }
 

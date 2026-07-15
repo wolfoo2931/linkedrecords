@@ -5,6 +5,7 @@ import { uuidv7 as uuid } from 'uuidv7';
 import SerializedChangeWithMetadata from '../../records/abstract/serialized_change_with_metadata';
 import QueryExecutor, { RecordQuery, ResolveToRecordsResult } from '../../records/record_query';
 import Fact from '../../facts/server';
+import FactBox from '../../facts/server/fact_box';
 import PgPoolWithLog from '../../../lib/pg-log';
 import Quota from '../quota';
 import AuthCache from '../../facts/server/auth_cache';
@@ -290,22 +291,26 @@ export default class Controller {
       log,
     );
 
+    // When the composition does not connect to any existing graph, all its
+    // facts - including the accountability facts of the new records - end up
+    // in one fresh graph. Computing that placement upfront allows the record
+    // classes to batch-insert the accountability facts instead of resolving
+    // a placement for each one.
+    const compositionFactBox = isNewUserScopedGraph && resolvedFacts.length
+      ? await FactBox.createNewUserScopedFactBox(hashedUserID, log)
+      : undefined;
+
     const attributesToSaveEntries = Array.from(attributesByAttributeClass.entries());
     const attributeSavePromises = attributesToSaveEntries
-      .map(([AC, attributesAndValues]) => AC.createAll(attributesAndValues));
-    const savedAttributeIds = await Promise.all(attributeSavePromises).then((r) => r.flat());
+      .map(([AC, attributesAndValues]) => AC.createAll(attributesAndValues, compositionFactBox));
+    await Promise.all(attributeSavePromises);
 
-    // TODO: This is slow
-    const factBox = await Fact.saveAllWithoutAuthCheck(
+    await Fact.saveAllWithoutAuthCheck(
       resolvedFacts,
       hashedUserID,
-      isNewUserScopedGraph,
+      compositionFactBox,
       log,
     );
-
-    if (factBox) {
-      await Fact.moveAllAccountabilityFactsToFactBox(savedAttributeIds, factBox, log);
-    }
 
     return Controller.getCompositionResult(composition, nameIdMap);
   }
