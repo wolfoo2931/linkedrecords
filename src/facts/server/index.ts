@@ -127,8 +127,6 @@ export default class Fact {
       CREATE TABLE IF NOT EXISTS bl_attributes (id UUID, actor_id varchar(36), updated_at TIMESTAMP, created_at TIMESTAMP, value TEXT);
       ALTER TABLE kv_attributes ADD COLUMN IF NOT EXISTS size int DEFAULT NULL;
       ALTER TABLE bl_attributes ADD COLUMN IF NOT EXISTS size int DEFAULT NULL;
-      CREATE INDEX IF NOT EXISTS idx_facts_subject ON facts (subject);
-      CREATE INDEX IF NOT EXISTS idx_facts_predicate ON facts (predicate);
       CREATE INDEX IF NOT EXISTS idx_facts_object ON facts (object);
       CREATE INDEX IF NOT EXISTS idx_kv_attr_id ON kv_attributes (id);
       CREATE INDEX IF NOT EXISTS idx_facts_composite ON facts(subject, predicate, object);
@@ -139,9 +137,16 @@ export default class Fact {
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS fact_box_id int DEFAULT 0;
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS graph_id int;
       ALTER TABLE facts ADD COLUMN IF NOT EXISTS latest BOOLEAN;
-      CREATE INDEX IF NOT EXISTS idx_facts_fact_box_id ON facts (fact_box_id);
       CREATE INDEX IF NOT EXISTS idx_facts_fact_graph_id ON facts (graph_id);
-      CREATE INDEX IF NOT EXISTS idx_facts_latest ON facts (latest);
+      CREATE INDEX IF NOT EXISTS idx_facts_predicate_object ON facts (predicate, object);
+      CREATE INDEX IF NOT EXISTS idx_facts_fact_box_id_predicate ON facts (fact_box_id, predicate);
+      -- dropped to reduce write amplification: subject, predicate and
+      -- fact_box_id are prefixes of composite indexes; latest is a boolean
+      -- and always queried together with predicate and object
+      DROP INDEX IF EXISTS idx_facts_subject;
+      DROP INDEX IF EXISTS idx_facts_predicate;
+      DROP INDEX IF EXISTS idx_facts_fact_box_id;
+      DROP INDEX IF EXISTS idx_facts_latest;
 
       CREATE TABLE IF NOT EXISTS users_fact_boxes (fact_box_id int, user_id int);
       CREATE INDEX IF NOT EXISTS idx_users_fact_boxes_fact_box_id ON users_fact_boxes (fact_box_id);
