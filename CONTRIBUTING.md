@@ -57,7 +57,8 @@ The E2E suite drives real browsers against the test app in
 `specs.wdio/testapp/`.
 
 > **Note:** The E2E suite currently authenticates against a hosted Auth0 test
-> tenant and requires secrets (`TEST_USERS_PWD`, `AUTH_CLIENT_SECRET`) that
+> tenant and requires the test user emails (`TEST_USERS`, a comma-separated
+> list) plus secrets (`TEST_USERS_PWD`, `AUTH_CLIENT_SECRET`) that
 > are only available in CI. External contributors can rely on the GitHub
 > Actions workflows to run these on their pull request; run `npm test` and
 > `npm run lint` locally.

@@ -48,6 +48,7 @@ jobs:
           PGDATABASE: ci_db_test
           PGPORT: ${{ job.services.postgres.ports[5432] }}
           TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
+          TEST_USERS: wolfoo2931+1@gmail.com,wolfoo2931+2@gmail.com,wolfoo2931+3@gmail.com,wolfoo2931+4@gmail.com
           COOKIE_DOMAIN: localhost
           FRONTEND_BASE_URL: http://localhost:3001
           SERVER_BASE_URL: http://localhost:6543
@@ -80,6 +81,7 @@ jobs:
         env:
           USE_PGLITE: 'true'
           TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
+          TEST_USERS: wolfoo2931+1@gmail.com,wolfoo2931+2@gmail.com,wolfoo2931+3@gmail.com,wolfoo2931+4@gmail.com
           COOKIE_DOMAIN: localhost
           FRONTEND_BASE_URL: http://localhost:3001
           SERVER_BASE_URL: http://localhost:6543
