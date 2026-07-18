@@ -542,9 +542,19 @@ const result = await client.Record.createAll({
 4. **Authorization-first** - Access control built into triplestore
 5. **Real-time** - Native collaboration support
 
+## Knowledge Base
+
+`knowledge/` holds the project's compound knowledge: ideas, evaluations, and
+measurement-backed analyses (see `knowledge/README.md` for conventions). Check
+it before starting analysis or optimization work — it records what was already
+tried and with what outcome. When you produce new findings, evaluations, or
+measurements, update the relevant document in place (or add a new topic file
+and list it in `knowledge/README.md`).
+
 ## Related Resources
 
 - README: `README.md`
 - Example app: `specs.wdio/tinytodo/tinytodo.ts`
 - Test suite: `specs.wdio/browser_sdk/auth.spec.ts`
 - Helpers: `specs.wdio/helpers/`
+- Knowledge base: `knowledge/`
