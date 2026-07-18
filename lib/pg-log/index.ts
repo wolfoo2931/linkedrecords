@@ -19,7 +19,12 @@ function getPool(): Promise<DbClient> {
       throw err;
     });
   } else {
-    poolPromise = Promise.resolve(new Pool({ max: 3, connectionTimeoutMillis: 2000 }));
+    const poolSize = parseInt(process.env['PG_POOL_SIZE'] || '', 10);
+
+    poolPromise = Promise.resolve(new Pool({
+      max: Number.isNaN(poolSize) ? 10 : poolSize,
+      connectionTimeoutMillis: 4000,
+    }));
   }
 
   return poolPromise;

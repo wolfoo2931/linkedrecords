@@ -78,6 +78,7 @@ examples for every deployment mode.
 | PGUSER | linkedrecords | The PostgreSQL user name. |
 | PGPASSWORD | xxxx | The PostgreSQL password. |
 | PGDATABASE | xxxx | The PostgreSQL database name. |
+| PG_POOL_SIZE | 10 | The maximum number of connections in the PostgreSQL connection pool. Defaults to 10. |
 | CORS_ORIGIN | ["https://app.example.com", "https://app.example.app"] | The content of the cors origin header. If not provided, the value of FRONTEND_BASE_URL will be used. |
 | SERVER_BASE_URL | http://localhost:6543 | The public URL of the linkedrecords server. |
 | DEFAULT_STORAGE_SIZE_QUOTA | 500 | The default storage size quota in MB. |
