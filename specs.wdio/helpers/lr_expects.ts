@@ -29,19 +29,27 @@ export async function expectNotToBeAbleToWriteRecord(attributeId, client) {
   const clientId = await attributeWithAccess.getClientId();
   const { actorId } = client;
 
-  const update = (lr, sURL, cId, actId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, {
-    credentials: 'include',
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      clientId: cId,
-      actorId: actId,
-      facts: [],
-      change: [{ UPDATED: 'VALUE' }],
-    }),
-  }).then((r) => r.status);
+  // Raw fetch on purpose (bypasses the SDK); authenticates like the SDK
+  // does: bearer token when one is available (public mode), cookies otherwise.
+  // NOTE: this function is stringified and eval'd in the browser, keep it
+  // free of TypeScript-only syntax.
+  const update = async (lr, sURL, cId, actId, aId) => {
+    const token = await lr.getAccessToken();
+
+    return fetch(`${sURL}attributes/${aId}?clientId=${cId}`, {
+      credentials: token ? 'same-origin' : 'include',
+      method: 'PATCH',
+      headers: token
+        ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+        : { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientId: cId,
+        actorId: actId,
+        facts: [],
+        change: [{ UPDATED: 'VALUE' }],
+      }),
+    }).then((r) => r.status);
+  };
 
   const authorizedContent = await client.do(
     update,
@@ -83,15 +91,28 @@ export async function expectNotToBeAbleToReadOrWriteRecord(attributeId, client) 
   expect(!!noAccessAttr).to.eql(false);
   expect(!!accessAttr).to.eql(true);
 
+  // Raw fetch on purpose (bypasses the SDK); authenticates like the SDK
+  // does: bearer token when one is available (public mode), cookies otherwise.
+  // NOTE: this function is stringified and eval'd in the browser, keep it
+  // free of TypeScript-only syntax.
+  const read = async (lr, sURL, cId, aId) => {
+    const token = await lr.getAccessToken();
+
+    return fetch(`${sURL}attributes/${aId}?clientId=${cId}`, {
+      credentials: token ? 'same-origin' : 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then((r) => r.text());
+  };
+
   const authorizedContent = await client.do(
-    (lr, sURL, cId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, { credentials: 'include' }).then((r) => r.text()),
+    read,
     serverURL,
     clientId,
     attributeWithAccess.id,
   );
 
   const unauthorizedContent = await client.do(
-    (lr, sURL, cId, aId) => fetch(`${sURL}attributes/${aId}?clientId=${cId}`, { credentials: 'include' }).then((r) => r.text()),
+    read,
     serverURL,
     clientId,
     attributeId,

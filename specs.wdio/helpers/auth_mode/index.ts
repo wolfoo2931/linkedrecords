@@ -1,8 +1,10 @@
 import AuthModeStrategy from './types';
 import ConfidentialClientMode from './confidential';
+import PublicClientMode from './public';
 
 const modes: Record<string, () => AuthModeStrategy> = {
   confidential: () => new ConfidentialClientMode(),
+  public: () => new PublicClientMode(),
 };
 
 export default function getAuthModeStrategy(): AuthModeStrategy {

@@ -1,8 +1,10 @@
 import IdpAdapter from './types';
 import Auth0 from './auth0';
+import DevOidc from './dev_oidc';
 
 const adapters: Record<string, () => IdpAdapter> = {
   auth0: () => new Auth0(),
+  'dev-oidc': () => new DevOidc(),
 };
 
 export default function getIdpAdapter(): IdpAdapter {

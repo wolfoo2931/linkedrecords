@@ -1,5 +1,8 @@
 /* eslint-disable import/prefer-default-export */
 // import type { Options } from '@wdio/types';
+import fs from 'fs';
+import path from 'path';
+
 const httpProxy = require('http-proxy');
 
 const proxy = httpProxy.createProxyServer();
@@ -50,7 +53,18 @@ exports.config = {
       middleware: [
         {
           mount: '/',
-          middleware: (req, res, next) => {
+          middleware: (req: Request, res: any, next: () => {}) => {
+            if (process.env['TEST_AUTH_MODE'] === 'public') {
+              if (req.url.startsWith('/callback')) {
+                const html = fs.readFileSync(path.join(__dirname, './specs.wdio/testapp/index.html'));
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(html);
+                return;
+              }
+
+              return next();
+            }
+
             if (req.url.startsWith('/logout') || req.url.startsWith('/login') || req.url.startsWith('/callback')) {
               proxy.web(req, res, { target: 'http://localhost:3000' });
             } else {

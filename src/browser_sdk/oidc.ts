@@ -9,6 +9,7 @@ export interface OIDCConfig {
   client_id?: string;
   redirect_uri: string;
   authority?: string; // discovered from server if not provided
+  audience?: string; // requested token audience; defaults to the server URL's host
   post_logout_redirect_uri?: string;
   scope?: string;
   response_type?: string;
@@ -46,6 +47,7 @@ export class OIDCManager {
       authority: providedAuthority,
       client_id: clientId,
       redirect_uri: redirectUri,
+      audience,
       post_logout_redirect_uri: postLogoutRedirectUri,
       scope,
       response_type: responseType,
@@ -91,7 +93,7 @@ export class OIDCManager {
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew: automaticSilentRenew ?? true,
       extraQueryParams: {
-        audience: serverURL.host,
+        audience: audience || serverURL.host,
       },
     };
 
