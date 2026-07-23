@@ -10,6 +10,11 @@ export QUOTA_COUNT_KV_RECORDS=true
 export QUOTA_COUNT_LT_RECORDS=true
 export SHORT_LIVED_ACCESS_TOKEN_SIGNING=xxx
 
+# In public client mode the SDK talks to the server with bearer tokens.
+if [ "$TEST_AUTH_MODE" = "public" ]; then
+  export ALLOW_HTTP_AUTHENTICATION_HEADER=true
+fi
+
 npx webpack --config ./specs.wdio/testapp/webpack.config.js
 
 bin/testserver.sh&

@@ -1,0 +1,12 @@
+name: Start Authentik
+description: Starts the hermetic Authentik instance bundled with this action, used by TEST_IDP=authentik, and waits for it to become healthy. Reads TEST_USERS_PWD from the job environment, same as the wdio suite itself.
+runs:
+  using: composite
+  steps:
+    - name: Start Authentik
+      shell: bash
+      run: docker compose -f "${{ github.action_path }}/docker-compose.yml" up -d --wait
+    - name: Show Authentik logs on failure
+      if: failure()
+      shell: bash
+      run: docker compose -f "${{ github.action_path }}/docker-compose.yml" logs

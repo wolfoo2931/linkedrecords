@@ -90,9 +90,14 @@ export default async function clientServerBus(
   io.of('/').adapter.on('create-room', (room) => channels.add(room));
   io.of('/').adapter.on('delete-room', (room) => channels.delete(room));
 
-  io.on('connection', async (socket) => {
-    const request = socket?.request;
-    let userId;
+  // Authentication runs as socket.io middleware: it completes BEFORE the
+  // connection is acknowledged to the client. Doing it inside the
+  // 'connection' handler instead would open a race — the client's first
+  // 'subscribe' can arrive while the (async) authentication is still
+  // running, before the event handlers below are registered, and gets
+  // silently dropped so its ack never fires.
+  io.use(async (socket, next) => {
+    const request = socket.request as any;
 
     if (socket.handshake.auth?.['token']) {
       const { token } = socket.handshake.auth;
@@ -103,17 +108,24 @@ export default async function clientServerBus(
     }
 
     try {
-      userId = await accessControl.verifyAuthenticated(request);
-    } catch (ex) {
-      request.log.info(`User not authenticated: ${(ex as Error).message}`);
-      throw ex;
-    }
+      const userId = await accessControl.verifyAuthenticated(request);
 
-    if (!userId) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.disconnect(true);
-      return;
+      if (!userId) {
+        next(new Error('unauthorized'));
+        return;
+      }
+
+      socket.data.userId = userId;
+      next();
+    } catch (ex) {
+      request.log?.info(`User not authenticated: ${(ex as Error).message}`);
+      next(new Error('unauthorized'));
     }
+  });
+
+  io.on('connection', (socket) => {
+    const request = socket?.request;
+    const { userId } = socket.data;
 
     if (!connections[socket.id]) {
       connections[socket.id] = { socket, userId };

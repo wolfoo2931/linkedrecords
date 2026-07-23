@@ -1,5 +1,8 @@
 const path = require("path");
+const webpack = require("webpack");
 const nodeExternals = require("webpack-node-externals");
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
 const NODE_ENV = "development";
 
 const client = {
@@ -29,6 +32,14 @@ const client = {
       },
     ],
   },
+  plugins: [
+    new webpack.DefinePlugin({
+      TESTAPP_AUTH_MODE: JSON.stringify(process.env.TEST_AUTH_MODE || 'confidential'),
+      AUTH_TOKEN_AUDIENCE: JSON.stringify(process.env.AUTH_TOKEN_AUDIENCE || null),
+      AUTH_ISSUER_BASE_URL: JSON.stringify(process.env.AUTH_ISSUER_BASE_URL || null),
+      AUTH_CLIENT_ID: JSON.stringify(process.env.AUTH_CLIENT_ID || null),
+    }),
+  ],
 }
 
 const server = {

@@ -5,6 +5,8 @@ import WdioRemote from './wdio_remote';
 import RecordsRepository from '../../src/browser_sdk/records_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
 import * as testappClient from './testapp_client';
+import getIdpAdapter from './idp';
+import getAuthModeStrategy from './auth_mode';
 
 type RecordsRepositoryType = RecordsRepository;
 
@@ -23,6 +25,23 @@ const capabilities = {
 
 const allSessionsToBeTerminated: InitializedSession[] = [];
 let theCachedSessions;
+
+function getTestUserEmail(index: string): string {
+  const testUsers = process.env['TEST_USERS'];
+
+  if (!testUsers) {
+    throw new Error('You need to provide the TEST_USERS environment variable which contains a comma separated list of test user emails, e.g. TEST_USERS="user+1@example.com,user+2@example.com"');
+  }
+
+  const emails = testUsers.split(',').map((email) => email.trim()).filter((email) => email);
+  const email = emails[parseInt(index, 10) - 1];
+
+  if (!email) {
+    throw new Error(`TEST_USERS only contains ${emails.length} emails but the test requested test user number ${index}`);
+  }
+
+  return email;
+}
 export default class Session {
   browser: WebdriverIO.Browser;
 
@@ -47,30 +66,21 @@ export default class Session {
     const allUsersPwd = process.env['TEST_USERS_PWD'];
     const frontendBaseURL = process.env['FRONTEND_BASE_URL'];
     const index = name.replace('browser', '');
+    const email = getTestUserEmail(index);
     const session = await browser.getInstance(name);
-
-    await session.url(`${frontendBaseURL}/index.html`);
-    await session.$('a').click();
+    const idp = getIdpAdapter();
+    const authMode = getAuthModeStrategy();
 
     if (!allUsersPwd) {
       throw new Error('You need to provide the TEST_USERS_PWD environment variable which contains the Password for all test users');
     }
 
-    await (await session.$('input[name=username]')).setValue(`wolfoo2931+${index}@gmail.com`);
-    await (await session.$('input[name=password]')).setValue(allUsersPwd);
-    await (await session.$('form button[type=submit][name=action][data-action-button-primary="true"]')).click();
+    await session.url(`${frontendBaseURL}/index.html`);
+    await authMode.initiateLogin(session);
+    await idp.login(session, email, allUsersPwd);
+    await authMode.completeLogin(session);
 
-    try {
-      const consentBtn = await session.$('form button[type=submit][name=action][data-action-button-primary="true"]');
-
-      if (await consentBtn.isExisting()) {
-        await consentBtn.click();
-      }
-    } catch (ex) {
-      // do nothing
-    }
-
-    const lrSession = new Session(session, `wolfoo2931+${index}@gmail.com`);
+    const lrSession = new Session(session, email);
 
     await lrSession.initLinkedRecord();
 
