@@ -96,3 +96,45 @@ jobs:
         env:
           USE_PGLITE: 'true'
         run: npm run wdio:fast
+
+  wdio-tests-authentik:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-deps
+      - uses: ./.github/actions/setup-authentik
+      - name: WDIO Tests (Authentik, confidential client mode)
+        env:
+          USE_PGLITE: 'true'
+          TEST_IDP: authentik
+          TEST_USERS: alice@example.com,bob@example.com,charlie@example.com,dora@example.com
+          AUTH_ISSUER_BASE_URL: http://localhost:9000/application/o/linkedrecords-e2e/
+          AUTH_CLIENT_ID: linkedrecords-e2e
+          AUTH_CLIENT_SECRET: e2e-test-client-secret-do-not-use-in-prod
+        run: npm run wdio:fast
+      - name: Show Authentik logs on failure
+        if: failure()
+        run: docker compose -f .github/actions/setup-authentik/docker-compose.yml logs
+
+  wdio-tests-authentik-public-client-mode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-deps
+      - uses: ./.github/actions/setup-authentik
+      - name: WDIO Tests (Authentik, public client mode)
+        env:
+          USE_PGLITE: 'true'
+          TEST_IDP: authentik
+          TEST_AUTH_MODE: public
+          TEST_USERS: alice@example.com,bob@example.com,charlie@example.com,dora@example.com
+          # Each Authentik provider defaults to issuer_mode=per_provider, so the
+          # public client's issuer/audience is its own application slug, distinct
+          # from the confidential client used above - see .env.authentik.example.
+          AUTH_ISSUER_BASE_URL: http://localhost:9000/application/o/linkedrecords-e2e-public/
+          AUTH_CLIENT_ID: linkedrecords-e2e-public
+          AUTH_TOKEN_AUDIENCE: linkedrecords-e2e-public
+        run: npm run wdio:fast
+      - name: Show Authentik logs on failure
+        if: failure()
+        run: docker compose -f .github/actions/setup-authentik/docker-compose.yml logs

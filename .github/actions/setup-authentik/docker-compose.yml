@@ -1,0 +1,90 @@
+# Hermetic Authentik instance for the wdio E2E suite (TEST_IDP=authentik).
+# Bundled with the .github/actions/setup-authentik composite action (CI); also
+# used directly for local dev, see ../../../.env.authentik.example.
+#
+# Self-contained: its own Postgres + Redis, no dependency on the app's
+# database. The blueprints/ directory is auto-applied by the worker on
+# startup and declares the OAuth2 provider, application and test users
+# needed by specs.wdio/helpers/idp/authentik.ts.
+#
+# Usage:
+#   docker compose -f .github/actions/setup-authentik/docker-compose.yml up -d --wait
+#
+# Then point the app + wdio suite at it, see ../../../.env.authentik.example.
+
+services:
+  postgresql:
+    image: docker.io/library/postgres:16-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - authentik-database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+
+  redis:
+    image: docker.io/library/redis:alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - authentik-redis:/data
+
+  server:
+    image: ghcr.io/goauthentik/server:2025.8
+    restart: unless-stopped
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgresql
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      # Dev-only fixed secret so restarts don't invalidate sessions/blueprints.
+      AUTHENTIK_SECRET_KEY: e2e-test-secret-key-do-not-use-in-prod
+      AUTHENTIK_BOOTSTRAP_EMAIL: akadmin@example.com
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${TEST_USERS_PWD:-test-password-123}
+      AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      AUTHENTIK_AVATARS: initials
+    volumes:
+      - ./blueprints:/blueprints/custom:ro
+    ports:
+      - "9000:9000"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # No wget/curl in this image; use the bundled python3 instead.
+      test: ["CMD", "python3", "-c", "import urllib.request as u; u.urlopen('http://localhost:9000/-/health/ready/')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  worker:
+    image: ghcr.io/goauthentik/server:2025.8
+    restart: unless-stopped
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - ./blueprints:/blueprints/custom:ro
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  authentik-database:
+  authentik-redis:

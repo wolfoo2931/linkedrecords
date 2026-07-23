@@ -21,7 +21,7 @@ export default class PublicClientMode implements AuthModeStrategy {
 
   // eslint-disable-next-line class-methods-use-this
   async completeLogin(browser: WebdriverIO.Browser): Promise<void> {
-    // The IdP redirects to auth-callback.html which exchanges the code and
+    // The IdP redirects to /callback which exchanges the code and
     // navigates back to the page the login started from.
     await browser.waitUntil(
       async () => (await browser.getUrl()).includes('/index.html'),
