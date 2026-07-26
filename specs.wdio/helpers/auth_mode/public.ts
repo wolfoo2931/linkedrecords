@@ -8,11 +8,13 @@ import AuthModeStrategy from './types';
 export default class PublicClientMode implements AuthModeStrategy {
   // eslint-disable-next-line class-methods-use-this
   async initiateLogin(browser: WebdriverIO.Browser): Promise<void> {
+    // 30s: see the matching wait in helpers/session.ts for why 10s isn't enough under
+    // concurrent Authentik logins (REUSE_TEST_BROWSERS=true).
     await browser.waitUntil(
       async () => browser.execute(() => typeof (window as any).lr !== 'undefined'),
       {
-        timeout: 10000,
-        timeoutMsg: 'window.lr was not initialized within 10 seconds',
+        timeout: 30000,
+        timeoutMsg: 'window.lr was not initialized within 30 seconds',
       },
     );
 

@@ -196,12 +196,17 @@ export default class Session {
   async initLinkedRecord() {
     const remote = new WdioRemote(this.browser);
 
-    // Wait for window.lr to be initialized before accessing it
+    // Wait for window.lr to be initialized before accessing it. 30s (not 10s): with
+    // REUSE_TEST_BROWSERS=true (npm run wdio:fast), the first test in the whole run logs
+    // in all 4 browsers concurrently (see getSessions()), and against the hermetic
+    // Authentik container that means 4 concurrent password-stage hashes competing for the
+    // runner's CPU - slower than the near-instant dev-oidc/auth0 flows this used to run
+    // against exclusively.
     await this.browser.waitUntil(
       async () => this.browser.execute(() => typeof (window as any).lr !== 'undefined'),
       {
-        timeout: 10000,
-        timeoutMsg: 'initLinkedRecord: window.lr was not initialized within 10 seconds',
+        timeout: 30000,
+        timeoutMsg: 'initLinkedRecord: window.lr was not initialized within 30 seconds',
       },
     );
 
