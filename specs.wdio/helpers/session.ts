@@ -201,7 +201,7 @@ export default class Session {
       async () => this.browser.execute(() => typeof (window as any).lr !== 'undefined'),
       {
         timeout: 10000,
-        timeoutMsg: 'window.lr was not initialized within 10 seconds',
+        timeoutMsg: 'initLinkedRecord: window.lr was not initialized within 10 seconds',
       },
     );
 

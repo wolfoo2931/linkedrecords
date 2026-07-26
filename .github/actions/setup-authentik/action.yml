@@ -6,6 +6,9 @@ runs:
     - name: Start Authentik
       shell: bash
       run: docker compose -f "${{ github.action_path }}/docker-compose.yml" up -d --wait
+    - name: Apply E2E blueprint
+      shell: bash
+      run: docker compose -f "${{ github.action_path }}/docker-compose.yml" exec -T worker ak apply_blueprint custom/e2e-test-setup.yaml
     - name: Show Authentik logs on failure
       if: failure()
       shell: bash
