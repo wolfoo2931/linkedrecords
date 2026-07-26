@@ -21,6 +21,18 @@ async function init() {
   };
 
   const client = new LinkedRecords(lrServerUrl, config, true, true);
+
+  // The constructor already kicks off handleRedirectCallback() in the
+  // background when landing back from the IdP with ?code&state (fire-and-
+  // forget, since the constructor can't be async). Await the same call here
+  // (handleRedirectCallback() is memoized, so this doesn't start a second
+  // one) before fetching user info, otherwise ensureUserIdIsKnown() can race
+  // ahead and fire without an access token yet.
+  const params = new URLSearchParams(window.location.search);
+  if (config && params.has('code') && params.has('state')) {
+    await client.handleRedirectCallback();
+  }
+
   await client.ensureUserIdIsKnown();
 
   // when the majority of the test were written

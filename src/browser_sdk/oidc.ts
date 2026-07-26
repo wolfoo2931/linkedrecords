@@ -27,6 +27,8 @@ export class OIDCManager {
 
   private redirectOriginPath?: string;
 
+  private redirectCallbackPromise?: Promise<User>;
+
   constructor(config: OIDCConfig, serverURL: URL) {
     const {
       redirect_uri: redirectUri,
@@ -113,7 +115,19 @@ export class OIDCManager {
     await this.userManager.signinRedirect();
   }
 
+  // Memoized: signinRedirectCallback() consumes the pending auth state and
+  // throws if called twice for the same redirect, so a caller racing the
+  // constructor's own auto-handling (see LinkedRecords constructor) must
+  // await this same in-flight call rather than trigger a second one.
   async handleRedirectCallback(): Promise<User> {
+    if (!this.redirectCallbackPromise) {
+      this.redirectCallbackPromise = this.performRedirectCallback();
+    }
+
+    return this.redirectCallbackPromise;
+  }
+
+  private async performRedirectCallback(): Promise<User> {
     await this.ready;
     this.user = await this.userManager.signinRedirectCallback();
 
