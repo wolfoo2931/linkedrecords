@@ -104,8 +104,22 @@ async function ensureUserIsInLocalDBAndVerified(
   return false;
 }
 
-function confidentialClientAuthenticationMiddleware(req, res, next) {
-  assignWhenAuthenticatedFunction(req, res);
+// Keyed by the (rare, currently unused by any caller) ?prompt= value, so that in
+// practice there is exactly one cached instance. Constructing `auth()` triggers OIDC
+// issuer discovery (a network round trip to AUTH_ISSUER_BASE_URL), so building a fresh
+// one per request - as this used to do - means every single request pays that cost
+// again. Against a fast IdP that's merely wasteful; against a slower one (e.g. the
+// hermetic Authentik instance used in CI, competing for CPU with everything else on the
+// runner) it turns into multi-second latency on every request.
+const oidcAuthMiddlewareCache = new Map<string, ReturnType<typeof auth>>();
+
+function getOidcAuthMiddleware(prompt: string | undefined) {
+  const cached = oidcAuthMiddlewareCache.get(prompt ?? '');
+
+  if (cached) {
+    return cached;
+  }
+
   const cookieSettings = getCookieSettingsFromEnv();
 
   const authMiddleware = auth({
@@ -117,7 +131,10 @@ function confidentialClientAuthenticationMiddleware(req, res, next) {
     errorOnRequiredAuth: true,
     enableTelemetry: false,
     idpLogout: process.env['AUTH_IDP_LOGOUT'] === 'true',
-    afterCallback: async (_, __, session: any) => {
+    // req/res here are the request/response of whichever call is currently completing
+    // the OIDC callback - not necessarily the one that built (and cached) this
+    // middleware instance - so they must be taken from the callback's own arguments.
+    afterCallback: async (req: any, res: any, session: any) => {
       const userInfo = decodeJwt(session.id_token);
       const isVerified = await ensureUserIsInLocalDBAndVerified(userInfo, req.log);
 
@@ -132,16 +149,42 @@ function confidentialClientAuthenticationMiddleware(req, res, next) {
       // which can not be redirected for refreshing the token.
       scope: 'openid email offline_access profile',
       response_type: 'code',
-      prompt: ['none', 'login', 'consent', 'select_account'].includes(req.query.prompt)
-        ? req.query.prompt
-        : undefined,
+      prompt,
     },
     session: {
       cookie: cookieSettings,
     },
   });
 
-  return authMiddleware(req, res, next);
+  oidcAuthMiddlewareCache.set(prompt ?? '', authMiddleware);
+
+  return authMiddleware;
+}
+
+function confidentialClientAuthenticationMiddleware(req, res, next) {
+  assignWhenAuthenticatedFunction(req, res);
+
+  const prompt = ['none', 'login', 'consent', 'select_account'].includes(req.query.prompt)
+    ? req.query.prompt
+    : undefined;
+
+  return getOidcAuthMiddleware(prompt)(req, res, next);
+}
+
+// Built once and reused: like getOidcAuthMiddleware() above, this doesn't vary per
+// request (issuerBaseURL/audience are fixed at process start), so there's no reason to
+// pay for a fresh JWKS/discovery round trip on every request.
+let bearerAuthMiddleware: ReturnType<typeof authBearer> | undefined;
+
+function getBearerAuthMiddleware() {
+  if (!bearerAuthMiddleware) {
+    bearerAuthMiddleware = authBearer({
+      issuerBaseURL: process.env['AUTH_ISSUER_BASE_URL'],
+      audience: process.env['AUTH_TOKEN_AUDIENCE'],
+    });
+  }
+
+  return bearerAuthMiddleware;
 }
 
 async function httpAuthHeaderMiddleware(req, res, next) {
@@ -174,12 +217,7 @@ async function httpAuthHeaderMiddleware(req, res, next) {
     }
   }
 
-  const authMiddleware = authBearer({
-    issuerBaseURL: process.env['AUTH_ISSUER_BASE_URL'],
-    audience: process.env['AUTH_TOKEN_AUDIENCE'],
-  });
-
-  return authMiddleware(req, res, async () => {
+  return getBearerAuthMiddleware()(req, res, async () => {
     if (!req.auth) {
       req.log.info('Request contained invalid access token in http authorization header.');
       return res.sendStatus(401);
