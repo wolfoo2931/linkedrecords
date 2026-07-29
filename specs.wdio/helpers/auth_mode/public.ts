@@ -25,10 +25,15 @@ export default class PublicClientMode implements AuthModeStrategy {
   async completeLogin(browser: WebdriverIO.Browser): Promise<void> {
     // The IdP redirects to /callback which exchanges the code and
     // navigates back to the page the login started from.
+    // 60s (not 30s): this covers the IdP's post-password-stage authorization/consent
+    // processing plus the client-side PKCE token exchange - see the matching wait in
+    // helpers/session.ts for why 30s isn't enough under concurrent Authentik logins
+    // (REUSE_TEST_BROWSERS=true logs 4 browsers in at once, each hitting the same
+    // CPU-bound password-stage hashing on the hermetic Authentik container).
     await browser.waitUntil(
       async () => (await browser.getUrl()).includes('/index.html'),
       {
-        timeout: 30000,
+        timeout: 60000,
         timeoutMsg: 'Was not redirected back to the test app after login',
       },
     );
@@ -39,7 +44,7 @@ export default class PublicClientMode implements AuthModeStrategy {
         done(lr ? await lr.isAuthenticated() : false);
       }),
       {
-        timeout: 30000,
+        timeout: 60000,
         timeoutMsg: 'The SDK did not report an authenticated session after login',
       },
     );

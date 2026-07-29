@@ -106,6 +106,9 @@ async function createApp(httpServer: https.Server) {
   }
 
   const app = express();
+
+  app.set('etag', false);
+
   await mountServiceBus(httpServer, app);
 
   app.use(limiter);

@@ -391,6 +391,14 @@ export default class LinkedRecords {
             return undefined;
           }
 
+          // Guard against any other non-2xx response (e.g. a bodyless 304 from an
+          // intermediate cache) being blindly parsed as JSON: response.json() throws on an
+          // empty body, which would otherwise leave actorId permanently uncached and cause
+          // every subsequent SDK call to redundantly re-fetch /userinfo.
+          if (!response.ok) {
+            return undefined;
+          }
+
           const responseBody = await response.json();
           return responseBody;
         });

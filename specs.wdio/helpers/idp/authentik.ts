@@ -37,12 +37,57 @@ async function setInputValue(
   }, stageTag, inputSelector, value);
 }
 
-async function submitStage(browser: WebdriverIO.Browser, stageTag: string): Promise<void> {
-  await browser.execute((tag) => {
+function clickSubmit(browser: WebdriverIO.Browser, stageTag: string): Promise<void> {
+  return browser.execute((tag) => {
     const stage = document.querySelector('ak-flow-executor')?.shadowRoot
       ?.querySelector(tag) as HTMLElement & { shadowRoot: ShadowRoot | null };
     (stage?.shadowRoot?.querySelector('button[type=submit]') as HTMLElement)?.click();
   }, stageTag);
+}
+
+async function stageGone(browser: WebdriverIO.Browser, stageTag: string): Promise<boolean> {
+  return !(await browser.execute((tag) => !!(
+    document.querySelector('ak-flow-executor')?.shadowRoot?.querySelector(tag)
+  ), stageTag));
+}
+
+// Clicking submit doesn't by itself confirm Authentik actually processed it: under heavy
+// concurrent load (several browsers logging in at once - see helpers/session.ts) the click
+// can race the stage's own event-listener attachment and get silently swallowed, leaving the
+// browser stuck on that stage forever with nothing downstream to detect it (the next thing
+// that would notice is the generic, much-later window.lr timeout).
+//
+// This used to poll every 500ms and re-click on every tick the stage was still present - but
+// a real submit (e.g. password verification) can easily take longer than 500ms to process,
+// so that re-clicked a request that was already in flight. Resubmitting the same password
+// stage repeatedly looks exactly like a brute-force attempt to Authentik's own reputation/
+// throttling policies, which can make a login stall for a long time and then eventually
+// succeed - i.e. it can turn a rare missed-click race into a much more common, much longer
+// stall than the bug it was meant to fix.
+//
+// So: click once, give it a real grace period to genuinely process, and only click a second
+// time (never more) if the stage is still there after that.
+async function submitStage(browser: WebdriverIO.Browser, stageTag: string): Promise<void> {
+  await clickSubmit(browser, stageTag);
+
+  try {
+    await browser.waitUntil(() => stageGone(browser, stageTag), { timeout: 5000, interval: 250 });
+    return;
+  } catch {
+    // Still on this stage after a reasonable processing window - the click likely didn't
+    // register at all (rather than merely being slow to process). Click once more and wait
+    // out the full budget without clicking again.
+  }
+
+  await clickSubmit(browser, stageTag);
+
+  await browser.waitUntil(
+    () => stageGone(browser, stageTag),
+    {
+      timeout: 100000,
+      timeoutMsg: `Authentik stage '${stageTag}' never went away after clicking submit twice`,
+    },
+  );
 }
 
 export default class Authentik implements IdpAdapter {
