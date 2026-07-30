@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import * as jose from 'jose';
 import * as crypto from 'crypto';
 import {
-  DEV_USERS, getIssuerUrl, getAudience, TOKEN_EXPIRY, CODE_EXPIRY,
+  DEV_USERS, getIssuerUrl, getAudience, getClientId, TOKEN_EXPIRY, CODE_EXPIRY,
 } from './config';
 import { getPrivateKey, getJWKS, getKeyId } from './keys';
 import { generateLoginPage } from './login-page';
@@ -151,6 +151,7 @@ export async function tokenHandler(req: Request, res: Response): Promise<void> {
     code,
     code_verifier: codeVerifier,
     grant_type: grantType,
+    client_id: clientId,
   } = req.body;
 
   if (grantType !== 'authorization_code') {
@@ -214,10 +215,14 @@ export async function tokenHandler(req: Request, res: Response): Promise<void> {
   const audience = getAudience();
   const now = Math.floor(Date.now() / 1000);
 
+  // The ID token's aud must be the requesting client's client_id (OIDC core §2), not the
+  // resource-server audience: confidential clients (express-openid-connect) validate exactly
+  // that, and get an "aud mismatch" if it's not there. The resource audience is only relevant
+  // to the separate access token, checked by public/bearer-mode's express-oauth2-jwt-bearer.
   const idTokenPayload: jose.JWTPayload = {
     iss: issuer,
     sub: user.sub,
-    aud: audience,
+    aud: clientId || getClientId(),
     exp: now + TOKEN_EXPIRY,
     iat: now,
     email: user.email,

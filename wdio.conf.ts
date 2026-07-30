@@ -1,5 +1,8 @@
 /* eslint-disable import/prefer-default-export */
 // import type { Options } from '@wdio/types';
+import fs from 'fs';
+import path from 'path';
+
 const httpProxy = require('http-proxy');
 
 const proxy = httpProxy.createProxyServer();
@@ -50,7 +53,18 @@ exports.config = {
       middleware: [
         {
           mount: '/',
-          middleware: (req, res, next) => {
+          middleware: (req: Request, res: any, next: () => {}) => {
+            if (process.env['TEST_AUTH_MODE'] === 'public') {
+              if (req.url.startsWith('/callback')) {
+                const html = fs.readFileSync(path.join(__dirname, './specs.wdio/testapp/index.html'));
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(html);
+                return;
+              }
+
+              return next();
+            }
+
             if (req.url.startsWith('/logout') || req.url.startsWith('/login') || req.url.startsWith('/callback')) {
               proxy.web(req, res, { target: 'http://localhost:3000' });
             } else {
@@ -67,8 +81,17 @@ exports.config = {
   connectionRetryCount: 3,
   framework: 'mocha',
 
+  // 240s, not 100s: Session.getSessions() logs in sequentially (see its comment in
+  // specs.wdio/helpers/session.ts), and against a real IdP (Authentik) under CI/Docker
+  // contention a single login can itself approach the per-stage timeouts configured in
+  // specs.wdio/helpers/idp/authentik.ts (up to 100s per stage) plus the 30s window.lr wait
+  // in session.ts. A test needing 2+ sessions therefore needs headroom for 2+ sequential
+  // logins in one budget - 100s was only ever enough for the near-instant dev-oidc/auth0
+  // flows this suite used to run against exclusively, and left mocha killing slow-but-
+  // healthy Authentik logins with a bare, uninformative "Error: Timeout" instead of letting
+  // the more specific inner timeouts (which explain what actually got stuck) ever fire.
   mochaOpts: {
-    timeout: 100000,
+    timeout: 240000,
   },
   reporters: [
     [

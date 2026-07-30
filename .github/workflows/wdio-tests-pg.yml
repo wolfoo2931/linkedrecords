@@ -1,0 +1,79 @@
+name: WDIO Tests (PostgreSQL)
+
+permissions:
+  contents: read
+  pull-requests: read
+
+on:
+  workflow_dispatch:
+    inputs: {}
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
+  COOKIE_DOMAIN: localhost
+  FRONTEND_BASE_URL: http://localhost:3001
+  SERVER_BASE_URL: http://localhost:6543
+  AUTH_COOKIE_SIGNING_SECRET: somesigningsecret
+  PADDLE_API_URL: https://sandbox-api.paddle.com
+  PADDLE_NOTIFICATION_SECRET: ${{ secrets.PADDLE_NOTIFICATION_SECRET }}
+  PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
+  QUOTA_COUNT_KV_RECORDS: true
+  QUOTA_COUNT_LT_RECORDS: true
+  PGUSER: postgres
+  PGHOST: localhost
+  PGPASSWORD: postgres
+  PGDATABASE: ci_db_test
+  # The IdP isn't the focus of this workflow (that's covered by wdio-tests-auth0.yml),
+  # so it uses the built-in mock provider (src/dev-oidc, AUTH_DEV_MODE) as a cheap
+  # stand-in - no docker-compose startup, health check or blueprint-apply retry needed,
+  # since it runs in-process in the same server the tests already start. TEST_USERS can
+  # be arbitrary example.com addresses (not a real inbox to receive anything): dev-oidc's
+  # login page accepts any email via its "custom email" field, minted into a signed
+  # token on the spot - see specs.wdio/helpers/idp/dev_oidc.ts.
+  AUTH_DEV_MODE: 'true'
+  TEST_IDP: dev-oidc
+  TEST_USERS: alice@example.com,bob@example.com,charlie@example.com,dora@example.com
+  # bin/test.wdio.sh always runs the server on localhost:3000 - see its
+  # SERVER_BASE_URL export - which is what src/dev-oidc/config.ts's
+  # getIssuerUrl() derives the issuer from.
+  AUTH_ISSUER_BASE_URL: http://localhost:3000/dev-oidc
+  AUTH_CLIENT_ID: linkedrecords-e2e-dev-oidc
+  AUTH_CLIENT_SECRET: dev-oidc-test-secret-do-not-use-in-prod
+
+jobs:
+  wdio-tests-postgres:
+    strategy:
+      matrix:
+        psql: [15, 17, 18]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:${{ matrix.psql }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci_db_test
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-deps
+      - name: WDIO Tests
+        env:
+          PGPORT: ${{ job.services.postgres.ports[5432] }}
+        run: npm run wdio:fast
+
+  wdio-tests-pglite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-deps
+      - name: WDIO Tests (PGlite)
+        env:
+          USE_PGLITE: 'true'
+        run: npm run wdio:fast

@@ -1,0 +1,124 @@
+# Declarative setup for the hermetic Authentik instance used by the wdio
+# E2E suite (TEST_IDP=authentik). Auto-applied by the worker on startup
+# (mounted read-only at /blueprints/custom).
+#
+# Provisions:
+#   - two OAuth2 providers + applications, one per TEST_AUTH_MODE:
+#     "linkedrecords-e2e" (confidential, has a client_secret - the server
+#     exchanges the code) and "linkedrecords-e2e-public" (public, no secret -
+#     the SPA exchanges the code itself with PKCE). They can't share a
+#     client: Authentik's token endpoint requires client authentication for
+#     confidential clients, which a browser-only PKCE exchange never sends.
+#     Both use the same redirect_uri (/callback) - see specs.wdio/testapp/
+#     client.ts and wdio.conf.ts's static-server middleware, which serves
+#     index.html at /callback in public mode.
+#   - four test users (alice/bob/charlie/dora@example.com) with the shared
+#     TEST_USERS_PWD password, matching the convention used by the built-in
+#     dev-oidc provider and docker-compose.yml.
+#
+# The default "email" scope mapping already includes email_verified: true
+# (verified against the authentik:2025.8 image), which LR's auth middleware
+# requires - no custom property mapping needed.
+version: 1
+metadata:
+  name: LinkedRecords E2E test setup
+entries:
+  - model: authentik_providers_oauth2.oauth2provider
+    id: e2e-provider
+    identifiers:
+      name: linkedrecords-e2e
+    attrs:
+      name: linkedrecords-e2e
+      client_type: confidential
+      client_id: linkedrecords-e2e
+      client_secret: e2e-test-client-secret-do-not-use-in-prod
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      # RS256 (not the default HS256) so the /jwks/ endpoint publishes a
+      # verification key - required for public-mode bearer token validation
+      # (express-oauth2-jwt-bearer verifies against JWKS, not the client secret).
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      redirect_uris:
+        - matching_mode: strict
+          url: http://localhost:3002/callback
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: linkedrecords-e2e
+    attrs:
+      name: LinkedRecords E2E
+      slug: linkedrecords-e2e
+      provider: !KeyOf e2e-provider
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: e2e-provider-public
+    identifiers:
+      name: linkedrecords-e2e-public
+    attrs:
+      name: linkedrecords-e2e-public
+      client_type: public
+      client_id: linkedrecords-e2e-public
+      authentication_flow: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
+      redirect_uris:
+        - matching_mode: strict
+          url: http://localhost:3002/callback
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+
+  - model: authentik_core.application
+    identifiers:
+      slug: linkedrecords-e2e-public
+    attrs:
+      name: LinkedRecords E2E (public client)
+      slug: linkedrecords-e2e-public
+      provider: !KeyOf e2e-provider-public
+
+  - model: authentik_core.user
+    identifiers:
+      username: alice
+    attrs:
+      username: alice
+      name: Alice
+      email: alice@example.com
+      is_active: true
+      password: !Env [TEST_USERS_PWD, test-password-123]
+
+  - model: authentik_core.user
+    identifiers:
+      username: bob
+    attrs:
+      username: bob
+      name: Bob
+      email: bob@example.com
+      is_active: true
+      password: !Env [TEST_USERS_PWD, test-password-123]
+
+  - model: authentik_core.user
+    identifiers:
+      username: charlie
+    attrs:
+      username: charlie
+      name: Charlie
+      email: charlie@example.com
+      is_active: true
+      password: !Env [TEST_USERS_PWD, test-password-123]
+
+  - model: authentik_core.user
+    identifiers:
+      username: dora
+    attrs:
+      username: dora
+      name: Dora
+      email: dora@example.com
+      is_active: true
+      password: !Env [TEST_USERS_PWD, test-password-123]

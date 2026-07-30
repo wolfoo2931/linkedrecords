@@ -9,6 +9,7 @@ export interface OIDCConfig {
   client_id?: string;
   redirect_uri: string;
   authority?: string; // discovered from server if not provided
+  audience?: string; // requested token audience; defaults to the server URL's host
   post_logout_redirect_uri?: string;
   scope?: string;
   response_type?: string;
@@ -25,6 +26,8 @@ export class OIDCManager {
   private ready: Promise<void>;
 
   private redirectOriginPath?: string;
+
+  private redirectCallbackPromise?: Promise<User>;
 
   constructor(config: OIDCConfig, serverURL: URL) {
     const {
@@ -46,6 +49,7 @@ export class OIDCManager {
       authority: providedAuthority,
       client_id: clientId,
       redirect_uri: redirectUri,
+      audience,
       post_logout_redirect_uri: postLogoutRedirectUri,
       scope,
       response_type: responseType,
@@ -91,7 +95,7 @@ export class OIDCManager {
       silent_redirect_uri: silentRedirectUri,
       automaticSilentRenew: automaticSilentRenew ?? true,
       extraQueryParams: {
-        audience: serverURL.host,
+        audience: audience || serverURL.host,
       },
     };
 
@@ -111,7 +115,19 @@ export class OIDCManager {
     await this.userManager.signinRedirect();
   }
 
+  // Memoized: signinRedirectCallback() consumes the pending auth state and
+  // throws if called twice for the same redirect, so a caller racing the
+  // constructor's own auto-handling (see LinkedRecords constructor) must
+  // await this same in-flight call rather than trigger a second one.
   async handleRedirectCallback(): Promise<User> {
+    if (!this.redirectCallbackPromise) {
+      this.redirectCallbackPromise = this.performRedirectCallback();
+    }
+
+    return this.redirectCallbackPromise;
+  }
+
+  private async performRedirectCallback(): Promise<User> {
     await this.ready;
     this.user = await this.userManager.signinRedirectCallback();
 

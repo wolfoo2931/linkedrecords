@@ -1,0 +1,20 @@
+name: Setup Node.js and install dependencies
+description: Sets up the requested Node.js version (with npm cache) and runs npm install. Assumes the repo has already been checked out.
+inputs:
+  node-version:
+    description: Node.js version to use
+    required: false
+    default: '24'
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js environment
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: |
+          package-lock.json
+    - name: Install dependencies
+      shell: bash
+      run: npm install

@@ -254,7 +254,11 @@ export default class RecordsRepository {
 
   async subscribeToQuery<T extends CompoundRecordQuery>(query: T, onChange: (result: QueryResult<T>) => void): Promise<() => void> {
     if (!this.linkedRecords.actorId) {
-      throw new Error('Not ready to subscribe to queries yet: this.linkedRecords.actorId is not initialized');
+      await this.linkedRecords.ensureUserIdIsKnown();
+    }
+
+    if (!this.linkedRecords.actorId) {
+      throw new Error('Not ready to subscribe to queries yet: the user is not authenticated');
     }
 
     const bus = await this.getClientServerBus();

@@ -5,6 +5,8 @@ import WdioRemote from './wdio_remote';
 import RecordsRepository from '../../src/browser_sdk/records_repository';
 import FactsRepository from '../../src/browser_sdk/facts_repository';
 import * as testappClient from './testapp_client';
+import getIdpAdapter from './idp';
+import getAuthModeStrategy from './auth_mode';
 
 type RecordsRepositoryType = RecordsRepository;
 
@@ -22,7 +24,37 @@ const capabilities = {
 };
 
 const allSessionsToBeTerminated: InitializedSession[] = [];
-let theCachedSessions;
+const theCachedSessions: InitializedSession[] = [];
+
+// One multiremote() call per browser instead of one call listing every capability: multiremote()
+// launches every capability it's given CONCURRENTLY (it's a Promise.all internally over one
+// chromedriver/Chrome startup per name - see node_modules/webdriverio/build/node.js's
+// `multiremote` function). Starting several headless Chrome processes in the same instant is
+// resource-intensive enough that chromedriver occasionally fails the handshake for one of them
+// with a generic "unknown error" on POST /session. We don't need true multiremote parallelism
+// here (each resulting instance is only ever driven individually via getInstance()), so creating
+// one single-capability multiremote() per browser, one at a time, avoids that concurrent-launch
+// race entirely.
+async function createBrowser(name: string): Promise<Awaited<ReturnType<typeof multiremote>>> {
+  return multiremote({ [name]: { capabilities } });
+}
+
+function getTestUserEmail(index: string): string {
+  const testUsers = process.env['TEST_USERS'];
+
+  if (!testUsers) {
+    throw new Error('You need to provide the TEST_USERS environment variable which contains a comma separated list of test user emails, e.g. TEST_USERS="user+1@example.com,user+2@example.com"');
+  }
+
+  const emails = testUsers.split(',').map((email) => email.trim()).filter((email) => email);
+  const email = emails[parseInt(index, 10) - 1];
+
+  if (!email) {
+    throw new Error(`TEST_USERS only contains ${emails.length} emails but the test requested test user number ${index}`);
+  }
+
+  return email;
+}
 export default class Session {
   browser: WebdriverIO.Browser;
 
@@ -47,53 +79,76 @@ export default class Session {
     const allUsersPwd = process.env['TEST_USERS_PWD'];
     const frontendBaseURL = process.env['FRONTEND_BASE_URL'];
     const index = name.replace('browser', '');
+    const email = getTestUserEmail(index);
     const session = await browser.getInstance(name);
-
-    await session.url(`${frontendBaseURL}/index.html`);
-    await session.$('a').click();
+    const idp = getIdpAdapter();
+    const authMode = getAuthModeStrategy();
 
     if (!allUsersPwd) {
       throw new Error('You need to provide the TEST_USERS_PWD environment variable which contains the Password for all test users');
     }
 
-    await (await session.$('input[name=username]')).setValue(`wolfoo2931+${index}@gmail.com`);
-    await (await session.$('input[name=password]')).setValue(allUsersPwd);
-    await (await session.$('form button[type=submit][name=action][data-action-button-primary="true"]')).click();
+    await session.url(`${frontendBaseURL}/index.html`);
+    await authMode.initiateLogin(session);
+    await idp.login(session, email, allUsersPwd);
+    await authMode.completeLogin(session);
 
-    try {
-      const consentBtn = await session.$('form button[type=submit][name=action][data-action-button-primary="true"]');
-
-      if (await consentBtn.isExisting()) {
-        await consentBtn.click();
-      }
-    } catch (ex) {
-      // do nothing
-    }
-
-    const lrSession = new Session(session, `wolfoo2931+${index}@gmail.com`);
+    const lrSession = new Session(session, email);
 
     await lrSession.initLinkedRecord();
 
     return lrSession as InitializedSession;
   }
 
+  // Logins happen sequentially (not Promise.all) and, when reused, are grown lazily one at
+  // a time rather than all 4 upfront - both to avoid the same problem in different guises:
+  //
+  // - Concurrent logins mean several password-stage hashes hit the IdP at the same instant;
+  //   against a loaded real IdP (the hermetic Authentik container fighting Docker-on-Mac's
+  //   VM overhead, or several CI workers sharing one runner) that burst can blow past even
+  //   generous per-login timeouts.
+  // - But logging in all 4 upfront regardless of what's asked for shifts that cost onto
+  //   whichever test happens to run first: WebdriverIO's command wrapper races every command
+  //   against the *current mocha test's own remaining timeout budget*
+  //   (@wdio/utils executeAsync, see node_modules/@wdio/utils/build/index.js), so a test that
+  //   only needs 2 sessions but ends up paying for 4 sequential logins can blow its own
+  //   mochaOpts.timeout and fail with a bare "Error: Timeout" that has nothing to do with
+  //   that test's own logic.
+  //
+  // Growing the cache one login at a time means each test only ever pays for the sessions it
+  // newly needs beyond what's already cached, spreading the one-time login cost across
+  // whichever tests actually ask for more instead of dumping it all on the first one.
   static async getSessions(count: number): Promise<InitializedSession[]> {
-    if (theCachedSessions && reuseBrowsers) {
-      return theCachedSessions;
+    if (!reuseBrowsers) {
+      const browsers = Array.from({ length: count }, (_, index) => `browser${index + 1}`);
+      const sessions: InitializedSession[] = [];
+
+      for (let i = 0; i < browsers.length; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const browser = await createBrowser(browsers[i]!);
+        // eslint-disable-next-line no-await-in-loop
+        sessions.push(await this.getSession(browsers[i]!, browser));
+      }
+
+      allSessionsToBeTerminated.push(...sessions);
+      return sessions;
     }
 
-    const mrConfig = {};
-    const browsers = Array.from({ length: reuseBrowsers ? 4 : count }, (_, index) => `browser${index + 1}`);
+    if (theCachedSessions.length >= count) {
+      return theCachedSessions.slice(0, count);
+    }
 
-    browsers.forEach((name) => {
-      mrConfig[name] = { capabilities };
-    });
+    for (let i = theCachedSessions.length; i < count; i += 1) {
+      const name = `browser${i + 1}`;
+      // eslint-disable-next-line no-await-in-loop
+      const browser = await createBrowser(name);
+      // eslint-disable-next-line no-await-in-loop
+      const session = await this.getSession(name, browser);
+      theCachedSessions.push(session);
+      allSessionsToBeTerminated.push(session);
+    }
 
-    const browser = await multiremote(mrConfig);
-
-    theCachedSessions = await Promise.all(browsers.map((name) => this.getSession(name, browser)));
-    allSessionsToBeTerminated.push(...theCachedSessions);
-    return theCachedSessions;
+    return theCachedSessions.slice(0, count);
   }
 
   static async getOneSession(): Promise<InitializedSession> {
@@ -186,12 +241,16 @@ export default class Session {
   async initLinkedRecord() {
     const remote = new WdioRemote(this.browser);
 
-    // Wait for window.lr to be initialized before accessing it
+    // Wait for window.lr to be initialized before accessing it. 30s (not 10s): against a
+    // real IdP (e.g. the hermetic Authentik container used in CI/local dev) a single login
+    // - password-stage hashing plus the OAuth round trip - can be noticeably slower than the
+    // near-instant dev-oidc/auth0 flows this used to run against exclusively, especially
+    // under CPU contention from whatever else is running (see getSessions()).
     await this.browser.waitUntil(
       async () => this.browser.execute(() => typeof (window as any).lr !== 'undefined'),
       {
-        timeout: 10000,
-        timeoutMsg: 'window.lr was not initialized within 10 seconds',
+        timeout: 30000,
+        timeoutMsg: 'initLinkedRecord: window.lr was not initialized within 30 seconds',
       },
     );
 
