@@ -13,6 +13,7 @@ on:
     branches: [ main, develop ]
 
 env:
+  TEST_USERS_PWD: ${{ secrets.TEST_USERS_PWD }}
   COOKIE_DOMAIN: localhost
   FRONTEND_BASE_URL: http://localhost:3001
   SERVER_BASE_URL: http://localhost:6543
