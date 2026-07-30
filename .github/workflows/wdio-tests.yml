@@ -97,6 +97,49 @@ jobs:
           USE_PGLITE: 'true'
         run: npm run wdio:fast
 
+  # Exercises the same real OIDC redirect flow as the Authentik jobs, but against the
+  # built-in mock provider (src/dev-oidc, AUTH_DEV_MODE) instead of a separate Docker
+  # container - no docker-compose startup, health check or blueprint-apply retry needed,
+  # since it runs in-process in the same server the tests already start. TEST_USERS can
+  # be arbitrary example.com addresses (not a real inbox to receive anything): dev-oidc's
+  # login page accepts any email via its "custom email" field, minted into a signed
+  # token on the spot - see specs.wdio/helpers/idp/dev_oidc.ts.
+  wdio-tests-dev-oidc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-deps
+      - name: WDIO Tests (dev-oidc, confidential client mode)
+        env:
+          USE_PGLITE: 'true'
+          AUTH_DEV_MODE: 'true'
+          TEST_IDP: dev-oidc
+          TEST_USERS: alice@example.com,bob@example.com,charlie@example.com,dora@example.com
+          # bin/test.wdio.sh always runs the server on localhost:3000 - see its
+          # SERVER_BASE_URL export - which is what src/dev-oidc/config.ts's
+          # getIssuerUrl() derives the issuer from.
+          AUTH_ISSUER_BASE_URL: http://localhost:3000/dev-oidc
+          AUTH_CLIENT_ID: linkedrecords-e2e-dev-oidc
+          AUTH_CLIENT_SECRET: dev-oidc-test-secret-do-not-use-in-prod
+        run: npm run wdio:fast
+
+  wdio-tests-dev-oidc-public-client-mode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-deps
+      - name: WDIO Tests (dev-oidc, public client mode)
+        env:
+          USE_PGLITE: 'true'
+          AUTH_DEV_MODE: 'true'
+          TEST_IDP: dev-oidc
+          TEST_AUTH_MODE: public
+          TEST_USERS: alice@example.com,bob@example.com,charlie@example.com,dora@example.com
+          AUTH_ISSUER_BASE_URL: http://localhost:3000/dev-oidc
+          AUTH_CLIENT_ID: linkedrecords-e2e-dev-oidc-public
+          AUTH_TOKEN_AUDIENCE: linkedrecords-e2e-dev-oidc-public
+        run: npm run wdio:fast
+
   # wdio-tests-authentik:
   #   runs-on: ubuntu-latest
   #   steps:
