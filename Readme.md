@@ -1,4 +1,7 @@
-# LinkedRecords
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/linkedrecords-logo-dark.png">
+  <img src="assets/linkedrecords-logo-light.png" alt="LinkedRecords">
+</picture>
 
 LinkedRecords is a Backend-as-a-Service you can connect to directly from your single-page application - no backend code required. Authorization is built into the data model, and real-time collaboration (CRDT/OT) works out of the box.
 
