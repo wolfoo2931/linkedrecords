@@ -9,6 +9,8 @@ LinkedRecords is a Backend-as-a-Service you can connect to directly from your si
 - **SDKs on npm:** [`@linkedrecords/browser`](https://www.npmjs.com/package/@linkedrecords/browser) (core SDK) · [`@linkedrecords/react`](https://www.npmjs.com/package/@linkedrecords/react) (React hooks)
 - **License:** [MIT](LICENSE)
 
+[![LinkedRecords Introduction](https://img.youtube.com/vi/qdGSEJaJS78/maxresdefault.jpg)](https://www.youtube.com/watch?v=qdGSEJaJS78)
+
 ## Quickstart
 
 Run the backend locally with Docker (includes PostgreSQL and a mock OIDC provider with one-click test accounts):
