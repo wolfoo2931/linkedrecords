@@ -9,6 +9,7 @@ const config = {
   trailingSlash: true,
   images: { unoptimized: true },
   basePath: '',
+  turbopack: { root: import.meta.dirname },
 };
 
 export default withMDX(config);

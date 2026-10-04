@@ -1,5 +1,5 @@
 import './global.css';
-import { RootProvider } from 'fumadocs-ui/provider';
+import { RootProvider } from 'fumadocs-ui/provider/next';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
 import { Banner } from 'fumadocs-ui/components/banner';
 import type { ReactNode } from 'react';
@@ -14,7 +14,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
-        <RootProvider theme={{ defaultTheme: 'dark' }}>
+        <RootProvider theme={{ defaultTheme: 'dark' }} search={{ enabled: false }}>
           <Banner variant="rainbow" changeLayout>
             <a
               href="https://github.com/wolfoo2931/linkedrecords"
@@ -35,7 +35,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             nav={{
               title: 'LinkedRecords',
             }}
-            sidebar={{ hideSearch: true }}
+            searchToggle={{ enabled: false }}
             githubUrl="https://github.com/wolfoo2931/linkedrecords"
           >
             {children}
