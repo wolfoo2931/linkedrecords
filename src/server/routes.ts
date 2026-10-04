@@ -22,7 +22,9 @@ import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../records/errors/authorization_error';
 import BlobRecord from '../records/blob/server';
 
-const blobUpload = multer().single('change');
+// No multipart field uses bracket notation, so reject any numeric array
+// index (> 0) to avoid the sparse-array DoS via append-field.
+const blobUpload = multer({ limits: { fieldArrayIndexLimit: 0 } }).single('change');
 
 const limiter = rateLimit({
   windowMs: 1000, // 1 second
@@ -42,6 +44,8 @@ async function withAuth(req, res, controllerAction) {
     blobUpload(request, response, async (err) => {
       if (err) {
         req.log.error(`error uploading file for ${req.method} ${req.path}`, err);
+        reject(err);
+        return;
       }
 
       if (request?.file?.fieldname === 'change' && request.body) {
@@ -64,7 +68,9 @@ async function withAuth(req, res, controllerAction) {
     try {
       await uploadWrappedControllerAction(req, res);
     } catch (ex: any) {
-      if (ex instanceof AuthorizationError) {
+      if (ex instanceof multer.MulterError) {
+        res.sendStatus(400);
+      } else if (ex instanceof AuthorizationError) {
         res.sendStatus(403);
       } else if (ex?.message?.startsWith('Not enough storage space available')) {
         res.status(403).send('Not enough storage space available');
