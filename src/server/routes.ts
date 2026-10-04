@@ -44,6 +44,8 @@ async function withAuth(req, res, controllerAction) {
     blobUpload(request, response, async (err) => {
       if (err) {
         req.log.error(`error uploading file for ${req.method} ${req.path}`, err);
+        reject(err);
+        return;
       }
 
       if (request?.file?.fieldname === 'change' && request.body) {
@@ -66,7 +68,9 @@ async function withAuth(req, res, controllerAction) {
     try {
       await uploadWrappedControllerAction(req, res);
     } catch (ex: any) {
-      if (ex instanceof AuthorizationError) {
+      if (ex instanceof multer.MulterError) {
+        res.sendStatus(400);
+      } else if (ex instanceof AuthorizationError) {
         res.sendStatus(403);
       } else if (ex?.message?.startsWith('Not enough storage space available')) {
         res.status(403).send('Not enough storage space available');
