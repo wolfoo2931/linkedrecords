@@ -22,7 +22,9 @@ import mountServiceBus from './service_bus_mount';
 import AuthorizationError from '../records/errors/authorization_error';
 import BlobRecord from '../records/blob/server';
 
-const blobUpload = multer().single('change');
+// No multipart field uses bracket notation, so reject any numeric array
+// index (> 0) to avoid the sparse-array DoS via append-field.
+const blobUpload = multer({ limits: { fieldArrayIndexLimit: 0 } }).single('change');
 
 const limiter = rateLimit({
   windowMs: 1000, // 1 second
