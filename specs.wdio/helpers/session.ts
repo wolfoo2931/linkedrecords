@@ -84,6 +84,10 @@ export default class Session {
     const idp = getIdpAdapter();
     const authMode = getAuthModeStrategy();
 
+    if (!session) {
+      throw new Error(`No browser instance named ${name}`);
+    }
+
     if (!allUsersPwd) {
       throw new Error('You need to provide the TEST_USERS_PWD environment variable which contains the Password for all test users');
     }
