@@ -202,9 +202,26 @@ export default abstract class AbstractRecordClient <Type, TypedChange extends Is
     return this.rawChange(change);
   }
 
-  public async subscribe(observer: Function) {
+  public async subscribe(observer: Function) : Promise<() => void> {
     await this.load();
     this.observers.push(observer);
+
+    let subscribed = true;
+
+    return () => {
+      if (subscribed) {
+        subscribed = false;
+        this.unsubscribe(observer);
+      }
+    };
+  }
+
+  public unsubscribe(observer: Function) {
+    const index = this.observers.indexOf(observer);
+
+    if (index !== -1) {
+      this.observers.splice(index, 1);
+    }
   }
 
   // TODO: when an attribute is unloaded it should be removed from the attribute cache
@@ -318,7 +335,8 @@ export default abstract class AbstractRecordClient <Type, TypedChange extends Is
   }
 
   protected notifySubscribers(change?: TypedChange, fullChangeInfo?: { actorId: string }) {
-    this.observers.forEach((callback) => {
+    // copy so observers can unsubscribe while being notified
+    [...this.observers].forEach((callback) => {
       callback(change, fullChangeInfo);
     });
   }

@@ -276,4 +276,55 @@ describe('Key Value Attributes', () => {
       });
     });
   });
+
+  describe('attribute.subscribe()', () => {
+    it('returns a function which removes only the given observer', async () => {
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
+
+      const attributeClientA = await clientA.Record.create('keyValue', { foo: 'bar' });
+      const attributeClientB = await clientB.Record.find(attributeClientA.id!);
+
+      let removedCalls = 0;
+      let keptCalls = 0;
+
+      const unsubscribe = await attributeClientB!.subscribe(() => { removedCalls += 1; });
+      await attributeClientB!.subscribe(() => { keptCalls += 1; });
+
+      unsubscribe();
+      unsubscribe();
+
+      await attributeClientA.change(new KeyValueChange([{ key: 'foo', value: 'baz' }]));
+
+      await waitFor(async () => keptCalls > 0);
+
+      expect(keptCalls).to.be.greaterThan(0);
+      expect(removedCalls).to.be.equal(0);
+    });
+
+    it('allows to remove an observer via attribute.unsubscribe()', async () => {
+      const [clientA] = await createClient();
+      const [clientB] = await createClient();
+
+      const attributeClientA = await clientA.Record.create('keyValue', { foo: 'bar' });
+      const attributeClientB = await clientB.Record.find(attributeClientA.id!);
+
+      let removedCalls = 0;
+      let keptCalls = 0;
+      const removedObserver = () => { removedCalls += 1; };
+
+      await attributeClientB!.subscribe(removedObserver);
+      await attributeClientB!.subscribe(() => { keptCalls += 1; });
+
+      attributeClientB!.unsubscribe(removedObserver);
+      attributeClientB!.unsubscribe(removedObserver);
+
+      await attributeClientA.change(new KeyValueChange([{ key: 'foo', value: 'baz' }]));
+
+      await waitFor(async () => keptCalls > 0);
+
+      expect(keptCalls).to.be.greaterThan(0);
+      expect(removedCalls).to.be.equal(0);
+    });
+  });
 });
