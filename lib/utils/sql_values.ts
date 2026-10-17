@@ -1,4 +1,4 @@
-import format = require('pg-format');
+import format from 'pg-format';
 
 export default class EnsureIsValid {
   static tableName(tableName: string): string {

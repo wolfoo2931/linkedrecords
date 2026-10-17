@@ -84,4 +84,36 @@ const server = {
   },
 };
 
-module.exports = [server, client];
+// The same SDK as an ES module, so ESM consumers (bundlers, <script type="module">)
+// get the real default export instead of going through CommonJS interop.
+const clientEsm = {
+  ...client,
+  output: {
+    path: path.resolve(__dirname, "dist"),
+    filename: "browser_sdk.mjs",
+    library: {
+      type: "module",
+    },
+  },
+  module: {
+    rules: [
+      {
+        ...client.module.rules[0],
+        use: {
+          loader: "ts-loader",
+          options: {
+            transpileOnly: false,
+            // tsconfig emits CommonJS; webpack needs ES modules to see the
+            // SDK's exports and re-export them from the bundle.
+            compilerOptions: { module: "esnext" },
+          },
+        },
+      },
+    ],
+  },
+  experiments: {
+    outputModule: true,
+  },
+};
+
+module.exports = [server, client, clientEsm];
