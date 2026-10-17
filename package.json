@@ -1,8 +1,9 @@
 {
   "name": "@linkedrecords/browser",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A BaaS (Backend-as-a-Service) solution for web applications",
   "main": "./dist/browser_sdk.js",
+  "module": "./dist/browser_sdk.mjs",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -11,13 +12,15 @@
   ],
   "exports": {
     ".": {
-      "default": "./dist/browser_sdk.js",
-      "types": "./dist/src/browser_sdk/index.d.ts"
+      "types": "./dist/src/browser_sdk/index.d.ts",
+      "import": "./dist/browser_sdk.mjs",
+      "default": "./dist/browser_sdk.js"
     },
     "./server": "./dist/server.js",
     "./browser_sdk": {
-      "default": "./dist/browser_sdk.js",
-      "types": "./dist/src/browser_sdk/index.d.ts"
+      "types": "./dist/src/browser_sdk/index.d.ts",
+      "import": "./dist/browser_sdk.mjs",
+      "default": "./dist/browser_sdk.js"
     }
   },
   "scripts": {
