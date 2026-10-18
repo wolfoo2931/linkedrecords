@@ -1,0 +1,89 @@
+---
+title: LinkedRecords vs Appwrite
+description: Admin-defined collections and document permissions compared with facts
+---
+
+Appwrite is the closest of the popular BaaS products to LinkedRecords. Users
+can create teams, invite members, and give teams permission on individual
+documents. The difference is who sets up the structure the data lives in.
+
+## How Appwrite handles access
+
+Appwrite stores documents in collections inside databases (newer versions call
+them tables and rows). An administrator creates each collection and its
+attributes in the console, the CLI, or a server SDK using an API key. Each
+collection has permissions. With document security turned on, a client can
+also set permissions on each document it creates:
+
+```typescript
+import { Databases, ID, Permission, Role } from 'appwrite';
+
+await databases.createDocument(
+  'main',
+  'documents',
+  ID.unique(),
+  { title: 'Q3 plan' },
+  [
+    Permission.read(Role.team(teamId)),
+    Permission.update(Role.team(teamId, 'editor')),
+  ],
+);
+```
+
+This is close to how LinkedRecords works: the client attaches access to the
+data it creates. The collection itself still has to exist first, and creating
+it needs admin rights. Part of the domain model lives in the app and part in
+the Appwrite project configuration.
+
+## The same feature in LinkedRecords
+
+```typescript
+await lr.Fact.createAll([
+  ['Document', '$isATermFor', 'A text document'],
+]);
+
+const doc = await lr.Record.createKeyValue(
+  { title: 'Q3 plan' },
+  [
+    ['$it', 'isA', 'Document'],
+    [readersTeamId, '$canRead', '$it'],
+    [editorsTeamId, '$canAccess', '$it'],
+  ],
+);
+```
+
+Any user can declare the term `Document`, so the app needs no admin step and
+no server API key. A team is an ordinary record. Teams can be granted access to
+other teams, used as accountable owners, and connected to anything else with
+facts.
+
+## Differences
+
+| | Appwrite | LinkedRecords |
+|---|---|---|
+| Structure | Collections created by an admin | Terms any user can declare |
+| Per-document access | Yes, with document security | Yes, always |
+| Teams | Built-in teams with roles | Any record can be a group; roles are separate teams |
+| Who can invite | Team owners and roles you configure | Hosts (`$isHostOf`) of the group |
+| Relationships between documents | Relationship attributes on collections | Any fact between records |
+| Who pays for storage | The project | The accountable user or group of each record |
+| Concurrent edits | Last write wins | CRDT for JSON, operational transformation for long text |
+| Built-in extras | Auth, storage, functions, messaging | Auth through any OIDC provider, blob storage |
+| Self-hosting | Yes | Yes |
+
+## Choose Appwrite when
+
+- You want one product with auth, functions, messaging, and storage.
+- Your data fits a fixed set of collections that rarely change.
+- You need server functions for custom logic.
+
+## Choose LinkedRecords when
+
+- You want the whole domain model in frontend code, without an admin setup
+  step.
+- Data from different apps should connect through shared terms.
+- Organizations should pay for their own storage through accountability.
+- Users edit long text together in real time.
+
+See also the [authorization model](/authorization-model) and the
+[whitepaper](/whitepaper).

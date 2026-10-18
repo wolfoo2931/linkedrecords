@@ -1,0 +1,11 @@
+{
+  "title": "Comparisons",
+  "pages": [
+    "index",
+    "firebase",
+    "supabase",
+    "appwrite",
+    "openfga-spicedb",
+    "local-first"
+  ]
+}
