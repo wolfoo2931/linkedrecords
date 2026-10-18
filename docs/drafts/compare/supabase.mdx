@@ -1,0 +1,94 @@
+---
+title: LinkedRecords vs Supabase
+description: Row-level security policies compared with facts
+---
+
+Supabase gives you a PostgreSQL database with generated REST and realtime
+APIs. LinkedRecords also runs on PostgreSQL, but you never see a table. The
+difference is whether you design a schema and its policies, or describe data
+and access with facts.
+
+## How Supabase handles access
+
+With Supabase, the browser can query tables through the generated API using
+the public anon key. Row-level security (RLS) policies decide which rows each
+user can read or change:
+
+```sql
+create table documents (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid references auth.users not null,
+  team_id uuid references teams,
+  title text
+);
+
+alter table documents enable row level security;
+
+create policy "members can read team documents"
+  on documents for select
+  using (
+    team_id in (
+      select team_id from team_members where user_id = auth.uid()
+    )
+  );
+```
+
+You need a policy for every table and every operation, and RLS has to be
+enabled on each table. A table exposed through the API without RLS can be read
+by anyone who has the anon key, which ships in your frontend. Policies are
+part of the schema, so they change through migrations.
+
+## The same feature in LinkedRecords
+
+```typescript
+await lr.Fact.createAll([
+  ['Document', '$isATermFor', 'A text document'],
+]);
+
+const doc = await lr.Record.createKeyValue(
+  { title: 'Q3 plan' },
+  [
+    ['$it', 'isA', 'Document'],
+    [teamId, '$canAccess', '$it'],
+  ],
+);
+
+const userId = await lr.getUserIdByEmail('ana@example.com');
+await lr.Fact.createAll([[userId, '$isMemberOf', teamId]]);
+```
+
+There are no tables, no `team_members` join table, and no policies. The
+permission rules are built into the server and apply to every record. A new
+kind of record needs a new term, not a migration.
+
+## Differences
+
+| | Supabase | LinkedRecords |
+|---|---|---|
+| Data model | Relational tables you design | Records connected by facts |
+| Where rules live | RLS policies in SQL migrations | In the app code, as facts |
+| Default for a new table | Readable through the API until RLS is enabled | Every record is private to its creator |
+| Effect of a policy bug | Every row in the table | Data created by users who ran the faulty code |
+| Schema changes | Migrations | New terms and facts |
+| Queries | Full SQL, joins, aggregates | Fact patterns with `$latest`, `$not`, `$hasDataType` |
+| Data validation | Column types, constraints, triggers | None on record contents |
+| Concurrent edits | Last write wins per row | CRDT for JSON, operational transformation for long text |
+| Self-hosting | Yes | Yes |
+
+## Choose Supabase when
+
+- Your data is relational and you need joins, aggregates, reporting, or
+  constraints.
+- You want to write server logic in SQL, triggers, or edge functions.
+- Your team already knows PostgreSQL well.
+
+## Choose LinkedRecords when
+
+- Most of your access rules are about who belongs to which team, and you
+  would rather not write a policy for each table.
+- You want access rules next to the feature code, not in migrations.
+- Users edit shared documents at the same time.
+- Several apps should share the same data without a shared schema.
+
+See also the [authorization model](/authorization-model) and the
+[whitepaper](/whitepaper).

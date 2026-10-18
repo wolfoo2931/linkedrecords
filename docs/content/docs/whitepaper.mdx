@@ -1,0 +1,794 @@
+---
+title: Letting untrusted clients write their own access rules
+description: How LinkedRecords moves authorization out of the backend and into the data, what that costs, and how it compares with Firebase, Supabase, Zanzibar, and Cedar
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Abstract
+
+Most web applications put a backend between the browser and the database, and
+the developer writes access control rules in that backend. Backend-as-a-service
+products remove the custom backend, but they still need rules on the server:
+security rules files, row-level security policies, or collection permissions
+set by an administrator. Broken access control has been the first entry in the
+OWASP Top 10 since 2021.
+
+LinkedRecords stores data as records and describes the relationships between
+them as facts in a triplestore. A small, fixed set of reserved predicates
+decides who may read a record, write it, or link it to other records. The same
+rules apply to every application, so nobody writes a policy for their own app.
+The client running in the user's browser creates the facts that grant access,
+on behalf of that user and limited to data that user controls. A client that
+is modified or replaced cannot grant more than its user already has.
+
+This paper describes the model, compares it with existing approaches, and
+argues that it limits the damage a single authorization bug can do. It also
+shows how declared terms let several applications share one vocabulary and
+work on the same data. As an evaluation, it reimplements TinyTodo, the example
+application used to present the Cedar policy language, in about 300 lines of
+frontend code, and lists what that version cannot express.
+
+## The problem
+
+Before the web, fat clients on personal computers were usually trusted. The
+client validated input and wrote to a relational database that accepted
+whatever it received. Once applications moved to the internet, the client could
+no longer be trusted, and a server tier took over validation and access
+control.
+
+Since then, backends have been built in many styles: MVC, microservices,
+hexagonal architecture, event sourcing, serverless functions. Underneath, they
+are all three tiers: a client, a backend that checks requests, and a database.
+In each of them, the frontend and the middle tier are coupled: many changes to
+an application need a change in both (Dubray, 2016).
+
+Several approaches reduce this coupling, and each stops at authorization:
+
+- Schemaless databases move schema enforcement out of the database and into
+  the middle tier, which migrates documents as it reads them. The database no
+  longer knows the domain, but the middle tier still has to reach it as a
+  confidential client, for example a "client implemented on a secure server
+  with restricted access to the client credentials" (Hardt, 2012).
+- GraphQL gives the frontend a flexible query interface, so the middle tier
+  changes less often. The more a client can ask for, the harder it gets to
+  decide what it may see (Gross, 2016), and the resolvers that make that
+  decision are still written for each application.
+- Backend-as-a-service (BaaS) products give every app the same generic API
+  and remove the middle tier for reads and writes. Authorization is where it
+  comes back. Firebase uses a security rules file written in its own language.
+  Supabase uses PostgreSQL row-level security policies written in SQL.
+  Appwrite needs an administrator to create collections and set their
+  permissions.
+- Policy engines such as Zanzibar (Pang et al., 2019) and Cedar (Cutler et
+  al., 2024) separate the policy from the application code, but the policy is
+  still specific to the domain and has to be deployed to the server whenever
+  requirements change.
+
+The pattern is the same each time: authorization ties the tiers together.
+Because of that coupling, the usual cloud service models assume that whoever
+runs the application also runs the database behind it (Mell & Grance, 2011).
+
+There is a second problem. In each of these systems, one policy protects every
+row a user might touch. If the policy has a hole, every row behind it is
+exposed at once.
+
+## Prior work
+
+Role-based access control (RBAC) and attribute-based access control (ABAC) are
+the most common models in SaaS products. Gates (2007) proposed
+relationship-based access control (ReBAC), arguing that "the data owner can
+control the release of their personal information in the same manner he would
+control it in the analog world". Gates was writing about personal information.
+LinkedRecords applies the same idea to operational data: documents, lists,
+projects, and teams.
+
+Zanzibar (Pang et al., 2019) showed that ReBAC works at Google's scale. It
+stores relationships as tuples and answers permission checks for Drive,
+YouTube, and Photos. OpenFGA, SpiceDB, Permify, and Ory Keto followed its
+design. These systems are consistent, fast, and expressive, but they have two
+properties this paper tries to change:
+
+1. The authorization schema is written in a dedicated language, and the query
+   API only answers authorization questions. The application data lives in a
+   separate database.
+2. Only trusted clients may write the schema and the relationship tuples. In
+   OAuth terms, these are confidential clients with administrative rights. A
+   developer still writes the policy, and the policy can still be wrong.
+
+Cedar (Cutler et al., 2024) takes a different route. Its policies are
+written in a language designed to be analyzed, so tools can prove properties
+such as "no intern can delete a list" before a policy is deployed. Cedar
+supports roles, attributes, hierarchies, and explicit deny rules. Its
+policies are still written by the developer for one application and
+evaluated by a trusted service. Cedar's authors present it with an example
+app called TinyTodo, which this paper reimplements in the
+[evaluation](#evaluation-tinytodo-with-cedar-and-with-linkedrecords).
+
+Tomaszuk and Rybiński (2011) proposed OAuth+UAO, an identification and access
+mechanism for RDF triplestores built on OAuth and an access ontology.
+
+Solid (Sambra et al., 2016) is a project started by Tim Berners-Lee at MIT
+and now developed in a W3C community group. In Solid, each user keeps their
+data as RDF in a personal online data store, called a pod, and applications
+read and write that data with the user's permission. Access is controlled per
+resource, either with Web Access Control lists or with the newer Access
+Control Policy language (Solid Protocol, 2024). Tomaszuk and Rybiński's work
+and Solid both share LinkedRecords' interest in
+triples and in data that is separate from the application. Neither lets an
+untrusted browser client build multi-user structures such as teams and
+organizations without first configuring access lists by hand or through a
+trusted service.
+
+Self-sovereign identity follows a related idea for personal attributes. With
+verifiable credentials (W3C, 2025), the user holds signed claims about
+themselves and decides which ones to show to whom. LinkedRecords applies a
+similar principle to application objects: the user, or the organization they
+act for, holds the facts that decide who can see a record. Capability-based
+systems such as macaroons (Birgisson et al., 2014) also let a holder pass on
+narrowed access without asking a central administrator. They do this with
+tokens that travel with the request, while LinkedRecords stores grants as
+facts that can be queried, revoked, and audited.
+
+## Records and facts
+
+LinkedRecords has two kinds of data.
+
+A record holds a payload. There are three types: key-value records (JSON
+documents merged with a CRDT), long text records (edited with operational
+transformation), and blob records for binary files.
+
+A fact is a triple `(subject, predicate, object)`, in the style of RDF. Facts
+classify records and connect them. They also carry every permission in the
+system.
+
+```typescript
+import LinkedRecords from '@linkedrecords/browser';
+
+const lr = new LinkedRecords(new URL('https://api.example.com'));
+
+const postBody = await lr.Record.createLongText('<p>long text...</p>');
+
+const postInfo = await lr.Record.createKeyValue({
+  summary: 'A summary of the article',
+  scheduledPublication: 1713700588,
+});
+
+await lr.Fact.createAll([
+  [postBody.id, 'isContentOf', postInfo.id],
+]);
+```
+
+Users authenticate through any OpenID Connect provider the server trusts. After
+login, the user has an ID, and from then on two things are true:
+
+- Any authenticated user may create records, within their storage quota (the
+  [threat model](#threat-model) lists what counts toward it).
+  Records do not belong to a table or collection, so there is nothing to set up
+  first.
+- When a user creates a record, the server adds the fact
+  `[userId, '$isAccountableFor', recordId]`. The client cannot prevent this.
+
+Until the user writes a fact that grants access to someone else, only that
+user can read the record.
+
+## Rules for writing facts
+
+Creating records is open to everyone. Creating facts is where the server
+enforces authorization. The rules are the same for every application on a
+LinkedRecords server.
+
+### Custom predicates
+
+A predicate that does not start with `$` belongs to the application, and the
+server gives it no meaning. To write `(s, p, o)` with a custom predicate, the
+user needs two permissions:
+
+- Permission to use `s` as a subject. Using a node as a subject adds to what it
+  means, so the paper calls this the conceptor permission. The user has it for
+  records they are accountable for, for groups they are a member or host of,
+  and through `$canRefine` grants.
+- Permission to use `o` as an object, called the referrer permission. The user
+  has it for their own records, for groups they belong to, for records shared
+  with them through `$canAccess` or `$canReferTo`, and for any declared term.
+
+User IDs can appear as subjects only in reserved facts such as
+`$isMemberOf`. The server does not check which custom predicate is used, as
+long as both ends are allowed.
+
+### Reserved predicates
+
+Predicates that start with `$` are reserved. A fact with an unknown `$`
+predicate is rejected.
+
+| Predicate | Meaning | Who may create it |
+|---|---|---|
+| `$isATermFor` | Declares a term | Anyone, if the term is not used in any fact yet |
+| `$isAccountableFor` | Ownership and quota | Created automatically for the creator; can be transferred to a group the user belongs to |
+| `$isMemberOf` | Group membership | The group's accountable party or a host of the group |
+| `$isHostOf` | Can add members | The group's accountable party or a host of the group |
+| `$canRead` | Read access | The record's accountable party, or hosts of a group with `$canAccess` to it |
+| `$canAccess` | Read and write access | Same as `$canRead` |
+| `$canRefine` | Use as subject | Same as `$canRead` |
+| `$canReferTo` | Use as object | Same as `$canRead` |
+
+None of these relations is transitive. If team A is a member of team B, the
+members of A do not become members of B. Transitive access rules are hard to
+reason about, and these predicates are the ones that decide access.
+
+`POST /facts` is all or nothing. If any fact in a batch fails the check, the
+server returns HTTP 403 and saves none of them.
+
+### Groups are records
+
+LinkedRecords has no built-in group type. Any record can act as a group: once
+users are members of it, it can receive `$canRead` or `$canAccess` on other
+records, and its members inherit those permissions. A "role" is a group whose
+members share a set of permissions, so RBAC can be expressed with these
+predicates.
+
+### Example: an organization with three teams
+
+The TinyTodo example app in the repository creates an organization, a list of
+todo lists, an archived state, and three teams in one request. This is the
+blueprint, trimmed to two teams:
+
+```typescript
+await lr.Fact.createAll([
+  ['Organization', '$isATermFor', 'A business organization'],
+  ['ListOfTodoLists', '$isATermFor', 'The todo lists of an organization'],
+  ['ArchivedState', '$isATermFor', 'Marks a list as archived'],
+  ['AdminTeam', '$isATermFor', 'Administrators of an organization'],
+  ['InternTeam', '$isATermFor', 'Interns of an organization'],
+]);
+
+const { org, adminTeam, internTeam } = await lr.Record.createAll({
+  org: {
+    type: 'KeyValueAttribute',
+    value: { name: 'Acme Inc' },
+    facts: [['$it', 'isA', 'Organization']],
+  },
+  todoLists: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [
+      ['$it', 'isA', 'ListOfTodoLists'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+    ],
+  },
+  archivedState: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [
+      ['$it', 'isA', 'ArchivedState'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+    ],
+  },
+  adminTeam: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [
+      ['$it', 'isA', 'AdminTeam'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+      ['$it', '$canRead', '{{todoLists}}'],
+      ['$it', '$canReferTo', '{{todoLists}}'],
+      ['$it', '$canRefine', '{{todoLists}}'],
+      ['$it', '$canRefine', '{{org}}'],
+      ['$it', '$canRead', '{{org}}'],
+      ['$it', '$isHostOf', '{{internTeam}}'],
+      ['$it', '$isHostOf', '$it'],
+      ['$it', '$canRead', '{{archivedState}}'],
+      ['$it', '$canReferTo', '{{archivedState}}'],
+    ],
+  },
+  internTeam: {
+    type: 'KeyValueAttribute',
+    value: {},
+    facts: [
+      ['$it', 'isA', 'InternTeam'],
+      ['{{org}}', '$isAccountableFor', '$it'],
+      ['$it', '$canAccess', '{{todoLists}}'],
+      ['$it', '$canRead', '{{org}}'],
+      ['$it', '$canRead', '{{archivedState}}'],
+    ],
+  },
+});
+```
+
+Admins can archive a list, because they may refer to the archived state.
+Interns can read and edit lists but cannot archive them. Admins host both
+teams, so they can invite people. An admin adds a user like this:
+
+```typescript
+const userId = await lr.getUserIdByEmail('intern@example.com');
+
+await lr.Fact.createAll([
+  [userId, '$isMemberOf', internTeam.id],
+]);
+```
+
+Every list of the organization can then be queried, without the archived
+ones:
+
+```typescript
+const { lists } = await lr.Record.findAll({
+  lists: [
+    ['$it', 'isA', 'TodoList'],
+    ['$it', '$isMemberOf', todoLists.id],
+    ['$it', '$latest(stateIs)', `$not(${archivedState.id})`],
+  ],
+});
+```
+
+The access rules for this app are the facts in the blueprint. They live in the
+frontend code, next to the feature that needs them, and go through the same
+code review and version history as the rest of the app.
+
+## How this differs from a rules file in the client
+
+The blueprint above has eleven permission facts for the admin team alone, and
+it encodes what the app intends: admins archive, interns edit. It is fair to
+ask whether this is a policy file that moved from the server to the browser.
+
+The difference is whose authority the rules run with. A Firebase rule or an
+RLS policy is evaluated by the server with authority over every record in the
+database. Whoever deploys it decides, in one step, for all users. The
+blueprint is a series of ordinary requests sent with the privileges of the
+user who runs it, and the server checks each fact against the fixed rules from
+the previous section. Three things follow from that:
+
+- The client has no special power. If a user modifies the JavaScript or calls
+  the API with their own client, they can still only grant access to records
+  they control. There is no API key in the
+  frontend, or in a backend, that can read everything.
+- The developer has no channel to grant access on users' behalf. A developer
+  can ship code that asks a user's client to write the wrong fact, but cannot
+  write facts about data no user has handed over. Only the server operator can
+  reach all data, by going to the database directly.
+- The permission structure is data. Each organization gets its own copy of
+  the teams and grants when it is created. One organization can add a team or
+  change a grant without a deploy, and without affecting any other
+  organization.
+
+The blueprint is still the app's intended policy, and a mistake in it still
+grants the wrong access. The [discussion](#a-bug-affects-less-data) looks at
+what such a mistake costs compared with a mistake in a central policy.
+
+## Terms
+
+To classify records, an application needs shared words such as `TodoList` or
+`BlogPost`. Before a word can be used as the object of a fact, someone has to
+declare it:
+
+```typescript
+await lr.Fact.createAll([
+  ['BlogPost', '$isATermFor', 'A writing published on the internet'],
+]);
+```
+
+Any user can declare a term if the word does not appear in any fact yet. After
+that, anyone may use it as an object, so every user can write
+`[postId, 'isA', 'BlogPost']` for their own records. Terms are public, and
+declaring a term grants no access to anyone's data.
+
+The user who declared the term becomes accountable for it, so only that user
+can use it as a subject. Refining a term changes what it means for every
+application that relies on it. If anyone could write
+`['BlogPost', 'isA', 'Author']`, a query for authors that followed `isA`
+links would start returning blog posts.
+
+Because terms are shared, two applications that use `BlogPost` can work on the
+same records. A reader app, an editor, and a scheduling tool from different
+vendors can all query `[['$it', 'isA', 'BlogPost']]` against the same server
+and see the posts the user is allowed to see.
+
+## Accountability
+
+Every record has exactly one accountable party at any time, and that party's
+quota pays for the record's storage. A user can transfer accountability to a
+group they belong to. The transfer replaces the previous accountability fact,
+so the user loses the permissions that came with it. Usually the user keeps
+access through a team that has `$canAccess` to the record.
+
+This handles a common case. A freelancer works for two companies and writes
+documents for both. Each document is accountable to the company it was written
+for, so each company pays for its own data, and the freelancer's access ends
+when they are removed from that company's team.
+
+Accountability is also a reliable query filter. Only parties allowed to make
+the organization accountable can create records that match
+`[org.id, '$isAccountableFor', '$it']`. TinyTodo loads its archived state this
+way, so a record created by an outsider cannot pose as the organization's
+archived state.
+
+## Deployment and tenancy
+
+### Who runs what
+
+Because the server rules do not depend on the application, the application and
+the data can be run by different parties. The table compares this with the
+usual service models.
+
+| Layer | Platform as a service | Software as a service | LinkedRecords |
+|---|---|---|---|
+| Application | Customer | Vendor | App vendor, as static files |
+| Data | Customer | Vendor | LinkedRecords operator chosen by the customer |
+| Runtime, servers, storage | Provider | Vendor | LinkedRecords operator |
+
+The customer in this model is the organization that uses the app, the tenant
+in SaaS terms, not each individual user. An organization can run its own
+LinkedRecords server or pick a hosting provider it trusts, and then point the
+app at that server's URL. The app vendor ships a single-page application and
+never needs access to the data. Individual users do not have to know any of
+this. They log in through the identity provider their organization uses.
+
+### Accountability inside an organization
+
+Every new record is first accountable to the user who created it, which makes
+sense for personal data. For organization data, the app transfers
+accountability to the organization when it creates the record, as TinyTodo
+does with `[orgId, '$isAccountableFor', '$it']`. The organization's quota then
+pays for it, and it stays with the organization when an employee leaves.
+Shared documents work the same way: the organization is accountable, and
+teams get `$canRead` or `$canAccess`. Records that belong to the application
+rather than to anyone, such as application logs, do not fit this model well
+and are better kept in a separate system.
+
+### Tenant isolation
+
+LinkedRecords isolates tenants at two levels. On a shared server, isolation
+is logical. Every query is filtered by the requesting user's grants, and the
+facts are partitioned into fact boxes, one for each cluster of users who
+share data, so a query never scans another cluster's facts. When an
+organization needs physical isolation, it runs its own server, which is the
+bring-your-own-backend case above.
+
+Several apps working on the same data does not break this isolation. An app
+acts with the permissions of the user who runs it, so a second app sees
+exactly what the user could already see in the first one. It works like two
+email clients connected to the same mailbox. Neither can read another
+customer's mail, and both see the same messages.
+
+## Threat model
+
+The attacker in this model is any authenticated user who calls the HTTP API
+directly, with a modified copy of the app or a client of their own. The
+OpenID Connect provider and the server operator are trusted, and traffic is
+encrypted with TLS. Denial of service is out of scope.
+
+Such a user cannot:
+
+- read records or facts that nobody shared with them;
+- add themselves to a group, or invite others to a group they do not host;
+- grant access to records they are not accountable for, unless they host a
+  group that has `$canAccess` to them;
+- make another user accountable for a record, or delete their own
+  accountability to escape the quota;
+- use another user's ID as the object of a custom fact, so they cannot write
+  something like `[taskId, 'assignedTo', victimId]`.
+
+Such a user can:
+
+- Create records and facts. Blob storage always counts toward the user's
+  quota. Key-value and long text records count only if the operator sets
+  `QUOTA_COUNT_KV_RECORDS` and `QUOTA_COUNT_LT_RECORDS`, and facts do not count
+  at all. Beyond that, the server only applies a per-IP rate limit.
+- Declare any term that does not exist yet and then control how it is
+  refined. This is term squatting. It does not give access to anyone's data,
+  but an app should declare its terms at startup so that it holds them first.
+  Domain-owned terms, described under future directions, would remove this
+  problem.
+- Push records into another user's query results. Any user may add other
+  users to a group they created and share records with that group. If the
+  victim's app queries `[['$it', 'isA', 'Invoice']]` without further
+  conditions, the attacker's invoices appear in the result. Apps should scope
+  queries to a group or accountable party they trust, for example with
+  `[org.id, '$isAccountableFor', '$it']` or
+  `['$it', '$isMemberOf', todoLists.id]`, as TinyTodo does.
+- Find out whether an email address has an account. `getUserIdByEmail`
+  returns the user ID for a known address, so it can be used to enumerate
+  users. Apart from the rate limit, nothing prevents this today.
+
+The operator of a LinkedRecords server can read all data, like the operator of
+any database. This is why customers who want control over their data run
+their own server ([Bring Your Own Backend](/#cloud-sovereignty)).
+
+## Evaluation: TinyTodo with Cedar and with LinkedRecords
+
+Cutler et al. (2024) present Cedar with TinyTodo, a todo app with users,
+lists, and three teams: admins, temps, and interns. Admins manage everyone,
+interns may edit lists but not create them, and temps have limited rights.
+TinyTodo is a useful benchmark because it was written to show what a modern
+policy language can do.
+
+The LinkedRecords version is in the repository
+([`specs.wdio/tinytodo/tinytodo.ts`](https://github.com/wolfoo2931/linkedrecords/blob/main/specs.wdio/tinytodo/tinytodo.ts)),
+and its behavior is checked by an end-to-end test suite. It adds one concept
+that the original does not have, an organization that groups lists and
+teams, so several organizations can use the same app.
+
+### Code size
+
+| | Cedar version | LinkedRecords version |
+|---|---|---|
+| Backend | ~2,000 lines of Rust | none |
+| Policies | ~60 lines of Cedar | none (facts in the blueprint) |
+| Client | ~350 lines of Python (command line interface) | 299 lines of TypeScript |
+| Total | ~2,410 lines | 299 lines |
+
+The LinkedRecords version is about 87% smaller. The comparison is not exact.
+The Cedar total includes a command line interface, and the LinkedRecords file
+is a domain module without a user interface. Without the Python client, the
+Cedar version is still about 2,060 lines. The LinkedRecords version also gets
+things the original does not have: persistent storage, login through OpenID
+Connect, and live updates.
+
+### What the LinkedRecords version cannot express
+
+- Deny rules. Cedar's intern policy explicitly forbids adding lists to an
+  organization. LinkedRecords only has grants, so a user who is both a temp
+  and an intern gets the temp team's right to add lists.
+- Global admin actions. In the original, admins can act on any list. In
+  LinkedRecords, admins only control lists that were added to their
+  organization. A list that a user keeps for themselves stays out of the
+  admins' reach.
+- "Interns may not create lists." In LinkedRecords, any user can create a
+  record, so interns can create lists. They cannot add those lists to the
+  organization, which the test suite checks.
+- Nested hierarchies. Cedar resolves group hierarchies transitively. The
+  reserved predicates in LinkedRecords are not transitive, so nested teams
+  have to be modeled explicitly.
+
+## Discussion
+
+### A bug affects less data
+
+A client-side developer can still write a wrong fact and give someone access
+they should not have. The difference from a central policy is the scope of the
+mistake.
+
+When a central policy is wrong, every record it guards is exposed as soon as
+the policy is deployed. In LinkedRecords, the wrong fact is written only when
+a user runs the faulty code, and only for the data that user creates or
+controls. If the bug is in the "create organization" flow, only organizations
+created after the bug shipped are affected. If it is in a "share" button, only
+records that users shared while the bug was live are affected. Either way,
+nobody gains access to data whose owners never ran the faulty code.
+
+This is a bound, not a guarantee of small damage. In a busy app, many users
+run the faulty code within hours, and the affected set keeps growing until the
+fix ships.
+
+There is also a cost on the other side. A central policy is fixed
+retroactively: when the corrected rule is deployed, the exposure ends for
+every record at once. A wrong fact is data. It keeps granting access after the
+code is fixed, until someone deletes it. Cleaning up works like this:
+
+- Deleting a fact needs the same permission as creating it. The users and
+  group hosts who could write the wrong fact can also remove it.
+- The fixed version of the app can run a cleanup step in each affected user's
+  session, with that user's privileges, the same way the bug ran.
+- Every fact has `created_at` and `created_by` columns, so the operator can
+  find the facts written while the bug was live and delete them directly in
+  the database.
+- Deleted facts are copied to a `deleted_facts` table with who deleted them
+  and when, which leaves a record of who had access during the incident.
+
+The trade-off is that a LinkedRecords bug is smaller, while a central policy
+bug is faster to stop. Which matters more depends on the app. For data where
+one breach exposes every customer at once, the bound is worth the cleanup
+work.
+
+### One deploy instead of two
+
+Firestore rules and Supabase policies can live in the same repository as the
+app, but they are applied to a different system. The frontend goes to a CDN or
+an app store. The rules go to the backend with `firebase deploy`, a database
+migration, or a console. Every change that touches both has to be coordinated:
+
+- A feature that needs a new rule fails until the rule is deployed, so the
+  rule has to go out first.
+- Browsers keep cached copies of a single-page app, and mobile users update
+  late, so several client versions are in use at the same time. The rules on
+  the server have to work for all of them. Tightening a rule can break an old
+  client that relied on it.
+- Rolling back one side without the other leaves the app and its rules out of
+  step. Staging and production each need both deploys, in the right order.
+
+In LinkedRecords, the server rules are the same for every app and do not
+change when the app changes. The facts that grant access are written in the
+same function that creates the data, so the frontend is the only thing to
+deploy. A new version of the app can use a different permission structure
+without a server change, and older clients keep working against the same
+rules.
+
+The cost moves into the data, and it helps to separate two kinds of change.
+
+Day-to-day user management needs no deploy in either kind of system. Adding
+someone to a team, promoting them to admin, or removing them is a single fact
+that an admin's client writes, and it takes effect at once.
+
+Changing the permission model is different. Suppose a new version of TinyTodo
+introduces a reviewer team. In a traditional app, the developer adds the team
+to the schema and the policy and deploys both, and the change applies to all
+organizations at once. In LinkedRecords, permission structures that older
+versions of the app created stay as they are, because they are data. The new
+version adds the reviewer team to existing organizations when it is first
+needed. When an admin assigns someone to the reviewer team and the app finds
+no such team for that organization, it creates the team with the admin's
+privileges and makes the organization accountable for it. TinyTodo's
+`addUserToOrg` function has the hook for this. Organizations whose admins
+never open the new version keep the old structure. For changes that must
+apply everywhere at once, the operator can still write the facts directly.
+
+Keeping the grants next to the code that creates the data also helps review.
+A reviewer, human or AI assistant, can see who gets access without opening a
+second file.
+
+Facts also read close to English: `[teamId, '$canRead', reportId]`. Choosing
+clear predicate names for custom relations helps keep the model readable.
+
+### Scaling
+
+A triplestore with authorization checks on every query sounds slow. The server
+stores facts in PostgreSQL and groups them into fact boxes, one for each
+cluster of users who share data. A query only scans the fact boxes the
+requesting user belongs to, so its cost follows the amount of data that user
+can see rather than the total size of the database.
+
+A load test runs after every merge to main. Three users create documents,
+and each document is a blueprint of eight records: the content, groups for
+collaborators and readers, comments, references, and configuration. The user
+under test stops at 300 documents, which happens at about 3,400 documents in
+total. The other users continue to more than 5,000 documents, or about 40,000
+records.
+
+While the user under test is still adding documents, response times rise
+with that user's data. After that, the database keeps growing and the times
+stay flat. In the current run, the plateau is about:
+
+| Operation | What it does | Time |
+|---|---|---|
+| `fetchDocument` | Loads one document with all related records (a compound query with nine groups) | ~75 ms |
+| `fetchDocuments` | Lists all 300 documents the user can see | ~46 ms |
+| `createDocument` | Creates the eight-record blueprint with its facts | ~40 ms |
+
+The test uses a single client that sends one request at a time. It shows how
+latency changes as data grows, not how much concurrent load one server can
+take, and that has not been measured yet. The current chart is in the
+[README](https://github.com/wolfoo2931/linkedrecords#performance).
+
+### Limits
+
+- Relations are not transitive. Nested groups have to be modeled explicitly.
+- There are no deny rules and no attribute-based conditions. Access is the
+  union of all grants a user has.
+- Only the accountable party can transfer accountability. If an employee kept
+  a record accountable to themselves and then leaves, the organization cannot
+  take it over, so apps should make the organization accountable when the
+  record is created.
+- The server does not check which custom predicate is used. A user who can
+  refine an organization can attach any custom fact to it, so applications
+  should combine custom predicates with accountability filters when the
+  answer matters.
+- The server does not validate record contents. Anyone with write access to a
+  key-value record can write any JSON to it.
+- Terms are first come, first served. Whoever declares a term first controls
+  how it can be refined.
+- There is no offline mode. LinkedRecords is server-authoritative.
+- Queries return the full matching set. Pagination is not implemented yet.
+
+## Future directions
+
+This section describes uses of the model that we are exploring. Each one
+builds on a property described above. Unless a paragraph says otherwise, none
+of it is implemented as a separate feature.
+
+### AI agents that write the app
+
+Coding assistants increasingly write application code, including access
+rules. In a traditional stack, an assistant that adds a feature has to
+change the frontend, the API route, the database schema, and the policy, and
+keep all four consistent. A policy it forgets or writes too broadly is easy to
+miss in review.
+
+In LinkedRecords, the facts that grant access are part of the call that
+creates the data, and the reserved predicates are a short, fixed list. An
+assistant can see who gets access by reading one function, and a reviewer can
+check the same function. If the assistant still writes a wrong fact, the
+argument from the discussion applies: only data created through that code
+path is affected, and only after the change ships. The frontend is the whole
+app, so an assistant also has less code to read before it can make a safe
+change.
+
+### AI agents that use the app
+
+An agent that acts on a user's data needs credentials, and these are often an
+API key with broad access. With LinkedRecords, an agent signs in through the
+same OpenID Connect provider as everyone else. It can act with the token of
+the user it works for, or with an account of its own.
+
+Agents with their own account get least privilege from ordinary facts. An
+organization can add the agent to a team that has `$canRead` on the records it
+needs and nothing else. The agent cannot widen its own access, because the
+server checks its facts with the same rules as any user's, and an admin can
+revoke it by deleting one `$isMemberOf` fact. The earlier drafts of this paper
+used the same pattern for a technical user that fetched published blog posts
+for a website.
+
+Terms could also make agents easier to connect. Every term carries a
+description, for example
+`['Invoice', '$isATermFor', 'A billing document sent to a customer']`. A
+planned feature would use these descriptions to generate Model Context
+Protocol (MCP) tools, so an agent could find and query an app's records without
+custom integration code. This is not implemented yet.
+
+### No-code tools
+
+Tools such as Notion and Airtable show that people outside engineering will
+define fields and link records to build their own tools. Terms and facts
+already describe what kinds of records exist and how they relate, so a generic
+interface could display and edit the data of any LinkedRecords app without
+code written for that app. Permissions would behave the same in that interface
+as in the original app, because they are stored in the data. A team could
+build an internal tool on top of data that a vendor's app created, and both
+would see the same records.
+
+### Other open questions
+
+These ideas appeared in earlier drafts of this paper and are not implemented:
+
+- Domain-owned terms. An app would serve its terms from a well-known URL on
+  its own domain, and the server would import them with the domain as the
+  accountable party. Only the domain's developers could then refine those
+  terms, which would also solve the first-come problem. The same mechanism
+  could import vocabularies such as schema.org.
+- Conditional grants, for example letting authors use the draft state only
+  while a post is not published.
+- A dry run for permission changes. Before saving a `$` fact, the server would
+  tell the user how many people would gain access to how many records, and the
+  user would confirm.
+
+## References
+
+- OWASP Foundation. *OWASP Top 10: A01 Broken Access Control.*
+  https://owasp.org/Top10/
+- Birgisson, A., Politz, J. G., Erlingsson, Ú., Taly, A., Vrable, M., &
+  Lentczner, M. (2014). Macaroons: Cookies with contextual caveats for
+  decentralized authorization in the cloud. *Network and Distributed System
+  Security Symposium (NDSS).*
+- Cutler, J. W., Disselkoen, C., Eline, A., et al. (2024). Cedar: A new
+  language for expressive, fast, safe, and analyzable authorization.
+  *Proceedings of the ACM on Programming Languages, 8(OOPSLA1).*
+  Example app: https://github.com/cedar-policy/cedar-examples/tree/release/4.2.x/tinytodo
+- Dubray, J.-J. (2016). Why I no longer use MVC frameworks. *InfoQ.*
+  https://www.infoq.com/articles/no-more-mvc-frameworks/
+- Gross, C. (2016). The API churn/security trade-off.
+  https://intercoolerjs.org/2016/02/17/api-churn-vs-security.html
+- Hardt, D. (2012). *The OAuth 2.0 Authorization Framework.* RFC 6749.
+- Mell, P., & Grance, T. (2011). *The NIST Definition of Cloud Computing.*
+  NIST Special Publication 800-145.
+- W3C (2025). *Verifiable Credentials Data Model v2.0.*
+  https://www.w3.org/TR/vc-data-model-2.0/
+- Gates, C. (2007). Access control requirements for Web 2.0 security and
+  privacy. *IEEE Web 2.0 Security and Privacy Workshop.*
+- Pang, R., et al. (2019). Zanzibar: Google's consistent, global authorization
+  system. *USENIX Annual Technical Conference.*
+- Tomaszuk, D., & Rybiński, H. (2011). OAuth+UAO: A distributed identification
+  mechanism for triplestores. *ICCCI 2011, LNCS 6922*, 275-284.
+- W3C (2014). *RDF 1.1 Concepts and Abstract Syntax.*
+  https://www.w3.org/TR/rdf11-concepts/
+- Sambra, A. V., Mansour, E., Hawke, S., Zereba, M., Greco, N., Ghanem, A.,
+  Zagidulin, D., Aboulnaga, A., & Berners-Lee, T. (2016). Solid: A platform
+  for decentralized social applications based on linked data. *Technical
+  report, MIT CSAIL & Qatar Computing Research Institute.*
+- W3C Solid Community Group (2024). *Solid Protocol, version 0.11.0.*
+  https://solidproject.org/TR/protocol
+- W3C Solid Community Group. *Web Access Control.*
+  https://solidproject.org/TR/wac
+- OpenID Foundation (2014). *OpenID Connect Core 1.0.*
+  https://openid.net/specs/openid-connect-core-1_0.html
+
+<Callout type="info">
+To try the model, start with [Getting Started](/getting-started).
+</Callout>

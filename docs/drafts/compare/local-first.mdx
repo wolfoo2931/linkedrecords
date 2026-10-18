@@ -1,0 +1,86 @@
+---
+title: LinkedRecords vs local-first tools
+description: Yjs, Automerge, and Replicache compared with a server-authoritative backend
+---
+
+Local-first tools keep the data on the user's device and sync it in the
+background. LinkedRecords keeps the data on the server. Both give you
+real-time collaboration, and both use CRDTs. They make opposite choices about
+where the source of truth is and who enforces access.
+
+## How local-first tools work
+
+Yjs and Automerge are CRDT libraries. Every client holds a full copy of a
+document, edits it locally, and exchanges changes with other clients through a
+provider or sync server, for example `y-websocket` or `automerge-repo`.
+Edits merge without conflicts, and the app keeps working offline.
+
+```typescript
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+
+const doc = new Y.Doc();
+const provider = new WebsocketProvider('wss://sync.example.com', 'doc-42', doc);
+doc.getMap('meta').set('title', 'Q3 plan');
+```
+
+Authorization is not part of the library. Whoever can connect to `doc-42` gets
+the whole document, so access checks go into the sync server you run, usually
+per document. A client that has the document can also keep it after its
+access is revoked.
+
+Replicache takes a different approach: the client keeps a local cache, and you
+write push and pull endpoints on your own server. Authorization happens in
+those endpoints, in your backend code. The team behind Replicache now develops
+Zero as its successor.
+
+## How LinkedRecords works
+
+```typescript
+const doc = await lr.Record.createKeyValue(
+  { title: 'Q3 plan' },
+  [
+    ['$it', 'isA', 'Document'],
+    [teamId, '$canAccess', '$it'],
+  ],
+);
+
+doc.subscribe(() => render(doc));
+```
+
+The server holds the current state. Key-value records merge concurrent
+changes with a CRDT, and long text records use operational transformation.
+The server checks every change against the user's permissions before it
+applies the change and sends it to other clients. Queries return only the records the user can see.
+
+## Differences
+
+| | Local-first (Yjs, Automerge) | LinkedRecords |
+|---|---|---|
+| Source of truth | Each client | The server |
+| Works offline | Yes | No |
+| Latency | Instant, local | One round trip to the server |
+| Authorization | In your sync server, usually per document | Built in, per record, for teams and organizations |
+| Revoking access | The client keeps its copy | The server stops serving and accepting changes for that user; data already loaded stays in the browser |
+| Querying across documents | Your own code | Fact queries |
+| Backend you run | Sync server or push and pull endpoints | LinkedRecords server |
+| Audit and governance | Hard, data lives on devices | Central, on the server |
+
+## Choose a local-first tool when
+
+- Users must be able to work offline, or local response time matters most.
+- Data belongs to one person or a small group that trusts each other.
+- You are building a single collaborative document, such as a whiteboard or
+  editor.
+
+## Choose LinkedRecords when
+
+- Access has to be enforced on the server, for example in business software
+  with roles and teams.
+- You need to revoke access on the server, not just on the device.
+- An organization needs its data in one place it controls, for compliance or
+  audits.
+- You need queries across many records, not just syncing one document.
+
+See also [long text records](/long-text-records) and the
+[whitepaper](/whitepaper).

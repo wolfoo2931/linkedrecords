@@ -1,0 +1,83 @@
+---
+title: LinkedRecords vs Firebase
+description: Security rules files compared with authorization written as facts
+---
+
+Firebase and LinkedRecords both let a single-page app talk to the database
+directly. They differ in where the access rules are written and who writes
+them.
+
+## How Firebase handles access
+
+Cloud Firestore stores documents in collections. Access is controlled by a
+security rules file, usually `firestore.rules`, deployed with the Firebase CLI:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /documents/{docId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == resource.data.ownerId;
+    }
+  }
+}
+```
+
+The rules apply to the whole database. Sharing with a team usually means
+storing member IDs on the document or in a separate collection and reading
+them from the rule with `get()` or `exists()`. Rules are not filters: a query
+has to be written so that every possible result passes the rule, or the whole
+query is rejected.
+
+## The same feature in LinkedRecords
+
+A document shared with a team:
+
+```typescript
+const doc = await lr.Record.createKeyValue(
+  { title: 'Q3 plan' },
+  [
+    ['$it', 'isA', 'Document'],
+    [teamId, '$canAccess', '$it'],
+  ],
+);
+```
+
+There is no rules file. The fact `[teamId, '$canAccess', '$it']` is the
+permission, and the server only saves it if the user may grant access to that
+team. A query such as `lr.Record.findAll({ docs: [['$it', 'isA', 'Document']] })`
+returns the documents the user can see, so queries act as filters.
+
+## Differences
+
+| | Firebase | LinkedRecords |
+|---|---|---|
+| Where rules live | `firestore.rules`, deployed separately | In the app code, as facts |
+| Who writes rules | The developer, for all users at once | The client, for the data the current user controls |
+| Default for new data | Whatever the rules say; a too-broad rule exposes it | Only the creator can read it |
+| Effect of a rule bug | Every document the rule matches | Data created by users who ran the faulty code |
+| Teams and roles | Modeled by hand in documents and rules | `$isMemberOf`, `$isHostOf`, `$canRead`, `$canAccess` |
+| Concurrent edits | Last write wins per field, or transactions | CRDT for JSON, operational transformation for long text |
+| Offline | Yes, with a local cache | No |
+| Hosting | Google Cloud only | Self-hosted, any PostgreSQL |
+| Custom server logic | Cloud Functions | Not built in |
+
+## Choose Firebase when
+
+- Your app must work offline on mobile.
+- You want the wider Google platform: analytics, messaging, hosting, crash
+  reporting.
+- Access rules are simple and mostly per user.
+
+## Choose LinkedRecords when
+
+- Users share data in teams and organizations, and the sharing rules keep
+  growing.
+- You want access rules in the same pull request as the feature that needs
+  them.
+- Customers need to host their own data, or you cannot use Google Cloud.
+- Several people edit the same text at the same time.
+
+See also the [authorization model](/authorization-model) and the
+[whitepaper](/whitepaper).

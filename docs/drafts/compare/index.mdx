@@ -1,0 +1,44 @@
+---
+title: Comparisons
+description: How LinkedRecords differs from Firebase, Supabase, Appwrite, authorization services, and local-first tools
+---
+
+Most backends protect data with a policy that the developer writes and the
+server enforces. In LinkedRecords, the user's own client writes facts that
+grant access, and the server checks each fact against rules that are the same
+for every app.
+
+The pages in this section compare LinkedRecords with tools developers often
+choose instead. Each one covers how the other tool handles authorization, where
+it is the better choice, and where LinkedRecords is.
+
+| Tool | What it is | Where authorization lives | Backend code you write |
+|---|---|---|---|
+| [Firebase](/compare/firebase) | Hosted document database with SDKs | A security rules file | Rules, plus Cloud Functions for anything rules cannot express |
+| [Supabase](/compare/supabase) | Hosted PostgreSQL with generated APIs | Row-level security policies in SQL | Schema, migrations, policies, often edge functions |
+| [Appwrite](/compare/appwrite) | Open-source BaaS with collections and teams | Collection and document permissions | Collection setup by an admin, functions for custom logic |
+| [OpenFGA and SpiceDB](/compare/openfga-spicedb) | Authorization services modeled on Zanzibar | An authorization schema and relationship tuples | A full backend and database; the service only answers permission checks |
+| [Local-first tools](/compare/local-first) | Sync libraries such as Yjs, Automerge, and Replicache | Usually in your sync server or not at all | A sync server or push and pull endpoints |
+| LinkedRecords | BaaS with a triplestore and built-in authorization | Facts written by the client, checked by fixed server rules | None |
+
+## When LinkedRecords fits
+
+- Users collaborate in teams and organizations, and they decide who sees what.
+- You want the whole app to be frontend code, including its access rules.
+- Customers want to choose where their data is hosted
+  ([Bring Your Own Backend](/#cloud-sovereignty)).
+- Several apps should work on the same data.
+- You need real-time collaboration on JSON documents or long text.
+
+## When something else fits better
+
+- Users need to work offline. Look at [local-first tools](/compare/local-first).
+- You already have a backend and a database and only need permission checks.
+  Look at [OpenFGA or SpiceDB](/compare/openfga-spicedb).
+- Your data is relational and you want SQL, joins, and constraints. Look at
+  [Supabase](/compare/supabase).
+- You need server-side validation of every write, or deeply nested inherited
+  permissions. LinkedRecords validates neither record contents nor custom
+  predicates, and its access relations are not transitive.
+
+For the reasoning behind the model, read the [whitepaper](/whitepaper).

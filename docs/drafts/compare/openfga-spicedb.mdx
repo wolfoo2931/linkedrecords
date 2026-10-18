@@ -1,0 +1,89 @@
+---
+title: LinkedRecords vs OpenFGA and SpiceDB
+description: Zanzibar-style authorization services compared with authorization built into the database
+---
+
+OpenFGA and SpiceDB are open-source authorization services based on Google's
+Zanzibar paper. LinkedRecords borrows the same core idea, storing
+relationships as tuples. The products solve different problems: OpenFGA and
+SpiceDB answer permission checks for a backend you already have, while
+LinkedRecords is the backend.
+
+## How Zanzibar-style services work
+
+You write an authorization schema in the service's own language. In OpenFGA:
+
+```
+model
+  schema 1.1
+
+type user
+
+type team
+  relations
+    define member: [user]
+
+type document
+  relations
+    define owner: [user]
+    define editor: [user, team#member] or owner
+    define viewer: [user, team#member] or editor
+```
+
+Your backend writes relationship tuples such as
+`team:marketing#member@user:ana` whenever something changes, and calls a check
+API before it returns data: "can `user:ana` view `document:42`?" The
+application data stays in your own database. The service holds only the
+relationships.
+
+The schema is expressive. Permissions can be computed from other relations,
+inherited through parent objects, nested through groups, and combined with
+unions, intersections, and exclusions. Only trusted backend code with
+credentials can write tuples or change the schema.
+
+## The same idea in LinkedRecords
+
+```typescript
+await lr.Fact.createAll([
+  [anaId, '$isMemberOf', marketingTeamId],
+  [marketingTeamId, '$canRead', documentId],
+]);
+```
+
+The facts look like Zanzibar tuples, but the browser client writes them
+directly. There is no schema to define, because the meaning of the reserved
+predicates is fixed, and the server checks each fact against rules that are
+the same for every app. A user can only grant access to what they control, so
+the client does not have to be trusted. The records themselves are stored in
+the same system, and every query is filtered by these facts.
+
+## Differences
+
+| | OpenFGA / SpiceDB | LinkedRecords |
+|---|---|---|
+| What it is | Authorization service | Database with authorization |
+| Stores app data | No | Yes |
+| Schema | Custom, per app | Fixed reserved predicates |
+| Who writes relationships | Trusted backend code | The user's client, checked by the server |
+| Expressiveness | High: computed, inherited, and nested permissions | Fixed set of predicates; no transitive access |
+| Filtering lists | List or lookup APIs, then load the data yourself | Queries return only visible records |
+| Consistency controls | Tokens such as SpiceDB ZedTokens | Single PostgreSQL database |
+| Backend code you write | All of it | None |
+
+## Choose OpenFGA or SpiceDB when
+
+- You already have a backend and a database and need fine-grained permission
+  checks on top.
+- Permissions follow deep hierarchies, such as folders inside folders, and
+  have to be inherited automatically.
+- Many services written in different languages need the same permission
+  answers.
+
+## Choose LinkedRecords when
+
+- You are starting a new app and want no backend at all.
+- Your sharing rules fit teams, hosts, members, read, and read-write access.
+- Users, not administrators, should set up their own teams and sharing.
+
+See also the [whitepaper](/whitepaper), which compares the model with Zanzibar
+in more detail.
