@@ -710,9 +710,18 @@ export default class Fact {
   }
 
   hasValidObject() {
-    return typeof this.object === 'string'
-      && this.object.match(/^[a-zA-Z0-9-\s]+$/)
-      && this.object.length <= 500;
+    if (typeof this.object !== 'string' || this.object.length > 500) {
+      return false;
+    }
+
+    // A term's description is text for people, e.g. "plain text (Markdown)"
+    // (#94). It is only ever written with query parameters, never put into
+    // SQL, so any characters but control characters are fine.
+    if (this.predicate === '$isATermFor') {
+      return /^(?:[^\p{Cc}]|[\n\t])+$/u.test(this.object);
+    }
+
+    return !!this.object.match(/^[a-zA-Z0-9-\s]+$/);
   }
 
   async save(userid: string): Promise<void> {

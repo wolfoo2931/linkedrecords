@@ -1,6 +1,27 @@
 /* eslint-disable no-await-in-loop */
 import Fact from '../../facts/server';
 
+// The facts in the request body. A fact with characters it may not contain
+// is the client's mistake: answered with 400, and undefined returned (#94).
+function factsFromRequest(req, res): Fact[] | undefined {
+  try {
+    return req.body.map((rawFact) => new Fact(
+      rawFact[0],
+      rawFact[1],
+      rawFact[2],
+      req.log,
+    ));
+  } catch (ex: any) {
+    if (ex?.message?.startsWith('Invalid Fact')) {
+      res.status(400);
+      res.send({ error: ex.message });
+      return undefined;
+    }
+
+    throw ex;
+  }
+}
+
 export default {
   async index(req, res) {
     const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
@@ -18,12 +39,11 @@ export default {
   },
 
   async create(req, res) {
-    const facts = req.body.map((rawFact) => new Fact(
-      rawFact[0],
-      rawFact[1],
-      rawFact[2],
-      req.log,
-    ));
+    const facts = factsFromRequest(req, res);
+
+    if (!facts) {
+      return;
+    }
 
     const authorizedChecks = await Promise.all(
       facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID)),
@@ -43,12 +63,11 @@ export default {
   },
 
   async delete(req, res) {
-    const facts = req.body.map((rawFact) => new Fact(
-      rawFact[0],
-      rawFact[1],
-      rawFact[2],
-      req.log,
-    ));
+    const facts = factsFromRequest(req, res);
+
+    if (!facts) {
+      return;
+    }
 
     const authorizedChecks = await Promise.all(
       facts.map((fact) => fact.isAuthorizedToSave(req.hashedUserID)),
@@ -61,7 +80,7 @@ export default {
       res.send({});
     } else {
       for (let i = 0; i < facts.length; i += 1) {
-        await facts[i].delete(req.hashedUserID);
+        await facts[i]!.delete(req.hashedUserID);
       }
 
       res.status(200);

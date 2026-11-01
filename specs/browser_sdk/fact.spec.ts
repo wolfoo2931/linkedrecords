@@ -60,6 +60,37 @@ describe('Fact', () => {
     // describe('$isAccountableFor predicate');
   });
 
+  // #94
+  describe('a term description', () => {
+    it('can contain punctuation', async () => {
+      const [client] = await createClient();
+      const description = "a string which contains plain text (Markdown), e.g. the user's notes: 50% done!";
+
+      const created = await client.Fact.createAll([
+        ['PlainTextFile', '$isATermFor', description],
+      ]);
+
+      expect(created).to.have.lengthOf(1);
+
+      const found = await client.Fact.findAll({ subject: ['PlainTextFile'], predicate: ['$isATermFor'] });
+      expect(found.map((fact) => fact.object)).to.eql([description]);
+    });
+
+    it('is the only object that can', async () => {
+      const [client] = await createClient();
+      const book = await client.Record.create('keyValue', { title: 'Moby Dick' });
+
+      await client.Fact.createAll([['Book', '$isATermFor', 'a book']]);
+      const response = await client.fetch('/facts', {
+        method: 'POST',
+        body: JSON.stringify([[book.id, 'isA', 'Book (hardcover)']]),
+      });
+
+      expect(response).to.equal(false);
+      expect(await client.Fact.findAll({ subject: [book.id!], predicate: ['isA'] })).to.have.lengthOf(0);
+    });
+  });
+
   describe('Facts.deleteAll', () => {
     it('deletes all facts if they exists', async () => {
       const [client] = await createClient();
