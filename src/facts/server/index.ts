@@ -316,7 +316,7 @@ export default class Fact {
     const predicatedAllowedToQueryAnyObjects = ['$isATermFor'];
 
     if (typeof query === 'string') {
-      return `SELECT '${query}'`;
+      return `SELECT '${EnsureIsValid.nodeId(query)}'`;
     }
 
     if (!query || !query.length || query.length !== 2) {
@@ -398,12 +398,23 @@ export default class Fact {
         .trim()}`;
     }
 
-    return transitiveQueries
-      .map((subjectQuery) => Fact.getSQLToResolvePossibleTransitiveQuery(
-        subjectQuery,
-        sqlPrefix,
-      ))
-      .join(' INTERSECT ');
+    // Plain ids mean any of them (#218): distinct ids intersected would never
+    // match. The patterns still all have to match.
+    const ids = transitiveQueries.filter((q): q is string => typeof q === 'string');
+    const patterns = transitiveQueries.filter((q) => typeof q !== 'string');
+    const selects = patterns.map((subjectQuery) => Fact.getSQLToResolvePossibleTransitiveQuery(
+      subjectQuery,
+      sqlPrefix,
+    ));
+
+    if (ids.length === 1) {
+      selects.unshift(Fact.getSQLToResolvePossibleTransitiveQuery(ids[0]!, sqlPrefix));
+    } else if (ids.length > 1) {
+      // one SELECT, so it can stand in the INTERSECT chain
+      selects.unshift(`SELECT id FROM (VALUES ${ids.map((id) => `('${EnsureIsValid.nodeId(id)}')`).join(', ')}) AS ids(id)`);
+    }
+
+    return selects.join(' INTERSECT ');
   }
 
   static async refreshFactBoxPlacements(facts: Fact[], logger: IsLogger) {
@@ -641,7 +652,8 @@ export default class Fact {
 
     if (subject) {
       const subjectFilter = Fact.getSQLToResolveToSubjectIdsWithModifiers(subject);
-      const singleValueMatch = subjectFilter.match(/^SELECT '(.*?)'$/);
+      // exactly one id, not e.g. "SELECT 'a' INTERSECT SELECT 'b'"
+      const singleValueMatch = subjectFilter.match(/^SELECT '([a-zA-Z0-9-]+)'$/);
 
       if (singleValueMatch && singleValueMatch[1]) {
         sqlQuery += ` ${and()} subject='${EnsureIsValid.subject(singleValueMatch[1])}'`;

@@ -24,15 +24,29 @@ function factsFromRequest(req, res): Fact[] | undefined {
 
 export default {
   async index(req, res) {
-    const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
-    const predicate = req.query.predicate ? JSON.parse(req.query.predicate) : undefined;
-    const object = req.query.object ? JSON.parse(req.query.object) : undefined;
+    let facts: Fact[];
 
-    const facts = await Fact.findAll({
-      subject,
-      predicate,
-      object,
-    }, req.hashedUserID, req.log);
+    try {
+      const subject = req.query.subject ? JSON.parse(req.query.subject) : undefined;
+      const predicate = req.query.predicate ? JSON.parse(req.query.predicate) : undefined;
+      const object = req.query.object ? JSON.parse(req.query.object) : undefined;
+
+      facts = await Fact.findAll({
+        subject,
+        predicate,
+        object,
+      }, req.hashedUserID, req.log);
+    } catch (ex: any) {
+      // a query that isn't valid JSON or contains invalid ids or predicates
+      // is the client's mistake, not the server's (#218)
+      if (ex instanceof SyntaxError || /^invalid/i.test(ex?.message || '')) {
+        res.status(400);
+        res.send({ error: ex.message });
+        return;
+      }
+
+      throw ex;
+    }
 
     res.status(200);
     res.send(facts);

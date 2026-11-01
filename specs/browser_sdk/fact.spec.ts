@@ -285,5 +285,50 @@ describe('Fact', () => {
       expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'Book')).to.have.lengthOf(1);
       expect(facts.filter((fact) => fact.subject === 'Author' && fact.object === 'ThePublisherClub')).to.have.lengthOf(0);
     });
+
+    // #218
+    it('matches facts whose subject or object is any of several ids', async () => {
+      const [client] = await createClient();
+
+      const mobyDick = await client.Record.create('keyValue', { title: 'Moby Dick' });
+      const ulysses = await client.Record.create('keyValue', { title: 'Ulysses' });
+      const author = await client.Record.create('keyValue', { name: 'Herman Melville' });
+
+      await client.Fact.createAll([['Book', '$isATermFor', 'a book']]);
+      await client.Fact.createAll([
+        [mobyDick.id, 'isA', 'Book'],
+        [ulysses.id, 'isA', 'Book'],
+        [author.id, 'wrote', mobyDick.id],
+      ]);
+
+      const books = await client.Fact.findAll({ subject: [mobyDick.id!, ulysses.id!], predicate: ['isA'] });
+      expect(books.map((fact) => fact.subject).sort()).to.eql([mobyDick.id, ulysses.id].sort());
+
+      const wrote = await client.Fact.findAll({ predicate: ['wrote'], object: [mobyDick.id!, ulysses.id!] });
+      expect(wrote.map((fact) => fact.subject)).to.eql([author.id]);
+    });
+
+    it('answers 400 for a subject or object that is not an id', async () => {
+      const [client] = await createClient();
+      const [otherClient] = await createClient();
+
+      const mobyDick = await client.Record.create('keyValue', { title: 'Moby Dick' });
+      await client.Fact.createAll([['Book', '$isATermFor', 'a book']]);
+      await client.Fact.createAll([[mobyDick.id, 'isA', 'Book']]);
+
+      const notAnId = "x') OR ('1'='1";
+
+      const token = await otherClient.getAccessToken();
+      const statuses = await Promise.all(['subject', 'object'].map(async (field) => {
+        const params = new URLSearchParams({ [field]: JSON.stringify(['kv-1', notAnId]) });
+        const response = await fetch(`http://localhost:3000/facts?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        return response.status;
+      }));
+
+      expect(statuses).to.eql([400, 400]);
+    });
   });
 });
