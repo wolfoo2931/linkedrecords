@@ -176,6 +176,11 @@ export default class LinkedRecords {
 
   public async getUserIdByEmail(email: string): Promise<string | undefined> {
     const resp = await this.fetch(`/userinfo?email=${encodeURIComponent(email)}`);
+
+    if (!resp) {
+      return undefined;
+    }
+
     const parsed = await resp.json();
     return parsed.id;
   }
@@ -202,14 +207,15 @@ export default class LinkedRecords {
     return data;
   }
 
-  public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
+  // undefined when the request failed (see fetch)
+  public async getQuota(nodeId?: string): Promise<QuotaAsJSON | undefined> {
     if (this.qetQuotaPromise[nodeId || '']) {
       return this.qetQuotaPromise[nodeId || ''];
     }
 
     this.qetQuotaPromise[nodeId || ''] = this.ensureUserIdIsKnown()
       .then((uId) => this.fetch(`/quota/${nodeId || uId}`))
-      .then((r) => r.json());
+      .then((r) => (r ? r.json() : undefined));
 
     const result = await this.qetQuotaPromise[nodeId || ''];
     delete this.qetQuotaPromise[nodeId || ''];
@@ -217,7 +223,11 @@ export default class LinkedRecords {
     return result;
   }
 
-  public async fetch(url: string, fetchOpt?: FetchOptions) {
+  // Resolves to false when the request failed: the session expired (401),
+  // the user may not do this (403), any other error status, or the
+  // connection was lost. The matching handler has been called by then;
+  // callers must check the result before reading the body (#227).
+  public async fetch(url: string, fetchOpt?: FetchOptions): Promise<Response | false> {
     const isOnRedirectUriRoute = await this.oidcManager?.isOnRedirectUriRoute();
 
     const {
@@ -281,6 +291,10 @@ export default class LinkedRecords {
 
     const response = await this.withConnectionLostHandler(() => fetch(absoluteUrl, options));
 
+    if (!response) {
+      return false;
+    }
+
     if (response.status === 401) {
       console.error(`Authentication Error when calling ${method} ${url} ${await response.text()}`);
 
@@ -312,7 +326,7 @@ export default class LinkedRecords {
     return response;
   }
 
-  public async withConnectionLostHandler(fn: () => Promise<any>) {
+  public async withConnectionLostHandler<T>(fn: () => Promise<T>): Promise<T | false> {
     try {
       return await fn();
     } catch (ex: any) {

@@ -214,6 +214,14 @@ export default class RecordsRepository {
     params.append('query', stringify(query));
 
     const result = await this.linkedRecords.fetch(`/records?${params.toString()}`);
+
+    // The request failed and its handler has been called: nothing is
+    // visible, an empty list for a list query and null for a single record.
+    if (!result) {
+      return Object.fromEntries(Object.entries(query)
+        .map(([key, value]) => [key, Array.isArray(value) ? [] : null])) as unknown as QueryResult<T>;
+    }
+
     const records = await result.json();
 
     const attributeResult = {} as any;

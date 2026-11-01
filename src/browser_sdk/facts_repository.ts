@@ -55,6 +55,11 @@ export default class FactsRepository {
     }
 
     const response = await this.linkedRecords.fetch(`/facts?${params.toString()}`);
+
+    if (!response) {
+      return [];
+    }
+
     const responseJson = await response.json();
 
     return responseJson.map((record) => new Fact(
