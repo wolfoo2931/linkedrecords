@@ -8,6 +8,7 @@ import KeyValueRecord from '../records/key_value/client';
 import BlobRecord from '../records/blob/client';
 import { CompoundRecordQuery, FactQueryWithOptionalSubjectPlaceholder } from '../records/record_query';
 import ClientServerBus from '../../lib/client-server-bus/client';
+import RequestFailedError from './request_failed_error';
 
 type ArrayContains<T, U> = T extends Array<infer E>
   ? Extract<E, U> extends never
@@ -215,11 +216,8 @@ export default class RecordsRepository {
 
     const result = await this.linkedRecords.fetch(`/records?${params.toString()}`);
 
-    // The request failed and its handler has been called: nothing is
-    // visible, an empty list for a list query and null for a single record.
     if (!result) {
-      return Object.fromEntries(Object.entries(query)
-        .map(([key, value]) => [key, Array.isArray(value) ? [] : null])) as unknown as QueryResult<T>;
+      throw new RequestFailedError('GET /records');
     }
 
     const records = await result.json();
@@ -274,7 +272,13 @@ export default class RecordsRepository {
     const channel = `query-sub:${this.linkedRecords.actorId}:${stringify(query)}`;
 
     const onPossibleChange = () => {
-      this.findAndLoadAll(query).then(onChange);
+      this.findAndLoadAll(query).then(onChange).catch((ex) => {
+        // The handler has told the application already. Keep the last
+        // result rather than publishing an empty one (#227).
+        if (!(ex instanceof RequestFailedError)) {
+          throw ex;
+        }
+      });
     };
 
     const subscription = await bus.subscribe(url, channel, undefined, onPossibleChange);

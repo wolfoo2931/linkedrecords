@@ -12,6 +12,7 @@ import FactsRepository from './facts_repository';
 import RecordsRepository from './records_repository';
 import { QuotaAsJSON } from '../server/quota';
 import { OIDCManager, OIDCConfig } from './oidc';
+import RequestFailedError from './request_failed_error';
 
 type FetchOptions = {
   headers?: object | undefined,
@@ -23,6 +24,7 @@ type FetchOptions = {
 };
 
 export {
+  RequestFailedError,
   LongTextRecord,
   KeyValueRecord,
   LongTextRecord as LongTextAttribute,
@@ -178,7 +180,7 @@ export default class LinkedRecords {
     const resp = await this.fetch(`/userinfo?email=${encodeURIComponent(email)}`);
 
     if (!resp) {
-      return undefined;
+      throw new RequestFailedError('GET /userinfo');
     }
 
     const parsed = await resp.json();
@@ -207,26 +209,37 @@ export default class LinkedRecords {
     return data;
   }
 
-  // undefined when the request failed (see fetch)
-  public async getQuota(nodeId?: string): Promise<QuotaAsJSON | undefined> {
+  public async getQuota(nodeId?: string): Promise<QuotaAsJSON> {
     if (this.qetQuotaPromise[nodeId || '']) {
       return this.qetQuotaPromise[nodeId || ''];
     }
 
     this.qetQuotaPromise[nodeId || ''] = this.ensureUserIdIsKnown()
       .then((uId) => this.fetch(`/quota/${nodeId || uId}`))
-      .then((r) => (r ? r.json() : undefined));
+      .then((r) => {
+        if (!r) {
+          throw new RequestFailedError('GET /quota');
+        }
 
-    const result = await this.qetQuotaPromise[nodeId || ''];
-    delete this.qetQuotaPromise[nodeId || ''];
+        return r.json();
+      });
 
-    return result;
+    try {
+      return await this.qetQuotaPromise[nodeId || ''];
+    } finally {
+      // also after a failure, so the next call asks again
+      delete this.qetQuotaPromise[nodeId || ''];
+    }
   }
 
   // Resolves to false when the request failed: the session expired (401),
   // the user may not do this (403), any other error status, or the
   // connection was lost. The matching handler has been called by then;
   // callers must check the result before reading the body (#227).
+  //
+  // A handler can throw instead, and then fetch() rejects with its error:
+  // without an authorization error handler, a 403 throws "User is not
+  // allowed to perform operation", and a login handler may throw on a 401.
   public async fetch(url: string, fetchOpt?: FetchOptions): Promise<Response | false> {
     const isOnRedirectUriRoute = await this.oidcManager?.isOnRedirectUriRoute();
 
@@ -330,8 +343,14 @@ export default class LinkedRecords {
     try {
       return await fn();
     } catch (ex: any) {
-      if (ex.message === 'Failed to fetch') {
+      // fetch() rejects with a TypeError when the request couldn't be made.
+      // Its message differs per browser: "Failed to fetch" (Chrome), "Load
+      // failed" (Safari), "NetworkError when attempting to fetch resource."
+      // (Firefox).
+      if (ex instanceof TypeError) {
         this.handleConnectionError(ex);
+      } else {
+        this.handleUnknownServerError(undefined);
       }
 
       return false;
