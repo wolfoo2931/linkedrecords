@@ -3,6 +3,7 @@
 import LinkedRecords from '.';
 import Fact from '../facts/client';
 import { FactQuery } from '../facts/fact_query';
+import RequestFailedError from './request_failed_error';
 
 export default class FactsRepository {
   linkedRecords: LinkedRecords;
@@ -55,6 +56,11 @@ export default class FactsRepository {
     }
 
     const response = await this.linkedRecords.fetch(`/facts?${params.toString()}`);
+
+    if (!response) {
+      throw new RequestFailedError('GET /facts');
+    }
+
     const responseJson = await response.json();
 
     return responseJson.map((record) => new Fact(

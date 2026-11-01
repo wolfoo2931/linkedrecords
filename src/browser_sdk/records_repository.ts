@@ -8,6 +8,7 @@ import KeyValueRecord from '../records/key_value/client';
 import BlobRecord from '../records/blob/client';
 import { CompoundRecordQuery, FactQueryWithOptionalSubjectPlaceholder } from '../records/record_query';
 import ClientServerBus from '../../lib/client-server-bus/client';
+import RequestFailedError from './request_failed_error';
 
 type ArrayContains<T, U> = T extends Array<infer E>
   ? Extract<E, U> extends never
@@ -214,6 +215,11 @@ export default class RecordsRepository {
     params.append('query', stringify(query));
 
     const result = await this.linkedRecords.fetch(`/records?${params.toString()}`);
+
+    if (!result) {
+      throw new RequestFailedError('GET /records');
+    }
+
     const records = await result.json();
 
     const attributeResult = {} as any;
@@ -266,7 +272,13 @@ export default class RecordsRepository {
     const channel = `query-sub:${this.linkedRecords.actorId}:${stringify(query)}`;
 
     const onPossibleChange = () => {
-      this.findAndLoadAll(query).then(onChange);
+      this.findAndLoadAll(query).then(onChange).catch((ex) => {
+        // The handler has told the application already. Keep the last
+        // result rather than publishing an empty one (#227).
+        if (!(ex instanceof RequestFailedError)) {
+          throw ex;
+        }
+      });
     };
 
     const subscription = await bus.subscribe(url, channel, undefined, onPossibleChange);
